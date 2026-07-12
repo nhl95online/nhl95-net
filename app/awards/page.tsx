@@ -40,11 +40,14 @@ export default function AwardsPage() {
       .eq('awards.award_names', awardName);
 
     if (data) {
-      setHistory(data.map(item => {
+      setHistory(data.map((item: any) => { // Add : any here
         const seasonObj = seasons.find(s => s.league_id === item.league_id);
         return {
           season: seasonObj ? seasonObj.season_name : `Season ${item.league_id}`,
-          winner: item.league_player_database?.player_name || item.league_coaches?.coach_name || "N/A"
+          // Ensure we access it correctly based on whether it's an object or an array
+          winner: item.league_player_database?.player_name
+            || item.league_coaches?.coach_name
+            || "N/A"
         };
       }));
     }
