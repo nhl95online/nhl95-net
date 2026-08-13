@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
-const StatCard = ({ title, data, category, onTabClick }: any) => {
+const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHoveredPlayer }: any) => {
   const [activeSubTab, setActiveSubTab] = useState(category === 'Goalies' ? 'GAA' : 'Points');
   const getSubTabs = () => (category === 'Goalies' ? ['GAA', 'SV%', 'SO'] : ['Points', 'Goals', 'Assists']);
 
@@ -24,11 +24,29 @@ const StatCard = ({ title, data, category, onTabClick }: any) => {
     return list.sort((a, b) => (b.total_points || 0) - (a.total_points || 0));
   }, [data, activeSubTab, category]);
 
-  const top = sorted[0];
+  const defaultTop = sorted[0];
+  const activeTop = hoveredPlayer && sorted.some(p => (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name))
+    ? sorted.find(p => (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name))
+    : defaultTop;
+
+  const top = activeTop || defaultTop;
+
+  const getValue = (p: any) => {
+    if (!p) return 0;
+    if (activeSubTab === 'GAA') return p.gaa?.toFixed(2);
+    if (activeSubTab === 'SV%') return p.sv_pct?.toFixed(3);
+    if (activeSubTab === 'Goals') return p.total_goals;
+    if (activeSubTab === 'Assists') return p.total_assists;
+    if (activeSubTab === 'SO') return p.shutouts;
+    return p.total_points;
+  };
 
   return (
     <div className="border border-black p-4 bg-white shadow-sm">
-      <h2 className="font-black text-sm uppercase mb-3 cursor-pointer hover:underline" onClick={() => onTabClick(category === 'Goalies' ? 'Goalies' : 'Skaters')}>
+      <h2
+        className="font-black text-sm uppercase mb-3 cursor-pointer hover:underline"
+        onClick={() => onTabClick(category === 'Goalies' ? 'Goalies' : 'Skaters')}
+      >
         {title} &gt;
       </h2>
       <div className="flex gap-4 border-b border-gray-200 mb-4 text-[10px] font-bold uppercase">
@@ -42,21 +60,25 @@ const StatCard = ({ title, data, category, onTabClick }: any) => {
             <img src={top.logo_url || '/placeholder.png'} className="h-16 w-16 mx-auto mb-2 object-contain" alt="Team" />
             <p className="font-bold text-xs truncate">{top.player_name} {top.is_rookie && <span className="text-red-600 font-black">[R]</span>}</p>
             <p className="text-[10px] text-gray-500 mb-2">{top.team_name}</p>
-            <p className="text-3xl font-black">
-              {activeSubTab === 'GAA' ? top.gaa?.toFixed(2) : activeSubTab === 'SV%' ? top.sv_pct?.toFixed(3) : activeSubTab === 'Goals' ? top.total_goals : activeSubTab === 'Assists' ? top.total_assists : top.total_points}
-            </p>
+            <p className="text-3xl font-black">{getValue(top)}</p>
           </div>
           <div className="w-2/3 flex flex-col justify-between">
-            {sorted.slice(0, 10).map((p, i) => (
-              <div key={i} className="flex justify-between items-center text-[11px] py-1 border-b border-gray-50">
-                <span className="truncate flex-1">
-                  {i + 1}. {p.player_name} {p.is_rookie && <span className="text-red-600 font-black text-[9px]">[R]</span>}
-                </span>
-                <span className="font-bold ml-12">
-                  {activeSubTab === 'GAA' ? p.gaa?.toFixed(2) : activeSubTab === 'SV%' ? p.sv_pct?.toFixed(3) : activeSubTab === 'Goals' ? p.total_goals : activeSubTab === 'Assists' ? p.total_assists : p.total_points}
-                </span>
-              </div>
-            ))}
+            {sorted.slice(0, 10).map((p, i) => {
+              const isHovered = hoveredPlayer && (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name);
+              return (
+                <div
+                  key={i}
+                  className={`flex justify-between items-center text-[11px] py-1 border-b border-gray-50 cursor-pointer px-1 ${isHovered ? 'bg-yellow-100 font-bold' : 'hover:bg-gray-50'}`}
+                  onMouseEnter={() => setHoveredPlayer(p)}
+                  onMouseLeave={() => setHoveredPlayer(null)}
+                >
+                  <span className="truncate flex-1">
+                    {i + 1}. {p.player_name} {p.is_rookie && <span className="text-red-600 font-black text-[9px]">[R]</span>}
+                  </span>
+                  <span className="font-bold ml-12">{getValue(p)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -71,6 +93,11 @@ export default function NewspaperPage() {
   const [selectedTeam, setSelectedTeam] = useState('All');
   const [data, setData] = useState<any[]>([]);
   const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc' | 'desc' } | null>(null);
+
+  const [hoveredSkater, setHoveredSkater] = useState<any>(null);
+  const [hoveredGoalie, setHoveredGoalie] = useState<any>(null);
+  const [hoveredDefense, setHoveredDefense] = useState<any>(null);
+  const [hoveredRookie, setHoveredRookie] = useState<any>(null);
 
   useEffect(() => {
     async function fetchLeagues() {
@@ -92,18 +119,29 @@ export default function NewspaperPage() {
     if (stats) setData(stats);
   }
 
-  const teams = useMemo(() => ['All', ...Array.from(new Set(data.map(p => p.team_name))).filter(Boolean).sort()], [data]);
-  const filteredData = useMemo(() => {
-    if (selectedTeam === 'All') return data;
-    return data.filter(p => p.team_name === selectedTeam);
-  }, [data, selectedTeam]);
+  const uniqueData = useMemo(() => {
+    const map = new Map();
+    data.forEach(item => {
+      const key = item.player_id || item.player_name;
+      if (!key) return;
+      if (!map.has(key)) {
+        map.set(key, { ...item });
+      } else {
+        const existing = map.get(key);
+        if ((item.gp || 0) > (existing.gp || 0)) {
+          map.set(key, { ...item });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [data]);
 
-  const sortMap: Record<string, string> = {
-    'TEAM': 'team_name', 'PLAYER': 'player_name', 'GP': 'gp', 'G': 'total_goals',
-    'A': 'total_assists', 'P': 'total_points', 'SOG': 'total_sog', 'CHKS': 'total_chks',
-    'PIM': 'total_pim', 'TOI': 'toi_minutes', 'W': 'wins', 'L': 'losses',
-    'T': 'ties', 'OTL': 'otl', 'SO': 'shutouts', 'SV%': 'sv_pct', 'GAA': 'gaa'
-  };
+  const teams = useMemo(() => ['All', ...Array.from(new Set(uniqueData.map(p => p.team_name))).filter(Boolean).sort()], [uniqueData]);
+
+  const filteredData = useMemo(() => {
+    if (selectedTeam === 'All') return uniqueData;
+    return uniqueData.filter(p => p.team_name === selectedTeam);
+  }, [uniqueData, selectedTeam]);
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
@@ -120,9 +158,62 @@ export default function NewspaperPage() {
     setSortConfig({ key, dir: sortConfig?.key === key && sortConfig.dir === 'desc' ? 'asc' : 'desc' });
   };
 
-  const getFilteredData = (type: 'skaters' | 'goalies' | 'defense') => {
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setHoveredSkater(null);
+    setHoveredGoalie(null);
+    setHoveredDefense(null);
+    setHoveredRookie(null);
+    if (tab === 'Skaters') {
+      setSortConfig({ key: 'total_points', dir: 'desc' });
+    } else if (tab === 'Goalies') {
+      setSortConfig({ key: 'gaa', dir: 'asc' });
+    } else {
+      setSortConfig(null);
+    }
+  };
+
+  const handleResetFilters = () => {
+    setSelectedTeam('All');
+    setHoveredSkater(null);
+    setHoveredGoalie(null);
+    setHoveredDefense(null);
+    setHoveredRookie(null);
+    setSortConfig(null);
+  };
+
+  const exportToCSV = () => {
+    const currentList = getFilteredData(activeTab === 'Goalies' ? 'goalies' : 'skaters');
+    if (currentList.length === 0) return;
+
+    const keys = Object.keys(currentList[0]);
+    const csvRows = [
+      keys.join(','),
+      ...currentList.map(row => keys.map(k => JSON.stringify(row[k] ?? '')).join(','))
+    ];
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.setAttribute('href', url);
+    a.setAttribute('download', `league_stats_${activeTab.toLowerCase()}.csv`);
+    a.click();
+  };
+
+  const sortMap: Record<string, string> = {
+    'TEAM': 'team_name', 'PLAYER': 'player_name', 'GP': 'gp', 'G': 'total_goals',
+    'A': 'total_assists', 'P': 'total_points', 'SOG': 'total_sog', 'CHKS': 'total_chks',
+    'PIM': 'total_pim', 'TOI': 'toi_minutes', 'W': 'wins', 'L': 'losses',
+    'T': 'ties', 'OTL': 'otl', 'SO': 'shutouts', 'SV%': 'sv_pct', 'GAA': 'gaa'
+  };
+
+  const getFilteredData = (type: 'skaters' | 'goalies' | 'defense', forHomeTab = false) => {
     if (type === 'defense') return sortedData.filter(p => p.pos_played === 'D');
-    return sortedData.filter(p => type === 'skaters' ? p.pos_played !== 'G' : p.pos_played === 'G');
+    if (type === 'goalies') {
+      const goalies = sortedData.filter(p => p.pos_played === 'G');
+      return forHomeTab ? goalies.filter(p => (p.gp || 0) >= 10) : goalies;
+    }
+    return sortedData.filter(p => p.pos_played !== 'G');
   };
 
   return (
@@ -131,28 +222,36 @@ export default function NewspaperPage() {
         <h1 className="text-4xl font-black uppercase tracking-tighter">League Statistics</h1>
       </header>
       <div className="mb-4 flex justify-between items-center">
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
           <select value={selectedLeague} onChange={(e) => { setSelectedLeague(e.target.value); loadData(e.target.value); }} className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer">
             {leagues.map((l) => <option key={l.league_id} value={l.league_id}>{l.league_name}</option>)}
           </select>
           {activeTab === 'Home' && (
             <select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)} className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer">
-              {teams.map((t) => <option key={t} value={t}>{t}</option>)}
+              {teams.map((t) => <option key={t} value={t}>{t === 'All' ? 'All Teams' : t}</option>)}
             </select>
           )}
+          <button onClick={handleResetFilters} className="bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800">
+            All / Reset
+          </button>
+        </div>
+        <div>
+          <button onClick={exportToCSV} className="flex items-center gap-2 bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800">
+            <FileSpreadsheet className="h-4 w-4" /> Export CSV
+          </button>
         </div>
       </div>
       <div className="flex gap-4 mb-4 text-xs uppercase border-b border-black pb-2 justify-center">
         {['Home', 'Skaters', 'Goalies'].map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={activeTab === tab ? 'font-bold' : 'text-gray-600'}>{tab}</button>
+          <button key={tab} onClick={() => handleTabChange(tab)} className={activeTab === tab ? 'font-bold underline' : 'text-gray-600'}>{tab}</button>
         ))}
       </div>
       {activeTab === 'Home' && (
         <div className="grid grid-cols-2 gap-6">
-          <StatCard title="Skaters" data={getFilteredData('skaters')} category="Skaters" onTabClick={setActiveTab} />
-          <StatCard title="Goalies" data={getFilteredData('goalies')} category="Goalies" onTabClick={setActiveTab} />
-          <StatCard title="Defensemen" data={getFilteredData('defense')} category="Skaters" onTabClick={setActiveTab} />
-          <StatCard title="Rookie Scoring Leaders" data={sortedData.filter(p => p.is_rookie)} category="Skaters" onTabClick={setActiveTab} />
+          <StatCard title="Skaters" data={getFilteredData('skaters')} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredSkater} setHoveredPlayer={setHoveredSkater} />
+          <StatCard title="Goalies" data={getFilteredData('goalies', true)} category="Goalies" onTabClick={handleTabChange} hoveredPlayer={hoveredGoalie} setHoveredPlayer={setHoveredGoalie} />
+          <StatCard title="Defensemen" data={getFilteredData('defense')} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredDefense} setHoveredPlayer={setHoveredDefense} />
+          <StatCard title="Rookie Scoring Leaders" data={sortedData.filter(p => p.is_rookie)} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredRookie} setHoveredPlayer={setHoveredRookie} />
         </div>
       )}
       {(activeTab === 'Skaters' || activeTab === 'Goalies') && (

@@ -15,8 +15,8 @@ export default function AwardsPage() {
   useEffect(() => {
     async function init() {
       const { data: seasonData } = await supabase
-        .from('league_seasons')
-        .select('league_id, season_name')
+        .from('leagues')
+        .select('league_id, league_name')
         .order('league_id', { ascending: false });
 
       setSeasons(seasonData || []);

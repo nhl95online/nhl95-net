@@ -15,7 +15,7 @@ export default function SchedulePage() {
   useEffect(() => {
     async function init() {
       const { data: seasonData } = await supabase
-        .from('league_seasons')
+        .from('leagues')
         .select('*')
         .order('league_id', { ascending: false });
 
