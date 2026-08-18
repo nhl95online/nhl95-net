@@ -871,10 +871,64 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
     });
 
     // 6. Aggregate played games
-    const processedGameIds = new Set<string>();
+    const resolveTeamKey = (id: any): number | null => {
+      const num = Number(id);
+      if (!num || num === 999 || num === 0 || num === 68) return null;
+      if (teamMap[num]) return num;
 
-    const processGameResult = (hId: number, aId: number, homeScore: number, awayScore: number, gameMeta: any) => {
-      if (hId === 999 || aId === 999 || hId === 0 || aId === 0 || hId === 68 || aId === 68) return;
+      const matchTeam = (teamsRes.data || []).find((t: any) =>
+        Number(t.team_id) === num ||
+        Number(t.coach_id) === num
+      );
+
+      if (matchTeam) {
+        const seasonMatch = (teamsRes.data || []).find((t: any) =>
+          Number(t.league_id) === sId &&
+          (
+            (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
+            (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
+            (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id))
+          )
+        );
+
+        if (seasonMatch && teamMap[Number(seasonMatch.team_id)]) {
+          return Number(seasonMatch.team_id);
+        }
+      }
+
+      const tInfo = matchTeam || (teamsRes.data || []).find((t: any) => Number(t.team_id) === num);
+      teamMap[num] = {
+        season_id: sId,
+        team_id: num,
+        gp: 0,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pts: 0,
+        gf: 0,
+        ga: 0,
+        otWins: 0,
+        otLosses: 0,
+        homeWins: 0,
+        homeLosses: 0,
+        homeTies: 0,
+        awayWins: 0,
+        awayLosses: 0,
+        awayTies: 0,
+        history: [] as string[],
+        conference: tInfo?.conference?.trim() || null,
+        division: tInfo?.division?.trim() || null,
+        clinch: null,
+        is_champion: false
+      };
+      return num;
+    };
+
+    const processGameResult = (rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any) => {
+      const hId = resolveTeamKey(rawHId);
+      const aId = resolveTeamKey(rawAId);
+
+      if (!hId || !aId || hId === aId) return;
       if (!teamMap[hId] || !teamMap[aId]) return;
 
       let isOT = false;
@@ -944,30 +998,27 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
       }
     };
 
-    // First process games matched via schedule
-    (scheduleData || []).forEach((game: any) => {
-      const gIdStr = String(game.game_id).trim();
-      const statsMatch = (statsData || []).find((s: any) => String(s.game_id).trim() === gIdStr);
-      if (statsMatch) {
-        processedGameIds.add(gIdStr);
-        const homeScore = Number(statsMatch.home_score) || 0;
-        const awayScore = Number(statsMatch.away_score) || 0;
-        const hId = Number(game.home_team_id) || Number(statsMatch.home_team_id);
-        const aId = Number(game.away_team_id) || Number(statsMatch.away_team_id);
-        processGameResult(hId, aId, homeScore, awayScore, statsMatch.game_meta);
-      }
-    });
-
-    // Also process any gamestats that might not have a matching schedule fixture
+    // Process all games in league_gamestats
+    const processedStatsGameIds = new Set<string>();
     (statsData || []).forEach((stats: any) => {
       const gIdStr = String(stats.game_id).trim();
-      if (!processedGameIds.has(gIdStr)) {
-        processedGameIds.add(gIdStr);
-        const homeScore = Number(stats.home_score) || 0;
-        const awayScore = Number(stats.away_score) || 0;
-        const hId = Number(stats.home_team_id);
-        const aId = Number(stats.away_team_id);
-        processGameResult(hId, aId, homeScore, awayScore, stats.game_meta);
+      processedStatsGameIds.add(gIdStr);
+
+      const homeScore = Number(stats.home_score) || 0;
+      const awayScore = Number(stats.away_score) || 0;
+      processGameResult(stats.home_team_id, stats.away_team_id, homeScore, awayScore, stats.game_meta);
+    });
+
+    // Also process any schedule fixtures marked played
+    (scheduleData || []).forEach((game: any) => {
+      const gIdStr = String(game.game_id).trim();
+      const rawPlayed = String(game.played || '').trim().toLowerCase();
+      const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
+
+      if (isPlayed && !processedStatsGameIds.has(gIdStr) && (game as any).game_meta) {
+        const homeScore = Number((game as any).home_score) || 0;
+        const awayScore = Number((game as any).away_score) || 0;
+        processGameResult(game.home_team_id, game.away_team_id, homeScore, awayScore, (game as any).game_meta);
       }
     });
 

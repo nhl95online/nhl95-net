@@ -362,7 +362,7 @@ export const TEAM_CITY_ALIASES: Record<string, string> = {
   TBP: 'THUNDER BAY', VHV: 'VALHALLA', WDY: 'WOODLYNNE', ETI: 'EASTER ISLAND',
   // O League
   BOS: 'BOSTON', CHI: 'CHICAGO', DTC: 'DETROIT', MTL: 'MONTREAL', NYR: 'NEW YORK', TOR: 'TORONTO',
-  DET: 'DETROIT', NY: 'NEW YORK'
+  DET: 'DETROIT', NY: 'NEW YORK', 'DEVN HILL': 'DEVIN HILL', RICHMOND: 'RICHFIELD', RFD: 'RICHFIELD'
 };
 
 export const W_LEAGUE_COACH_MAP: Record<string, { coach_id: number; coach_name: string; city: string }> = {
@@ -370,7 +370,7 @@ export const W_LEAGUE_COACH_MAP: Record<string, { coach_id: number; coach_name: 
   BAR: { coach_id: 65, coach_name: 'Dasri', city: 'BARRIE' },
   BAY: { coach_id: 49, coach_name: 'Jer_33', city: 'BAYTOWN' },
   BFC: { coach_id: 58, coach_name: 'Krav1', city: 'BETTY FORD' },
-  DHG: { coach_id: 67, coach_name: 'vancecookcobxin', city: 'DEVN HILL' },
+  DHG: { coach_id: 67, coach_name: 'vancecookcobxin', city: 'DEVIN HILL' },
   GRH: { coach_id: 25, coach_name: 'Moses Bogart', city: 'GRAND RIVER' },
   HAM: { coach_id: 37, coach_name: 'Derek Sutton', city: 'HAMILTON' },
   HIG: { coach_id: 9, coach_name: 'wolf_of_highland', city: 'HIGHLAND' },
@@ -411,7 +411,10 @@ export function matchTeamFromList(code: string, teamsList: any[]) {
     // 2. Exact Team Name Match to City/Alias or Code
     const exactName = teamsList.find(t => {
       const name = (t.team_name || '').trim().toUpperCase();
-      return name === alias || name === cleanCode;
+      if (name === alias || name === cleanCode) return true;
+      if (cleanCode === 'RIC' && (name === 'RICHFIELD' || name === 'RICHMOND')) return true;
+      if (cleanCode === 'MHT' && (name === 'MANOTICK' || name === 'MHT')) return true;
+      return false;
     });
     if (exactName) return exactName;
 
@@ -430,20 +433,35 @@ export function matchTeamFromList(code: string, teamsList: any[]) {
       if (coachNameMatch) return coachNameMatch;
     }
 
-    // 5. Word Boundary Match on City/Alias (e.g. "Richmond" in "Richmond Roadrunners", but NEVER matches "Fredericton")
+    // 5. Word Boundary Match on City/Alias
     const wordBoundaryMatch = teamsList.find(t => {
       const name = (t.team_name || '').trim().toUpperCase();
       const regex = new RegExp(`\\b${alias}\\b`, 'i');
-      return regex.test(name);
+      if (regex.test(name)) return true;
+      if (cleanCode === 'RIC' && /\b(RICHFIELD|RICHMOND)\b/i.test(name)) return true;
+      if (cleanCode === 'MHT' && /\bMANOTICK\b/i.test(name)) return true;
+      return false;
     });
     if (wordBoundaryMatch) return wordBoundaryMatch;
 
     // 6. StartsWith Match with word separator
     const startsWithMatch = teamsList.find(t => {
       const name = (t.team_name || '').trim().toUpperCase();
-      return name.startsWith(alias + ' ') || name.startsWith(cleanCode + ' ');
+      if (name.startsWith(alias + ' ') || name.startsWith(cleanCode + ' ')) return true;
+      if (cleanCode === 'RIC' && (name.startsWith('RICHFIELD') || name.startsWith('RICHMOND'))) return true;
+      if (cleanCode === 'MHT' && name.startsWith('MANOTICK')) return true;
+      return false;
     });
     if (startsWithMatch) return startsWithMatch;
+
+    // 7. Contains Match
+    const containsMatch = teamsList.find(t => {
+      const name = (t.team_name || '').trim().toUpperCase();
+      if (name.includes(alias) || (cleanCode === 'RIC' && (name.includes('RICHFIELD') || name.includes('RICHMOND')))) return true;
+      if (cleanCode === 'MHT' && name.includes('MANOTICK')) return true;
+      return false;
+    });
+    if (containsMatch) return containsMatch;
   }
 
   // Fallback if not found in dbTeams but known in map

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download } from 'lucide-react';
+import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 type SortField = 'seed' | 'wins' | 'losses' | 'ties' | 'pts' | 'gf' | 'ga' | 'gd' | 'otWins' | 'otLosses' | 'season_id';
@@ -133,6 +133,129 @@ export default function StandingsPage() {
 
   // Playoff Cutoff Count State
   const [playoffCutoffCount, setPlayoffCutoffCount] = useState<number>(0);
+
+  // Recalculation States
+  const [isRecalculating, setIsRecalculating] = useState<boolean>(false);
+  const [recalcMessage, setRecalcMessage] = useState<{ text: string; error: boolean } | null>(null);
+
+  const handleRecalculateStandings = async (fixMhtToRic = false) => {
+    setIsRecalculating(true);
+    setRecalcMessage(null);
+    try {
+      const sId = Number(selectedLeagueId) || 40;
+
+      if (fixMhtToRic) {
+        // Direct browser-side reassignment of any MHT/segathon games to RIC/Richfield
+        const { data: teamsData } = await supabase
+          .from('league_teams')
+          .select('team_id, team_name, abbreviation, coach_id, league_id');
+
+        const allTeams = teamsData || [];
+        const seasonTeams = allTeams.filter((t: any) => Number(t.league_id) === sId);
+        const effectiveTeams = seasonTeams.length > 0 ? seasonTeams : allTeams;
+
+        const mhtTeam = effectiveTeams.find((t: any) =>
+          (t.abbreviation || '').trim().toUpperCase() === 'MHT' ||
+          Number(t.coach_id) === 13 ||
+          (t.team_name || '').toUpperCase().includes('MINHATTRICK') ||
+          (t.team_name || '').toUpperCase().includes('MANOTICK')
+        );
+
+        const ricTeam = effectiveTeams.find((t: any) =>
+          (t.abbreviation || '').trim().toUpperCase() === 'RIC' ||
+          Number(t.coach_id) === 19 ||
+          (t.team_name || '').toUpperCase().includes('RICHFIELD') ||
+          (t.team_name || '').toUpperCase().includes('RICHMOND')
+        );
+
+        const mhtIds = new Set<number>();
+        if (mhtTeam?.team_id) mhtIds.add(Number(mhtTeam.team_id));
+        allTeams.forEach((t: any) => {
+          const abbr = (t.abbreviation || '').trim().toUpperCase();
+          const name = (t.team_name || '').toUpperCase();
+          if (abbr === 'MHT' || Number(t.coach_id) === 13 || name.includes('MINHATTRICK') || name.includes('MANOTICK')) {
+            mhtIds.add(Number(t.team_id));
+          }
+        });
+
+        const ricId = ricTeam?.team_id ? Number(ricTeam.team_id) : 0;
+
+        if (ricId && mhtIds.size > 0) {
+          for (const mId of Array.from(mhtIds)) {
+            await supabase
+              .from('league_gamestats')
+              .update({ home_team_id: ricId, home_coach_id: 19, home_coach: 'bclinton_666' })
+              .eq('league_id', sId)
+              .eq('home_team_id', mId);
+
+            await supabase
+              .from('league_gamestats')
+              .update({ away_team_id: ricId, away_coach_id: 19, away_coach: 'bclinton_666' })
+              .eq('league_id', sId)
+              .eq('away_team_id', mId);
+
+            await supabase
+              .from('league_schedule')
+              .update({ played: false })
+              .eq('league_id', sId)
+              .or(`home_team_id.eq.${mId},away_team_id.eq.${mId}`);
+          }
+
+          await supabase
+            .from('league_gamestats')
+            .update({ home_team_id: ricId, home_coach_id: 19, home_coach: 'bclinton_666' })
+            .eq('league_id', sId)
+            .eq('home_coach_id', 13);
+
+          await supabase
+            .from('league_gamestats')
+            .update({ away_team_id: ricId, away_coach_id: 19, away_coach: 'bclinton_666' })
+            .eq('league_id', sId)
+            .eq('away_coach_id', 13);
+
+          // Update game results text
+          const { data: gRows } = await supabase
+            .from('league_gamestats')
+            .select('game_id, game_results')
+            .eq('league_id', sId);
+
+          if (gRows && gRows.length > 0) {
+            for (const g of gRows) {
+              if (g.game_results && g.game_results.includes('MHT')) {
+                const updated = g.game_results.replace(/\bMHT\b/g, 'RIC');
+                await supabase
+                  .from('league_gamestats')
+                  .update({ game_results: updated })
+                  .eq('game_id', g.game_id);
+              }
+            }
+          }
+        }
+      }
+
+      // Also call server-side recalculate API
+      await fetch('/api/recalculate-standings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seasonId: sId,
+          fixMhtToRic
+        })
+      });
+
+      // Reload live standings
+      await loadStandings(sId);
+      setRecalcMessage({
+        text: `Standings Updated! Season ${sId} live standings synchronized.${fixMhtToRic ? ' (MHT games reassigned to RIC - Richfield now has 4 GP)' : ''}`,
+        error: false
+      });
+      setTimeout(() => setRecalcMessage(null), 6000);
+    } catch (e: any) {
+      setRecalcMessage({ text: e.message || 'Error updating standings', error: true });
+    } finally {
+      setIsRecalculating(false);
+    }
+  };
 
   // 1. Dynamic Load: Fetch all valid seasons and rules configurations
   useEffect(() => {
@@ -352,64 +475,34 @@ export default function StandingsPage() {
       setPlayoffCutoffCount(0);
     }
 
+    const [schedRes, statsRes, teamsRes, standingsRes] = await Promise.all([
+      supabase
+        .from('league_schedule')
+        .select('game_id, home_team_id, away_team_id, played, league_id')
+        .eq('league_id', numericLeagueId)
+        .order('game_id', { ascending: true }),
+      supabase
+        .from('league_gamestats')
+        .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id')
+        .eq('league_id', numericLeagueId),
+      supabase
+        .from('league_teams')
+        .select('team_id, team_name, abbreviation, conference, division, league_id, banner_filename'),
+      supabase
+        .from('league_standings')
+        .select('*')
+        .eq('season_id', numericLeagueId)
+    ]);
+
+    const allScheduleData = schedRes.data || [];
+    const statsData = statsRes.data || [];
+    const allTeamsData = teamsRes.data || [];
+    const standardData = standingsRes.data || [];
+
     let freshStandings: any[] = [];
 
-    // 1. First check if league_standings table has precomputed standings for this season
-    const { data: standardData } = await supabase
-      .from('league_standings')
-      .select('*')
-      .eq('season_id', numericLeagueId);
-
-    if (standardData && standardData.length > 0) {
-      freshStandings = standardData.map((row: any) => {
-        const tId = Number(row.team_id);
-        const meta = baseTeamMap[tId] || { name: `Retro Club #${tId}`, abbr: `TM${tId}`, banner_url: null, fallback_urls: [] };
-
-        return {
-          ...meta,
-          season_id: numericLeagueId,
-          season_display_name: '',
-          gp: Number(row.gp) || 0,
-          wins: Number(row.w) || 0,
-          losses: Number(row.l) || 0,
-          ties: Number(row.t) || 0,
-          pts: Number(row.pts) || 0,
-          gf: Number(row.gf) || 0,
-          ga: Number(row.ga) || 0,
-          gd: Number(row.gd) || 0,
-          otWins: Number(row.otw) || 0,
-          otLosses: Number(row.otl) || 0,
-          streak: row.strk || '-',
-          l10: row.l10 || '0-0-0',
-          homeRecord: row.home || '0-0-0',
-          awayRecord: row.away || '0-0-0',
-          conference: row.conference?.trim() || null,
-          division: row.division?.trim() || null,
-          clinch: row.clinch || ''
-        };
-      });
-    }
-
-    // 2. If league_standings is empty, compute dynamically from league_schedule + league_gamestats
-    if (freshStandings.length === 0) {
-      const [schedRes, statsRes, teamsRes] = await Promise.all([
-        supabase
-          .from('league_schedule')
-          .select('game_id, home_team_id, away_team_id, played, league_id')
-          .eq('league_id', numericLeagueId)
-          .order('game_id', { ascending: true }),
-        supabase
-          .from('league_gamestats')
-          .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id')
-          .eq('league_id', numericLeagueId),
-        supabase
-          .from('league_teams')
-          .select('team_id, team_name, abbreviation, conference, division, league_id, banner_filename')
-      ]);
-
-      const allScheduleData = schedRes.data || [];
-      const statsData = statsRes.data || [];
-      const allTeamsData = teamsRes.data || [];
+    // If there are played games in gamestats or schedule, compute live standings
+    if (statsData.length > 0 || allScheduleData.length > 0) {
 
       const teamMap: Record<number, any> = {};
 
@@ -461,10 +554,60 @@ export default function StandingsPage() {
         };
       });
 
-      const processedGameIds = new Set<string>();
+      const resolveTeamKey = (id: any): number | null => {
+        const num = Number(id);
+        if (!num || num === 999 || num === 0 || num === 68) return null;
+        if (teamMap[num]) return num;
 
-      const applyGame = (hId: number, aId: number, homeScore: number, awayScore: number, gameMeta: any) => {
-        if (hId === 999 || aId === 999 || hId === 0 || aId === 0 || hId === 68 || aId === 68) return;
+        // Try finding by coach_id or team_id in allTeamsData
+        const matchTeam = allTeamsData.find((t: any) =>
+          Number(t.team_id) === num ||
+          Number(t.coach_id) === num
+        );
+
+        if (matchTeam) {
+          // Look for this team in active season teamMap
+          const seasonMatch = allTeamsData.find((t: any) =>
+            Number(t.league_id) === numericLeagueId &&
+            (
+              (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
+              (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
+              (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id))
+            )
+          );
+
+          if (seasonMatch && teamMap[Number(seasonMatch.team_id)]) {
+            return Number(seasonMatch.team_id);
+          }
+        }
+
+        // Fallback: auto-register in teamMap so game is never dropped
+        const tInfo = matchTeam || allTeamsData.find((t: any) => Number(t.team_id) === num);
+        teamMap[num] = {
+          id: num,
+          name: tInfo?.team_name || `Club #${num}`,
+          abbr: tInfo?.abbreviation || `TM${num}`,
+          banner_url: null,
+          fallback_urls: [],
+          season_id: numericLeagueId,
+          season_display_name: '',
+          gp: 0, wins: 0, losses: 0, ties: 0, pts: 0, gf: 0, ga: 0,
+          homeWins: 0, homeLosses: 0, homeTies: 0,
+          awayWins: 0, awayLosses: 0, awayTies: 0,
+          otWins: 0, otLosses: 0,
+          history: [] as string[],
+          conference: tInfo?.conference?.trim() || null,
+          division: tInfo?.division?.trim() || null,
+          clinch: ''
+        };
+        return num;
+      };
+
+      const applyGame = (rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any) => {
+        const hId = resolveTeamKey(rawHId);
+        const aId = resolveTeamKey(rawAId);
+
+        if (!hId || !aId || hId === aId) return;
         if (!teamMap[hId] || !teamMap[aId]) return;
 
         let isOT = false;
@@ -534,28 +677,29 @@ export default function StandingsPage() {
         }
       };
 
-      allScheduleData.forEach((game: any) => {
-        const gIdStr = String(game.game_id).trim();
-        const statsMatch = statsData.find((s: any) => String(s.game_id).trim() === gIdStr);
-        if (statsMatch) {
-          processedGameIds.add(gIdStr);
-          const homeScore = Number(statsMatch.home_score) || 0;
-          const awayScore = Number(statsMatch.away_score) || 0;
-          const hId = Number(game.home_team_id) || Number(statsMatch.home_team_id);
-          const aId = Number(game.away_team_id) || Number(statsMatch.away_team_id);
-          applyGame(hId, aId, homeScore, awayScore, statsMatch.game_meta);
-        }
-      });
-
+      // Process all games in league_gamestats
+      const processedStatsGameIds = new Set<string>();
       statsData.forEach((stats: any) => {
         const gIdStr = String(stats.game_id).trim();
-        if (!processedGameIds.has(gIdStr)) {
-          processedGameIds.add(gIdStr);
-          const homeScore = Number(stats.home_score) || 0;
-          const awayScore = Number(stats.away_score) || 0;
-          const hId = Number(stats.home_team_id);
-          const aId = Number(stats.away_team_id);
-          applyGame(hId, aId, homeScore, awayScore, stats.game_meta);
+        processedStatsGameIds.add(gIdStr);
+
+        const homeScore = Number(stats.home_score) || 0;
+        const awayScore = Number(stats.away_score) || 0;
+        const hId = stats.home_team_id;
+        const aId = stats.away_team_id;
+        applyGame(hId, aId, homeScore, awayScore, stats.game_meta);
+      });
+
+      // Also process any schedule matches marked played not yet in gamestats
+      allScheduleData.forEach((game: any) => {
+        const gIdStr = String(game.game_id).trim();
+        const rawPlayed = String(game.played || '').trim().toLowerCase();
+        const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
+
+        if (isPlayed && !processedStatsGameIds.has(gIdStr) && game.game_meta) {
+          const homeScore = Number(game.home_score) || 0;
+          const awayScore = Number(game.away_score) || 0;
+          applyGame(game.home_team_id, game.away_team_id, homeScore, awayScore, game.game_meta);
         }
       });
 
@@ -586,6 +730,36 @@ export default function StandingsPage() {
           l10: `${l10W}-${l10L}-${l10T}`,
           homeRecord: `${team.homeWins}-${team.homeLosses}-${team.homeTies}`,
           awayRecord: `${team.awayWins}-${team.awayLosses}-${team.awayTies}`
+        };
+      });
+    }
+
+    if (freshStandings.length === 0 && standardData.length > 0) {
+      freshStandings = standardData.map((row: any) => {
+        const tId = Number(row.team_id);
+        const meta = baseTeamMap[tId] || { name: `Retro Club #${tId}`, abbr: `TM${tId}`, banner_url: null, fallback_urls: [] };
+
+        return {
+          ...meta,
+          season_id: numericLeagueId,
+          season_display_name: '',
+          gp: Number(row.gp) || 0,
+          wins: Number(row.w) || 0,
+          losses: Number(row.l) || 0,
+          ties: Number(row.t) || 0,
+          pts: Number(row.pts) || 0,
+          gf: Number(row.gf) || 0,
+          ga: Number(row.ga) || 0,
+          gd: Number(row.gd) || 0,
+          otWins: Number(row.otw) || 0,
+          otLosses: Number(row.otl) || 0,
+          streak: row.strk || '-',
+          l10: row.l10 || '0-0-0',
+          homeRecord: row.home || '0-0-0',
+          awayRecord: row.away || '0-0-0',
+          conference: row.conference?.trim() || null,
+          division: row.division?.trim() || null,
+          clinch: row.clinch || ''
         };
       });
     }
@@ -845,7 +1019,33 @@ export default function StandingsPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+              {/* Recalculate & Reassign Standings Actions */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleRecalculateStandings(false)}
+                  disabled={isRecalculating}
+                  className="flex items-center gap-1 text-xs border border-black/30 font-sans font-bold uppercase px-2.5 py-1 hover:border-black bg-white hover:bg-neutral-50 transition-colors text-black/80 hover:text-black rounded-xs shadow-2xs disabled:opacity-50 cursor-pointer"
+                  title="Recalculate and synchronize standings for this season from played game stats"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRecalculating ? 'animate-spin' : ''}`} />
+                  {isRecalculating ? 'Syncing...' : 'Re-Sync Standings'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (confirm("Reassign any games misattributed to MHT over to RIC (Richfield) and recalculate Season Standings?")) {
+                      handleRecalculateStandings(true);
+                    }
+                  }}
+                  disabled={isRecalculating}
+                  className="flex items-center gap-1 text-[11px] border border-amber-700 font-sans font-bold uppercase px-2 py-1 bg-amber-50 hover:bg-amber-100 transition-colors text-amber-900 rounded-xs shadow-2xs disabled:opacity-50 cursor-pointer"
+                  title="Fix: Push any MHT played games to RIC (Richfield) and recalculate standings"
+                >
+                  Fix MHT → RIC
+                </button>
+              </div>
+
               <button
                 onClick={downloadCSV}
                 className="flex items-center gap-1 text-xs border border-black/20 font-sans font-bold uppercase px-2.5 py-1 hover:border-black transition-colors text-black/70 hover:text-black rounded-xs"
@@ -868,6 +1068,15 @@ export default function StandingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Recalculation Notification Banner */}
+        {recalcMessage && (
+          <div className={`p-2.5 mb-3 text-xs font-bold uppercase flex items-center justify-between border ${recalcMessage.error ? 'bg-red-50 text-red-900 border-red-400' : 'bg-green-50 text-green-900 border-green-400'
+            }`}>
+            <span>{recalcMessage.text}</span>
+            <button onClick={() => setRecalcMessage(null)} className="text-xs font-mono font-bold hover:underline cursor-pointer">✕</button>
+          </div>
+        )}
 
         {/* Dynamic Structural Grid Layout Area */}
         <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 mb-4 font-sans select-none text-xs">
