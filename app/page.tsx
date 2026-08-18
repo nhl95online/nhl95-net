@@ -81,7 +81,7 @@ const DEFAULT_BRIEFING = {
     context: "Confirming archival Sabres footage through pure aura"
   },
   bulletin: {
-    title: "COMMISSIONER'S DESK: SEASON 40 PUCK DROP",
+    title: "COMMISSIONER'S DESK: SEASON O01 and W18 PUCK DROP",
     text: "All team managers are instructed to confirm their active rosters and check emulator netplay configs. Rulebook updates regarding manual goalies and crease violations are now in full effect.",
     author: "League HQ",
     date: "Today"
@@ -539,8 +539,8 @@ export default function HomePage() {
                 type="button"
                 onClick={() => handleLeagueChange(league)}
                 className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors ${selectedLeague === league
-                    ? 'bg-black text-white'
-                    : 'bg-white text-black hover:bg-neutral-200'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-200'
                   }`}
               >
                 {league}
