@@ -313,8 +313,8 @@ export default function AllTeamsContent() {
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
               className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
-                  ? 'bg-black text-white shadow-xs'
-                  : 'text-black hover:bg-neutral-100'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-black hover:bg-neutral-100'
                 }`}
               title="All Leagues"
             >
@@ -329,8 +329,8 @@ export default function AllTeamsContent() {
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
                   className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
-                      ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
-                      : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
+                    ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
+                    : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
                     }`}
                   title={config?.name || `${type} League`}
                 >

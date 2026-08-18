@@ -76,8 +76,8 @@ const CURRENT_LEAGUES_CONFIG = [
     draftRounds: ['1st', '2nd', '3rd'],
     accentColor: 'amber',
     badgeText: 'Classic Era',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   {
     id: 'Q',
@@ -829,34 +829,34 @@ export default function TradesPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif overflow-x-hidden pb-12">
-      <div className="max-w-[1400px] mx-auto px-4 py-4 md:py-6">
+      <div className="max-w-[1400px] mx-auto px-2 sm:px-4 py-3 sm:py-6">
 
         {/* 1. OFFICIAL SITE HEADER (STANDINGS / RECORDS STYLE) */}
         <div className="border-b-4 border-black pt-2 pb-4 text-center relative">
-          <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tight">Trade Machine</h1>
-          <p className="text-sm uppercase tracking-widest mt-2 italic">The Official Record of NHL95 Athletics</p>
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight">Trade Machine</h1>
+          <p className="text-xs sm:text-sm uppercase tracking-widest mt-1 italic">The Official Record of NHL95 Athletics</p>
         </div>
 
         {/* 2. CONTEXT / MODE NAVIGATION BAR */}
-        <div className="border-y border-black p-2 flex flex-col lg:flex-row items-center justify-between mt-4 mb-4 gap-4 bg-[#f4f1ea]">
+        <div className="border-y border-black p-2 flex flex-col lg:flex-row items-stretch lg:items-center justify-between mt-3 mb-4 gap-3 bg-[#f4f1ea]">
           {/* Left: Tab Switchers */}
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-full pb-1">
             <button
               onClick={() => setActiveTab('simulator')}
-              className={`px-4 py-1.5 font-bold uppercase text-xs transition border border-black flex items-center gap-1.5 cursor-pointer ${activeTab === 'simulator'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
+              className={`px-3 sm:px-4 py-1.5 font-bold uppercase text-xs transition border border-black flex items-center gap-1.5 cursor-pointer shrink-0 ${activeTab === 'simulator'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
-              <span>Trade Simulator</span>
+              <span>Simulator</span>
             </button>
 
             <button
               onClick={() => { setActiveTab('W'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'W'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               W League
@@ -865,8 +865,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('O'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'O'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               Original 6
@@ -875,8 +875,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('Q'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'Q'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               The Q
@@ -885,8 +885,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('V'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'V'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               Vintage
@@ -895,8 +895,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('ALL'); setSelectedSeasonFilter('ALL'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'ALL'
-                ? 'bg-black text-white'
-                : 'bg-white text-black hover:bg-neutral-100'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               All Trades
@@ -933,8 +933,8 @@ export default function TradesPage() {
                       key={cfg.id}
                       onClick={() => setSimLeague(cfg.id as any)}
                       className={`p-2.5 border text-left flex items-center gap-3 transition-all cursor-pointer rounded-xs ${isSelected
-                        ? 'bg-black text-white border-black shadow-sm'
-                        : 'bg-white/80 text-black border-black/20 hover:border-black hover:bg-white'
+                          ? 'bg-black text-white border-black shadow-sm'
+                          : 'bg-white/80 text-black border-black/20 hover:border-black hover:bg-white'
                         }`}
                     >
                       <img
@@ -961,238 +961,253 @@ export default function TradesPage() {
               </div>
             </div>
 
-            {/* DEAL ASSESSMENT VISUALIZER (SIDE-BY-SIDE: TEAMS ON LEFT/RIGHT & ASSETS IN THE MIDDLE WITH ARROWS) */}
+            {/* DEAL ASSESSMENT VISUALIZER (MATCHING USER MOCKUP EXACTLY) */}
             <div className="bg-white border border-black p-4 md:p-5 shadow-sm space-y-4">
 
-              {/* Header: Status Verdict & Controls */}
+              {/* Header: Status Verdict & Controls (Clean Gazette Outline Style) */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-3 border-b border-black pb-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-black/70">ASSESSMENT STATUS:</span>
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-black uppercase border ${verdictBadge.color}`}>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-black">ASSESSMENT STATUS:</span>
+
+                  {/* Verdict Badge in Clean Bordered Box */}
+                  <div className="border border-black bg-white px-3 py-1 text-xs font-black uppercase flex items-center gap-1.5 shadow-2xs">
                     <verdictBadge.icon className="w-3.5 h-3.5" />
-                    {verdictBadge.text}
-                  </span>
+                    <span>{verdictBadge.text}</span>
+                  </div>
+
+                  {/* Margin Differential Box */}
                   {valDifference > 0 && (teamATotalVal > 0 || teamBTotalVal > 0) && (
-                    <span className="text-xs font-mono font-bold text-neutral-700 bg-neutral-100 px-2 py-0.5 border border-neutral-300">
+                    <div className="border border-black bg-white px-2.5 py-1 text-xs font-mono font-bold text-black shadow-2xs">
                       (Margin: ±{valDifference} pts / {marginPercent}%)
-                    </span>
+                    </div>
                   )}
                 </div>
 
+                {/* Right Action Buttons */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={copyTradeForDiscord}
-                    className="flex items-center gap-1.5 bg-black text-white border border-black text-xs font-bold uppercase px-3 py-1.5 hover:bg-neutral-800 transition cursor-pointer"
+                    className="flex items-center gap-1.5 bg-black text-white border border-black text-xs font-bold uppercase px-3.5 py-1.5 hover:bg-neutral-800 transition cursor-pointer"
                     title="Copy formatted proposal for Discord"
                   >
                     {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? "Copied!" : "Copy for Discord"}
+                    <span>{copied ? "COPIED!" : "COPY FOR DISCORD"}</span>
                   </button>
                   <button
                     onClick={handleResetTrade}
-                    className="flex items-center gap-1 bg-transparent border border-black text-xs font-bold uppercase px-2.5 py-1.5 hover:bg-black hover:text-white transition cursor-pointer"
+                    className="flex items-center gap-1 bg-white text-black border border-black text-xs font-bold uppercase px-3 py-1.5 hover:bg-black hover:text-white transition cursor-pointer"
                     title="Clear all selected assets"
                   >
-                    <RotateCcw className="w-3 h-3" /> Reset
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>RESET</span>
                   </button>
                 </div>
               </div>
 
-              {/* THREE-COLUMN HORIZONTAL DECK: TEAM A (LEFT) | ASSET EXCHANGE & ARROWS (MIDDLE) | TEAM B (RIGHT) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch border border-black p-3 bg-[#fdfaf5]">
+              {/* FIVE-SECTION HORIZONTAL DECK (AS SHOWN IN USER MOCKUP) */}
+              <div className="border border-black bg-[#f4f1ea] p-3 md:p-4">
+                <div className="flex flex-col lg:flex-row items-stretch gap-3">
 
-                {/* 1. LEFT COLUMN: TEAM A SUMMARY & 100x100 LOGO */}
-                <div className="lg:col-span-3 bg-white p-3.5 border border-black flex flex-col justify-between shadow-2xs">
-                  <div className="flex items-center gap-3">
-                    {teamA?.logo_url ? (
-                      <img
-                        src={teamA.logo_url}
-                        alt={teamA.team_name}
-                        style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                        className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shrink-0"
-                      />
-                    ) : (
-                      <div
-                        style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                        className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-xl shrink-0"
-                      >
-                        {teamA?.abbreviation || 'TM1'}
+                  {/* 1. TEAM A SUMMARY CARD (LEFT) */}
+                  <div className="w-full lg:w-[28%] bg-white border border-black p-3.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-start gap-3">
+                        {teamA?.logo_url ? (
+                          <img
+                            src={teamA.logo_url}
+                            alt={teamA.team_name}
+                            style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
+                            className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shrink-0"
+                          />
+                        ) : (
+                          <div
+                            style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
+                            className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-xl shrink-0"
+                          >
+                            {teamA?.abbreviation || 'TM1'}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase border border-black bg-white px-2 py-0.5 inline-block font-mono mb-1">
+                            TEAM A
+                          </span>
+                          <h4 className="font-black text-sm md:text-base uppercase tracking-tight leading-snug text-black">
+                            {teamA?.team_name || 'Team A'}
+                          </h4>
+                          <p className="text-[11px] text-neutral-600 font-sans mt-0.5 truncate">
+                            Coach: {teamA?.coach_name || 'Front Office'}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[9px] font-bold uppercase bg-neutral-100 text-black px-1.5 py-0.5 border border-black/30 inline-block font-mono">
-                        Team A
-                      </span>
-                      <h4 className="font-black text-sm md:text-base uppercase tracking-tight truncate leading-tight text-black mt-1">
-                        {teamA?.team_name || 'Team A'}
-                      </h4>
-                      <p className="text-[10px] text-neutral-600 font-sans truncate">Coach: {teamA?.coach_name}</p>
+                    </div>
+
+                    <div className="mt-4 pt-2 border-t border-black/15 flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-neutral-600 tracking-wider">OUTGOING TOTAL</span>
+                      <div className="border border-black bg-white px-3 py-1 font-black font-mono text-base text-black shadow-2xs">
+                        {teamATotalVal} PTS
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-black/10 flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-neutral-500">Outgoing Total</span>
-                    <span className="text-base font-black font-mono bg-neutral-100 text-black px-2 py-0.5 border border-black">
-                      {teamATotalVal} PTS
-                    </span>
-                  </div>
-                </div>
-
-                {/* 2. MIDDLE COLUMN: LIVE ASSET PACKAGES SEPARATED BY DIRECTIONAL ARROWS */}
-                <div className="lg:col-span-6 flex flex-col justify-between gap-2 bg-white p-3 border border-black">
-
-                  {/* Top: Team A's Outgoing Assets ➔ (Heading to Team B) */}
-                  <div className="bg-[#f4f1ea] border border-black/40 p-2">
-                    <div className="flex items-center justify-between gap-2 border-b border-black/20 pb-1 mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-black" />
-                        <span className="text-xs font-black uppercase font-mono text-black">
-                          {teamA?.abbreviation || 'Team A'} Sends ({teamATotalVal} pts)
-                        </span>
+                  {/* 2. TEAM A OUTGOING ASSET PACKAGE */}
+                  <div className="w-full lg:w-[22%] bg-[#fdfaf5] border border-black p-3 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="border border-black bg-white px-2.5 py-1 text-xs font-mono font-black uppercase text-center mb-2.5 shadow-2xs">
+                        {teamA?.abbreviation || 'TEAM A'} SENDS ({teamATotalVal} PTS)
                       </div>
-                      <div className="flex items-center gap-1 bg-black text-white px-2 py-0.5 text-[10px] font-mono font-bold">
+
+                      {teamASendingPlayers.length === 0 && teamASendingPicks.length === 0 ? (
+                        <p className="text-[11px] italic text-neutral-500 py-4 text-center font-sans">
+                          No assets selected from {teamA?.abbreviation || 'Team A'}.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                          {teamASendingPlayers.map(p => (
+                            <div
+                              key={p.id}
+                              className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
+                            >
+                              <span className="truncate">{p.name}</span>
+                              <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
+                                OVR {p.ovr}
+                              </span>
+                            </div>
+                          ))}
+                          {teamASendingPicks.map(pk => (
+                            <div
+                              key={pk.id}
+                              className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
+                            >
+                              <span>{pk.year} {pk.round} Rd</span>
+                              <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
+                                {pk.value} pts
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex justify-end">
+                      <div className="bg-black text-white px-3 py-1 text-[11px] font-mono font-bold flex items-center gap-1.5 shadow-2xs">
                         <span>Going to {teamB?.abbreviation || 'Team B'}</span>
-                        <ArrowRight className="w-3 h-3 text-white" />
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </div>
                     </div>
-
-                    {/* Outgoing Asset Pills from Team A */}
-                    {teamASendingPlayers.length === 0 && teamASendingPicks.length === 0 ? (
-                      <p className="text-[11px] italic text-neutral-500 py-1 text-center font-sans">
-                        No assets selected from {teamA?.abbreviation || 'Team A'}.
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
-                        {teamASendingPlayers.map(p => (
-                          <span
-                            key={p.id}
-                            className="inline-flex items-center gap-1 bg-white border border-black px-2 py-0.5 text-[11px] font-bold"
-                          >
-                            <span>{p.name}</span>
-                            <span className="font-mono text-[9px] bg-neutral-100 text-black px-1 font-black">OVR {p.ovr}</span>
-                          </span>
-                        ))}
-                        {teamASendingPicks.map(pk => (
-                          <span
-                            key={pk.id}
-                            className="inline-flex items-center gap-1 bg-white border border-black px-2 py-0.5 text-[11px] font-bold"
-                          >
-                            <span>{pk.year} {pk.round} Rd</span>
-                            <span className="font-mono text-[9px] bg-neutral-100 text-black px-1 font-black">+{pk.value}pts</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
-                  {/* Middle Balance & Differential Divider */}
-                  <div className="flex items-center justify-center gap-2 py-0.5">
-                    <div className="h-[1px] flex-1 bg-black/20" />
-                    <div className="px-2.5 py-0.5 bg-black text-white text-[10px] font-mono font-bold uppercase border border-black flex items-center gap-1.5">
-                      <Scale className="w-3 h-3 text-white" />
-                      <span>{valDifference === 0 ? 'EVEN DEAL' : `DIFF: ±${valDifference} PTS`}</span>
+                  {/* 3. CENTRAL BALANCE INDICATOR */}
+                  <div className="w-full lg:w-[6%] flex items-center justify-center py-2 lg:py-0">
+                    <div className="bg-black text-white border border-black px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase flex items-center gap-1 shadow-2xs whitespace-nowrap">
+                      <Scale className="w-3 h-3" />
+                      <span>DIFF: ±{valDifference} PTS</span>
                     </div>
-                    <div className="h-[1px] flex-1 bg-black/20" />
                   </div>
 
-                  {/* Bottom: Team B's Outgoing Assets 🠔 (Heading to Team A) */}
-                  <div className="bg-[#f4f1ea] border border-black/40 p-2">
-                    <div className="flex items-center justify-between gap-2 border-b border-black/20 pb-1 mb-1.5">
-                      <div className="flex items-center gap-1 bg-black text-white px-2 py-0.5 text-[10px] font-mono font-bold">
-                        <ArrowLeft className="w-3 h-3 text-white" />
+                  {/* 4. TEAM B OUTGOING ASSET PACKAGE */}
+                  <div className="w-full lg:w-[22%] bg-[#fdfaf5] border border-black p-3 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="border border-black bg-white px-2.5 py-1 text-xs font-mono font-black uppercase text-center mb-2.5 shadow-2xs">
+                        {teamB?.abbreviation || 'TEAM B'} SENDS ({teamBTotalVal} PTS)
+                      </div>
+
+                      {teamBSendingPlayers.length === 0 && teamBSendingPicks.length === 0 ? (
+                        <p className="text-[11px] italic text-neutral-500 py-4 text-center font-sans">
+                          No assets selected from {teamB?.abbreviation || 'Team B'}.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                          {teamBSendingPlayers.map(p => (
+                            <div
+                              key={p.id}
+                              className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
+                            >
+                              <span className="truncate">{p.name}</span>
+                              <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
+                                OVR {p.ovr}
+                              </span>
+                            </div>
+                          ))}
+                          {teamBSendingPicks.map(pk => (
+                            <div
+                              key={pk.id}
+                              className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
+                            >
+                              <span>{pk.year} {pk.round} Rd</span>
+                              <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
+                                {pk.value} pts
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex justify-start">
+                      <div className="bg-black text-white px-3 py-1 text-[11px] font-mono font-bold flex items-center gap-1.5 shadow-2xs">
+                        <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Going to {teamA?.abbreviation || 'Team A'}</span>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-black uppercase font-mono text-black">
-                          {teamB?.abbreviation || 'Team B'} Sends ({teamBTotalVal} pts)
-                        </span>
-                        <span className="w-2 h-2 rounded-full bg-black" />
+                    </div>
+                  </div>
+
+                  {/* 5. TEAM B SUMMARY CARD (RIGHT) */}
+                  <div className="w-full lg:w-[28%] bg-white border border-black p-3.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-start gap-3 justify-end text-right">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold uppercase border border-black bg-white px-2 py-0.5 inline-block font-mono mb-1">
+                            TEAM B
+                          </span>
+                          <h4 className="font-black text-sm md:text-base uppercase tracking-tight leading-snug text-black">
+                            {teamB?.team_name || 'Team B'}
+                          </h4>
+                          <p className="text-[11px] text-neutral-600 font-sans mt-0.5 truncate">
+                            Coach: {teamB?.coach_name || 'Front Office'}
+                          </p>
+                        </div>
+                        {teamB?.logo_url ? (
+                          <img
+                            src={teamB.logo_url}
+                            alt={teamB.team_name}
+                            style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
+                            className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shrink-0"
+                          />
+                        ) : (
+                          <div
+                            style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
+                            className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-xl shrink-0"
+                          >
+                            {teamB?.abbreviation || 'TM2'}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Outgoing Asset Pills from Team B */}
-                    {teamBSendingPlayers.length === 0 && teamBSendingPicks.length === 0 ? (
-                      <p className="text-[11px] italic text-neutral-500 py-1 text-center font-sans">
-                        No assets selected from {teamB?.abbreviation || 'Team B'}.
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto justify-end">
-                        {teamBSendingPlayers.map(p => (
-                          <span
-                            key={p.id}
-                            className="inline-flex items-center gap-1 bg-white border border-black px-2 py-0.5 text-[11px] font-bold"
-                          >
-                            <span>{p.name}</span>
-                            <span className="font-mono text-[9px] bg-neutral-100 text-black px-1 font-black">OVR {p.ovr}</span>
-                          </span>
-                        ))}
-                        {teamBSendingPicks.map(pk => (
-                          <span
-                            key={pk.id}
-                            className="inline-flex items-center gap-1 bg-white border border-black px-2 py-0.5 text-[11px] font-bold"
-                          >
-                            <span>{pk.year} {pk.round} Rd</span>
-                            <span className="font-mono text-[9px] bg-neutral-100 text-black px-1 font-black">+{pk.value}pts</span>
-                          </span>
-                        ))}
+                    <div className="mt-4 pt-2 border-t border-black/15 flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-neutral-600 tracking-wider">OUTGOING TOTAL</span>
+                      <div className="border border-black bg-white px-3 py-1 font-black font-mono text-base text-black shadow-2xs">
+                        {teamBTotalVal} PTS
                       </div>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* 3. RIGHT COLUMN: TEAM B SUMMARY & 100x100 LOGO */}
-                <div className="lg:col-span-3 bg-white p-3.5 border border-black flex flex-col justify-between shadow-2xs">
-                  <div className="flex items-center gap-3 justify-end text-right">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[9px] font-bold uppercase bg-neutral-100 text-black px-1.5 py-0.5 border border-black/30 inline-block font-mono">
-                        Team B
-                      </span>
-                      <h4 className="font-black text-sm md:text-base uppercase tracking-tight truncate leading-tight text-black mt-1">
-                        {teamB?.team_name || 'Team B'}
-                      </h4>
-                      <p className="text-[10px] text-neutral-600 font-sans truncate">Coach: {teamB?.coach_name}</p>
                     </div>
-                    {teamB?.logo_url ? (
-                      <img
-                        src={teamB.logo_url}
-                        alt={teamB.team_name}
-                        style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                        className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shrink-0"
-                      />
-                    ) : (
-                      <div
-                        style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                        className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg shrink-0"
-                      >
-                        {teamB?.abbreviation || 'TM2'}
-                      </div>
-                    )}
                   </div>
 
-                  <div className="mt-3 pt-2 border-t border-black/10 flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-neutral-500">Outgoing Total</span>
-                    <span className="text-base font-black font-mono bg-neutral-100 text-black px-2 py-0.5 border border-black">
-                      {teamBTotalVal} PTS
-                    </span>
-                  </div>
                 </div>
-
               </div>
 
-              {/* Proportional Volume Balance Meter */}
+              {/* PROPORTIONAL VOLUME BALANCE METER (SOLID BLACK VS WHITE AS IN MOCKUP) */}
               <div>
-                <div className="flex justify-between text-[11px] font-mono font-bold text-neutral-700 mb-1">
+                <div className="flex justify-between text-[11px] font-mono font-bold text-black mb-1">
                   <span>{teamA?.abbreviation || 'Team A'}: {teamATotalVal} pts ({teamATotalVal + teamBTotalVal > 0 ? Math.round((teamATotalVal / (teamATotalVal + teamBTotalVal)) * 100) : 50}%)</span>
                   <span>{teamB?.abbreviation || 'Team B'}: {teamBTotalVal} pts ({teamATotalVal + teamBTotalVal > 0 ? Math.round((teamBTotalVal / (teamATotalVal + teamBTotalVal)) * 100) : 50}%)</span>
                 </div>
-                <div className="w-full bg-neutral-200 h-2.5 border border-black overflow-hidden flex">
+                <div className="w-full bg-white h-3 border-2 border-black overflow-hidden flex">
                   <div
                     className="bg-black h-full transition-all duration-300"
                     style={{ width: `${teamATotalVal + teamBTotalVal > 0 ? (teamATotalVal / (teamATotalVal + teamBTotalVal)) * 100 : 50}%` }}
                   />
                   <div
-                    className="bg-neutral-500 h-full transition-all duration-300"
+                    className="bg-white h-full transition-all duration-300"
                     style={{ width: `${teamATotalVal + teamBTotalVal > 0 ? (teamBTotalVal / (teamATotalVal + teamBTotalVal)) * 100 : 50}%` }}
                   />
                 </div>
@@ -1221,7 +1236,7 @@ export default function TradesPage() {
                         src={teamA.logo_url}
                         alt={teamA.team_name}
                         style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                        className="w-[100px] h-[100px] object-contain shrink-0 p-1 border border-black bg-white shadow-2xs"
+                        className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shadow-2xs"
                       />
                     ) : (
                       <div
@@ -1268,8 +1283,8 @@ export default function TradesPage() {
                               key={pos}
                               onClick={() => setPosFilterA(pos)}
                               className={`px-1.5 py-0.5 border transition cursor-pointer ${posFilterA === pos
-                                ? 'bg-black text-white border-black font-black'
-                                : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
+                                  ? 'bg-black text-white border-black font-black'
+                                  : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
                                 }`}
                             >
                               {pos}
@@ -1354,8 +1369,8 @@ export default function TradesPage() {
                                     key={pk.id}
                                     onClick={() => togglePickA(pk)}
                                     className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${isSelected
-                                      ? 'bg-black text-white border-black'
-                                      : 'bg-white border-neutral-300 hover:border-black'
+                                        ? 'bg-black text-white border-black'
+                                        : 'bg-white border-neutral-300 hover:border-black'
                                       }`}
                                   >
                                     <span>{pk.round} Rd</span>
@@ -1427,8 +1442,8 @@ export default function TradesPage() {
                               key={pos}
                               onClick={() => setPosFilterB(pos)}
                               className={`px-1.5 py-0.5 border transition cursor-pointer ${posFilterB === pos
-                                ? 'bg-black text-white border-black font-black'
-                                : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
+                                  ? 'bg-black text-white border-black font-black'
+                                  : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
                                 }`}
                             >
                               {pos}
@@ -1513,8 +1528,8 @@ export default function TradesPage() {
                                     key={pk.id}
                                     onClick={() => togglePickB(pk)}
                                     className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${isSelected
-                                      ? 'bg-black text-white border-black'
-                                      : 'bg-white border-neutral-300 hover:border-black'
+                                        ? 'bg-black text-white border-black'
+                                        : 'bg-white border-neutral-300 hover:border-black'
                                       }`}
                                   >
                                     <span>{pk.round} Rd</span>
@@ -1720,8 +1735,8 @@ export default function TradesPage() {
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[9px] uppercase font-mono text-neutral-600 font-bold">NET:</span>
                                   <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${outcome.netImpactT1 >= 0
-                                    ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
-                                    : 'bg-red-100 text-red-950 border-red-600'
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
+                                      : 'bg-red-100 text-red-950 border-red-600'
                                     }`}>
                                     {outcome.netImpactT1 >= 0 ? `+${outcome.netImpactT1} PTS` : `${outcome.netImpactT1} PTS`}
                                   </span>
@@ -1807,8 +1822,8 @@ export default function TradesPage() {
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[9px] uppercase font-mono text-neutral-600 font-bold">NET:</span>
                                   <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${outcome.netImpactT2 >= 0
-                                    ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
-                                    : 'bg-red-100 text-red-950 border-red-600'
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
+                                      : 'bg-red-100 text-red-950 border-red-600'
                                     }`}>
                                     {outcome.netImpactT2 >= 0 ? `+${outcome.netImpactT2} PTS` : `${outcome.netImpactT2} PTS`}
                                   </span>

@@ -94,15 +94,15 @@ export default function AwardsPage() {
   }, [selectedSeason]);
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] p-8 font-serif text-black">
-      <header className="text-center border-b-4 border-black pb-8 mb-8">
-        <h1 className="text 7xl font-black bold tracking-tighter uppercase mb-2">The Trophy Case</h1>
-        <div className="mt-6 flex justify-center items-center gap-4">
-          <label className="font-bold uppercase tracking-widest text-sm">Select Archive Season:</label>
+    <div className="min-h-screen bg-[#f4f1ea] p-3 sm:p-8 font-serif text-black">
+      <header className="text-center border-b-4 border-black pb-4 sm:pb-8 mb-6 sm:mb-8">
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase mb-2">The Trophy Case</h1>
+        <div className="mt-4 sm:mt-6 flex flex-wrap justify-center items-center gap-2 sm:gap-4">
+          <label className="font-bold uppercase tracking-widest text-xs sm:text-sm">Select Archive Season:</label>
           <select
             value={selectedSeason}
             onChange={(e) => setSelectedSeason(Number(e.target.value))}
-            className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer"
+            className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer text-xs sm:text-sm"
           >
             {seasons.map(s => (
               <option key={s.league_id} value={s.league_id}>{s.season_name}</option>
@@ -111,8 +111,8 @@ export default function AwardsPage() {
         </div>
       </header>
 
-      {/* 3-Column Grid */}
-      <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-3 gap-6">
+      {/* Responsive Grid: 1 col on phone, 2 on tablet, 3 on desktop */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         {awards.map((a, idx) => (
           <div key={idx} className="p-4 border border-black bg-[#fdfaf5] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div
@@ -137,12 +137,12 @@ export default function AwardsPage() {
             </div>
 
             <div className="flex gap-4 items-center mb-4">
-              {a.trophy_image_url && <img src={a.trophy_image_url} className="w-20 h-20 object-contain" />}
-              <div>
-                <p className="text-2xl font-black italic leading-tight">{a.winner_name || "\u00A0"}</p>
+              {a.trophy_image_url && <img src={a.trophy_image_url} className="w-16 sm:w-20 h-16 sm:h-20 object-contain shrink-0" />}
+              <div className="min-w-0 flex-1">
+                <p className="text-xl sm:text-2xl font-black italic leading-tight truncate">{a.winner_name || "\u00A0"}</p>
                 <div className="flex items-center gap-2 mt-1">
-                  {a.team_logo && <img src={a.team_logo} className="w-6 h-6 object-contain" />}
-                  <p className="font-bold text-xs uppercase tracking-tight">{a.team_name}</p>
+                  {a.team_logo && <img src={a.team_logo} className="w-5 sm:w-6 h-5 sm:h-6 object-contain shrink-0" />}
+                  <p className="font-bold text-xs uppercase tracking-tight truncate">{a.team_name}</p>
                 </div>
               </div>
             </div>

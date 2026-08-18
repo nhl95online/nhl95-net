@@ -81,7 +81,7 @@ const DEFAULT_BRIEFING = {
     context: "Confirming archival Sabres footage through pure aura"
   },
   bulletin: {
-    title: "COMMISSIONER'S DESK: SEASON O01 and W18 PUCK DROP",
+    title: "COMMISSIONER'S DESK: SEASON 40 PUCK DROP",
     text: "All team managers are instructed to confirm their active rosters and check emulator netplay configs. Rulebook updates regarding manual goalies and crease violations are now in full effect.",
     author: "League HQ",
     date: "Today"
@@ -272,10 +272,10 @@ export default function HomePage() {
   }, [selectedSeason]);
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-6">
-      <header className="border-b-4 border-black pb-4 mb-4 text-center">
-        <h1 className="text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-        <p className="text-sm italic">"Welcome to the Darkside of NHL95"</p>
+    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-2 sm:p-4 md:p-6">
+      <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 text-center">
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
+        <p className="text-xs sm:text-sm italic">"Ask Ticklepuss where you want to be tickled"</p>
       </header>
 
       {/* Real-World NHL Current News Wire Bar */}
@@ -284,7 +284,7 @@ export default function HomePage() {
           <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
             AP NHL WIRE
           </span>
-          <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap scrollbar-none text-neutral-800">
+          <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap no-scrollbar text-neutral-800">
             {briefing.nhl_wire.map((story: any, sIdx: number) => (
               <a
                 key={sIdx}
@@ -302,8 +302,8 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-8">
-        <section className="col-span-12 md:col-span-3 border-r border-black pr-2 space-y-6">
+      <div className="grid grid-cols-12 gap-4 sm:gap-6 md:gap-8">
+        <section className="col-span-12 md:col-span-3 border-r-0 md:border-r border-black pr-0 md:pr-2 pb-4 md:pb-0 border-b md:border-b-0 space-y-4 sm:space-y-6">
           {/* 1. Live Now Section (if any live events) */}
           {briefing?.events?.some((e: any) => e.is_live) && (
             <div className="border-2 border-red-700 bg-red-50 p-3 shadow-xs">
@@ -514,7 +514,7 @@ export default function HomePage() {
           )}
         </main>
 
-        <aside className="col-span-12 md:col-span-3 border-l border-black pl-4">
+        <aside className="col-span-12 md:col-span-3 border-l-0 md:border-l border-black pl-0 md:pl-4 pt-4 md:pt-0 border-t md:border-t-0">
           <div className="flex justify-between items-center mb-2">
             <h2 className="font-bold uppercase text-sm">STANDINGS</h2>
             <select
@@ -531,16 +531,16 @@ export default function HomePage() {
           </div>
 
           {/* League Filter / Sort Buttons */}
-          <div className="flex flex-wrap items-center gap-1 mb-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 mr-0.5">League:</span>
+          <div className="flex items-center gap-1 mb-3 overflow-x-auto no-scrollbar max-w-full pb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 mr-0.5 shrink-0">League:</span>
             {(['ALL', 'W', 'Q', 'O', 'V', 'G'] as const).map((league) => (
               <button
                 key={league}
                 type="button"
                 onClick={() => handleLeagueChange(league)}
-                className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors ${selectedLeague === league
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-200'
+                className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors shrink-0 ${selectedLeague === league
+                    ? 'bg-black text-white'
+                    : 'bg-white text-black hover:bg-neutral-200'
                   }`}
               >
                 {league}
@@ -548,51 +548,55 @@ export default function HomePage() {
             ))}
           </div>
 
-          <table className="w-full text-[10px] border-collapse">
-            <thead>
-              <tr className="border-b border-black text-left">
-                <th className="pb-1 font-bold">RK</th>
-                <th className="pb-1 font-bold">TM</th>
-                <th className="pb-1 font-bold">W-L-T</th>
-                <th className="pb-1 font-bold">PTS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.map((s: any, index: number) => (
-                <tr key={index} className="border-b border-slate-200">
-                  <td className="py-1 font-bold">{index + 1}</td>
-                  <td className="py-1 font-bold flex items-center gap-2">
-                    {s.league_teams?.logo_url && (
-                      <img
-                        src={s.league_teams.logo_url}
-                        alt={s.league_teams.abbreviation}
-                        className="w-4 h-4 object-contain"
-                      />
-                    )}
-                    {s.league_teams?.abbreviation || 'N/A'}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[10px] border-collapse min-w-[240px]">
+              <thead>
+                <tr className="border-b border-black text-left">
+                  <th className="pb-1 font-bold">RK</th>
+                  <th className="pb-1 font-bold">TM</th>
+                  <th className="pb-1 font-bold text-center">REC</th>
+                  <th className="pb-1 font-bold text-center">PTS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {standings.map((s: any, index: number) => (
+                  <tr key={index} className="border-b border-slate-200">
+                    <td className="py-1 font-bold">{index + 1}</td>
+                    <td className="py-1 font-bold flex items-center gap-1.5">
+                      {s.league_teams?.logo_url && (
+                        <img
+                          src={s.league_teams.logo_url}
+                          alt={s.league_teams.abbreviation}
+                          className="w-4 h-4 object-contain shrink-0"
+                        />
+                      )}
+                      <span>{s.league_teams?.abbreviation || 'N/A'}</span>
 
-                    {s.is_champion && getTrophyUrl(selectedSeason) && (
-                      <img
-                        src={getTrophyUrl(selectedSeason)!}
-                        alt="Championship Winner"
-                        className="w-4 h-4 ml-1 object-contain"
-                        title="Championship Winner"
-                      />
-                    )}
-                  </td>
-                  <td className="py-1">{s.w}-{s.l}-{s.t}</td>
-                  <td className="py-1 font-bold">{s.pts}</td>
-                </tr>
-              ))}
-              {standings.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-3 text-center text-slate-500 italic">
-                    No standings available
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                      {s.is_champion && getTrophyUrl(selectedSeason) && (
+                        <img
+                          src={getTrophyUrl(selectedSeason)!}
+                          alt="Championship Winner"
+                          className="w-4 h-4 ml-1 object-contain shrink-0"
+                          title="Championship Winner"
+                        />
+                      )}
+                    </td>
+                    <td className="py-1 text-center font-mono">
+                      {s.w}-{s.l}{s.t ? `-${s.t}` : ''}{s.otl ? `-${s.otl}` : ''}
+                    </td>
+                    <td className="py-1 font-bold text-center">{s.pts}</td>
+                  </tr>
+                ))}
+                {standings.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-3 text-center text-slate-500 italic">
+                      No standings available
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           <a href="/standings" className="block mt-4 text-[9px] underline italic text-slate-600 hover:text-black">
             View full standings →
           </a>

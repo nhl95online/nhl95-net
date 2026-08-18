@@ -400,7 +400,7 @@ export default function RecordsPage() {
           </div>
 
           {/* League Selector Tabs with League Logos */}
-          <div className="flex flex-wrap items-center gap-2 bg-white border-2 border-black p-1.5 shadow-sm self-start md:self-center rounded-xs">
+          <div className="flex items-center gap-2 bg-white border-2 border-black p-1.5 shadow-sm self-start md:self-center rounded-xs overflow-x-auto max-w-full no-scrollbar">
             {LEAGUES.map((l) => {
               const isSelected = selectedLeague === l.id;
               return (
@@ -409,7 +409,7 @@ export default function RecordsPage() {
                   type="button"
                   onClick={() => setSelectedLeague(l.id)}
                   title={l.name}
-                  className={`h-12 px-3 flex items-center justify-center transition cursor-pointer border-2 rounded-xs ${isSelected
+                  className={`h-10 sm:h-12 px-2.5 sm:px-3 flex items-center justify-center transition cursor-pointer border-2 rounded-xs shrink-0 ${isSelected
                       ? 'bg-black text-white border-black shadow-sm ring-2 ring-yellow-400'
                       : 'bg-[#faf8f5] text-black border-neutral-300 hover:border-black hover:bg-neutral-100'
                     }`}
@@ -418,7 +418,7 @@ export default function RecordsPage() {
                     <img
                       src={l.logoUrl}
                       alt={l.name}
-                      className="h-8 max-w-[48px] object-contain"
+                      className="h-6 sm:h-8 max-w-[40px] sm:max-w-[48px] object-contain"
                       onError={(e) => {
                         if (l.fallbackUrl && (e.currentTarget as HTMLImageElement).src !== l.fallbackUrl) {
                           (e.currentTarget as HTMLImageElement).src = l.fallbackUrl;
@@ -438,9 +438,9 @@ export default function RecordsPage() {
         </div>
 
         {/* 2. Category Buttons & Selectors */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 bg-white border-2 border-black p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-black uppercase text-gray-600 mr-2">Category:</span>
+        <div className="mt-4 sm:mt-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4 bg-white border-2 border-black p-3 sm:p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <span className="text-xs font-black uppercase text-gray-600 mr-1 sm:mr-2">Category:</span>
             {[
               { id: 'points', label: 'Points' },
               { id: 'goals', label: 'Goals' },
@@ -552,8 +552,14 @@ export default function RecordsPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          {/* Mobile Swipe Notice */}
+          <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 mb-2 rounded-xs uppercase tracking-wider">
+            <span>↔ Swipe table sideways for full records</span>
+            <span>{leaderboard.length} Leaders</span>
+          </div>
+
+          <div className="overflow-x-auto -mx-2 sm:mx-0">
+            <table className="w-full text-left text-xs border-collapse min-w-[650px]">
               <thead>
                 <tr className="bg-black text-white uppercase text-[10px] font-black">
                   <th className="py-3 px-3 border-r border-neutral-800 w-14 text-center">Rank</th>

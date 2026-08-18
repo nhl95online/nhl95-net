@@ -49,8 +49,7 @@ export default function DraftPage() {
         setData(rawData.map((d: any) => {
           const p = d.league_player_database;
           const t = d.league_teams;
-          // Accessing JSON meta 'ovr' from ratings if it's stored as an object/JSON
-          const ovr = p?.ratings?.ovr || null;
+          const ovr = p?.ratings?.ovr || p?.ratings?.Ovr || null;
 
           return {
             team: t?.team_name || "Unknown",
@@ -60,7 +59,7 @@ export default function DraftPage() {
             pos: p?.pos || "N/A",
             ovr: ovr,
             transaction: d.transaction_type,
-            logo: t?.banner_filename || "",
+            logo: t?.logo_url || "",
             year: d.year
           };
         }));
@@ -80,70 +79,109 @@ export default function DraftPage() {
   }, [data, showCapital, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] p-8 text-white font-serif">
-      <div className="max-w-6xl mx-auto">
+    <div className="bg-[#f4f1ea] text-black min-h-screen p-3 sm:p-8 font-serif text-sm">
+      <div className="max-w-7xl mx-auto">
+        <header className="border-b-4 border-black pb-4 mb-6 text-center">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">The Draft Floor</h1>
+          <p className="text-xs uppercase tracking-widest font-sans font-bold text-gray-700 mt-1">Official Selection Archives & Draft Capital</p>
+        </header>
 
-        {/* Header & Controls */}
-        <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-2xl font-bold uppercase tracking-widest mb-4">DRAFT CENTRAL</h1>
-            <div className="flex gap-4">
-              <select value={selectedLeague} onChange={(e) => setSelectedLeague(e.target.value)} className="bg-white text-black px-2 py-1 font-bold uppercase text-sm cursor-pointer border border-gray-300">
+        <div className="flex flex-col md:flex-row justify-between items-start gap-4 sm:gap-6 mb-6">
+          <div className="space-y-3 w-full md:w-auto">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <select
+                value={selectedLeague}
+                onChange={(e) => setSelectedLeague(e.target.value)}
+                className="bg-[#fdfaf5] text-black px-3 py-1.5 font-bold uppercase text-xs cursor-pointer border-2 border-black"
+              >
                 <option value="ALL">ALL LEAGUES</option>
                 <option value="W01">W01 (1995)</option>
                 {leagues.map(l => <option key={l.id} value={l.id}>{l.league_name}</option>)}
               </select>
-              <input placeholder="Search..." onChange={(e) => setSearchQuery(e.target.value)} className="bg-white text-black px-2 py-1 text-sm w-48 focus:outline-none border border-gray-300" />
-              <button onClick={() => setShowCapital(!showCapital)} className="bg-white text-black px-4 py-1 text-sm font-bold uppercase hover:bg-gray-200 border border-gray-300">
-                {showCapital ? "View Picks" : "View Capital"}
+              <input
+                placeholder="SEARCH DRAFT..."
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-[#fdfaf5] text-black px-3 py-1.5 text-xs font-bold uppercase w-full sm:w-48 focus:outline-none border-2 border-black"
+              />
+              <button
+                onClick={() => setShowCapital(!showCapital)}
+                className="bg-black text-white px-3 sm:px-4 py-1.5 text-xs font-bold uppercase hover:bg-neutral-800 border-2 border-black"
+              >
+                {showCapital ? "View Selections" : "View Capital Picks"}
               </button>
             </div>
           </div>
 
           {/* Podium */}
-          <div className="w-64 bg-white text-black p-4 border border-gray-300 shadow-lg">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest border-b border-black mb-2">PODIUM</h3>
+          <div className="w-full md:w-72 bg-[#fdfaf5] text-black p-3 sm:p-4 border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <h3 className="text-[10px] font-black uppercase tracking-widest border-b-2 border-black pb-1 mb-2 text-center bg-black text-white">
+              PODIUM SELECTION
+            </h3>
             {podium ? (
               <div className="text-center">
-                <p className="text-md font-black uppercase">{podium.player}</p>
+                <p className="text-base font-black uppercase">{podium.player}</p>
                 <p className="text-xs font-bold text-gray-700 mb-1">{podium.pos} | OVR: {podium.ovr ?? 'N/A'}</p>
-                <p className="text-[10px] italic border-t border-black pt-1">{podium.team} • Pick {podium.pk}</p>
+                <p className="text-[11px] italic border-t border-black pt-1 font-bold">{podium.team} • Pick #{podium.pk} (Rd {podium.rd})</p>
               </div>
             ) : (
-              <p className="text-[10px] italic text-gray-500 py-4">No player selected</p>
+              <p className="text-[11px] italic text-gray-500 py-3 text-center">Click any row to view on podium</p>
             )}
           </div>
         </div>
 
+        {/* Mobile Swipe Notice */}
+        <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 mb-2 rounded-xs uppercase tracking-wider">
+          <span>↔ Swipe table sideways for all draft columns</span>
+          <span>{filteredData.length} Picks</span>
+        </div>
+
         {/* Table */}
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="text-gray-500 text-xs uppercase tracking-widest border-b border-gray-800">
-              <th className="py-3">YEAR</th>
-              <th className="py-3">TEAM</th>
-              <th className="py-3">RD</th>
-              <th className="py-3">PK</th>
-              <th className="py-3">PLAYER</th>
-              <th className="py-3">POS</th>
-              <th className="py-3">OVR</th>
-              <th className="py-3">TRANSACTION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredData.map((d, i) => (
-              <tr key={i} onClick={() => setPodium(d)} className={`border-b border-gray-900 cursor-pointer hover:bg-gray-900 transition-colors ${podium?.player === d.player ? 'bg-gray-800' : ''}`}>
-                <td className="py-4 text-sm font-bold">{d.year}</td>
-                <td className="py-4 flex items-center gap-2 text-sm">{d.logo && <img src={d.logo} className="w-6 h-6 object-contain" alt="" />} {d.team}</td>
-                <td className="py-4 text-sm">{d.rd}</td>
-                <td className="py-4 text-sm">{d.pk}</td>
-                <td className="py-4 text-sm font-bold">{d.player}</td>
-                <td className="py-4 text-sm">{d.pos}</td>
-                <td className="py-4 text-sm">{d.ovr}</td>
-                <td className="py-4 text-sm text-gray-400">{d.transaction}</td>
+        <div className="bg-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] overflow-x-auto -mx-1 sm:mx-0">
+          <table className="w-full text-left border-collapse text-xs min-w-[650px]">
+            <thead>
+              <tr className="bg-black text-white text-[10px] uppercase tracking-wider">
+                <th className="py-2.5 px-3">YEAR</th>
+                <th className="py-2.5 px-3">TEAM</th>
+                <th className="py-2.5 px-3 text-center">RD</th>
+                <th className="py-2.5 px-3 text-center">PK</th>
+                <th className="py-2.5 px-3">PLAYER</th>
+                <th className="py-2.5 px-3 text-center">POS</th>
+                <th className="py-2.5 px-3 text-center">OVR</th>
+                <th className="py-2.5 px-3">TRANSACTION</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredData.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center italic text-gray-500 font-bold uppercase">
+                    No draft records found matching query.
+                  </td>
+                </tr>
+              ) : (
+                filteredData.map((d, i) => (
+                  <tr
+                    key={i}
+                    onClick={() => setPodium(d)}
+                    className={`cursor-pointer hover:bg-yellow-50 transition-colors ${podium?.player === d.player && podium?.pk === d.pk ? 'bg-yellow-100 font-bold' : ''
+                      }`}
+                  >
+                    <td className="py-2.5 px-3 font-mono font-bold">{d.year}</td>
+                    <td className="py-2.5 px-3 flex items-center gap-2 font-bold uppercase">
+                      {d.logo && <img src={d.logo} className="w-5 h-5 object-contain" alt="" />}
+                      <span>{d.team}</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono">{d.rd}</td>
+                    <td className="py-2.5 px-3 text-center font-mono font-bold">#{d.pk}</td>
+                    <td className="py-2.5 px-3 font-bold uppercase">{d.player}</td>
+                    <td className="py-2.5 px-3 text-center font-mono">{d.pos}</td>
+                    <td className="py-2.5 px-3 text-center font-mono font-bold">{d.ovr ?? '-'}</td>
+                    <td className="py-2.5 px-3 text-gray-600 font-sans text-[11px]">{d.transaction || 'Original Selection'}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

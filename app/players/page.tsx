@@ -101,7 +101,7 @@ export default function PlayersPage() {
   const [leagueAverages, setLeagueAverages] = useState<Record<string, number>>({});
   const [sort, setSort] = useState({ column: 'player_name', asc: true });
 
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
   const PORTRAIT_BUCKET = "nhl%20players";
   const BANNER_BUCKET = "nhl%20banners";
   const years = Array.from({ length: 2026 - 1909 + 1 }, (_, i) => 1909 + i);
@@ -162,25 +162,25 @@ export default function PlayersPage() {
     : [];
 
   return (
-    <div className="p-4 max-w-7xl mx-auto grid grid-cols-12 gap-4 font-mono bg-[#E5E0D5] min-h-screen text-[10px]">
+    <div className="p-2 sm:p-4 max-w-7xl mx-auto grid grid-cols-12 gap-4 font-mono bg-[#E5E0D5] min-h-screen text-[10px]">
       <div className="col-span-12 lg:col-span-7 space-y-2">
-        <div className="grid grid-cols-2 gap-1">
-          <input className="col-span-2 bg-[#F5F2E6] border-2 border-black p-1 text-[10px] uppercase text-black" placeholder="SEARCH PLAYER..." onChange={(e) => { setSearch(e.target.value); setPage(0); fetchPlayers(e.target.value, year, 0) }} />
-          <select className="bg-[#F5F2E6] border-2 border-black p-1 text-[10px] uppercase text-black" onChange={(e) => { setYear(e.target.value); setPage(0); fetchPlayers(search, e.target.value, 0) }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <input className="sm:col-span-2 bg-[#F5F2E6] border-2 border-black p-1.5 text-[10px] uppercase text-black" placeholder="SEARCH PLAYER..." onChange={(e) => { setSearch(e.target.value); setPage(0); fetchPlayers(e.target.value, year, 0) }} />
+          <select className="bg-[#F5F2E6] border-2 border-black p-1.5 text-[10px] uppercase text-black" onChange={(e) => { setYear(e.target.value); setPage(0); fetchPlayers(search, e.target.value, 0) }}>
             <option value="">ALL YEARS</option>
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <button onClick={downloadCSV} className="bg-black text-white p-1 uppercase font-bold hover:bg-green-700">Download CSV</button>
+          <button onClick={downloadCSV} className="bg-black text-white p-1.5 uppercase font-bold hover:bg-green-700">Download CSV</button>
         </div>
 
         <div className="flex justify-between items-center text-xs text-black border-y border-black py-2">
-          <button disabled={page === 0} onClick={() => setPage(page - 1)} className="hover:text-green-700 font-bold">◀ PREV</button>
-          <span>PAGE {page + 1}</span>
-          <button onClick={() => setPage(page + 1)} className="hover:text-green-700 font-bold">NEXT ▶</button>
+          <button disabled={page === 0} onClick={() => setPage(page - 1)} className="hover:text-green-700 font-bold cursor-pointer disabled:opacity-40">◀ PREV</button>
+          <span className="font-bold">PAGE {page + 1}</span>
+          <button onClick={() => setPage(page + 1)} className="hover:text-green-700 font-bold cursor-pointer">NEXT ▶</button>
         </div>
 
-        <div className="bg-[#F5F2E6] border-2 border-black rounded overflow-hidden">
-          <table className="w-full text-left text-[9px] uppercase text-black">
+        <div className="bg-[#F5F2E6] border-2 border-black rounded overflow-x-auto">
+          <table className="w-full text-left text-[9px] uppercase text-black min-w-[320px]">
             <thead className="bg-black text-white">
               <tr>
                 <th className="p-1.5 cursor-pointer" onClick={() => handleSort('player_name')}>PLAYER ↕</th>
@@ -193,7 +193,7 @@ export default function PlayersPage() {
             <tbody className="divide-y divide-black">
               {players.map(p => (
                 <tr key={p.player_id} onClick={() => setSelected(p)} className="cursor-pointer hover:bg-slate-200">
-                  <td className="p-1.5">{p.player_name}</td>
+                  <td className="p-1.5 font-bold">{p.player_name}</td>
                   <td className="p-1.5">{p.pos}</td>
                   <td className="p-1.5">{p.team_default}</td>
                   <td className="p-1.5">{p.player_info?.source_year}</td>
@@ -207,7 +207,7 @@ export default function PlayersPage() {
 
       <div className="col-span-12 lg:col-span-5">
         {selected ? (
-          <div className="relative w-full bg-[#F5F2E6] text-black p-4 border-[3px] border-black shadow-[5px_5px_0px_rgba(0,0,0,1)] rounded-lg sticky top-4">
+          <div className="relative w-full bg-[#F5F2E6] text-black p-3 sm:p-4 border-[3px] border-black shadow-[5px_5px_0px_rgba(0,0,0,1)] rounded-lg lg:sticky lg:top-4">
             <div className="flex justify-between items-center mb-3 border-b-2 border-black pb-1">
               <h2 className="text-xl font-black uppercase italic tracking-tighter">{selected.player_name}</h2>
               <div className="bg-black text-white px-3 py-1 font-black text-lg">OVR {selected.ratings?.Ovr || '0'}</div>

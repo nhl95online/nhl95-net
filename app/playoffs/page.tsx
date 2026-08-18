@@ -708,11 +708,19 @@ export default function PlayoffBracket() {
         </p>
       </header>
 
+      {/* Mobile Swipe Notice */}
+      <div className="md:hidden max-w-[1440px] mx-auto px-2 mb-2">
+        <div className="flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 rounded-xs uppercase tracking-wider">
+          <span>↔ Swipe sideways to explore playoff bracket</span>
+          <span className="font-mono text-emerald-800 font-black">Bracket Mode</span>
+        </div>
+      </div>
+
       {/* Main scrolling viewport container */}
       <div className="w-full overflow-x-auto pb-8 scrollbar-thin px-2">
 
         {/* Clean Dropdown & Controls Toolbar */}
-        <div className="min-w-[1260px] max-w-[1440px] mx-auto flex items-center justify-between mb-3 px-1">
+        <div className="w-full max-w-[1440px] mx-auto flex flex-wrap items-center justify-between mb-3 gap-2 px-1">
 
           {/* Season / Edition Selector */}
           {seasons.length > 0 && (
@@ -738,9 +746,9 @@ export default function PlayoffBracket() {
           )}
 
           {/* Desktop Zoom Controls */}
-          <div className="hidden lg:flex items-center gap-1 bg-[#fdfaf5] border-2 border-black p-0.5 shadow-[2px_2px_0px_rgba(0,0,0,1)] text-xs">
+          <div className="flex items-center gap-1 bg-[#fdfaf5] border-2 border-black p-0.5 shadow-[2px_2px_0px_rgba(0,0,0,1)] text-xs">
             <button
-              onClick={() => setZoomLevel(prev => Math.max(75, prev - 10))}
+              onClick={() => setZoomLevel(prev => Math.max(60, prev - 10))}
               title="Zoom Out"
               className="p-1 hover:bg-neutral-200 text-black transition cursor-pointer"
             >
@@ -756,17 +764,14 @@ export default function PlayoffBracket() {
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
-            {zoomLevel !== 100 && (
-              <button
-                onClick={() => setZoomLevel(100)}
-                title="Reset Zoom"
-                className="p-1 hover:bg-neutral-200 text-red-700 transition cursor-pointer"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            )}
+            <button
+              onClick={() => setZoomLevel(100)}
+              title="Reset Zoom"
+              className="p-1 hover:bg-neutral-200 text-black transition cursor-pointer border-l border-black/20"
+            >
+              <RotateCcw className="w-3 h-3" />
+            </button>
           </div>
-
         </div>
 
         {/* ==========================================

@@ -25,8 +25,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   V: {
     name: 'Vintage',
@@ -778,8 +778,8 @@ export default function SchedulePage() {
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
               className={`px-4 py-1.5 h-12 md:h-14 flex items-center justify-center text-xs md:text-sm font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-black hover:bg-neutral-100'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-black hover:bg-neutral-100'
                 }`}
               title="All Leagues"
             >
@@ -794,8 +794,8 @@ export default function SchedulePage() {
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
                   className={`px-3 py-1 flex items-center justify-center transition-all h-12 md:h-14 border-2 shrink-0 cursor-pointer ${isSelected
-                    ? 'bg-yellow-100 border-black shadow-xs ring-2 ring-black'
-                    : 'border-transparent bg-transparent opacity-70 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
+                      ? 'bg-yellow-100 border-black shadow-xs ring-2 ring-black'
+                      : 'border-transparent bg-transparent opacity-70 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
                     }`}
                   title={config?.name || `${type} League`}
                 >
@@ -926,8 +926,8 @@ export default function SchedulePage() {
                       key={game.game_id}
                       onClick={() => handleSelectGame(game)}
                       className={`w-full p-3 border-2 transition text-xs font-bold uppercase cursor-pointer flex items-center justify-between gap-2 shadow-xs ${isSelected
-                        ? 'border-black bg-yellow-100 ring-2 ring-black font-black'
-                        : game.glowClass
+                          ? 'border-black bg-yellow-100 ring-2 ring-black font-black'
+                          : game.glowClass
                         }`}
                     >
                       {/* Away Team */}
@@ -965,12 +965,12 @@ export default function SchedulePage() {
                           <span className="text-slate-400 font-mono text-xs">@</span>
                         )}
                         <span className={`text-[9px] px-1.5 py-0.2 border uppercase font-mono mt-0.5 ${game.isPlayed
-                          ? game.isOT
-                            ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold'
-                            : game.isTie
-                              ? 'bg-green-100 text-green-900 border-green-400 font-bold'
-                              : 'bg-black text-white border-black font-bold'
-                          : 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
+                            ? game.isOT
+                              ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold'
+                              : game.isTie
+                                ? 'bg-green-100 text-green-900 border-green-400 font-bold'
+                                : 'bg-black text-white border-black font-bold'
+                            : 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
                           }`}>
                           {game.statusBadge}
                         </span>

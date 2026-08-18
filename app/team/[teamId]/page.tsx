@@ -1311,8 +1311,8 @@ function TeamPageContent({ teamId }: { teamId: string }) {
                           key={`${s.season_id}-${s.team_id || idx}`}
                           onClick={() => handleSeasonChange(Number(s.season_id), Number(s.team_id))}
                           className={`border-b border-gray-200 font-bold cursor-pointer transition ${isCurrent
-                            ? 'bg-yellow-200 border-2 border-black font-black'
-                            : idx % 2 === 0 ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-white hover:bg-yellow-50'
+                              ? 'bg-yellow-200 border-2 border-black font-black'
+                              : idx % 2 === 0 ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-white hover:bg-yellow-50'
                             }`}
                         >
                           <td className="p-2 uppercase flex items-center gap-2">
