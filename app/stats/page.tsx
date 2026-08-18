@@ -274,6 +274,15 @@ export default function NewspaperPage() {
     return uniqueData.filter(p => p.team_name === selectedTeam);
   }, [uniqueData, selectedTeam]);
 
+  const getFilteredData = (category: 'skaters' | 'goalies' | 'defense') => {
+    return uniqueData.filter(p => {
+      const pos = (p.pos || p.position || '').toUpperCase();
+      if (category === 'goalies') return pos.includes('G');
+      if (category === 'defense') return pos.includes('D');
+      return !pos.includes('G');
+    });
+  };
+
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
     return [...filteredData].sort((a, b) => {
@@ -327,13 +336,13 @@ export default function NewspaperPage() {
         valB = b.total_pim ?? b.pim ?? 0;
       } else if (sortConfig.key === 'shots_against') {
         valA = a.shots_against ?? a.total_shots_against ?? a.total_sa ?? a.sa ?? 0;
-        valB = b.shots_against ?? b.total_shots_against ?? b.total_sa ?? b.sa ?? 0;
+        valB = b.shots_against ?? b.total_shots_against ?? b.total_sa ?? a.sa ?? 0;
       } else if (sortConfig.key === 'saves') {
         valA = a.saves ?? a.total_saves ?? a.sv ?? 0;
         valB = b.saves ?? b.total_saves ?? b.sv ?? 0;
       } else if (sortConfig.key === 'goals_against') {
         valA = a.goals_against ?? a.total_goals_against ?? a.total_ga ?? a.ga ?? 0;
-        valB = b.goals_against ?? b.total_goals_against ?? b.total_ga ?? b.ga ?? 0;
+        valB = b.goals_against ?? b.total_goals_against ?? b.total_ga ?? a.ga ?? 0;
       } else if (sortConfig.key === 'total_goals') {
         valA = a.total_goals ?? a.goals ?? 0;
         valB = b.total_goals ?? b.goals ?? 0;
@@ -765,7 +774,8 @@ export default function NewspaperPage() {
               </tbody>
             </table>
           </div>
-      )}
         </div>
-      );
+      )}
+    </div>
+  );
 }
