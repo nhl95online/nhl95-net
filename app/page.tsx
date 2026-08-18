@@ -95,6 +95,15 @@ export default function HomePage() {
     }
   };
 
+  const [briefing, setBriefing] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/daily_briefing.json')
+      .then((res) => res.json())
+      .then((data) => setBriefing(data))
+      .catch((err) => console.error("Could not load daily briefing:", err));
+  }, []);
+
   useEffect(() => {
     async function loadStandings() {
       const { data, error } = await supabase
@@ -133,10 +142,107 @@ export default function HomePage() {
         </section>
 
         <main className="col-span-12 md:col-span-6">
-          <h2 className="font-bold border-b border-black mb-4 pb-1 uppercase">Daily Discord Briefing</h2>
-          <div className="bg-slate-100 p-4 border border-slate-300 italic text-sm">
-            [Visual Basic Integration]: "Summarizing daily messages..."
+          <div className="flex items-center justify-between border-b-2 border-black pb-1 mb-3">
+            <h2 className="font-black uppercase tracking-tight text-lg">Daily Discord Gazette Briefing</h2>
+            <span className="text-[10px] font-mono uppercase bg-black text-white px-2 py-0.5 tracking-wider">
+              {briefing?.updated_at || 'LIVE WIRE'}
+            </span>
           </div>
+
+          {briefing ? (
+            <div className="space-y-4">
+              {/* Main Tabloid Headline */}
+              <div className="border-b border-black pb-3">
+                <h3 className="text-2xl font-black uppercase leading-tight tracking-tight mb-1">
+                  {briefing.headline}
+                </h3>
+                <p className="text-xs italic text-neutral-700">
+                  {briefing.subheadline}
+                </p>
+              </div>
+
+              {/* Quote of the Day Box */}
+              {briefing.quote_of_the_day && (
+                <div className="bg-amber-50/70 border-l-4 border-black p-3 my-2">
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">
+                    ★ Quote of the Day ★
+                  </div>
+                  <blockquote className="text-sm font-bold italic">
+                    "{briefing.quote_of_the_day.quote}"
+                  </blockquote>
+                  <div className="text-[11px] text-right mt-1 font-semibold text-neutral-700">
+                    — {briefing.quote_of_the_day.author} <span className="text-[10px] font-normal italic text-neutral-500">({briefing.quote_of_the_day.context})</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Channel Breakdown Columns / Cards */}
+              <div className="space-y-4 mt-2">
+                {briefing.sections?.map((sec: any, idx: number) => (
+                  <div key={idx} className="border border-neutral-300 bg-white/60 p-3.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-wider bg-black text-white px-1.5 py-0.5">
+                        {sec.badge}
+                      </span>
+                      <span className="text-[10px] font-mono text-neutral-500">
+                        #{sec.channel}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-sm text-neutral-900 leading-snug mb-1">
+                      {sec.title}
+                    </h4>
+
+                    <p className="text-xs text-neutral-800 leading-relaxed mb-2 font-serif">
+                      {sec.commentary}
+                    </p>
+
+                    {/* Twitch Highlight Clips */}
+                    {sec.clips && sec.clips.length > 0 && (
+                      <div className="my-2 p-2 bg-purple-50 border border-purple-200">
+                        <div className="text-[10px] font-bold uppercase text-purple-900 mb-1.5 flex items-center gap-1">
+                          <span>📼</span> Tape Room Video Reels:
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sec.clips.map((clip: any, cIdx: number) => (
+                            <a
+                              key={cIdx}
+                              href={clip.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[10px] font-mono font-bold bg-purple-700 hover:bg-purple-900 text-white px-2 py-1 transition-colors flex items-center gap-1 shadow-xs"
+                            >
+                              <span>▶</span> {clip.name}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Soundbites / Raw Messages */}
+                    {sec.messages && sec.messages.length > 0 && (
+                      <div className="bg-neutral-100/80 border-t border-neutral-200 pt-2 mt-2 space-y-1 font-mono text-[11px] text-neutral-700">
+                        <div className="text-[9px] uppercase font-bold tracking-wider text-neutral-400">
+                          Intercepted Audio Log:
+                        </div>
+                        {sec.messages.map((m: any, mIdx: number) => (
+                          <div key={mIdx} className="leading-tight">
+                            <span className="text-neutral-400">[{m.time}]</span>{" "}
+                            <span className="font-bold text-neutral-900">{m.author}:</span>{" "}
+                            <span className="italic">{m.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-100 p-4 border border-slate-300 italic text-sm text-neutral-600">
+              Fetching daily intelligence from the wire...
+            </div>
+          )}
         </main>
 
         <aside className="col-span-12 md:col-span-3 border-l border-black pl-4">
@@ -164,8 +270,8 @@ export default function HomePage() {
                 type="button"
                 onClick={() => handleLeagueChange(league)}
                 className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors ${selectedLeague === league
-                    ? 'bg-black text-white'
-                    : 'bg-white text-black hover:bg-neutral-200'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-200'
                   }`}
               >
                 {league}

@@ -46,7 +46,6 @@ export default function Navbar() {
 
       {/* Navigation Links Row */}
       <div className="flex justify-center items-center gap-8 px-6 py-3 text-sm text-black uppercase font-bold tracking-widest bg-[#f4f1ea] border-b border-black">
-        <Link href="/team" className="hover:underline transition text-red-700">Teams</Link>
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
@@ -64,8 +63,8 @@ export default function Navbar() {
         </div>
 
         <Link href="/stats" className="hover:underline transition">Stats</Link>
+        <Link href="/team" className="hover:underline transition">Teams</Link>
         <Link href="/awards" className="hover:underline transition">Awards</Link>
-        <Link href="/managers" className="hover:underline transition">Managers</Link>
         <Link href="/records" className="hover:underline transition">Records</Link>
         <Link href="/upload" className="hover:underline transition bg-black text-white px-2.5 py-1 text-xs font-bold rounded-none hover:bg-red-700">Upload</Link>
       </div>

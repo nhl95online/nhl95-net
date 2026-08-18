@@ -76,8 +76,8 @@ const CURRENT_LEAGUES_CONFIG = [
     draftRounds: ['1st', '2nd', '3rd'],
     accentColor: 'amber',
     badgeText: 'Classic Era',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
   },
   {
     id: 'Q',
@@ -844,8 +844,8 @@ export default function TradesPage() {
             <button
               onClick={() => setActiveTab('simulator')}
               className={`px-4 py-1.5 font-bold uppercase text-xs transition border border-black flex items-center gap-1.5 cursor-pointer ${activeTab === 'simulator'
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-100'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
@@ -855,8 +855,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('W'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'W'
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-100'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               W League
@@ -865,8 +865,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('O'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'O'
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-100'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               Original 6
@@ -875,8 +875,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('Q'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'Q'
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-100'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               The Q
@@ -885,8 +885,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('V'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'V'
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-100'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               Vintage
@@ -895,8 +895,8 @@ export default function TradesPage() {
             <button
               onClick={() => { setActiveTab('ALL'); setSelectedSeasonFilter('ALL'); setSelectedFranchiseFilter('ALL'); }}
               className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'ALL'
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-100'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
               All Trades
@@ -933,8 +933,8 @@ export default function TradesPage() {
                       key={cfg.id}
                       onClick={() => setSimLeague(cfg.id as any)}
                       className={`p-2.5 border text-left flex items-center gap-3 transition-all cursor-pointer rounded-xs ${isSelected
-                          ? 'bg-black text-white border-black shadow-sm'
-                          : 'bg-white/80 text-black border-black/20 hover:border-black hover:bg-white'
+                        ? 'bg-black text-white border-black shadow-sm'
+                        : 'bg-white/80 text-black border-black/20 hover:border-black hover:bg-white'
                         }`}
                     >
                       <img
@@ -1268,8 +1268,8 @@ export default function TradesPage() {
                               key={pos}
                               onClick={() => setPosFilterA(pos)}
                               className={`px-1.5 py-0.5 border transition cursor-pointer ${posFilterA === pos
-                                  ? 'bg-black text-white border-black font-black'
-                                  : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
+                                ? 'bg-black text-white border-black font-black'
+                                : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
                                 }`}
                             >
                               {pos}
@@ -1354,8 +1354,8 @@ export default function TradesPage() {
                                     key={pk.id}
                                     onClick={() => togglePickA(pk)}
                                     className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${isSelected
-                                        ? 'bg-black text-white border-black'
-                                        : 'bg-white border-neutral-300 hover:border-black'
+                                      ? 'bg-black text-white border-black'
+                                      : 'bg-white border-neutral-300 hover:border-black'
                                       }`}
                                   >
                                     <span>{pk.round} Rd</span>
@@ -1427,8 +1427,8 @@ export default function TradesPage() {
                               key={pos}
                               onClick={() => setPosFilterB(pos)}
                               className={`px-1.5 py-0.5 border transition cursor-pointer ${posFilterB === pos
-                                  ? 'bg-black text-white border-black font-black'
-                                  : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
+                                ? 'bg-black text-white border-black font-black'
+                                : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
                                 }`}
                             >
                               {pos}
@@ -1513,8 +1513,8 @@ export default function TradesPage() {
                                     key={pk.id}
                                     onClick={() => togglePickB(pk)}
                                     className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${isSelected
-                                        ? 'bg-black text-white border-black'
-                                        : 'bg-white border-neutral-300 hover:border-black'
+                                      ? 'bg-black text-white border-black'
+                                      : 'bg-white border-neutral-300 hover:border-black'
                                       }`}
                                   >
                                     <span>{pk.round} Rd</span>
@@ -1720,8 +1720,8 @@ export default function TradesPage() {
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[9px] uppercase font-mono text-neutral-600 font-bold">NET:</span>
                                   <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${outcome.netImpactT1 >= 0
-                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
-                                      : 'bg-red-100 text-red-950 border-red-600'
+                                    ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
+                                    : 'bg-red-100 text-red-950 border-red-600'
                                     }`}>
                                     {outcome.netImpactT1 >= 0 ? `+${outcome.netImpactT1} PTS` : `${outcome.netImpactT1} PTS`}
                                   </span>
@@ -1807,8 +1807,8 @@ export default function TradesPage() {
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[9px] uppercase font-mono text-neutral-600 font-bold">NET:</span>
                                   <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${outcome.netImpactT2 >= 0
-                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
-                                      : 'bg-red-100 text-red-950 border-red-600'
+                                    ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
+                                    : 'bg-red-100 text-red-950 border-red-600'
                                     }`}>
                                     {outcome.netImpactT2 >= 0 ? `+${outcome.netImpactT2} PTS` : `${outcome.netImpactT2} PTS`}
                                   </span>
