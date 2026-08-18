@@ -418,20 +418,127 @@ export default function NewspaperPage() {
     'GA': 'goals_against', 'SO': 'shutouts', 'SV%': 'sv_pct', 'GAA': 'gaa'
   };
 
-  const getFilteredData = (type: 'skaters' | 'goalies' | 'defense') => {
-    if (type === 'defense') return sortedData.filter(p => p.pos_played === 'D');
-    if (type === 'goalies') return sortedData.filter(p => p.pos_played === 'G');
-    return sortedData.filter(p => p.pos_played !== 'G');
+  const skaterList = useMemo(() => getFilteredData('skaters'), [sortedData]);
+  const goalieList = useMemo(() => getFilteredData('goalies'), [sortedData]);
+
+  const skaterLeaders = useMemo(() => {
+    if (skaterList.length === 0) return {};
+    const maxVals: Record<string, number> = {};
+
+    const getNum = (p: any, key: string): number => {
+      if (key === 'total_goals') return p.total_goals ?? p.goals ?? 0;
+      if (key === 'total_assists') return p.total_assists ?? p.assists ?? 0;
+      if (key === 'total_points') return p.total_points ?? p.points ?? 0;
+      if (key === 'pts_per_game') return p.gp ? (p.total_points ?? p.points ?? 0) / p.gp : 0;
+      if (key === 'evg') return p.evg ?? p.total_evg ?? 0;
+      if (key === 'ev_points') {
+        const pts = p.total_points ?? p.points ?? 0;
+        const ppp = p.pp_points ?? p.total_pp_points ?? p.ppp ?? 0;
+        const shp = p.sh_points ?? p.total_sh_points ?? p.shp ?? 0;
+        return p.ev_points ?? p.total_ev_points ?? p.ev_pts ?? Math.max(0, pts - ppp - shp);
+      }
+      if (key === 'ppg') return p.ppg ?? p.total_ppg ?? p.pp_goals ?? p.total_pp_goals ?? 0;
+      if (key === 'pp_points') return p.pp_points ?? p.total_pp_points ?? p.ppp ?? p.pp_pts ?? 0;
+      if (key === 'shg') return p.shg ?? p.total_shg ?? p.sh_goals ?? p.total_sh_goals ?? 0;
+      if (key === 'sh_points') return p.sh_points ?? p.total_sh_points ?? p.shp ?? p.sh_pts ?? 0;
+      if (key === 'gwg') return p.gwg ?? p.total_gwg ?? 0;
+      if (key === 'otg') return p.otg ?? p.total_otg ?? 0;
+      if (key === 'total_sog') return p.total_sog ?? p.sog ?? p.shots ?? 0;
+      if (key === 'total_chks') return p.total_chks ?? p.chks ?? p.checks ?? 0;
+      if (key === 'total_pim') return p.total_pim ?? p.pim ?? 0;
+      if (key === 'toi') return parseTOI(p.toi_minutes ?? p.toi);
+      if (key === 'gp') return p.gp ?? 0;
+      return 0;
+    };
+
+    const keys = [
+      'gp', 'total_goals', 'total_assists', 'total_points', 'pts_per_game',
+      'evg', 'ev_points', 'ppg', 'pp_points', 'shg', 'sh_points',
+      'gwg', 'otg', 'total_sog', 'total_chks', 'total_pim', 'toi'
+    ];
+
+    keys.forEach(k => {
+      let max = -Infinity;
+      skaterList.forEach(p => {
+        const val = getNum(p, k);
+        if (val > max) max = val;
+      });
+      if (max > 0) {
+        maxVals[k] = max;
+      }
+    });
+
+    return maxVals;
+  }, [skaterList]);
+
+  const goalieLeaders = useMemo(() => {
+    if (goalieList.length === 0) return {};
+    const leaders: Record<string, number> = {};
+
+    const getNum = (p: any, key: string): number => {
+      if (key === 'gp') return p.gp ?? 0;
+      if (key === 'wins') return p.wins ?? 0;
+      if (key === 'shots_against') return p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0;
+      if (key === 'saves') return p.saves ?? p.total_saves ?? p.sv ?? 0;
+      if (key === 'shutouts') return p.shutouts ?? 0;
+      if (key === 'sv_pct') return p.sv_pct != null && !isNaN(Number(p.sv_pct)) ? Number(p.sv_pct) : 0;
+      if (key === 'gaa') return p.gaa != null && !isNaN(Number(p.gaa)) ? Number(p.gaa) : 999;
+      if (key === 'total_goals') return p.total_goals ?? p.goals ?? 0;
+      if (key === 'total_assists') return p.total_assists ?? p.assists ?? 0;
+      if (key === 'total_points') return p.total_points ?? p.points ?? ((p.total_goals ?? p.goals ?? 0) + (p.total_assists ?? p.assists ?? 0));
+      return 0;
+    };
+
+    const maxKeys = ['gp', 'wins', 'shots_against', 'saves', 'shutouts', 'sv_pct', 'total_goals', 'total_assists', 'total_points'];
+    maxKeys.forEach(k => {
+      let max = -Infinity;
+      goalieList.forEach(p => {
+        const val = getNum(p, k);
+        if (val > max) max = val;
+      });
+      if (max > 0) {
+        leaders[k] = max;
+      }
+    });
+
+    let minGAA = Infinity;
+    goalieList.forEach(p => {
+      if (p.gaa != null && !isNaN(Number(p.gaa))) {
+        const gaa = Number(p.gaa);
+        if (gaa < minGAA) minGAA = gaa;
+      }
+    });
+    if (minGAA !== Infinity) {
+      leaders['gaa'] = minGAA;
+    }
+
+    return leaders;
+  }, [goalieList]);
+
+  const renderStatCell = (val: any, isLeader: boolean, isBold: boolean = false) => {
+    return (
+      <td className="p-1">
+        {isLeader ? (
+          <span className="bg-black text-red-600 font-black px-1.5 py-0.5 inline-block">
+            {val}
+          </span>
+        ) : (
+          <span className={isBold ? 'font-bold' : ''}>{val}</span>
+        )}
+      </td>
+    );
   };
 
   return (
-    <div className="bg-[#f4f1ea] text-black min-h-screen p-4 font-serif text-sm">
+    <div className="bg-[#f4f1ea] text-black min-h-screen p-2 sm:p-4 font-serif text-sm">
       <header className="border-b-4 border-black pb-2 mb-4 text-center">
-        <h1 className="text-4xl font-black uppercase tracking-tighter">League Statistics</h1>
+        <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter">League Statistics</h1>
       </header>
-      <div className="mb-4 flex justify-between items-center">
-        <div className="flex gap-4 items-center">
-          <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full">
+
+      {/* Responsive Filter Toolbar */}
+      <div className="mb-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
+          <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full no-scrollbar">
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
@@ -475,119 +582,190 @@ export default function NewspaperPage() {
               );
             })}
           </div>
-          <select
-            value={selectedLeague}
-            onChange={(e) => {
-              setSelectedLeague(e.target.value);
-              loadData(e.target.value);
-            }}
-            className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer"
-          >
-            {filteredLeagues.map((l) => (
-              <option key={l.league_id} value={l.league_id}>
-                {l.league_name}
-              </option>
-            ))}
-          </select>
-          {activeTab === 'Home' && (
+
+          <div className="flex items-center gap-2 flex-wrap">
             <select
-              value={selectedTeam}
-              onChange={(e) => setSelectedTeam(e.target.value)}
-              className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer"
+              value={selectedLeague}
+              onChange={(e) => {
+                setSelectedLeague(e.target.value);
+                loadData(e.target.value);
+              }}
+              className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer text-xs sm:text-sm"
             >
-              {teams.map((t) => (
-                <option key={t} value={t}>
-                  {t === 'All' ? 'All Teams' : t}
+              {filteredLeagues.map((l) => (
+                <option key={l.league_id} value={l.league_id}>
+                  {l.league_name}
                 </option>
               ))}
             </select>
-          )}
-          <button
-            onClick={handleResetFilters}
-            className="bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800"
-          >
-            All / Reset
-          </button>
+
+            {activeTab === 'Home' && (
+              <select
+                value={selectedTeam}
+                onChange={(e) => setSelectedTeam(e.target.value)}
+                className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer text-xs sm:text-sm"
+              >
+                {teams.map((t) => (
+                  <option key={t} value={t}>
+                    {t === 'All' ? 'All Teams' : t}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <button
+              onClick={handleResetFilters}
+              className="bg-black text-white px-2.5 sm:px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800 rounded-xs"
+            >
+              Reset
+            </button>
+          </div>
         </div>
-        <div>
-          <button onClick={exportToCSV} className="flex items-center gap-2 bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800">
-            <FileSpreadsheet className="h-4 w-4" /> Export CSV
+
+        <div className="flex justify-end">
+          <button onClick={exportToCSV} className="flex items-center gap-1.5 bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800 rounded-xs w-full sm:w-auto justify-center">
+            <FileSpreadsheet className="h-3.5 w-3.5" /> Export CSV
           </button>
         </div>
       </div>
+
+      {/* Tabs */}
       <div className="flex gap-4 mb-4 text-xs uppercase border-b border-black pb-2 justify-center">
         {['Home', 'Skaters', 'Goalies'].map((tab) => (
-          <button key={tab} onClick={() => handleTabChange(tab)} className={activeTab === tab ? 'font-bold underline' : 'text-gray-600'}>{tab}</button>
+          <button
+            key={tab}
+            onClick={() => handleTabChange(tab)}
+            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors ${activeTab === tab ? 'bg-black text-white' : 'text-gray-600 hover:text-black hover:bg-black/5'
+              }`}
+          >
+            {tab}
+          </button>
         ))}
       </div>
+
       {activeTab === 'Home' && (
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <StatCard title="Skaters" data={getFilteredData('skaters')} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredSkater} setHoveredPlayer={setHoveredSkater} />
           <StatCard title="Goalies" data={getFilteredData('goalies')} category="Goalies" onTabClick={handleTabChange} hoveredPlayer={hoveredGoalie} setHoveredPlayer={setHoveredGoalie} />
           <StatCard title="Defensemen" data={getFilteredData('defense')} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredDefense} setHoveredPlayer={setHoveredDefense} />
           <StatCard title="Rookie Scoring Leaders" data={sortedData.filter(p => p.is_rookie)} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredRookie} setHoveredPlayer={setHoveredRookie} />
         </div>
       )}
+
       {(activeTab === 'Skaters' || activeTab === 'Goalies') && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[11px] border-collapse border-t border-b border-black whitespace-nowrap">
-            <thead className="bg-black text-white">
-              <tr>
-                {activeTab === 'Skaters'
-                  ? ['TEAM', 'PLAYER', 'GP', 'G', 'A', 'PTS', 'PTS/G', 'EVG', 'EV PTS', 'PPG', 'PP PTS', 'SHG', 'SH PTS', 'GWG', 'OTG', 'SOG', 'CHKS', 'PIM', 'TOI'].map(h => <th key={h} className="p-1 text-left cursor-pointer hover:bg-gray-800" onClick={() => requestSort(h)}>{h}</th>)
-                  : ['TEAM', 'PLAYER', 'GP', 'W', 'L', 'T', 'OTL', 'SA', 'SV', 'GA', 'SO', 'SV%', 'GAA', 'G', 'A', 'P'].map(h => <th key={h} className="p-1 text-left cursor-pointer hover:bg-gray-800" onClick={() => requestSort(h)}>{h}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {getFilteredData(activeTab === 'Skaters' ? 'skaters' : 'goalies').map((r, i) => (
-                <tr key={i} className="border-b border-gray-300 hover:bg-gray-200">
-                  <td className="p-1">{r.logo_url ? <img src={r.logo_url} className="h-6 w-6 object-contain" alt="" /> : r.team_name}</td>
-                  <td className="p-1 font-bold">{r.player_name} {r.is_rookie && <span className="text-red-600 font-black">[R]</span>}</td>
-                  <td className="p-1">{r.gp}</td>
-                  {activeTab === 'Skaters' ? (
-                    <>
-                      <td className="p-1">{r.total_goals ?? r.goals ?? 0}</td>
-                      <td className="p-1">{r.total_assists ?? r.assists ?? 0}</td>
-                      <td className="p-1 font-bold">{r.total_points ?? r.points ?? 0}</td>
-                      <td className="p-1">{r.gp ? (((r.total_points ?? r.points ?? 0) / r.gp)).toFixed(2) : '0.00'}</td>
-                      <td className="p-1">{r.evg ?? r.total_evg ?? 0}</td>
-                      <td className="p-1">
-                        {r.ev_points ?? r.total_ev_points ?? r.ev_pts ?? Math.max(0, (r.total_points ?? r.points ?? 0) - (r.pp_points ?? r.total_pp_points ?? r.ppp ?? 0) - (r.sh_points ?? r.total_sh_points ?? r.shp ?? 0))}
-                      </td>
-                      <td className="p-1">{r.ppg ?? r.total_ppg ?? r.pp_goals ?? r.total_pp_goals ?? 0}</td>
-                      <td className="p-1">{r.pp_points ?? r.total_pp_points ?? r.ppp ?? r.pp_pts ?? 0}</td>
-                      <td className="p-1">{r.shg ?? r.total_shg ?? r.sh_goals ?? r.total_sh_goals ?? 0}</td>
-                      <td className="p-1">{r.sh_points ?? r.total_sh_points ?? r.shp ?? r.sh_pts ?? 0}</td>
-                      <td className="p-1">{r.gwg ?? r.total_gwg ?? 0}</td>
-                      <td className="p-1">{r.otg ?? r.total_otg ?? 0}</td>
-                      <td className="p-1">{r.total_sog ?? r.sog ?? r.shots ?? 0}</td>
-                      <td className="p-1">{r.total_chks ?? r.chks ?? r.checks ?? 0}</td>
-                      <td className="p-1">{r.total_pim ?? r.pim ?? 0}</td>
-                      <td className="p-1">{r.toi_minutes ?? r.toi}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="p-1">{r.wins}</td>
-                      <td className="p-1">{r.losses}</td>
-                      <td className="p-1">{r.ties}</td>
-                      <td className="p-1">{r.otl}</td>
-                      <td className="p-1">{r.shots_against ?? r.total_shots_against ?? r.total_sa ?? r.sa ?? 0}</td>
-                      <td className="p-1">{r.saves ?? r.total_saves ?? r.sv ?? 0}</td>
-                      <td className="p-1">{r.goals_against ?? r.total_goals_against ?? r.total_ga ?? r.ga ?? 0}</td>
-                      <td className="p-1 font-bold">{r.shutouts}</td>
-                      <td className="p-1">{r.sv_pct != null && !isNaN(Number(r.sv_pct)) ? Number(r.sv_pct).toFixed(3) : '-'}</td>
-                      <td className="p-1">{r.gaa != null && !isNaN(Number(r.gaa)) ? Number(r.gaa).toFixed(2) : '-'}</td>
-                      <td className="p-1">{r.total_goals ?? r.goals ?? 0}</td>
-                      <td className="p-1">{r.total_assists ?? r.assists ?? 0}</td>
-                      <td className="p-1 font-bold">{r.total_points ?? r.points ?? ((r.total_goals ?? r.goals ?? 0) + (r.total_assists ?? r.assists ?? 0))}</td>
-                    </>
-                  )}
+        <div>
+          {/* Mobile Swipe Notice */}
+          <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 mb-2 rounded-xs uppercase tracking-wider">
+            <span>↔ Swipe table sideways for full stats</span>
+            <span>{getFilteredData(activeTab === 'Skaters' ? 'skaters' : 'goalies').length} Players</span>
+          </div>
+
+          <div className="overflow-x-auto -mx-2 sm:mx-0 border border-gray-300 shadow-sm rounded-xs bg-white">
+            <table className="w-full text-[11px] border-collapse whitespace-nowrap min-w-[850px]">
+              <thead className="bg-black text-white">
+                <tr>
+                  <th className="sticky left-0 bg-black z-20 p-1.5 text-center w-10 border-r border-neutral-700">TEAM</th>
+                  <th className="sticky left-10 bg-black z-20 p-1.5 text-left min-w-[140px] border-r border-neutral-700">PLAYER</th>
+                  {activeTab === 'Skaters'
+                    ? ['GP', 'G', 'A', 'PTS', 'PTS/G', 'EVG', 'EV PTS', 'PPG', 'PP PTS', 'SHG', 'SH PTS', 'GWG', 'OTG', 'SOG', 'CHKS', 'PIM', 'TOI'].map(h => <th key={h} className="p-1.5 text-left cursor-pointer hover:bg-gray-800" onClick={() => requestSort(h)}>{h}</th>)
+                    : ['GP', 'W', 'L', 'T', 'OTL', 'SA', 'SV', 'GA', 'SO', 'SV%', 'GAA', 'G', 'A', 'P'].map(h => <th key={h} className="p-1.5 text-left cursor-pointer hover:bg-gray-800" onClick={() => requestSort(h)}>{h}</th>)}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {getFilteredData(activeTab === 'Skaters' ? 'skaters' : 'goalies').map((r, i) => (
+                  <tr key={i} className="group border-b border-gray-200 hover:bg-gray-50">
+                    <td className="sticky left-0 bg-white group-hover:bg-gray-50 z-10 p-1 text-center w-10 border-r border-gray-200">
+                      {r.logo_url ? <img src={r.logo_url} className="h-5 w-5 object-contain mx-auto" alt="" /> : r.team_name}
+                    </td>
+                    <td className="sticky left-10 bg-white group-hover:bg-gray-50 z-10 p-1 font-bold border-r border-gray-200 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
+                      {r.player_name} {r.is_rookie && <span className="text-red-600 font-black">[R]</span>}
+                    </td>
+                    {renderStatCell(r.gp, r.gp > 0 && r.gp === (activeTab === 'Skaters' ? skaterLeaders.gp : goalieLeaders.gp))}
+                    {activeTab === 'Skaters' ? (
+                      (() => {
+                        const goals = r.total_goals ?? r.goals ?? 0;
+                        const assists = r.total_assists ?? r.assists ?? 0;
+                        const points = r.total_points ?? r.points ?? 0;
+                        const ptsPerGame = r.gp ? ((points / r.gp)).toFixed(2) : '0.00';
+                        const ptsPerGameNum = r.gp ? points / r.gp : 0;
+                        const evg = r.evg ?? r.total_evg ?? 0;
+                        const ppp = r.pp_points ?? r.total_pp_points ?? r.ppp ?? 0;
+                        const shp = r.sh_points ?? r.total_sh_points ?? r.shp ?? 0;
+                        const evPoints = r.ev_points ?? r.total_ev_points ?? r.ev_pts ?? Math.max(0, points - ppp - shp);
+                        const ppg = r.ppg ?? r.total_ppg ?? r.pp_goals ?? r.total_pp_goals ?? 0;
+                        const shg = r.shg ?? r.total_shg ?? r.sh_goals ?? r.total_sh_goals ?? 0;
+                        const gwg = r.gwg ?? r.total_gwg ?? 0;
+                        const otg = r.otg ?? r.total_otg ?? 0;
+                        const sog = r.total_sog ?? r.sog ?? r.shots ?? 0;
+                        const chks = r.total_chks ?? r.chks ?? r.checks ?? 0;
+                        const pim = r.total_pim ?? r.pim ?? 0;
+                        const toiStr = r.toi_minutes ?? r.toi ?? '-';
+                        const toiSec = parseTOI(toiStr);
+
+                        return (
+                          <>
+                            {renderStatCell(goals, goals > 0 && goals === skaterLeaders.total_goals)}
+                            {renderStatCell(assists, assists > 0 && assists === skaterLeaders.total_assists)}
+                            {renderStatCell(points, points > 0 && points === skaterLeaders.total_points, true)}
+                            {renderStatCell(ptsPerGame, ptsPerGameNum > 0 && ptsPerGameNum === skaterLeaders.pts_per_game)}
+                            {renderStatCell(evg, evg > 0 && evg === skaterLeaders.evg)}
+                            {renderStatCell(evPoints, evPoints > 0 && evPoints === skaterLeaders.ev_points)}
+                            {renderStatCell(ppg, ppg > 0 && ppg === skaterLeaders.ppg)}
+                            {renderStatCell(ppp, ppp > 0 && ppp === skaterLeaders.pp_points)}
+                            {renderStatCell(shg, shg > 0 && shg === skaterLeaders.shg)}
+                            {renderStatCell(shp, shp > 0 && shp === skaterLeaders.sh_points)}
+                            {renderStatCell(gwg, gwg > 0 && gwg === skaterLeaders.gwg)}
+                            {renderStatCell(otg, otg > 0 && otg === skaterLeaders.otg)}
+                            {renderStatCell(sog, sog > 0 && sog === skaterLeaders.total_sog)}
+                            {renderStatCell(chks, chks > 0 && chks === skaterLeaders.total_chks)}
+                            {renderStatCell(pim, pim > 0 && pim === skaterLeaders.total_pim)}
+                            {renderStatCell(toiStr, toiSec > 0 && toiSec === skaterLeaders.toi)}
+                          </>
+                        );
+                      })()
+                    ) : (
+                      (() => {
+                        const wins = r.wins ?? 0;
+                        const losses = r.losses ?? 0;
+                        const ties = r.ties ?? 0;
+                        const otl = r.otl ?? 0;
+                        const sa = r.shots_against ?? r.total_shots_against ?? r.total_sa ?? r.sa ?? 0;
+                        const sv = r.saves ?? r.total_saves ?? r.sv ?? 0;
+                        const ga = r.goals_against ?? r.total_goals_against ?? r.total_ga ?? r.ga ?? 0;
+                        const so = r.shutouts ?? 0;
+                        const svPctNum = r.sv_pct != null && !isNaN(Number(r.sv_pct)) ? Number(r.sv_pct) : null;
+                        const svPctStr = svPctNum != null ? svPctNum.toFixed(3) : '-';
+                        const gaaNum = r.gaa != null && !isNaN(Number(r.gaa)) ? Number(r.gaa) : null;
+                        const gaaStr = gaaNum != null ? gaaNum.toFixed(2) : '-';
+                        const goals = r.total_goals ?? r.goals ?? 0;
+                        const assists = r.total_assists ?? r.assists ?? 0;
+                        const points = r.total_points ?? r.points ?? (goals + assists);
+
+                        return (
+                          <>
+                            {renderStatCell(wins, wins > 0 && wins === goalieLeaders.wins)}
+                            {renderStatCell(losses, false)}
+                            {renderStatCell(ties, false)}
+                            {renderStatCell(otl, false)}
+                            {renderStatCell(sa, sa > 0 && sa === goalieLeaders.shots_against)}
+                            {renderStatCell(sv, sv > 0 && sv === goalieLeaders.saves)}
+                            {renderStatCell(ga, false)}
+                            {renderStatCell(so, so > 0 && so === goalieLeaders.shutouts, true)}
+                            {renderStatCell(svPctStr, svPctNum != null && svPctNum > 0 && svPctNum === goalieLeaders.sv_pct)}
+                            {renderStatCell(gaaStr, gaaNum != null && gaaNum === goalieLeaders.gaa)}
+                            {renderStatCell(goals, goals > 0 && goals === goalieLeaders.total_goals)}
+                            {renderStatCell(assists, assists > 0 && assists === goalieLeaders.total_assists)}
+                            {renderStatCell(points, points > 0 && points === goalieLeaders.total_points, true)}
+                          </>
+                        );
+                      })()
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
       )}
-    </div>
-  );
+        </div>
+      );
 }

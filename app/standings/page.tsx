@@ -20,8 +20,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   V: {
     name: 'Vintage',
@@ -920,29 +920,28 @@ export default function StandingsPage() {
 
   const hasGroups = availableConferences.length > 0 || availableDivisions.length > 0;
   const colSpanCount = 13;
-
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif overflow-x-hidden">
       <div className={isFullScreen ? 'fixed inset-0 bg-[#f4f1ea] z-50 overflow-y-auto p-4 md:p-8' : 'max-w-[1400px] mx-auto px-4 py-8'}>
 
-        <div className="border-b-4 border-black pt-4 pb-4 text-center relative">
-          <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tight">League Standings</h1>
-          <p className="text-sm uppercase tracking-widest mt-2 italic">The Official Record of NHL95 Athletics</p>
+        <div className="border-b-4 border-black pt-2 sm:pt-4 pb-3 sm:pb-4 text-center relative">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight">League Standings</h1>
+          <p className="text-xs sm:text-sm uppercase tracking-widest mt-1 sm:mt-2 italic">The Official Record of NHL95 Athletics</p>
 
           {isFullScreen && (
             <button
               onClick={() => setIsFullScreen(false)}
-              className="absolute right-2 top-4 flex items-center gap-1 text-xs border border-black px-2 py-1 font-sans font-bold uppercase hover:bg-black hover:text-white transition-all rounded-xs"
+              className="absolute right-2 top-2 sm:top-4 flex items-center gap-1 text-xs border border-black px-2 py-1 font-sans font-bold uppercase hover:bg-black hover:text-white transition-all rounded-xs"
             >
-              <Minimize2 className="w-3 h-3" /> Close Full Screen
+              <Minimize2 className="w-3 h-3" /> <span className="hidden sm:inline">Close Full Screen</span>
             </button>
           )}
         </div>
 
-        <div className="border-y border-black p-2 flex flex-col lg:flex-row items-center justify-between mt-4 mb-3 gap-4">
-          <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+        <div className="border-y border-black p-2 flex flex-col lg:flex-row items-center justify-between mt-3 sm:mt-4 mb-3 gap-3 sm:gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full lg:w-auto">
             {/* League Type Buttons */}
-            <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full">
+            <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full no-scrollbar">
               <button
                 type="button"
                 onClick={() => handleLeagueTypeChange('ALL')}
@@ -1013,7 +1012,7 @@ export default function StandingsPage() {
               </select>
             </div>
 
-            <div className="flex items-center gap-1 border-l border-black/20 pl-4 font-sans font-bold text-xs">
+            <div className="flex items-center gap-1 border-l border-black/20 pl-3 sm:pl-4 font-sans font-bold text-xs">
               <button
                 onClick={() => setIsCompactView(!isCompactView)}
                 className={`p-1 border rounded-xs mr-1 transition-colors ${isCompactView ? 'bg-black text-white border-black' : 'border-black/20 text-black/60 hover:text-black'}`}
@@ -1026,7 +1025,7 @@ export default function StandingsPage() {
               {!isFullScreen && (
                 <button
                   onClick={() => setIsFullScreen(true)}
-                  className="p-1 border border-black/20 rounded-xs ml-3 text-black/60 hover:text-black hover:border-black transition-colors"
+                  className="p-1 border border-black/20 rounded-xs ml-2 sm:ml-3 text-black/60 hover:text-black hover:border-black transition-colors"
                   title="Maximize to Full Screen Display"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
@@ -1035,7 +1034,7 @@ export default function StandingsPage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto justify-end">
+          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full lg:w-auto justify-end">
             <div className="relative w-full sm:w-auto">
               <Search className="absolute left-2 top-1.5 text-gray-500 w-3 h-3" />
               <input
@@ -1053,11 +1052,11 @@ export default function StandingsPage() {
                 <button
                   onClick={() => handleRecalculateStandings(false)}
                   disabled={isRecalculating}
-                  className="flex items-center gap-1 text-xs border border-black/30 font-sans font-bold uppercase px-2.5 py-1 hover:border-black bg-white hover:bg-neutral-50 transition-colors text-black/80 hover:text-black rounded-xs shadow-2xs disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1 text-xs border border-black/30 font-sans font-bold uppercase px-2 sm:px-2.5 py-1 hover:border-black bg-white hover:bg-neutral-50 transition-colors text-black/80 hover:text-black rounded-xs shadow-2xs disabled:opacity-50 cursor-pointer"
                   title="Recalculate and synchronize standings for this season from played game stats"
                 >
                   <RefreshCw className={`w-3 h-3 ${isRecalculating ? 'animate-spin' : ''}`} />
-                  {isRecalculating ? 'Syncing...' : 'Re-Sync Standings'}
+                  {isRecalculating ? 'Syncing...' : 'Re-Sync'}
                 </button>
 
                 <button
@@ -1079,7 +1078,7 @@ export default function StandingsPage() {
                 className="flex items-center gap-1 text-xs border border-black/20 font-sans font-bold uppercase px-2.5 py-1 hover:border-black transition-colors text-black/70 hover:text-black rounded-xs"
                 title="Export Active Lines to Spreadsheets"
               >
-                <Download className="w-3 h-3" /> Export CSV
+                <Download className="w-3 h-3" /> <span className="hidden sm:inline">Export</span> CSV
               </button>
 
               <button
@@ -1091,7 +1090,7 @@ export default function StandingsPage() {
                   }`}
               >
                 <Globe className="w-3 h-3" />
-                Global Query {isGlobalMode ? 'Active' : ''} <ChevronDown className="w-3 h-3 opacity-40" />
+                Global {isGlobalMode ? 'Active' : ''} <ChevronDown className="w-3 h-3 opacity-40" />
               </button>
             </div>
           </div>
@@ -1115,8 +1114,8 @@ export default function StandingsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-              <div className="md:col-span-2 border-r border-black/10 pr-2">
-                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-2">League</div>
+              <div className="md:col-span-2 border-b md:border-b-0 md:border-r border-black/10 pb-2 md:pb-0 md:pr-2">
+                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">League</div>
                 <button
                   onClick={() => setCurrentTab('ALL')}
                   className={`w-full text-left px-2 py-1 font-black uppercase tracking-tight text-[11px] rounded-xs transition-all ${currentTab === 'ALL' ? 'bg-black text-white shadow-xs' : 'text-black/70 hover:bg-black/5 hover:text-black'
@@ -1126,10 +1125,10 @@ export default function StandingsPage() {
                 </button>
               </div>
 
-              <div className="md:col-span-3 border-r border-black/10 pr-2">
-                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-2">Conference</div>
+              <div className="md:col-span-3 border-b md:border-b-0 md:border-r border-black/10 pb-2 md:pb-0 md:pr-2">
+                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">Conference</div>
                 {hasGroups && availableConferences.length > 0 ? (
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap md:flex-col gap-1">
                     {availableConferences.map((conf) => (
                       <button
                         key={conf}
@@ -1137,7 +1136,7 @@ export default function StandingsPage() {
                         className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all ${currentTab === conf ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
                           }`}
                       >
-                        {conf} Conference
+                        {conf} Conf.
                       </button>
                     ))}
                   </div>
@@ -1147,7 +1146,7 @@ export default function StandingsPage() {
               </div>
 
               <div className="md:col-span-7">
-                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-2">Divisions</div>
+                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">Divisions</div>
                 {hasGroups && availableDivisions.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
                     {availableDivisions.map((div) => (
@@ -1170,8 +1169,14 @@ export default function StandingsPage() {
           )}
         </div>
 
+        {/* Mobile Swipe Notice */}
+        <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 mb-2 rounded-xs uppercase tracking-wider">
+          <span>↔ Swipe table sideways for full stats</span>
+          <span>{processedStandings.length} Teams</span>
+        </div>
+
         {/* Core Visual Standings Display Board */}
-        <div className="bg-white border border-gray-300 shadow-sm overflow-x-auto select-none rounded-xs">
+        <div className="bg-white border border-gray-300 shadow-sm overflow-x-auto select-none rounded-xs -mx-2 sm:mx-0">
           {loading ? (
             <div className="p-12 text-center text-xs font-black uppercase tracking-widest opacity-40 font-sans">
               Aggregating statistics lines...
@@ -1181,55 +1186,57 @@ export default function StandingsPage() {
               No matching records found.
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[1050px] transition-all text-[12px]">
+            <table className="w-full text-left border-collapse min-w-[980px] md:min-w-[1050px] transition-all text-[12px]">
               <thead>
                 <tr className="border-b-2 border-black uppercase text-[10px] font-sans font-black tracking-wider text-black/70 bg-black/[0.01]">
                   {!isGlobalMode ? (
-                    <th onClick={() => handleSort('seed')} className="text-center cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1 w-[65px]">
+                    <th onClick={() => handleSort('seed')} className="sticky left-0 bg-[#fdfaf5] z-20 text-center cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1 w-[50px] sm:w-[65px] border-r border-black/10">
                       Seed {renderSortIcon('seed')}
                     </th>
                   ) : (
-                    <th onClick={() => handleSort('season_id')} className="text-center bg-black/[0.03] cursor-pointer hover:bg-black/[0.06] transition-colors font-black text-black py-2 px-1 w-[110px]">
+                    <th onClick={() => handleSort('season_id')} className="sticky left-0 bg-[#fdfaf5] z-20 text-center cursor-pointer hover:bg-black/[0.06] transition-colors font-black text-black py-2 px-1 w-[90px] sm:w-[110px] border-r border-black/10">
                       Season {renderSortIcon('season_id')}
                     </th>
                   )}
 
-                  <th className="w-[260px] text-center bg-black/[0.01] py-2 px-1">Club Identity</th>
-                  <th className="w-[60px] text-center font-sans font-black tracking-wider text-[9px] text-black/30 select-none py-2 px-1">Clinch</th>
-                  <th className="w-[50px] text-center font-sans font-black tracking-wider text-[9px] text-red-700/40 select-none py-2 px-1">E #</th>
+                  <th className="sticky left-[50px] sm:left-[65px] bg-[#fdfaf5] z-20 w-[180px] sm:w-[260px] text-center py-2 px-1 border-r border-black/10 shadow-[2px_0_4px_rgba(0,0,0,0.04)]">
+                    Club Identity
+                  </th>
+                  <th className="w-[50px] sm:w-[60px] text-center font-sans font-black tracking-wider text-[9px] text-black/30 select-none py-2 px-1">Clinch</th>
+                  <th className="w-[45px] sm:w-[50px] text-center font-sans font-black tracking-wider text-[9px] text-red-700/40 select-none py-2 px-1">E #</th>
 
-                  <th className="text-center w-[50px] text-black/40 py-2 px-1">GP</th>
-                  <th onClick={() => handleSort('wins')} className="text-center w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
+                  <th className="text-center w-[45px] sm:w-[50px] text-black/40 py-2 px-1">GP</th>
+                  <th onClick={() => handleSort('wins')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
                     W {renderSortIcon('wins')}
                   </th>
-                  <th onClick={() => handleSort('losses')} className="text-center w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('losses')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
                     L {renderSortIcon('losses')}
                   </th>
-                  <th onClick={() => handleSort('ties')} className="text-center w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('ties')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
                     T {renderSortIcon('ties')}
                   </th>
-                  <th onClick={() => handleSort('pts')} className="text-center w-[70px] font-black bg-black/[0.03] cursor-pointer hover:bg-black/[0.06] transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('pts')} className="text-center w-[60px] sm:w-[70px] font-black bg-black/[0.03] cursor-pointer hover:bg-black/[0.06] transition-colors py-2 px-1">
                     PTS {renderSortIcon('pts')}
                   </th>
-                  <th onClick={() => handleSort('gf')} className="text-center w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('gf')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
                     GF {renderSortIcon('gf')}
                   </th>
-                  <th onClick={() => handleSort('ga')} className="text-center w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('ga')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
                     GA {renderSortIcon('ga')}
                   </th>
-                  <th onClick={() => handleSort('gd')} className="text-center w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('gd')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
                     +/- {renderSortIcon('gd')}
                   </th>
-                  <th className="text-center w-[90px] py-2 px-1">HOME</th>
-                  <th className="text-center w-[90px] py-2 px-1">AWAY</th>
-                  <th onClick={() => handleSort('otWins')} className="text-center w-[65px] text-emerald-700 bg-emerald-50/30 cursor-pointer hover:bg-emerald-50/50 transition-colors py-2 px-1">
+                  <th className="text-center w-[75px] sm:w-[90px] py-2 px-1">HOME</th>
+                  <th className="text-center w-[75px] sm:w-[90px] py-2 px-1">AWAY</th>
+                  <th onClick={() => handleSort('otWins')} className="text-center w-[55px] sm:w-[65px] text-emerald-700 bg-emerald-50/30 cursor-pointer hover:bg-emerald-50/50 transition-colors py-2 px-1">
                     OTW {renderSortIcon('otWins')}
                   </th>
-                  <th onClick={() => handleSort('otLosses')} className="text-center w-[65px] text-rose-700 bg-rose-50/30 cursor-pointer hover:bg-rose-50/50 transition-colors py-2 px-1">
+                  <th onClick={() => handleSort('otLosses')} className="text-center w-[55px] sm:w-[65px] text-rose-700 bg-rose-50/30 cursor-pointer hover:bg-rose-50/50 transition-colors py-2 px-1">
                     OTL {renderSortIcon('otLosses')}
                   </th>
-                  <th className="text-center w-[65px] py-2 px-1">STRK</th>
-                  <th className="text-center w-[80px] py-2 px-1">L10</th>
+                  <th className="text-center w-[55px] sm:w-[65px] py-2 px-1">STRK</th>
+                  <th className="text-center w-[70px] sm:w-[80px] py-2 px-1">L10</th>
                 </tr>
               </thead>
               <tbody className="font-sans font-bold">
@@ -1240,17 +1247,17 @@ export default function StandingsPage() {
                   return (
                     <React.Fragment key={`${team.id}-${team.season_id}-${index}`}>
                       <tr className="group border-b border-gray-200 hover:bg-gray-50 transition-colors duration-75 max-h-[36px]">
-                        <td className="text-center font-mono font-black text-gray-400 py-1 px-1 text-[11px] align-middle">
+                        <td className="sticky left-0 bg-white group-hover:bg-gray-50 z-10 text-center font-mono font-black text-gray-400 py-1 px-1 text-[11px] align-middle border-r border-black/5">
                           {isGlobalMode ? team.season_display_name : team.seed}
                         </td>
 
-                        <td className="flex justify-center items-center whitespace-nowrap py-1 px-1 w-[260px] align-middle">
+                        <td className="sticky left-[50px] sm:left-[65px] bg-white group-hover:bg-gray-50 z-10 flex justify-center items-center whitespace-nowrap py-1 px-1 w-[180px] sm:w-[260px] align-middle border-r border-black/5 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
                           {team.banner_url ? (
                             <div className="w-full flex justify-center max-h-[28px] items-center relative">
                               <img
                                 src={team.banner_url}
                                 alt={team.abbr}
-                                className="object-contain block filter contrast-125 saturate-110 drop-shadow-xs mix-blend-multiply max-w-full w-40 h-7 transition-transform duration-75 group-hover:scale-102 rounded-xs"
+                                className="object-contain block filter contrast-125 saturate-110 drop-shadow-xs mix-blend-multiply max-w-full w-32 sm:w-40 h-6 sm:h-7 transition-transform duration-75 group-hover:scale-102 rounded-xs"
                                 onError={(e) => {
                                   const target = e.currentTarget;
                                   const fallbacks: string[] = team.fallback_urls || [];
@@ -1269,13 +1276,13 @@ export default function StandingsPage() {
                               />
                               <div
                                 style={{ display: 'none' }}
-                                className="team-abbr-fallback bg-black/5 border border-black/20 rounded-xs items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-7 shadow-inner text-[13px]"
+                                className="team-abbr-fallback bg-black/5 border border-black/20 rounded-xs items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-6 sm:h-7 shadow-inner text-[12px] sm:text-[13px]"
                               >
                                 {team.abbr}
                               </div>
                             </div>
                           ) : (
-                            <div className="bg-black/5 border border-black/20 rounded-xs flex items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-7 shadow-inner text-[13px]">
+                            <div className="bg-black/5 border border-black/20 rounded-xs flex items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-6 sm:h-7 shadow-inner text-[12px] sm:text-[13px]">
                               {team.abbr}
                             </div>
                           )}

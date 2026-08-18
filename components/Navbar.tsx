@@ -3,9 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Menu, X, ChevronDown, Search } from 'lucide-react';
 
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isRostersOpen, setIsRostersOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileRostersOpen, setIsMobileRostersOpen] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
 
@@ -15,59 +18,209 @@ export default function Navbar() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (search.trim()) {
+      setIsMobileMenuOpen(false);
       router.push(`/team?q=${encodeURIComponent(search)}`);
     }
   };
 
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+    setIsMobileRostersOpen(false);
+  };
+
   return (
-    <nav className="bg-[#f4f1ea] text-black font-serif border-b-2 border-black">
+    <nav className="bg-[#f4f1ea] text-black font-serif border-b-2 border-black sticky top-0 z-50 shadow-xs">
       {/* Top Banner with Search & Discord */}
-      <div className="bg-black text-white px-6 py-1 flex justify-between items-center text-xs uppercase tracking-widest">
-        <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="hover:text-cyan-400">
-          Join the NHL95 Digital Hockey World Now!
+      <div className="bg-black text-white px-3 sm:px-6 py-1.5 flex flex-col sm:flex-row justify-between items-center gap-1.5 text-[11px] sm:text-xs uppercase tracking-widest">
+        <a
+          href={DISCORD_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-cyan-400 text-center transition-colors truncate max-w-full"
+        >
+          Join the NHL95 Digital Hockey World!
         </a>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="SEARCH TEAMS..."
-            className="text-black px-2 py-0.5 outline-none"
-          />
-          <button type="submit" className="hover:text-cyan-400">Search</button>
+        <form onSubmit={handleSearch} className="flex gap-1.5 items-center w-full sm:w-auto justify-center">
+          <div className="relative flex-1 sm:w-44">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="SEARCH TEAMS..."
+              className="text-black bg-white px-2 py-0.5 text-xs outline-none w-full border border-black/20 font-sans"
+            />
+          </div>
+          <button
+            type="submit"
+            className="hover:text-cyan-400 bg-neutral-800 sm:bg-transparent px-2 py-0.5 rounded-none font-bold text-xs uppercase cursor-pointer"
+          >
+            Search
+          </button>
         </form>
       </div>
 
-      {/* Primary Row - Logo Centered */}
-      <div className="py-6 flex justify-center items-center border-b border-black">
-        <Link href="/">
-          <img src={LOGO_URL} alt="NHL95 Online League" className="h-16 object-contain" />
+      {/* Primary Header Row - Logo & Mobile Hamburger */}
+      <div className="py-3 sm:py-5 px-4 flex justify-between sm:justify-center items-center border-b border-black relative">
+        <Link href="/" onClick={closeMobileMenu} className="flex items-center justify-center">
+          <img
+            src={LOGO_URL}
+            alt="NHL95 Online League"
+            className="h-10 sm:h-14 md:h-16 max-w-[220px] sm:max-w-none object-contain"
+          />
         </Link>
+
+        {/* Mobile Hamburger Toggle (Visible on screens < md) */}
+        <button
+          type="button"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="md:hidden p-2 text-black hover:bg-black/5 border border-black/30 rounded-xs focus:outline-none transition-colors"
+          aria-label="Toggle Navigation Menu"
+        >
+          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
       </div>
 
-      {/* Navigation Links Row */}
-      <div className="flex justify-center items-center gap-8 px-6 py-3 text-sm text-black uppercase font-bold tracking-widest bg-[#f4f1ea] border-b border-black">
+      {/* Desktop Navigation Links Row (Visible on screens >= md) */}
+      <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-8 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
+        <Link href="/team" className="hover:underline transition text-red-700">Teams</Link>
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
-        {/* Dropdown for Rosters & Trades */}
-        <div className="relative" onMouseEnter={() => setIsOpen(true)} onMouseLeave={() => setIsOpen(false)}>
-          <button className="hover:underline transition cursor-pointer uppercase">Rosters</button>
-          {isOpen && (
-            <div className="absolute top-full left-0 bg-[#f4f1ea] border border-black py-2 w-48 flex flex-col z-50 shadow-lg">
-              <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold">Trade Machine</Link>
-              <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white">Draft Central</Link>
-              <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white">Player Database</Link>
+        {/* Desktop Dropdown for Rosters & Trades */}
+        <div
+          className="relative"
+          onMouseEnter={() => setIsRostersOpen(true)}
+          onMouseLeave={() => setIsRostersOpen(false)}
+        >
+          <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
+            Rosters <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+          {isRostersOpen && (
+            <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
+              <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
+              <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
+              <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
             </div>
           )}
         </div>
 
         <Link href="/stats" className="hover:underline transition">Stats</Link>
-        <Link href="/team" className="hover:underline transition">Teams</Link>
         <Link href="/awards" className="hover:underline transition">Awards</Link>
+        <Link href="/managers" className="hover:underline transition">Managers</Link>
         <Link href="/records" className="hover:underline transition">Records</Link>
-        <Link href="/upload" className="hover:underline transition bg-black text-white px-2.5 py-1 text-xs font-bold rounded-none hover:bg-red-700">Upload</Link>
+        <Link
+          href="/upload"
+          className="hover:underline transition bg-black text-white px-2.5 py-1 text-xs font-bold rounded-xs hover:bg-red-700 shadow-2xs"
+        >
+          Upload
+        </Link>
       </div>
+
+      {/* Mobile Drawer (Visible on screens < md when toggled) */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
+          <Link
+            href="/team"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 text-red-800 font-black flex items-center justify-between"
+          >
+            Teams <span>→</span>
+          </Link>
+          <Link
+            href="/standings"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            Standings <span>→</span>
+          </Link>
+          <Link
+            href="/playoffs"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            Playoffs <span>→</span>
+          </Link>
+          <Link
+            href="/schedule"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            Schedule & Scores <span>→</span>
+          </Link>
+
+          {/* Mobile Collapsible Rosters Section */}
+          <div className="border-b border-black/10">
+            <button
+              onClick={() => setIsMobileRostersOpen(!isMobileRostersOpen)}
+              className="w-full py-2 px-3 hover:bg-black/5 flex items-center justify-between uppercase font-bold text-xs"
+            >
+              <span>Rosters & Trades</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${isMobileRostersOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isMobileRostersOpen && (
+              <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
+                <Link
+                  href="/trades"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Trade Machine
+                </Link>
+                <Link
+                  href="/draft"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Draft Central
+                </Link>
+                <Link
+                  href="/players"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Player Database
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <Link
+            href="/stats"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            Player Stats <span>→</span>
+          </Link>
+          <Link
+            href="/awards"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            Awards <span>→</span>
+          </Link>
+          <Link
+            href="/managers"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            Managers <span>→</span>
+          </Link>
+          <Link
+            href="/records"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
+          >
+            League Records <span>→</span>
+          </Link>
+          <Link
+            href="/upload"
+            onClick={closeMobileMenu}
+            className="py-2.5 px-3 bg-black text-white text-center rounded-xs font-black hover:bg-red-700 transition-colors mt-2"
+          >
+            Upload Game File
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }
