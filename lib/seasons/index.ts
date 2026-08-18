@@ -178,7 +178,7 @@ export const W_LEAGUE_SKATERS: Record<string, string[]> = {
     'Anton Stralman', 'Chris Tanev', 'Alexander Edler'
   ],
   VHV: [
-    'Dustin Brown', 'David Perron', 'Ryan O'Reilly', 'Mike Ribeiro', 'Mikko Koivu',
+    'Dustin Brown', 'David Perron', 'Ryan O\'Reilly', 'Mike Ribeiro', 'Mikko Koivu',
     'Andrej Sekera', 'Willie Mitchell', 'Mark Streit'
   ],
   WDY: [
