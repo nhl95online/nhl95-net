@@ -80,6 +80,64 @@ const DEFAULT_BRIEFING = {
     author: "Unholy",
     context: "Confirming archival Sabres footage through pure aura"
   },
+  bulletin: {
+    title: "COMMISSIONER'S DESK: SEASON 40 PUCK DROP",
+    text: "All team managers are instructed to confirm their active rosters and check emulator netplay configs. Rulebook updates regarding manual goalies and crease violations are now in full effect.",
+    author: "League HQ",
+    date: "Today"
+  },
+  nhl_wire: [
+    {
+      title: "NHL Offseason: Trade Buzz Intensifies as Training Camps Near",
+      link: "https://www.nhl.com/news",
+      date: "Today"
+    },
+    {
+      title: "Scouting Reports: Top Prospects Gear Up for Rookie Showcases",
+      link: "https://www.nhl.com/news",
+      date: "Today"
+    },
+    {
+      title: "Free Agency Rewind: Big Summer Moves That Shifted Division Balance",
+      link: "https://www.nhl.com/news",
+      date: "Today"
+    }
+  ],
+  events: [
+    {
+      date: "LIVE NOW",
+      time: "",
+      title: "W18 Exhibition Series: Segathon vs Unholy",
+      description: "Genesis Netplay showdown streaming live in #highlights.",
+      url: "https://www.twitch.tv/segathonsow",
+      is_live: true,
+      interested: 8
+    },
+    {
+      date: "June 28",
+      time: "8:00 PM",
+      title: "Trade Deadline",
+      description: "Rosters lock for playoffs. Final buzzer on all blockbuster trades.",
+      is_live: false,
+      interested: 14
+    },
+    {
+      date: "July 01",
+      time: "7:00 PM",
+      title: "Draft Lottery",
+      description: "Ping pong balls decide franchise future.",
+      is_live: false,
+      interested: 18
+    },
+    {
+      date: "July 05",
+      time: "12:00 PM",
+      title: "Free Agency Opens",
+      description: "High-stakes contract negotiations begin on the wire.",
+      is_live: false,
+      interested: 12
+    }
+  ],
   sections: [
     {
       channel: "cooking-with-puss",
@@ -215,19 +273,141 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-6">
-      <header className="border-b-4 border-black pb-4 mb-6 text-center">
+      <header className="border-b-4 border-black pb-4 mb-4 text-center">
         <h1 className="text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-        <p className="text-sm italic">"Welcome to the Darkside of NHL95"</p>
+        <p className="text-sm italic">"Ask Ticklepuss where you want to be tickled"</p>
       </header>
 
+      {/* Real-World NHL Current News Wire Bar */}
+      {briefing?.nhl_wire && briefing.nhl_wire.length > 0 && (
+        <div className="border-y-2 border-black py-1.5 px-3 mb-6 bg-neutral-100 flex items-center gap-3 overflow-hidden text-xs">
+          <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
+            AP NHL WIRE
+          </span>
+          <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap scrollbar-none text-neutral-800">
+            {briefing.nhl_wire.map((story: any, sIdx: number) => (
+              <a
+                key={sIdx}
+                href={story.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold hover:text-blue-800 hover:underline flex items-center gap-1.5"
+              >
+                <span>•</span>
+                <span>{story.title}</span>
+                <span className="text-[10px] text-neutral-500 font-normal">({story.date})</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-12 gap-8">
-        <section className="col-span-12 md:col-span-3 border-r border-black">
-          <h2 className="font-bold border-b border-black mb-4 pb-1 uppercase">Upcoming Events</h2>
-          <ul className="text-sm space-y-4">
-            <li><strong>June 28:</strong> Trade Deadline</li>
-            <li><strong>July 01:</strong> Draft Lottery</li>
-            <li><strong>July 05:</strong> Free Agency Opens</li>
-          </ul>
+        <section className="col-span-12 md:col-span-3 border-r border-black pr-2 space-y-6">
+          {/* 1. Live Now Section (if any live events) */}
+          {briefing?.events?.some((e: any) => e.is_live) && (
+            <div className="border-2 border-red-700 bg-red-50 p-3 shadow-xs">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-red-900 font-mono">
+                  HAPPENING NOW
+                </span>
+              </div>
+              {briefing.events
+                .filter((e: any) => e.is_live)
+                .map((liveEvt: any, lIdx: number) => (
+                  <div key={lIdx} className="space-y-1">
+                    <h3 className="font-black text-xs text-neutral-900 leading-snug">{liveEvt.title}</h3>
+                    {liveEvt.description && (
+                      <p className="text-[11px] text-neutral-700 italic">{liveEvt.description}</p>
+                    )}
+                    {liveEvt.url && (
+                      <a
+                        href={liveEvt.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block mt-1 text-[10px] font-bold font-mono bg-red-600 hover:bg-red-700 text-white px-2 py-0.5"
+                      >
+                        Watch Live Stream →
+                      </a>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+
+          {/* 2. Upcoming Discord Events */}
+          <div>
+            <div className="flex items-center justify-between border-b border-black mb-3 pb-1">
+              <h2 className="font-bold uppercase tracking-tight text-sm">Upcoming Events</h2>
+              <span className="text-[9px] font-mono uppercase bg-neutral-200 px-1 py-0.5">
+                DISCORD
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {briefing?.events && briefing.events.filter((e: any) => !e.is_live).length > 0 ? (
+                briefing.events
+                  .filter((e: any) => !e.is_live)
+                  .map((evt: any, idx: number) => (
+                    <div key={idx} className="border border-neutral-300 bg-white/60 p-2.5 shadow-xs">
+                      <div className="flex items-start gap-2.5">
+                        <div className="bg-black text-white text-center px-1.5 py-1 min-w-[48px] shrink-0 font-mono rounded-none">
+                          <div className="text-[10px] font-black uppercase leading-none">{evt.date}</div>
+                          {evt.time && <div className="text-[8px] opacity-75 mt-0.5 leading-none">{evt.time}</div>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-xs leading-snug text-neutral-900">{evt.title}</h3>
+                          {evt.description && (
+                            <p className="text-[10px] text-neutral-600 italic mt-0.5 leading-tight">{evt.description}</p>
+                          )}
+                          {evt.url ? (
+                            <a
+                              href={evt.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block mt-1 text-[9px] font-mono font-bold text-blue-800 hover:underline"
+                            >
+                              Join in Discord →
+                            </a>
+                          ) : evt.interested ? (
+                            <span className="inline-block mt-1 text-[8px] font-mono text-neutral-500">
+                              ★ {evt.interested} interested
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-xs italic text-neutral-500">No scheduled events on the wire.</p>
+              )}
+            </div>
+          </div>
+
+          {/* 3. League Special Bulletin / Announcements */}
+          {briefing?.bulletin && (
+            <div className="border border-black bg-amber-50/50 p-3 shadow-xs">
+              <div className="flex items-center justify-between border-b border-black/20 pb-1 mb-1.5">
+                <span className="text-[9px] font-black uppercase font-mono tracking-wider text-neutral-800">
+                  SPECIAL BULLETIN
+                </span>
+                <span className="text-[9px] font-mono text-neutral-500">{briefing.bulletin.date}</span>
+              </div>
+              <h3 className="font-bold text-xs leading-snug text-neutral-900 mb-1">
+                {briefing.bulletin.title}
+              </h3>
+              <p className="text-[11px] text-neutral-700 leading-relaxed font-serif">
+                {briefing.bulletin.text}
+              </p>
+              <div className="text-[9px] font-mono text-right text-neutral-500 mt-1.5">
+                — {briefing.bulletin.author}
+              </div>
+            </div>
+          )}
         </section>
 
         <main className="col-span-12 md:col-span-6">
@@ -359,8 +539,8 @@ export default function HomePage() {
                 type="button"
                 onClick={() => handleLeagueChange(league)}
                 className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors ${selectedLeague === league
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-200'
+                    ? 'bg-black text-white'
+                    : 'bg-white text-black hover:bg-neutral-200'
                   }`}
               >
                 {league}
