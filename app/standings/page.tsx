@@ -483,7 +483,7 @@ export default function StandingsPage() {
         .order('game_id', { ascending: true }),
       supabase
         .from('league_gamestats')
-        .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id')
+        .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats')
         .eq('league_id', numericLeagueId),
       supabase
         .from('league_teams')
@@ -603,7 +603,7 @@ export default function StandingsPage() {
         return num;
       };
 
-      const applyGame = (rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any) => {
+      const applyGame = (rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any, statsObj?: any) => {
         const hId = resolveTeamKey(rawHId);
         const aId = resolveTeamKey(rawAId);
 
@@ -616,13 +616,26 @@ export default function StandingsPage() {
         if (gameMeta) {
           try {
             const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
-            isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1';
+            isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
+              meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
             isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
           } catch {
             const lowStr = String(gameMeta || '').toLowerCase();
-            isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1');
+            isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
+              lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
             isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
           }
+        }
+
+        if (!isOT && statsObj) {
+          try {
+            const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
+            const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
+            if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
+              Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+              isOT = true;
+            }
+          } catch { }
         }
 
         if (homeScore === awayScore && !isOT) {
@@ -647,32 +660,42 @@ export default function StandingsPage() {
           teamMap[aId].pts += 1;
           teamMap[aId].history.push('T');
         } else if (homeScore > awayScore) {
+          // Home Team Wins
           teamMap[hId].wins += 1;
           teamMap[hId].homeWins += 1;
           teamMap[hId].pts += 2;
           teamMap[hId].history.push('W');
 
-          teamMap[aId].losses += 1;
-          teamMap[aId].awayLosses += 1;
-          teamMap[aId].history.push('L');
-
           if (isOT) {
             teamMap[hId].otWins += 1;
+            // Away Team loses in OT: gets 1 point, 0 regulation losses, increment OTL
             teamMap[aId].otLosses += 1;
+            teamMap[aId].pts += 1;
+            teamMap[aId].history.push('OTL');
+          } else {
+            // Away Team loses in Regulation: increment regulation losses (L)
+            teamMap[aId].losses += 1;
+            teamMap[aId].awayLosses += 1;
+            teamMap[aId].history.push('L');
           }
         } else if (awayScore > homeScore) {
+          // Away Team Wins
           teamMap[aId].wins += 1;
           teamMap[aId].awayWins += 1;
           teamMap[aId].pts += 2;
           teamMap[aId].history.push('W');
 
-          teamMap[hId].losses += 1;
-          teamMap[hId].homeLosses += 1;
-          teamMap[hId].history.push('L');
-
           if (isOT) {
             teamMap[aId].otWins += 1;
+            // Home Team loses in OT: gets 1 point, 0 regulation losses, increment OTL
             teamMap[hId].otLosses += 1;
+            teamMap[hId].pts += 1;
+            teamMap[hId].history.push('OTL');
+          } else {
+            // Home Team loses in Regulation: increment regulation losses (L)
+            teamMap[hId].losses += 1;
+            teamMap[hId].homeLosses += 1;
+            teamMap[hId].history.push('L');
           }
         }
       };
@@ -687,7 +710,7 @@ export default function StandingsPage() {
         const awayScore = Number(stats.away_score) || 0;
         const hId = stats.home_team_id;
         const aId = stats.away_team_id;
-        applyGame(hId, aId, homeScore, awayScore, stats.game_meta);
+        applyGame(hId, aId, homeScore, awayScore, stats.game_meta, stats);
       });
 
       // Also process any schedule matches marked played not yet in gamestats
@@ -699,7 +722,7 @@ export default function StandingsPage() {
         if (isPlayed && !processedStatsGameIds.has(gIdStr) && game.game_meta) {
           const homeScore = Number(game.home_score) || 0;
           const awayScore = Number(game.away_score) || 0;
-          applyGame(game.home_team_id, game.away_team_id, homeScore, awayScore, game.game_meta);
+          applyGame(game.home_team_id, game.away_team_id, homeScore, awayScore, game.game_meta, game);
         }
       });
 
@@ -722,12 +745,17 @@ export default function StandingsPage() {
         const l10W = last10.filter((r: string) => r === 'W').length;
         const l10L = last10.filter((r: string) => r === 'L').length;
         const l10T = last10.filter((r: string) => r === 'T').length;
+        const l10OTL = last10.filter((r: string) => r === 'OTL').length;
+
+        const l10Str = l10OTL > 0
+          ? (l10T > 0 ? `${l10W}-${l10L}-${l10T}-${l10OTL}` : `${l10W}-${l10L}-${l10OTL}`)
+          : `${l10W}-${l10L}-${l10T}`;
 
         return {
           ...team,
           gd: team.gf - team.ga,
           streak: streakStr,
-          l10: `${l10W}-${l10L}-${l10T}`,
+          l10: l10Str,
           homeRecord: `${team.homeWins}-${team.homeLosses}-${team.homeTies}`,
           awayRecord: `${team.awayWins}-${team.awayLosses}-${team.awayTies}`
         };
@@ -1294,7 +1322,7 @@ export default function StandingsPage() {
                         <td className="text-center font-mono text-gray-500 font-normal py-1 px-1 align-middle">{team.awayRecord}</td>
                         <td className="text-center font-mono text-emerald-700 bg-emerald-50/10 font-bold py-1 px-1 align-middle">{team.otWins}</td>
                         <td className="text-center font-mono text-rose-600 bg-rose-50/10 font-bold py-1 px-1 align-middle">{team.otLosses}</td>
-                        <td className={`text-center font-mono font-black py-1 px-1 align-middle ${team.streak?.startsWith('W') ? 'text-emerald-600' : team.streak?.startsWith('L') ? 'text-rose-600' : 'text-gray-400'}`}>{team.streak}</td>
+                        <td className={`text-center font-mono font-black py-1 px-1 align-middle ${team.streak?.startsWith('W') ? 'text-emerald-600' : team.streak?.startsWith('OTL') ? 'text-amber-600' : team.streak?.startsWith('L') ? 'text-rose-600' : 'text-gray-400'}`}>{team.streak}</td>
                         <td className="text-center font-mono text-gray-400 font-normal py-1 px-1 align-middle">{team.l10}</td>
                       </tr>
 
@@ -1322,7 +1350,7 @@ export default function StandingsPage() {
             <h3 className="font-black uppercase text-sm mb-4">League Legend & Column Glossary</h3>
             <div className="grid grid-cols-2 text-[11px] gap-y-2 font-sans font-semibold text-black/80">
               <p><strong>GP</strong> Games Played</p> <p><strong>W / L / T</strong> Wins / Losses / Ties</p>
-              <p><strong>PTS</strong> Points (Win = 2, Tie = 1)</p> <p><strong>+/-</strong> Goal Differential</p>
+              <p><strong>PTS</strong> Points (Win = 2, Tie/OTL = 1)</p> <p><strong>+/-</strong> Goal Differential</p>
               <p><strong>HOME / AWAY</strong> Split Venue Records</p> <p><strong>OTW / OTL</strong> Overtime Wins / Losses</p>
               <p><strong>STRK</strong> Active Hot/Cold Streak</p> <p><strong>L10</strong> Record Over Past 10 Matchups</p>
               <p><strong>E #</strong> Elimination Number (Points needed to mathematically lock out from playoffs)</p>

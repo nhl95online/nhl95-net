@@ -741,6 +741,23 @@ export async function POST(req: NextRequest) {
     // 12. Recalculate and synchronize league_standings for this active season
     const standingsResult = await recalculateAndSaveSeasonStandings(sId);
 
+    // 13. Automatically broadcast rich Boxscore to Discord server
+    let discordSent = false;
+    try {
+      await sendDiscordBoxscore({
+        game,
+        seasonId: sId,
+        gameId: finalGameId,
+        homeTeamName: homeTeam?.team_name || homeTeamCode,
+        awayTeamName: awayTeam?.team_name || awayTeamCode,
+        homeCoachName,
+        awayCoachName
+      });
+      discordSent = true;
+    } catch (discErr) {
+      console.warn("Could not post boxscore to Discord:", discErr);
+    }
+
     const tableErrors: Record<string, string> = {};
     if (insertPlayerErr) tableErrors['league_player_stats_master'] = insertPlayerErr.message || JSON.stringify(insertPlayerErr);
     if (insertScoringErr) tableErrors['league_scoring'] = insertScoringErr.message || JSON.stringify(insertScoringErr);
@@ -763,6 +780,7 @@ export async function POST(req: NextRequest) {
         scoringRows: scoringRows.length,
         penaltiesInserted: !insertPenErr,
         penaltyRows: penaltyRows.length,
+        discordBroadcast: discordSent,
         tableErrors: Object.keys(tableErrors).length > 0 ? tableErrors : undefined
       },
       insertedRow: insertedGame?.[0] || gamestatsRow
@@ -968,32 +986,42 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
         teamMap[aId].pts += 1;
         teamMap[aId].history.push('T');
       } else if (homeScore > awayScore) {
+        // Home Team Wins
         teamMap[hId].wins += 1;
         teamMap[hId].homeWins += 1;
         teamMap[hId].pts += 2;
         teamMap[hId].history.push('W');
 
-        teamMap[aId].losses += 1;
-        teamMap[aId].awayLosses += 1;
-        teamMap[aId].history.push('L');
-
         if (isOT) {
           teamMap[hId].otWins += 1;
+          // Away Team loses in OT: gets 1 point, 0 regulation losses, increment OTL
           teamMap[aId].otLosses += 1;
+          teamMap[aId].pts += 1;
+          teamMap[aId].history.push('OTL');
+        } else {
+          // Away Team loses in Regulation: increment regulation losses (L)
+          teamMap[aId].losses += 1;
+          teamMap[aId].awayLosses += 1;
+          teamMap[aId].history.push('L');
         }
       } else if (awayScore > homeScore) {
+        // Away Team Wins
         teamMap[aId].wins += 1;
         teamMap[aId].awayWins += 1;
         teamMap[aId].pts += 2;
         teamMap[aId].history.push('W');
 
-        teamMap[hId].losses += 1;
-        teamMap[hId].homeLosses += 1;
-        teamMap[hId].history.push('L');
-
         if (isOT) {
           teamMap[aId].otWins += 1;
+          // Home Team loses in OT: gets 1 point, 0 regulation losses, increment OTL
           teamMap[hId].otLosses += 1;
+          teamMap[hId].pts += 1;
+          teamMap[hId].history.push('OTL');
+        } else {
+          // Home Team loses in Regulation: increment regulation losses (L)
+          teamMap[hId].losses += 1;
+          teamMap[hId].homeLosses += 1;
+          teamMap[hId].history.push('L');
         }
       }
     };
@@ -1092,3 +1120,120 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
     return { success: false, error: err.message };
   }
 }
+
+async function sendDiscordBoxscore(params: {
+  game: any;
+  seasonId: number | string;
+  gameId: number;
+  homeTeamName: string;
+  awayTeamName: string;
+  homeCoachName: string;
+  awayCoachName: string;
+}) {
+  const webhookUrl = process.env.DISCORD_BOXSCORE_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  const channelId = process.env.DISCORD_BOXSCORE_CHANNEL_ID || process.env.DISCORD_CHANNEL_ID;
+
+  if (!webhookUrl && (!botToken || !channelId)) {
+    console.log("No Discord Boxscore Webhook or Channel configured, skipping Discord boxscore push.");
+    return { skipped: true };
+  }
+
+  const { game, seasonId, gameId, homeCoachName, awayCoachName } = params;
+  const awayCode = (game.awayTeam?.teamCode || 'AWAY').toUpperCase();
+  const homeCode = (game.homeTeam?.teamCode || 'HOME').toUpperCase();
+  const awayGoals = Number(game.awayTeam?.goals || 0);
+  const homeGoals = Number(game.homeTeam?.goals || 0);
+  const isOT = Boolean(game.isOT);
+
+  // Determine top performers / 3 stars
+  const allSkaters = [
+    ...(game.awaySkaters || []).map((s: any) => ({ ...s, side: awayCode })),
+    ...(game.homeSkaters || []).map((s: any) => ({ ...s, side: homeCode }))
+  ].sort((a: any, b: any) => (Number(b.points) || 0) - (Number(a.points) || 0) || (Number(b.goals) || 0) - (Number(a.goals) || 0));
+
+  const allGoalies = [
+    ...(game.awayGoalies || []).map((g: any) => ({ ...g, side: awayCode })),
+    ...(game.homeGoalies || []).map((g: any) => ({ ...g, side: homeCode }))
+  ].sort((a: any, b: any) => (Number(b.saves) || 0) - (Number(a.saves) || 0));
+
+  const stars: string[] = [];
+  if (allSkaters[0] && (allSkaters[0].points > 0 || allSkaters[0].goals > 0)) {
+    stars.push(`🥇 **${allSkaters[0].name}** (${allSkaters[0].side}) — ${allSkaters[0].goals}G, ${allSkaters[0].assists}A (${allSkaters[0].points} PTS)`);
+  }
+  if (allSkaters[1] && (allSkaters[1].points > 0 || allSkaters[1].goals > 0)) {
+    stars.push(`🥈 **${allSkaters[1].name}** (${allSkaters[1].side}) — ${allSkaters[1].goals}G, ${allSkaters[1].assists}A (${allSkaters[1].points} PTS)`);
+  }
+  if (allGoalies[0] && allGoalies[0].shots > 0) {
+    stars.push(`🥉 **${allGoalies[0].name}** (${allGoalies[0].side}) — ${allGoalies[0].saves} SV, ${allGoalies[0].shots} SH (.${Math.round((allGoalies[0].savePct || 0) * 1000)} SV%)`);
+  }
+
+  // Scoring list
+  const scoringLines = (game.goals || []).slice(0, 12).map((g: any) => {
+    const assists = [g.assist1, g.assist2].filter((a: any) => a && a !== '--').join(', ');
+    const assistStr = assists ? ` (${assists})` : '';
+    const typeStr = g.type && g.type !== 'EV' ? ` [${g.type}]` : '';
+    return `• **P${g.period} ${g.time}** - ${g.team} **${g.scorer}**${assistStr}${typeStr}`;
+  });
+
+  const periodTable = `\`\`\`\n` +
+    `Team   1   2   3  ${isOT ? 'OT  ' : ''}T\n` +
+    `${awayCode.padEnd(5)} ${String(game.awayTeam?.goalsP1 || 0).padStart(2)}  ${String(game.awayTeam?.goalsP2 || 0).padStart(2)}  ${String(game.awayTeam?.goalsP3 || 0).padStart(2)}  ${isOT ? String(game.awayTeam?.goalsOT || 0).padStart(2) + '  ' : ''}${String(awayGoals).padStart(2)}\n` +
+    `${homeCode.padEnd(5)} ${String(game.homeTeam?.goalsP1 || 0).padStart(2)}  ${String(game.homeTeam?.goalsP2 || 0).padStart(2)}  ${String(game.homeTeam?.goalsP3 || 0).padStart(2)}  ${isOT ? String(game.homeTeam?.goalsOT || 0).padStart(2) + '  ' : ''}${String(homeGoals).padStart(2)}\n` +
+    `\`\`\``;
+
+  const teamStatsBlock =
+    `**Shots on Goal:** ${awayCode} ${game.awayTeam?.shots || 0} - ${game.homeTeam?.shots || 0} ${homeCode}\n` +
+    `**Powerplays:** ${awayCode} ${game.awayTeam?.ppGoals || 0}/${game.awayTeam?.ppTries || 0} - ${homeCode} ${game.homeTeam?.ppGoals || 0}/${game.homeTeam?.ppTries || 0}\n` +
+    `**Body Checks:** ${awayCode} ${game.awayTeam?.checks || 0} - ${homeCode} ${game.homeTeam?.checks || 0}\n` +
+    `**Faceoffs Won:** ${awayCode} ${game.awayTeam?.faceoffWins || 0} - ${homeCode} ${game.homeTeam?.faceoffWins || 0}\n` +
+    `**Pass %:** ${awayCode} ${Math.round(((game.awayTeam?.passComps || 0) / Math.max(1, game.awayTeam?.passTries || 1)) * 100)}% - ${homeCode} ${Math.round(((game.homeTeam?.passComps || 0) / Math.max(1, game.homeTeam?.passTries || 1)) * 100)}%`;
+
+  const embed = {
+    title: `🏒 FINAL: ${awayCode} (${awayGoals}) @ ${homeCode} (${homeGoals})${isOT ? ' [OT]' : ''}`,
+    description: `**Season ${seasonId} (${getLeagueCode(seasonId)}) • Game #${gameId}**\n**Coaches:** ${awayCoachName} vs ${homeCoachName}`,
+    color: awayGoals > homeGoals ? 0x2b82d9 : 0xd9532b,
+    fields: [
+      { name: "📊 Line Score", value: periodTable, inline: false },
+      { name: "⚡ Team Stats", value: teamStatsBlock, inline: true },
+      { name: "⭐ Top Performers", value: stars.length > 0 ? stars.join("\n") : "No individual points", inline: true },
+      ...(scoringLines.length > 0 ? [{ name: "🚨 Scoring Summary", value: scoringLines.join("\n"), inline: false }] : [])
+    ],
+    footer: {
+      text: "NHL95 Gazette Boxscore System • nhl95.net"
+    },
+    timestamp: new Date().toISOString()
+  };
+
+  const payload = {
+    username: "NHL95 Boxscore Wire",
+    avatar_url: "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/brule_cup.png",
+    embeds: [embed]
+  };
+
+  try {
+    if (webhookUrl) {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      console.log("✅ Discord Boxscore sent successfully via Webhook!");
+    } else if (botToken && channelId) {
+      await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bot ${botToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      console.log("✅ Discord Boxscore sent successfully via Bot API!");
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error("Failed to push boxscore to Discord:", err);
+    return { error: err.message };
+  }
+}
+

@@ -382,32 +382,42 @@ async function recalculateSeasonStandings(sId: number) {
       teamMap[aId].pts += 1;
       teamMap[aId].history.push('T');
     } else if (homeScore > awayScore) {
+      // Home Team Wins
       teamMap[hId].wins += 1;
       teamMap[hId].homeWins += 1;
       teamMap[hId].pts += 2;
       teamMap[hId].history.push('W');
 
-      teamMap[aId].losses += 1;
-      teamMap[aId].awayLosses += 1;
-      teamMap[aId].history.push('L');
-
       if (isOT) {
         teamMap[hId].otWins += 1;
+        // Away Team loses in OT: gets 1 point, 0 regulation losses, increment OTL
         teamMap[aId].otLosses += 1;
+        teamMap[aId].pts += 1;
+        teamMap[aId].history.push('OTL');
+      } else {
+        // Away Team loses in Regulation: increment regulation losses (L)
+        teamMap[aId].losses += 1;
+        teamMap[aId].awayLosses += 1;
+        teamMap[aId].history.push('L');
       }
     } else if (awayScore > homeScore) {
+      // Away Team Wins
       teamMap[aId].wins += 1;
       teamMap[aId].awayWins += 1;
       teamMap[aId].pts += 2;
       teamMap[aId].history.push('W');
 
-      teamMap[hId].losses += 1;
-      teamMap[hId].homeLosses += 1;
-      teamMap[hId].history.push('L');
-
       if (isOT) {
         teamMap[aId].otWins += 1;
+        // Home Team loses in OT: gets 1 point, 0 regulation losses, increment OTL
         teamMap[hId].otLosses += 1;
+        teamMap[hId].pts += 1;
+        teamMap[hId].history.push('OTL');
+      } else {
+        // Home Team loses in Regulation: increment regulation losses (L)
+        teamMap[hId].losses += 1;
+        teamMap[hId].homeLosses += 1;
+        teamMap[hId].history.push('L');
       }
     }
   };
