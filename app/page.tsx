@@ -71,11 +71,96 @@ const getTrophyUrl = (seasonId: number) => {
   return null;
 };
 
+const DEFAULT_BRIEFING = {
+  updated_at: "Today • Late Edition",
+  headline: "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
+  subheadline: "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Reels",
+  quote_of_the_day: {
+    quote: "I can't view it, but yes that's me.",
+    author: "Unholy",
+    context: "Confirming archival Sabres footage through pure aura"
+  },
+  sections: [
+    {
+      channel: "cooking-with-puss",
+      badge: "CULINARY CONTROVERSY",
+      title: "Late Night Buffet Rants",
+      commentary: "At 2:43 AM, GaelicGopher called out an anonymous Chinese buffet influencer as 'horrible' before immediately admitting to hate-watching the entire filmography.",
+      messages: [
+        {
+          time: "02:43",
+          author: "GaelicGopher",
+          text: "@segathon FYI, that Chinese buffet loser....he's horrible (and I've somehow watched every single episode)"
+        }
+      ]
+    },
+    {
+      channel: "knightsvision",
+      badge: "HOT SCOOP",
+      title: "Sabres Classics Identification Incident",
+      commentary: "Segathon uncovered mystery vintage tape. Unholy confirmed it was 100% him on the ice without even loading the link.",
+      messages: [
+        {
+          time: "16:04",
+          author: "segathon",
+          text: "is this you @Unholy (https://x.com/SabresClassics/...)"
+        },
+        {
+          time: "16:32",
+          author: "Unholy",
+          text: "I can't view it, but yes that's me."
+        }
+      ]
+    },
+    {
+      channel: "highlights",
+      badge: "TAPE ROOM",
+      title: "Segathon Drops Triple Twitch Bombshell",
+      commentary: "Three high-octane clips dropped in rapid succession featuring textbook manual goalie saves and cross-crease snipes.",
+      clips: [
+        {
+          name: "HilariousHumbleCake",
+          url: "https://www.twitch.tv/segathonsow/clip/HilariousHumbleCakeOptimizePrime-jXgK-FCJEkSEPWRN"
+        },
+        {
+          name: "ProtectiveTangibleLlama",
+          url: "https://www.twitch.tv/segathonsow/clip/ProtectiveTangibleLlamaDoubleRainbow-SheU_4EQkkT-SvHC"
+        },
+        {
+          name: "CrepuscularAltruisticSandwich",
+          url: "https://www.twitch.tv/segathonsow/clip/CrepuscularAltruisticSandwichAMPEnergyCherry-qp00z_PkiDpFAEEZ"
+        }
+      ],
+      messages: [
+        {
+          time: "13:15 - 13:23",
+          author: "segathon",
+          text: "Posted 3 Twitch highlight reels"
+        }
+      ]
+    },
+    {
+      channel: "crib-notes-with-pinot-and-gummies",
+      badge: "LATE NIGHT INTEL",
+      title: "The Monday Night Detour",
+      commentary: "Under the influence of premium pinot and gummies, GaelicGopher declared 'Monday night de tour'. Scouts are analyzing the playbook.",
+      messages: [
+        {
+          time: "02:14",
+          author: "GaelicGopher",
+          text: "Monday night de tour"
+        }
+      ]
+    }
+  ]
+};
+
 export default function HomePage() {
   // Defaulting to 40 (W18)
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(40);
   const [standings, setStandings] = useState<any[]>([]);
+  const [briefing, setBriefing] = useState<any>(DEFAULT_BRIEFING);
 
   // Filter seasons based on selected league
   const filteredSeasons = useMemo(() => {
@@ -95,13 +180,17 @@ export default function HomePage() {
     }
   };
 
-  const [briefing, setBriefing] = useState<any>(null);
-
   useEffect(() => {
     fetch('/daily_briefing.json')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('Not found');
+        return res.json();
+      })
       .then((data) => setBriefing(data))
-      .catch((err) => console.error("Could not load daily briefing:", err));
+      .catch((err) => {
+        // Fallback to default briefing
+        console.log("Using cached Gazette briefing");
+      });
   }, []);
 
   useEffect(() => {
@@ -128,7 +217,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-6">
       <header className="border-b-4 border-black pb-4 mb-6 text-center">
         <h1 className="text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-        <p className="text-sm italic">"Ask Ticklepuss where you want to be tickled"</p>
+        <p className="text-sm italic">"Welcome to the Darkside of NHL95"</p>
       </header>
 
       <div className="grid grid-cols-12 gap-8">
