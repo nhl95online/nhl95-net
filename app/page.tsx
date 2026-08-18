@@ -275,7 +275,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-6">
       <header className="border-b-4 border-black pb-4 mb-4 text-center">
         <h1 className="text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-        <p className="text-sm italic">"Ask Ticklepuss where you want to be tickled"</p>
+        <p className="text-sm italic">"Welcome to the Darkside of NHL95"</p>
       </header>
 
       {/* Real-World NHL Current News Wire Bar */}
