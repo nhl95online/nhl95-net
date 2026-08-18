@@ -47,30 +47,27 @@ export default function Navbar() {
       {/* Navigation Links Row */}
       <div className="flex justify-center items-center gap-8 px-6 py-3 text-sm text-black uppercase font-bold tracking-widest bg-[#f4f1ea] border-b border-black">
         <Link href="/team" className="hover:underline transition text-red-700">Teams</Link>
+        <Link href="/standings" className="hover:underline transition">Standings</Link>
+        <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
+        <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
-        {['STANDINGS', 'PLAYOFFS', 'SCORES', 'SCHEDULE'].map((link) => (
-          <Link key={link} href={`/${link.toLowerCase()}`} className="hover:underline transition">
-            {link}
-          </Link>
-        ))}
-
-        {/* Dropdown for Rosters */}
+        {/* Dropdown for Rosters & Trades */}
         <div className="relative" onMouseEnter={() => setIsOpen(true)} onMouseLeave={() => setIsOpen(false)}>
           <button className="hover:underline transition cursor-pointer uppercase">Rosters</button>
           {isOpen && (
-            <div className="absolute top-full left-0 bg-[#f4f1ea] border border-black py-2 w-40 flex flex-col z-50 shadow-lg">
-              <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white">Draft</Link>
-              <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white">Trades</Link>
+            <div className="absolute top-full left-0 bg-[#f4f1ea] border border-black py-2 w-48 flex flex-col z-50 shadow-lg">
+              <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold">Trade Machine</Link>
+              <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white">Draft Central</Link>
               <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white">Player Database</Link>
             </div>
           )}
         </div>
 
-        {['STATS', 'AWARDS', 'MANAGERS', 'RECORDS'].map((link) => (
-          <Link key={link} href={`/${link.toLowerCase()}`} className="hover:underline transition">
-            {link}
-          </Link>
-        ))}
+        <Link href="/stats" className="hover:underline transition">Stats</Link>
+        <Link href="/awards" className="hover:underline transition">Awards</Link>
+        <Link href="/managers" className="hover:underline transition">Managers</Link>
+        <Link href="/records" className="hover:underline transition">Records</Link>
+        <Link href="/upload" className="hover:underline transition bg-black text-white px-2.5 py-1 text-xs font-bold rounded-none hover:bg-red-700">Upload</Link>
       </div>
     </nav>
   );

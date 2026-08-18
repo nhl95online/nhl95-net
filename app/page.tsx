@@ -1,14 +1,64 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+
+interface SeasonOption {
+  id: number;
+  label: string;
+  league: 'W' | 'O' | 'V' | 'G' | 'Q';
+}
+
+// All defined seasons with their ID, code label, and league type
+const ALL_SEASONS: SeasonOption[] = [
+  { id: 40, label: 'W18', league: 'W' },
+  { id: 39, label: 'O01', league: 'O' },
+  { id: 38, label: 'W17', league: 'W' },
+  { id: 37, label: 'W16', league: 'W' },
+  { id: 36, label: 'Q19', league: 'Q' },
+  { id: 35, label: 'W15', league: 'W' },
+  { id: 34, label: 'Q18', league: 'Q' },
+  { id: 33, label: 'W14', league: 'W' },
+  { id: 32, label: 'Q17', league: 'Q' },
+  { id: 31, label: 'W13', league: 'W' },
+  { id: 30, label: 'Q16', league: 'Q' },
+  { id: 29, label: 'Q15', league: 'Q' },
+  { id: 28, label: 'W12', league: 'W' },
+  { id: 27, label: 'Q14', league: 'Q' },
+  { id: 26, label: 'Q13', league: 'Q' },
+  { id: 25, label: 'Q12', league: 'Q' },
+  { id: 24, label: 'W11', league: 'W' },
+  { id: 23, label: 'Q11', league: 'Q' },
+  { id: 22, label: 'W10', league: 'W' },
+  { id: 21, label: 'Q10', league: 'Q' },
+  { id: 20, label: 'V01', league: 'V' },
+  { id: 19, label: 'Q09', league: 'Q' },
+  { id: 18, label: 'W09', league: 'W' },
+  { id: 17, label: 'Q08', league: 'Q' },
+  { id: 16, label: 'G01', league: 'G' },
+  { id: 15, label: 'Q07', league: 'Q' },
+  { id: 14, label: 'W08', league: 'W' },
+  { id: 13, label: 'Q06', league: 'Q' },
+  { id: 12, label: 'Q05', league: 'Q' },
+  { id: 11, label: 'W07', league: 'W' },
+  { id: 10, label: 'Q04', league: 'Q' },
+  { id: 9, label: 'W06', league: 'W' },
+  { id: 8, label: 'Q03', league: 'Q' },
+  { id: 7, label: 'Q02', league: 'Q' },
+  { id: 6, label: 'W05', league: 'W' },
+  { id: 5, label: 'Q01', league: 'Q' },
+  { id: 4, label: 'W04', league: 'W' },
+  { id: 3, label: 'W03', league: 'W' },
+  { id: 2, label: 'W02', league: 'W' },
+  { id: 1, label: 'W01', league: 'W' }
+];
 
 // Mapping season IDs to their prefix type for trophy logic
 const SEASON_TYPES: Record<number, string> = {
   1: 'W', 2: 'W', 3: 'W', 4: 'W', 5: 'Q', 6: 'W', 7: 'Q', 8: 'Q', 9: 'W', 10: 'Q',
   11: 'W', 12: 'Q', 13: 'Q', 14: 'W', 15: 'Q', 16: 'G', 17: 'Q', 18: 'W', 19: 'Q', 20: 'V',
   21: 'Q', 22: 'W', 23: 'Q', 24: 'W', 25: 'Q', 26: 'Q', 27: 'Q', 28: 'W', 29: 'Q', 30: 'Q',
-  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W'
+  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
 };
 
 const getTrophyUrl = (seasonId: number) => {
@@ -16,13 +66,34 @@ const getTrophyUrl = (seasonId: number) => {
   if (type === 'W') return 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/brule_cup.png';
   if (type === 'Q') return 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/q_cup.png';
   if (type === 'V') return 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/grail_cup.png';
+  if (type === 'O') return 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png';
+  if (type === 'G') return 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png';
   return null;
 };
 
 export default function HomePage() {
-  // Defaulting to 38
-  const [selectedSeason, setSelectedSeason] = useState<number>(38);
+  // Defaulting to 40 (W18)
+  const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
+  const [selectedSeason, setSelectedSeason] = useState<number>(40);
   const [standings, setStandings] = useState<any[]>([]);
+
+  // Filter seasons based on selected league
+  const filteredSeasons = useMemo(() => {
+    if (selectedLeague === 'ALL') return ALL_SEASONS;
+    return ALL_SEASONS.filter((s) => s.league === selectedLeague);
+  }, [selectedLeague]);
+
+  // Handle switching league filter buttons
+  const handleLeagueChange = (league: string) => {
+    setSelectedLeague(league);
+    const available = league === 'ALL'
+      ? ALL_SEASONS
+      : ALL_SEASONS.filter((s) => s.league === league);
+
+    if (available.length > 0 && !available.some((s) => s.id === selectedSeason)) {
+      setSelectedSeason(available[0].id);
+    }
+  };
 
   useEffect(() => {
     async function loadStandings() {
@@ -69,33 +140,37 @@ export default function HomePage() {
         </main>
 
         <aside className="col-span-12 md:col-span-3 border-l border-black pl-4">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-2">
             <h2 className="font-bold uppercase text-sm">STANDINGS</h2>
             <select
-              className="text-[10px] border p-1 bg-transparent"
+              className="text-[10px] border border-black p-1 bg-transparent font-bold cursor-pointer"
               value={selectedSeason}
               onChange={(e) => setSelectedSeason(Number(e.target.value))}
             >
-              <option value={1}>W01</option> <option value={2}>W02</option>
-              <option value={3}>W03</option> <option value={4}>W04</option>
-              <option value={5}>Q01</option> <option value={6}>W05</option>
-              <option value={7}>Q02</option> <option value={8}>Q03</option>
-              <option value={9}>W06</option> <option value={10}>Q04</option>
-              <option value={11}>W07</option> <option value={12}>Q05</option>
-              <option value={13}>Q06</option> <option value={14}>W08</option>
-              <option value={15}>Q07</option> <option value={16}>G01</option>
-              <option value={17}>Q08</option> <option value={18}>W09</option>
-              <option value={19}>Q09</option> <option value={20}>V01</option>
-              <option value={21}>Q10</option> <option value={22}>W10</option>
-              <option value={23}>Q11</option> <option value={24}>W11</option>
-              <option value={25}>Q12</option> <option value={26}>Q13</option>
-              <option value={27}>Q14</option> <option value={28}>W12</option>
-              <option value={29}>Q15</option> <option value={30}>Q16</option>
-              <option value={31}>W13</option> <option value={32}>Q17</option>
-              <option value={33}>W14</option> <option value={34}>Q18</option>
-              <option value={35}>W15</option> <option value={36}>Q19</option>
-              <option value={37}>W16</option> <option value={38}>W17</option>
+              {filteredSeasons.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
             </select>
+          </div>
+
+          {/* League Filter / Sort Buttons */}
+          <div className="flex flex-wrap items-center gap-1 mb-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 mr-0.5">League:</span>
+            {(['ALL', 'W', 'Q', 'O', 'V', 'G'] as const).map((league) => (
+              <button
+                key={league}
+                type="button"
+                onClick={() => handleLeagueChange(league)}
+                className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors ${selectedLeague === league
+                    ? 'bg-black text-white'
+                    : 'bg-white text-black hover:bg-neutral-200'
+                  }`}
+              >
+                {league}
+              </button>
+            ))}
           </div>
 
           <table className="w-full text-[10px] border-collapse">
@@ -134,9 +209,16 @@ export default function HomePage() {
                   <td className="py-1 font-bold">{s.pts}</td>
                 </tr>
               ))}
+              {standings.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-3 text-center text-slate-500 italic">
+                    No standings available
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-          <a href="/standings" className="block mt-4 text-[9px] underline italic text-slate-600">
+          <a href="/standings" className="block mt-4 text-[9px] underline italic text-slate-600 hover:text-black">
             View full standings →
           </a>
         </aside>

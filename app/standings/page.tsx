@@ -1,14 +1,115 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 type SortField = 'seed' | 'wins' | 'losses' | 'ties' | 'pts' | 'gf' | 'ga' | 'gd' | 'otWins' | 'otLosses' | 'season_id';
 type SortOrder = 'asc' | 'desc';
 
+const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?: string }> = {
+  W: {
+    name: 'W League',
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/WN95HL.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/WN95HL.png'
+  },
+  Q: {
+    name: 'The Q',
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/TheQ.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/TheQ.png'
+  },
+  O: {
+    name: 'Original 6',
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+  },
+  V: {
+    name: 'Vintage',
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Vintage.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Vintage.png'
+  },
+  G: {
+    name: 'Golden Era',
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Golden%20Era.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png'
+  }
+};
+
+const SEASON_TYPES: Record<number, string> = {
+  1: 'W', 2: 'W', 3: 'W', 4: 'W', 5: 'Q', 6: 'W', 7: 'Q', 8: 'Q', 9: 'W', 10: 'Q',
+  11: 'W', 12: 'Q', 13: 'Q', 14: 'W', 15: 'Q', 16: 'G', 17: 'Q', 18: 'W', 19: 'Q', 20: 'V',
+  21: 'Q', 22: 'W', 23: 'Q', 24: 'W', 25: 'Q', 26: 'Q', 27: 'Q', 28: 'W', 29: 'Q', 30: 'Q',
+  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
+};
+
+const getLeaguePrefix = (league: { league_id: number | string; league_name?: string }) => {
+  const name = String(league.league_name || '').trim().toUpperCase();
+  if (name) {
+    const match = name.match(/^[A-Z]+/);
+    if (match && match[0]) return match[0];
+  }
+  const idNum = Number(league.league_id);
+  if (SEASON_TYPES[idNum]) return SEASON_TYPES[idNum];
+  return 'W';
+};
+
+export const getTeamBannerUrls = (t: {
+  team_id?: number | string;
+  abbreviation?: string;
+  team_name?: string;
+  banner_filename?: string;
+  league_id?: number | string;
+}, currentSeasonId?: number | string) => {
+  const abbr = String(t.abbreviation || '').trim().toUpperCase();
+  const name = String(t.team_name || '').trim().toUpperCase();
+  const tLeagueId = Number(t.league_id !== undefined ? t.league_id : currentSeasonId || 0);
+
+  const isOriginalSix =
+    ['BOS', 'CHI', 'DET', 'DTC', 'MTL', 'NYR', 'TOR'].includes(abbr) ||
+    tLeagueId === 39 ||
+    SEASON_TYPES[tLeagueId] === 'O' ||
+    name.includes('BOSTON') || name.includes('BRUINS') ||
+    name.includes('CHICAGO') || name.includes('BLACKHAWKS') ||
+    name.includes('DETROIT') || name.includes('COUGARS') || name.includes('RED WINGS') ||
+    name.includes('MONTREAL') || name.includes('CANADIENS') ||
+    name.includes('NEW YORK RANGERS') || name.includes('RANGERS') ||
+    name.includes('TORONTO') || name.includes('MAPLE LEAFS');
+
+  let bannerFile = t.banner_filename?.trim();
+  if (!bannerFile && abbr) {
+    bannerFile = `${abbr}.png`;
+  }
+  if (!bannerFile) return { primaryUrl: null, fallbackUrls: [] };
+
+  if (!bannerFile.includes('.')) {
+    bannerFile = `${bannerFile}.png`;
+  }
+
+  const primaryBucket = isOriginalSix ? 'nhl banners' : 'banners';
+  const secondaryBucket = isOriginalSix ? 'banners' : 'nhl banners';
+
+  const primaryUrl = supabase.storage.from(primaryBucket).getPublicUrl(bannerFile).data.publicUrl;
+  const fallbackUrl1 = supabase.storage.from(secondaryBucket).getPublicUrl(bannerFile).data.publicUrl;
+
+  const encodedFileName = encodeURIComponent(bannerFile);
+  const fallbackUrl2 = `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/${encodeURIComponent(primaryBucket)}/${encodedFileName}`;
+  const fallbackUrl3 = `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/${encodeURIComponent(secondaryBucket)}/${encodedFileName}`;
+  const fallbackUrl4 = `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl_banners/${encodedFileName}`;
+  const fallbackUrl5 = `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20banners/${encodedFileName}`;
+  const fallbackUrl6 = `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/banners/${encodedFileName}`;
+
+  const allUrls = [primaryUrl, fallbackUrl1, fallbackUrl2, fallbackUrl3, fallbackUrl4, fallbackUrl5, fallbackUrl6];
+  const uniqueUrls = Array.from(new Set(allUrls.filter(Boolean))) as string[];
+
+  return {
+    primaryUrl: uniqueUrls[0] || null,
+    fallbackUrls: uniqueUrls.slice(1)
+  };
+};
+
 export default function StandingsPage() {
   const [seasons, setSeasons] = useState<any[]>([]);
+  const [selectedLeagueType, setSelectedLeagueType] = useState<string>('ALL');
   const [selectedLeagueId, setSelectedLeagueId] = useState<number | string>('');
   const [activeSeasonId, setActiveSeasonId] = useState<number | string>('');
   const [standings, setStandings] = useState<any[]>([]);
@@ -50,13 +151,13 @@ export default function StandingsPage() {
       }
 
       if (error || !data || data.length === 0) {
-        const emergencyFallback = Array.from({ length: 38 }, (_, i) => {
-          const id = i + 1;
+        const emergencyFallback = Array.from({ length: 40 }, (_, i) => {
+          const id = 40 - i;
           return { league_id: String(id), league_name: `Season ${id.toString().padStart(2, '0')}` };
         });
         setSeasons(emergencyFallback);
-        setActiveSeasonId("38");
-        setSelectedLeagueId("38");
+        setActiveSeasonId("40");
+        setSelectedLeagueId("40");
         return;
       }
 
@@ -83,11 +184,11 @@ export default function StandingsPage() {
           games_per_team: customGamesLimit
         };
       })
-        .sort((a, b) => Number(a.league_id) - Number(b.league_id));
+        .sort((a, b) => Number(b.league_id) - Number(a.league_id));
 
       setSeasons(formattedList);
 
-      const latestSeason = formattedList[formattedList.length - 1];
+      const latestSeason = formattedList[0];
       if (latestSeason) {
         setActiveSeasonId(latestSeason.league_id);
         setSelectedLeagueId(latestSeason.league_id);
@@ -97,6 +198,42 @@ export default function StandingsPage() {
 
     fetchSeasons();
   }, []);
+
+  const availableLeagueTypes = useMemo(() => {
+    const extracted = new Set<string>();
+    seasons.forEach(l => {
+      const p = getLeaguePrefix(l);
+      if (p) extracted.add(p);
+    });
+    if (extracted.size === 0) {
+      return ['W', 'Q', 'O', 'V'];
+    }
+    const priority = ['W', 'Q', 'O', 'V', 'G'];
+    return Array.from(extracted).sort((a, b) => {
+      const idxA = priority.indexOf(a);
+      const idxB = priority.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [seasons]);
+
+  const filteredSeasons = useMemo(() => {
+    if (selectedLeagueType === 'ALL') return seasons;
+    return seasons.filter(s => getLeaguePrefix(s) === selectedLeagueType);
+  }, [seasons, selectedLeagueType]);
+
+  const handleLeagueTypeChange = (type: string) => {
+    setSelectedLeagueType(type);
+    setIsGlobalMode(false);
+    const list = type === 'ALL' ? seasons : seasons.filter(s => getLeaguePrefix(s) === type);
+    if (list.length > 0) {
+      const latestInType = list[0];
+      const nextId = String(latestInType.league_id);
+      setSelectedLeagueId(nextId);
+    }
+  };
 
   // 2. Trigger loading whenever season context or global view switches
   useEffect(() => {
@@ -117,22 +254,22 @@ export default function StandingsPage() {
     }
   }, [selectedLeagueId, activeSeasonId, isGlobalMode, seasons]);
 
-  const getTeamMetadataMap = async () => {
+  const getTeamMetadataMap = async (currentSeasonId?: number | string) => {
     const { data: teamsData } = await supabase
       .from('league_teams')
-      .select('team_id, team_name, abbreviation, banner_filename');
+      .select('team_id, team_name, abbreviation, banner_filename, league_id');
 
     const baseTeamMap: Record<number, any> = {};
     teamsData?.forEach((t: any) => {
       const tId = Number(t.team_id);
-      const bannerFile = t.banner_filename?.trim();
-      const publicUrl = bannerFile ? supabase.storage.from('banners').getPublicUrl(bannerFile).data.publicUrl : null;
+      const { primaryUrl, fallbackUrls } = getTeamBannerUrls(t, currentSeasonId);
 
       baseTeamMap[tId] = {
         id: tId,
         name: t.team_name,
         abbr: t.abbreviation,
-        banner_url: publicUrl
+        banner_url: primaryUrl,
+        fallback_urls: fallbackUrls
       };
     });
     return baseTeamMap;
@@ -153,11 +290,23 @@ export default function StandingsPage() {
 
     const compiledGlobalRows = (globalData || []).map((row: any) => {
       const tId = Number(row.team_id);
-      const meta = baseTeamMap[tId] || { name: `Retro Club #${tId}`, abbr: `TM${tId}`, banner_url: null };
       const matchingSeason = seasons.find(s => String(s.league_id) === String(row.season_id));
+      const sId = matchingSeason ? matchingSeason.league_id : row.season_id;
+      const meta = baseTeamMap[tId] || { name: `Retro Club #${tId}`, abbr: `TM${tId}`, banner_url: null, fallback_urls: [] };
+
+      // Re-evaluate banner in context of the specific season if needed
+      const bannerInfo = getTeamBannerUrls({
+        team_id: tId,
+        team_name: meta.name,
+        abbreviation: meta.abbr,
+        banner_filename: meta.banner_filename,
+        league_id: sId
+      }, sId);
 
       return {
         ...meta,
+        banner_url: meta.banner_url || bannerInfo.primaryUrl,
+        fallback_urls: meta.fallback_urls?.length ? meta.fallback_urls : bannerInfo.fallbackUrls,
         season_id: row.season_id,
         season_display_name: matchingSeason ? matchingSeason.league_name : `Season ${row.season_id}`,
         gp: row.gp,
@@ -189,7 +338,7 @@ export default function StandingsPage() {
   const loadStandings = async (leagueId: number | string) => {
     setLoading(true);
     const numericLeagueId = parseInt(String(leagueId).replace(/\D/g, '')) || 1;
-    const baseTeamMap = await getTeamMetadataMap();
+    const baseTeamMap = await getTeamMetadataMap(numericLeagueId);
 
     const { data: playoffData } = await supabase
       .from('league_playoffs')
@@ -205,161 +354,213 @@ export default function StandingsPage() {
 
     let freshStandings: any[] = [];
 
-    if (String(leagueId) !== String(activeSeasonId) || !activeSeasonId) {
-      const { data: standardData } = await supabase
-        .from('league_standings')
-        .select('*')
-        .eq('season_id', numericLeagueId);
+    // 1. First check if league_standings table has precomputed standings for this season
+    const { data: standardData } = await supabase
+      .from('league_standings')
+      .select('*')
+      .eq('season_id', numericLeagueId);
 
-      freshStandings = (standardData || [])
-        .map((row: any) => {
-          const tId = Number(row.team_id);
-          const meta = baseTeamMap[tId] || { name: `Retro Club #${tId}`, abbr: `TM${tId}`, banner_url: null };
+    if (standardData && standardData.length > 0) {
+      freshStandings = standardData.map((row: any) => {
+        const tId = Number(row.team_id);
+        const meta = baseTeamMap[tId] || { name: `Retro Club #${tId}`, abbr: `TM${tId}`, banner_url: null, fallback_urls: [] };
 
-          return {
-            ...meta,
-            season_id: numericLeagueId,
-            season_display_name: '',
-            gp: row.gp,
-            wins: row.w,
-            losses: row.l,
-            ties: row.t,
-            pts: row.pts,
-            gf: row.gf,
-            ga: row.ga,
-            gd: row.gd,
-            otWins: row.otw,
-            otLosses: row.otl,
-            streak: row.strk,
-            l10: row.l10,
-            homeRecord: row.home,
-            awayRecord: row.away,
-            conference: row.conference?.trim() || null,
-            division: row.division?.trim() || null,
-            clinch: row.clinch || ''
-          };
-        });
-    } else {
-      const { data: allScheduleData } = await supabase
-        .from('league_schedule')
-        .select('game_id, home_team_id, away_team_id, played, league_id')
-        .eq('league_id', numericLeagueId)
-        .order('game_id', { ascending: true });
+        return {
+          ...meta,
+          season_id: numericLeagueId,
+          season_display_name: '',
+          gp: Number(row.gp) || 0,
+          wins: Number(row.w) || 0,
+          losses: Number(row.l) || 0,
+          ties: Number(row.t) || 0,
+          pts: Number(row.pts) || 0,
+          gf: Number(row.gf) || 0,
+          ga: Number(row.ga) || 0,
+          gd: Number(row.gd) || 0,
+          otWins: Number(row.otw) || 0,
+          otLosses: Number(row.otl) || 0,
+          streak: row.strk || '-',
+          l10: row.l10 || '0-0-0',
+          homeRecord: row.home || '0-0-0',
+          awayRecord: row.away || '0-0-0',
+          conference: row.conference?.trim() || null,
+          division: row.division?.trim() || null,
+          clinch: row.clinch || ''
+        };
+      });
+    }
 
-      const { data: statsData } = await supabase
-        .from('league_gamestats')
-        .select('game_id, home_score, away_score, game_meta, league_id')
-        .eq('league_id', numericLeagueId);
+    // 2. If league_standings is empty, compute dynamically from league_schedule + league_gamestats
+    if (freshStandings.length === 0) {
+      const [schedRes, statsRes, teamsRes] = await Promise.all([
+        supabase
+          .from('league_schedule')
+          .select('game_id, home_team_id, away_team_id, played, league_id')
+          .eq('league_id', numericLeagueId)
+          .order('game_id', { ascending: true }),
+        supabase
+          .from('league_gamestats')
+          .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id')
+          .eq('league_id', numericLeagueId),
+        supabase
+          .from('league_teams')
+          .select('team_id, team_name, abbreviation, conference, division, league_id, banner_filename')
+      ]);
+
+      const allScheduleData = schedRes.data || [];
+      const statsData = statsRes.data || [];
+      const allTeamsData = teamsRes.data || [];
 
       const teamMap: Record<number, any> = {};
 
-      Object.keys(baseTeamMap).forEach((idStr) => {
-        const tId = Number(idStr);
-        const isTeamInLeague = allScheduleData?.some(g => Number(g.home_team_id) === tId || Number(g.away_team_id) === tId);
-
-        if (isTeamInLeague && tId !== 999 && tId !== 0 && tId !== 68) {
-          teamMap[tId] = {
-            ...baseTeamMap[tId],
-            season_id: numericLeagueId,
-            season_display_name: '',
-            gp: 0, wins: 0, losses: 0, ties: 0, pts: 0, gf: 0, ga: 0,
-            homeWins: 0, homeLosses: 0, homeTies: 0,
-            awayWins: 0, awayLosses: 0, awayTies: 0,
-            otWins: 0, otLosses: 0,
-            history: [],
-            conference: null,
-            division: null,
-            clinch: ''
-          };
-        }
+      const activeTeamIds = new Set<number>();
+      allTeamsData.forEach((t: any) => {
+        if (Number(t.league_id) === numericLeagueId) activeTeamIds.add(Number(t.team_id));
+      });
+      allScheduleData.forEach((g: any) => {
+        const h = Number(g.home_team_id);
+        const a = Number(g.away_team_id);
+        if (h && h !== 999 && h !== 0 && h !== 68) activeTeamIds.add(h);
+        if (a && a !== 999 && a !== 0 && a !== 68) activeTeamIds.add(a);
+      });
+      statsData.forEach((s: any) => {
+        const h = Number(s.home_team_id);
+        const a = Number(s.away_team_id);
+        if (h && h !== 999 && h !== 0 && h !== 68) activeTeamIds.add(h);
+        if (a && a !== 999 && a !== 0 && a !== 68) activeTeamIds.add(a);
       });
 
-      allScheduleData?.forEach((game: any) => {
-        const rawPlayed = String(game.played).trim().toLowerCase();
-        const isPlayed = rawPlayed === "true" || rawPlayed === "1" || rawPlayed === "y" || rawPlayed === "yes";
-        if (!isPlayed) return;
+      activeTeamIds.forEach((tId) => {
+        const tInfo = allTeamsData.find((t: any) => Number(t.team_id) === tId);
+        const bannerInfo = getTeamBannerUrls({
+          team_id: tId,
+          team_name: tInfo?.team_name,
+          abbreviation: tInfo?.abbreviation,
+          banner_filename: tInfo?.banner_filename,
+          league_id: tInfo?.league_id || numericLeagueId
+        }, numericLeagueId);
 
-        const statsMatch = statsData?.find((s: any) => s.game_id?.toString().trim() === game.game_id?.toString().trim());
-        if (!statsMatch) return;
+        teamMap[tId] = {
+          ...(baseTeamMap[tId] || {
+            id: tId,
+            name: tInfo?.team_name || `Retro Club #${tId}`,
+            abbr: tInfo?.abbreviation || `TM${tId}`,
+            banner_url: bannerInfo.primaryUrl,
+            fallback_urls: bannerInfo.fallbackUrls
+          }),
+          season_id: numericLeagueId,
+          season_display_name: '',
+          gp: 0, wins: 0, losses: 0, ties: 0, pts: 0, gf: 0, ga: 0,
+          homeWins: 0, homeLosses: 0, homeTies: 0,
+          awayWins: 0, awayLosses: 0, awayTies: 0,
+          otWins: 0, otLosses: 0,
+          history: [] as string[],
+          conference: tInfo?.conference?.trim() || null,
+          division: tInfo?.division?.trim() || null,
+          clinch: ''
+        };
+      });
+
+      const processedGameIds = new Set<string>();
+
+      const applyGame = (hId: number, aId: number, homeScore: number, awayScore: number, gameMeta: any) => {
+        if (hId === 999 || aId === 999 || hId === 0 || aId === 0 || hId === 68 || aId === 68) return;
+        if (!teamMap[hId] || !teamMap[aId]) return;
 
         let isOT = false;
         let isTie = false;
 
-        try {
-          if (statsMatch.game_meta) {
-            const parsedMeta = typeof statsMatch.game_meta === 'string' ? JSON.parse(statsMatch.game_meta) : statsMatch.game_meta;
-            isOT = parsedMeta.is_ot === true || parsedMeta.is_ot === "true" || parsedMeta.is_ot === 1 || parsedMeta.is_ot === "1";
-            isTie = parsedMeta.is_tie === true || parsedMeta.is_tie === "true" || parsedMeta.is_tie === 1 || parsedMeta.is_tie === "1";
+        if (gameMeta) {
+          try {
+            const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
+            isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1';
+            isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
+          } catch {
+            const lowStr = String(gameMeta || '').toLowerCase();
+            isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1');
+            isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
           }
-        } catch (e) {
-          const lowStr = String(statsMatch.game_meta || "").toLowerCase();
-          isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1');
-          isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
         }
-
-        const homeScore = Number(statsMatch.home_score) || 0;
-        const awayScore = Number(statsMatch.away_score) || 0;
-        const hId = Number(game.home_team_id);
-        const aId = Number(game.away_team_id);
-
-        if (hId === 999 || aId === 999 || hId === 0 || aId === 0 || hId === 68 || aId === 68) return;
 
         if (homeScore === awayScore && !isOT) {
           isTie = true;
         }
 
-        if (teamMap[hId] && teamMap[aId]) {
-          teamMap[hId].gp += 1;
-          teamMap[aId].gp += 1;
-          teamMap[hId].gf += homeScore;
-          teamMap[hId].ga += awayScore;
-          teamMap[aId].gf += awayScore;
-          teamMap[aId].ga += homeScore;
+        teamMap[hId].gp += 1;
+        teamMap[aId].gp += 1;
+        teamMap[hId].gf += homeScore;
+        teamMap[hId].ga += awayScore;
+        teamMap[aId].gf += awayScore;
+        teamMap[aId].ga += homeScore;
 
-          if (isTie) {
-            teamMap[hId].ties += 1;
-            teamMap[hId].homeTies += 1;
-            teamMap[hId].pts += 1;
-            teamMap[hId].history.push("T");
+        if (isTie) {
+          teamMap[hId].ties += 1;
+          teamMap[hId].homeTies += 1;
+          teamMap[hId].pts += 1;
+          teamMap[hId].history.push('T');
 
-            teamMap[aId].ties += 1;
-            teamMap[aId].awayTies += 1;
-            teamMap[aId].pts += 1;
-            teamMap[aId].history.push("T");
-          } else if (homeScore > awayScore) {
-            teamMap[hId].wins += 1;
-            teamMap[hId].homeWins += 1;
-            teamMap[hId].pts += 2;
-            teamMap[hId].history.push("W");
+          teamMap[aId].ties += 1;
+          teamMap[aId].awayTies += 1;
+          teamMap[aId].pts += 1;
+          teamMap[aId].history.push('T');
+        } else if (homeScore > awayScore) {
+          teamMap[hId].wins += 1;
+          teamMap[hId].homeWins += 1;
+          teamMap[hId].pts += 2;
+          teamMap[hId].history.push('W');
 
-            teamMap[aId].losses += 1;
-            teamMap[aId].awayLosses += 1;
-            teamMap[aId].history.push("L");
+          teamMap[aId].losses += 1;
+          teamMap[aId].awayLosses += 1;
+          teamMap[aId].history.push('L');
 
-            if (isOT) {
-              teamMap[hId].otWins += 1;
-              teamMap[aId].otLosses += 1;
-            }
-          } else if (awayScore > homeScore) {
-            teamMap[aId].wins += 1;
-            teamMap[aId].awayWins += 1;
-            teamMap[aId].pts += 2;
-            teamMap[aId].history.push("W");
-
-            teamMap[hId].losses += 1;
-            teamMap[hId].homeLosses += 1;
-            teamMap[hId].history.push("L");
-
-            if (isOT) {
-              teamMap[aId].otWins += 1;
-              teamMap[hId].otLosses += 1;
-            }
+          if (isOT) {
+            teamMap[hId].otWins += 1;
+            teamMap[aId].otLosses += 1;
           }
+        } else if (awayScore > homeScore) {
+          teamMap[aId].wins += 1;
+          teamMap[aId].awayWins += 1;
+          teamMap[aId].pts += 2;
+          teamMap[aId].history.push('W');
+
+          teamMap[hId].losses += 1;
+          teamMap[hId].homeLosses += 1;
+          teamMap[hId].history.push('L');
+
+          if (isOT) {
+            teamMap[aId].otWins += 1;
+            teamMap[hId].otLosses += 1;
+          }
+        }
+      };
+
+      allScheduleData.forEach((game: any) => {
+        const gIdStr = String(game.game_id).trim();
+        const statsMatch = statsData.find((s: any) => String(s.game_id).trim() === gIdStr);
+        if (statsMatch) {
+          processedGameIds.add(gIdStr);
+          const homeScore = Number(statsMatch.home_score) || 0;
+          const awayScore = Number(statsMatch.away_score) || 0;
+          const hId = Number(game.home_team_id) || Number(statsMatch.home_team_id);
+          const aId = Number(game.away_team_id) || Number(statsMatch.away_team_id);
+          applyGame(hId, aId, homeScore, awayScore, statsMatch.game_meta);
+        }
+      });
+
+      statsData.forEach((stats: any) => {
+        const gIdStr = String(stats.game_id).trim();
+        if (!processedGameIds.has(gIdStr)) {
+          processedGameIds.add(gIdStr);
+          const homeScore = Number(stats.home_score) || 0;
+          const awayScore = Number(stats.away_score) || 0;
+          const hId = Number(stats.home_team_id);
+          const aId = Number(stats.away_team_id);
+          applyGame(hId, aId, homeScore, awayScore, stats.game_meta);
         }
       });
 
       freshStandings = Object.values(teamMap).map((team: any) => {
-        let streakStr = "-";
+        let streakStr = '-';
         if (team.history.length > 0) {
           const lastResult = team.history[team.history.length - 1];
           let count = 0;
@@ -373,10 +574,10 @@ export default function StandingsPage() {
           streakStr = `${lastResult}${count}`;
         }
 
-        const last10Games = team.history.slice(-10);
-        const l10W = last10Games.filter((r: string) => r === "W").length;
-        const l10L = last10Games.filter((r: string) => r === "L").length;
-        const l10T = last10Games.filter((r: string) => r === "T").length;
+        const last10 = team.history.slice(-10);
+        const l10W = last10.filter((r: string) => r === 'W').length;
+        const l10L = last10.filter((r: string) => r === 'L').length;
+        const l10T = last10.filter((r: string) => r === 'T').length;
 
         return {
           ...team,
@@ -538,8 +739,55 @@ export default function StandingsPage() {
 
         <div className="border-y border-black p-2 flex flex-col lg:flex-row items-center justify-between mt-4 mb-3 gap-4">
           <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+            {/* League Type Buttons */}
+            <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full">
+              <button
+                type="button"
+                onClick={() => handleLeagueTypeChange('ALL')}
+                className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL' && !isGlobalMode
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-black hover:bg-neutral-100'
+                  }`}
+                title="All Leagues"
+              >
+                ALL
+              </button>
+              {availableLeagueTypes.map((type) => {
+                const config = LEAGUE_LOGOS[type];
+                const isSelected = selectedLeagueType === type && !isGlobalMode;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleLeagueTypeChange(type)}
+                    className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
+                      ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
+                      : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
+                      }`}
+                    title={config?.name || `${type} League`}
+                  >
+                    {config?.logoUrl ? (
+                      <img
+                        src={config.logoUrl}
+                        alt={config.name || `${type} League`}
+                        className="h-5 md:h-6 w-auto max-w-[60px] md:max-w-[80px] object-contain block"
+                        onError={(e) => {
+                          if (config.fallbackUrl && e.currentTarget.src !== config.fallbackUrl) {
+                            e.currentTarget.src = config.fallbackUrl;
+                          }
+                        }}
+                      />
+                    ) : (
+                      <span className="font-black text-xs uppercase px-1">{type}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Season Selector */}
             <div className="flex items-center gap-2">
-              <label className="font-bold text-xs uppercase opacity-70">Context Scope:</label>
+              <label className="font-bold text-xs uppercase opacity-70">Season:</label>
               <select
                 value={isGlobalMode ? 'GLOBAL' : selectedLeagueId}
                 onChange={(e) => {
@@ -550,16 +798,16 @@ export default function StandingsPage() {
                     setSelectedLeagueId(e.target.value);
                   }
                 }}
-                className="bg-transparent font-bold text-xs uppercase border-none focus:outline-none cursor-pointer font-sans"
+                className="bg-transparent font-bold text-xs md:text-sm uppercase border-b-2 border-black focus:outline-none cursor-pointer font-sans p-1"
               >
-                {!isGlobalMode && seasons.map((s) => (
+                {!isGlobalMode && filteredSeasons.map((s) => (
                   <option key={s.league_id} value={s.league_id} className="bg-[#fdfaf5]">
                     {s.league_name}
                   </option>
                 ))}
                 {isGlobalMode && <option value="GLOBAL" className="bg-[#fdfaf5]">All Historical Seasons Active</option>}
                 <hr />
-                <option value={activeSeasonId}>Return to Single Seasons</option>
+                <option value={activeSeasonId}>Latest Active Season</option>
               </select>
             </div>
 
@@ -761,12 +1009,33 @@ export default function StandingsPage() {
 
                         <td className="flex justify-center items-center whitespace-nowrap py-1 px-1 w-[260px] align-middle">
                           {team.banner_url ? (
-                            <div className="w-full flex justify-center max-h-[28px] items-center">
+                            <div className="w-full flex justify-center max-h-[28px] items-center relative">
                               <img
                                 src={team.banner_url}
                                 alt={team.abbr}
                                 className="object-contain block filter contrast-125 saturate-110 drop-shadow-xs mix-blend-multiply max-w-full w-40 h-7 transition-transform duration-75 group-hover:scale-102 rounded-xs"
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  const fallbacks: string[] = team.fallback_urls || [];
+                                  const triedList = (target.dataset.tried || '').split('|');
+                                  const nextUrl = fallbacks.find((url: string) => url && !triedList.includes(url) && url !== target.src);
+
+                                  if (nextUrl) {
+                                    target.dataset.tried = `${target.dataset.tried || ''}|${nextUrl}`;
+                                    target.src = nextUrl;
+                                  } else {
+                                    target.style.display = 'none';
+                                    const fallbackDiv = target.parentElement?.querySelector('.team-abbr-fallback') as HTMLElement | null;
+                                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                                  }
+                                }}
                               />
+                              <div
+                                style={{ display: 'none' }}
+                                className="team-abbr-fallback bg-black/5 border border-black/20 rounded-xs items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-7 shadow-inner text-[13px]"
+                              >
+                                {team.abbr}
+                              </div>
                             </div>
                           ) : (
                             <div className="bg-black/5 border border-black/20 rounded-xs flex items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-7 shadow-inner text-[13px]">

@@ -4,10 +4,9 @@ import './globals.css';
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-[#080b11] text-white">
-        {/* The Navbar component now handles the header branding and navigation */}
+      <body className="bg-[#f4f1ea] text-black font-serif min-h-screen">
         <Navbar />
-        <main className="max-w-7xl mx-auto py-6">
+        <main className="max-w-7xl mx-auto py-6 px-4">
           {children}
         </main>
       </body>
