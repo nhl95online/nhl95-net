@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { supabase as defaultSupabase } from '@/lib/supabase';
 import { matchTeamFromList } from '@/lib/seasons';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
+                    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || 
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+                    '';
 
-const supabase = serviceKey
-  ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
-  : defaultSupabase;
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false }
+});
+
 
 export async function GET(req: NextRequest) {
   try {
