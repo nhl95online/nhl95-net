@@ -820,7 +820,7 @@ export default function HomePage() {
                 <tr className="border-b border-black text-left">
                   <th className="pb-1 font-bold">RK</th>
                   <th className="pb-1 font-bold">TM</th>
-                  <th className="pb-1 font-bold text-center">REC</th>
+                  <th className="pb-1 font-bold text-center">W-L-T-OTL</th>
                   <th className="pb-1 font-bold text-center">PTS</th>
                 </tr>
               </thead>
@@ -848,9 +848,9 @@ export default function HomePage() {
                       )}
                     </td>
                     <td className="py-1 text-center font-mono">
-                      {s.w}-{s.l}{s.t ? `-${s.t}` : ''}{s.otl ? `-${s.otl}` : ''}
+                      {s.w ?? 0}-{s.l ?? 0}-{s.t ?? 0}-{s.otl ?? 0}
                     </td>
-                    <td className="py-1 font-bold text-center">{s.pts}</td>
+                    <td className="py-1 font-bold text-center">{s.pts ?? 0}</td>
                   </tr>
                 ))}
                 {standings.length === 0 && (
