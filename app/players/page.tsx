@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 // Helper: Visual Rating Bars (1-6 scale)
 const RatingBar = ({ label, value }: { label: number | string, value: number }) => {

@@ -1,6 +1,7 @@
 {
   "seasonId": 40,
-  "seasonName": "W League - Current Season (W18 / Season 38)",
+  "seasonName": "W League - Season 18 (W18 / Season 40)",
+  "leagueCode": "W18",
   "leagueType": "W",
   "teamCodes": {
     "0": "AUT",
@@ -306,7 +307,7 @@
   "skaters": {
     "AUT": [
       "Joe Pavelski",
-      "Martin St. Louis",
+      "Martin St.Louis",
       "Ryan Johansen",
       "Brad Richards",
       "Wayne Simmonds",

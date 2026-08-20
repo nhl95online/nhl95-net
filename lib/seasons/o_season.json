@@ -1,6 +1,7 @@
 {
   "seasonId": 39,
   "seasonName": "O League - Season 1 (O01 / Season 39)",
+  "leagueCode": "O01",
   "leagueType": "O",
   "teamCodes": {
     "0": "BOS",

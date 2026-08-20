@@ -74,7 +74,7 @@ export const W_LEAGUE_GOALIES: Record<string, string[]> = {
 
 export const W_LEAGUE_SKATERS: Record<string, string[]> = {
   AUT: [
-    'Joe Pavelski', 'Martin St. Louis', 'Ryan Johansen', 'Brad Richards', 'Wayne Simmonds',
+    'Joe Pavelski', 'Martin St.Louis', 'Ryan Johansen', 'Brad Richards', 'Wayne Simmonds',
     'Mark Giordano', 'Dustin Byfuglien', 'Sergei Gonchar'
   ],
   BAR: [

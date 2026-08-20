@@ -2,6 +2,59 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import {
+  W_LEAGUE_GOALIES,
+  W_LEAGUE_SKATERS,
+  W_LEAGUE_POSITION_COUNTS,
+  O_LEAGUE_GOALIES,
+  O_LEAGUE_SKATERS,
+  O_LEAGUE_POSITION_COUNTS
+} from '@/lib/seasons';
+
+// Helper to normalize player names for foolproof exact matching
+const normalizeName = (name: string) => {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.'’\-\s_]/g, '');
+};
+
+// Build static lookup sets for all known goalies, forwards, and defensemen
+const KNOWN_GOALIES_SET = new Set<string>();
+Object.values(W_LEAGUE_GOALIES).forEach(names => names.forEach(n => {
+  if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
+}));
+Object.values(O_LEAGUE_GOALIES).forEach(names => names.forEach(n => {
+  if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
+}));
+
+const KNOWN_FORWARDS_SET = new Set<string>();
+Object.entries(W_LEAGUE_SKATERS).forEach(([team, names]) => {
+  const fCount = W_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
+  names.slice(0, fCount).forEach(n => {
+    if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
+  });
+});
+Object.entries(O_LEAGUE_SKATERS).forEach(([team, names]) => {
+  const fCount = O_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
+  names.slice(0, fCount).forEach(n => {
+    if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
+  });
+});
+
+const KNOWN_DEFENSE_SET = new Set<string>();
+Object.entries(W_LEAGUE_SKATERS).forEach(([team, names]) => {
+  const fCount = W_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
+  names.slice(fCount).forEach(n => {
+    if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
+  });
+});
+Object.entries(O_LEAGUE_SKATERS).forEach(([team, names]) => {
+  const fCount = O_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
+  names.slice(fCount).forEach(n => {
+    if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
+  });
+});
 
 const parseTOI = (val: any): number => {
   if (val === undefined || val === null) return 0;
@@ -19,6 +72,14 @@ const parseTOI = (val: any): number => {
   return 0;
 };
 
+const formatSecondsToMMSS = (seconds: number | string): string => {
+  const s = typeof seconds === 'string' ? parseInt(seconds, 10) : seconds;
+  if (isNaN(s) || s <= 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const remS = Math.round(s % 60);
+  return `${m}:${remS < 10 ? '0' : ''}${remS}`;
+};
+
 const hasPositiveTOI = (p: any): boolean => {
   if (!p) return false;
   const toiVals = [p.toi_minutes, p.toi, p.toi_seconds, p.toiSeconds, p.time_on_ice, p.toi_min];
@@ -30,33 +91,105 @@ const hasPositiveTOI = (p: any): boolean => {
   return false;
 };
 
-const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHoveredPlayer }: any) => {
+// Check if player has participated (either has positive TOI, games played, goalie stats, or skater stats)
+const hasPlayed = (p: any): boolean => {
+  if (!p) return false;
+  if (Number(p.gp || p.games_played || 0) > 0) return true;
+  if (hasPositiveTOI(p)) return true;
+  if (Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0) > 0) return true;
+  if (Number(p.saves ?? p.total_saves ?? p.sv ?? 0) > 0) return true;
+  if (Number(p.wins ?? 0) > 0 || Number(p.losses ?? 0) > 0 || Number(p.shutouts ?? 0) > 0) return true;
+  if (Number(p.total_points ?? p.points ?? 0) > 0 || Number(p.total_goals ?? p.goals ?? 0) > 0 || Number(p.total_assists ?? p.assists ?? 0) > 0) return true;
+  if (Number(p.total_sog ?? p.sog ?? p.shots ?? 0) > 0) return true;
+  return false;
+};
+
+const resolvePlayerPosition = (p: any, posMap: Map<string, string>): 'G' | 'D' | 'F' => {
+  const norm = normalizeName(p.player_name);
+  if (KNOWN_GOALIES_SET.has(norm)) return 'G';
+  if (KNOWN_FORWARDS_SET.has(norm)) return 'F';
+  if (KNOWN_DEFENSE_SET.has(norm)) return 'D';
+
+  const directPos = String(p.pos_played || p.pos || p.position || p.player_pos || '').trim().toUpperCase();
+  if (directPos === 'G' || directPos.includes('GOALIE') || directPos.includes('GK')) return 'G';
+  if (directPos === 'D' || directPos.includes('DEF') || directPos === 'LD' || directPos === 'RD') return 'D';
+  if (directPos === 'F' || directPos === 'C' || directPos === 'LW' || directPos === 'RW' || directPos.includes('FORW')) return 'F';
+
+  const idKey = p.player_id ? String(p.player_id) : '';
+  const rawName = String(p.player_name || '').trim().toLowerCase();
+  const dbPos = String(posMap.get(idKey) || posMap.get(rawName) || posMap.get(norm) || '').trim().toUpperCase();
+  if (dbPos === 'G' || dbPos.includes('GOALIE') || dbPos.includes('GK')) return 'G';
+  if (dbPos === 'D' || dbPos.includes('DEF') || dbPos === 'LD' || dbPos === 'RD') return 'D';
+  if (dbPos === 'F' || dbPos === 'C' || dbPos === 'LW' || dbPos === 'RW') return 'F';
+
+  const sa = Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
+  const sv = Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
+  const sog = Number(p.total_sog ?? p.sog ?? p.shots ?? 0);
+  const chks = Number(p.total_chks ?? p.chks ?? p.checks ?? 0);
+  if ((sa > 0 || sv > 0) && sog === 0 && chks === 0) {
+    return 'G';
+  }
+
+  return 'F';
+};
+
+const StatCard = ({ title, data, category, minGP = 10, onTabClick, hoveredPlayer, setHoveredPlayer }: any) => {
   const [activeSubTab, setActiveSubTab] = useState(category === 'Goalies' ? 'GAA' : 'Points');
   const getSubTabs = () => (category === 'Goalies' ? ['GAA', 'SV%', 'SO'] : ['Points', 'Goals', 'Assists']);
 
   const sorted = useMemo(() => {
-    const list = [...data];
+    let list = [...data];
     if (category === 'Goalies') {
+      const minGames = minGP !== undefined ? minGP : 10;
+      list = list.filter(p => Number(p.gp || 0) >= minGames);
+
       if (activeSubTab === 'GAA') {
         return list.sort((a, b) => {
-          const gaaA = a.gaa != null ? Number(a.gaa) : 999;
-          const gaaB = b.gaa != null ? Number(b.gaa) : 999;
-          return gaaA - gaaB;
+          const gaaA = a.gaa != null && !isNaN(Number(a.gaa)) && Number(a.gaa) > 0
+            ? Number(a.gaa)
+            : ((Number(a.gp || 0) > 0 || Number(a.shots_against || 0) > 0)
+              ? (Number(a.goals_against ?? a.total_goals_against ?? a.total_ga ?? a.ga ?? 0) / Math.max(1, Number(a.gp || 1)))
+              : 999);
+          const gaaB = b.gaa != null && !isNaN(Number(b.gaa)) && Number(b.gaa) > 0
+            ? Number(b.gaa)
+            : ((Number(b.gp || 0) > 0 || Number(b.shots_against || 0) > 0)
+              ? (Number(b.goals_against ?? b.total_goals_against ?? b.total_ga ?? b.ga ?? 0) / Math.max(1, Number(b.gp || 1)))
+              : 999);
+          if (gaaA !== gaaB) return gaaA - gaaB;
+          return (Number(b.wins) || 0) - (Number(a.wins) || 0);
         });
       }
       if (activeSubTab === 'SV%') {
         return list.sort((a, b) => {
-          const svA = a.sv_pct != null ? Number(a.sv_pct) : 0;
-          const svB = b.sv_pct != null ? Number(b.sv_pct) : 0;
-          return svB - svA;
+          const svA = a.sv_pct != null && !isNaN(Number(a.sv_pct))
+            ? Number(a.sv_pct)
+            : ((Number(a.shots_against || 0) > 0) ? (Number(a.saves || 0) / Number(a.shots_against || 1)) : 0);
+          const svB = b.sv_pct != null && !isNaN(Number(b.sv_pct))
+            ? Number(b.sv_pct)
+            : ((Number(b.shots_against || 0) > 0) ? (Number(b.saves || 0) / Number(b.shots_against || 1)) : 0);
+          if (svA !== svB) return svB - svA;
+          return (Number(b.saves) || 0) - (Number(a.saves) || 0);
         });
       }
-      return list.sort((a, b) => (Number(b.shutouts) || 0) - (Number(a.shutouts) || 0));
+      return list.sort((a, b) => {
+        const soA = Number(a.shutouts) || 0;
+        const soB = Number(b.shutouts) || 0;
+        if (soA !== soB) return soB - soA;
+        return (Number(b.wins) || 0) - (Number(a.wins) || 0);
+      });
     }
-    if (activeSubTab === 'Goals') return list.sort((a, b) => (Number(b.total_goals) || 0) - (Number(a.total_goals) || 0));
-    if (activeSubTab === 'Assists') return list.sort((a, b) => (Number(b.total_assists) || 0) - (Number(a.total_assists) || 0));
-    return list.sort((a, b) => (Number(b.total_points) || 0) - (Number(a.total_points) || 0));
-  }, [data, activeSubTab, category]);
+    if (activeSubTab === 'Goals') {
+      return list.sort((a, b) => Number(b.total_goals ?? b.goals ?? 0) - Number(a.total_goals ?? a.goals ?? 0));
+    }
+    if (activeSubTab === 'Assists') {
+      return list.sort((a, b) => Number(b.total_assists ?? b.assists ?? 0) - Number(a.total_assists ?? a.assists ?? 0));
+    }
+    return list.sort((a, b) => {
+      const pA = Number(a.total_points ?? a.points ?? (Number(a.total_goals ?? a.goals ?? 0) + Number(a.total_assists ?? a.assists ?? 0)));
+      const pB = Number(b.total_points ?? b.points ?? (Number(b.total_goals ?? b.goals ?? 0) + Number(b.total_assists ?? b.assists ?? 0)));
+      return pB - pA;
+    });
+  }, [data, activeSubTab, category, minGP]);
 
   const defaultTop = sorted[0];
   const activeTop = hoveredPlayer && sorted.some(p => (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name))
@@ -67,21 +200,36 @@ const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHovered
 
   const getValue = (p: any) => {
     if (!p) return 0;
-    if (activeSubTab === 'GAA') return p.gaa != null && !isNaN(Number(p.gaa)) ? Number(p.gaa).toFixed(2) : '-';
-    if (activeSubTab === 'SV%') return p.sv_pct != null && !isNaN(Number(p.sv_pct)) ? Number(p.sv_pct).toFixed(3) : '-';
-    if (activeSubTab === 'Goals') return p.total_goals ?? 0;
-    if (activeSubTab === 'Assists') return p.total_assists ?? 0;
+    if (activeSubTab === 'GAA') {
+      if (p.gaa != null && !isNaN(Number(p.gaa))) return Number(p.gaa).toFixed(2);
+      const gp = Number(p.gp ?? 0);
+      const ga = Number(p.goals_against ?? p.total_goals_against ?? p.total_ga ?? p.ga ?? 0);
+      return gp > 0 ? (ga / gp).toFixed(2) : '-';
+    }
+    if (activeSubTab === 'SV%') {
+      if (p.sv_pct != null && !isNaN(Number(p.sv_pct))) return Number(p.sv_pct).toFixed(3);
+      const sa = Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
+      const sv = Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
+      return sa > 0 ? (sv / sa).toFixed(3) : '-';
+    }
+    if (activeSubTab === 'Goals') return p.total_goals ?? p.goals ?? 0;
+    if (activeSubTab === 'Assists') return p.total_assists ?? p.assists ?? 0;
     if (activeSubTab === 'SO') return p.shutouts ?? 0;
-    return p.total_points ?? 0;
+    return p.total_points ?? p.points ?? ((p.total_goals ?? p.goals ?? 0) + (p.total_assists ?? p.assists ?? 0));
   };
 
   return (
     <div className="border border-black p-4 bg-white shadow-sm">
       <h2
-        className="font-black text-sm uppercase mb-3 cursor-pointer hover:underline"
+        className="font-black text-sm uppercase mb-3 cursor-pointer hover:underline flex items-baseline justify-between"
         onClick={() => onTabClick(category === 'Goalies' ? 'Goalies' : 'Skaters')}
       >
-        {title} &gt;
+        <span>{title} &gt;</span>
+        {category === 'Goalies' && (
+          <span className="text-[10px] font-normal text-gray-500 lowercase tracking-normal">
+            (min. {minGP} gp)
+          </span>
+        )}
       </h2>
       <div className="flex gap-4 border-b border-gray-200 mb-4 text-[10px] font-bold uppercase">
         {getSubTabs().map(tab => (
@@ -98,7 +246,7 @@ const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHovered
         <div className="flex gap-8">
           <div className="text-center w-1/3 border-r border-gray-100 pr-4">
             <img src={top.logo_url || '/placeholder.png'} className="h-16 w-16 mx-auto mb-2 object-contain" alt="Team" />
-            <p className="font-bold text-xs truncate">{top.player_name} {top.is_rookie && <span className="text-red-600 font-black">[R]</span>}</p>
+            <p className="font-bold text-xs truncate">{top.player_name} {(top.is_rookie === true || top.is_rookie === 'true' || top.is_rookie === 1) && <span className="text-red-600 font-black">[R]</span>}</p>
             <p className="text-[10px] text-gray-500 mb-2">{top.team_name}</p>
             <p className="text-3xl font-black">{getValue(top)}</p>
           </div>
@@ -113,7 +261,7 @@ const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHovered
                   onMouseLeave={() => setHoveredPlayer(null)}
                 >
                   <span className="truncate flex-1">
-                    {i + 1}. {p.player_name} {p.is_rookie && <span className="text-red-600 font-black text-[9px]">[R]</span>}
+                    {i + 1}. {p.player_name} {(p.is_rookie === true || p.is_rookie === 'true' || p.is_rookie === 1) && <span className="text-red-600 font-black text-[9px]">[R]</span>}
                   </span>
                   <span className="font-bold ml-12">{getValue(p)}</span>
                 </div>
@@ -123,7 +271,7 @@ const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHovered
         </div>
       ) : (
         <div className="py-8 text-center text-xs text-gray-500 font-bold uppercase italic">
-          No qualifying players
+          {category === 'Goalies' ? `No qualifying goalies (Min. ${minGP} GP)` : 'No qualifying players'}
         </div>
       )}
     </div>
@@ -131,38 +279,18 @@ const StatCard = ({ title, data, category, onTabClick, hoveredPlayer, setHovered
 };
 
 const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?: string }> = {
-  W: {
-    name: 'W League',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/WN95HL.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/WN95HL.png'
-  },
-  Q: {
-    name: 'The Q',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/TheQ.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/TheQ.png'
-  },
-  O: {
-    name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
-  },
-  V: {
-    name: 'Vintage',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Vintage.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Vintage.png'
-  },
-  G: {
-    name: 'Golden Era',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Golden%20Era.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png'
-  }
+  W: { name: 'W League', logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/WN95HL.png', fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/WN95HL.png' },
+  Q: { name: 'The Q', logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/TheQ.png', fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/TheQ.png' },
+  O: { name: 'Original 6', logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png', fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png' },
+  V: { name: 'Vintage', logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Vintage.png', fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Vintage.png' },
+  G: { name: 'Golden Era', logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Golden%20Era.png', fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png' }
 };
 
 const SEASON_TYPES: Record<number, string> = {
   1: 'W', 2: 'W', 3: 'W', 4: 'W', 5: 'Q', 6: 'W', 7: 'Q', 8: 'Q', 9: 'W', 10: 'Q',
   11: 'W', 12: 'Q', 13: 'Q', 14: 'W', 15: 'Q', 16: 'G', 17: 'Q', 18: 'W', 19: 'Q', 20: 'V',
   21: 'Q', 22: 'W', 23: 'Q', 24: 'W', 25: 'Q', 26: 'Q', 27: 'Q', 28: 'W', 29: 'Q', 30: 'Q',
-  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W'
+  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
 };
 
 const getLeaguePrefix = (league: { league_id: number | string; league_name?: string }) => {
@@ -183,6 +311,7 @@ export default function NewspaperPage() {
   const [selectedLeague, setSelectedLeague] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('All');
   const [data, setData] = useState<any[]>([]);
+  const [posMap, setPosMap] = useState<Map<string, string>>(new Map());
   const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc' | 'desc' } | null>(null);
 
   const [hoveredSkater, setHoveredSkater] = useState<any>(null);
@@ -245,27 +374,241 @@ export default function NewspaperPage() {
   };
 
   async function loadData(leagueId: string) {
-    const { data: stats } = await supabase.from('api_stats_with_names').select('*').eq('league_id', parseInt(leagueId, 10));
-    if (stats) setData(stats);
+    const sId = parseInt(leagueId, 10);
+
+    // Fetch stats, master player game stats, rosters, database, and teams in parallel
+    const [statsRes, masterRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
+      supabase.from('api_stats_with_names').select('*').eq('league_id', sId),
+      supabase.from('league_player_stats_master').select('*').eq('league_id', sId),
+      supabase.from('league_rosters').select('*').eq('league_id', sId),
+      supabase.from('league_player_database').select('player_id, player_name, pos, team_default, is_rookie'),
+      supabase.from('league_teams').select('team_id, team_name, logo_url, abbreviation, league_id')
+    ]);
+
+    // Build team lookup map
+    const teamMap = new Map<string, { name: string; logo: string; abbr: string }>();
+    (teamsRes.data || []).forEach((t: any) => {
+      const tId = String(t.team_id);
+      const abbr = String(t.abbreviation || '').trim().toUpperCase();
+      const name = String(t.team_name || '').trim();
+      const obj = { name, logo: t.logo_url || '', abbr };
+      if (tId) teamMap.set(tId, obj);
+      if (abbr) teamMap.set(abbr, obj);
+      if (name) teamMap.set(name.toLowerCase(), obj);
+    });
+
+    // Build player / roster lookup map
+    const newPosMap = new Map<string, string>();
+    const playerMetaMap = new Map<string, any>();
+
+    if (playerDbRes.data) {
+      playerDbRes.data.forEach((p: any) => {
+        const pos = String(p.pos || '').trim().toUpperCase();
+        const pName = String(p.player_name || '').trim();
+        const pId = p.player_id ? String(p.player_id) : '';
+        if (pos) {
+          if (pId) newPosMap.set(pId, pos);
+          if (pName) newPosMap.set(pName.toLowerCase(), pos);
+        }
+        if (pId) playerMetaMap.set(pId, p);
+        if (pName) playerMetaMap.set(pName.toLowerCase(), p);
+      });
+    }
+
+    if (rosterRes.data) {
+      rosterRes.data.forEach((p: any) => {
+        const pos = String(p.pos || p.position || '').trim().toUpperCase();
+        const pName = String(p.player_name || '').trim();
+        const pId = p.player_id ? String(p.player_id) : '';
+        if (pos) {
+          if (pId) newPosMap.set(pId, pos);
+          if (pName) newPosMap.set(pName.toLowerCase(), pos);
+        }
+        if (pId) playerMetaMap.set(pId, { ...(playerMetaMap.get(pId) || {}), ...p });
+        if (pName) playerMetaMap.set(pName.toLowerCase(), { ...(playerMetaMap.get(pName.toLowerCase()) || {}), ...p });
+      });
+    }
+
+    setPosMap(newPosMap);
+
+    // Aggregate stats from league_player_stats_master if available
+    const masterAggregatedMap = new Map<string, any>();
+    if (masterRes.data && masterRes.data.length > 0) {
+      masterRes.data.forEach((row: any) => {
+        const isG = String(row.pos_played || '').toUpperCase() === 'G';
+        const pId = row.player_id ? String(row.player_id) : '';
+        const rawPName = String(row.player_name || '').trim();
+        const meta = (pId ? playerMetaMap.get(pId) : null) || (rawPName ? playerMetaMap.get(rawPName.toLowerCase()) : null);
+        const resolvedName = meta?.player_name || rawPName || (pId && pId !== '1' ? `Player #${pId}` : (isG ? 'Goalie' : 'Skater'));
+        const key = (isG ? 'G_' : 'S_') + (pId && pId !== '1' ? pId : (resolvedName.toLowerCase() + '_' + String(row.team_id || '')));
+
+        const tInfo = teamMap.get(String(row.team_id)) || (meta?.team_default ? teamMap.get(meta.team_default) : null);
+        const teamName = tInfo?.name || row.team_name || 'Team';
+        const logoUrl = tInfo?.logo || row.logo_url || '';
+        const isRookie = meta?.is_rookie === true || meta?.is_rookie === 'true' || meta?.is_rookie === 1 || row.is_rookie === true;
+
+        if (!masterAggregatedMap.has(key)) {
+          masterAggregatedMap.set(key, {
+            player_id: row.player_id,
+            player_name: resolvedName,
+            team_id: row.team_id,
+            team_name: teamName,
+            logo_url: logoUrl,
+            is_rookie: isRookie,
+            pos_played: isG ? 'G' : (row.pos_played || 'F'),
+            gp: 0,
+            total_goals: 0,
+            total_assists: 0,
+            total_points: 0,
+            total_sog: 0,
+            total_chks: 0,
+            total_pim: 0,
+            pp_points: 0,
+            sh_points: 0,
+            ppg: 0,
+            shg: 0,
+            evg: 0,
+            gwg: 0,
+            otg: 0,
+            toi_seconds: 0,
+            shots_against: 0,
+            saves: 0,
+            goals_against: 0,
+            wins: 0,
+            losses: 0,
+            ties: 0,
+            otl: 0,
+            shutouts: 0
+          });
+        }
+
+        const cur = masterAggregatedMap.get(key);
+        cur.gp += 1;
+        cur.toi_seconds += Number(row.toi || 0);
+
+        if (isG) {
+          cur.shots_against += Number(row.shots_against || 0);
+          cur.saves += Number(row.saves || 0);
+          cur.goals_against += Number(row.goals_against || 0);
+          if (row.is_win) cur.wins += 1;
+          if (row.is_loss) cur.losses += 1;
+          if (row.is_tie) cur.ties += 1;
+          if (row.is_otl) cur.otl += 1;
+          if (Number(row.goals_against || 0) === 0 && (Number(row.shots_against || 0) > 0 || row.is_win)) {
+            cur.shutouts += 1;
+          }
+          cur.total_goals += Number(row.goals || 0);
+          cur.total_assists += Number(row.assists || 0);
+          cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
+        } else {
+          cur.total_goals += Number(row.goals || 0);
+          cur.total_assists += Number(row.assists || 0);
+          cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
+          cur.total_sog += Number(row.shots || 0);
+          cur.total_chks += Number(row.checks || 0);
+          cur.total_pim += Number(row.pim || 0);
+          cur.pp_points += Number(row.pp_points || 0);
+          cur.sh_points += Number(row.sh_points || 0);
+          cur.evg += Number(row.evg || 0);
+          cur.gwg += Number(row.gwg || 0);
+          cur.otg += Number(row.otg || 0);
+        }
+      });
+    }
+
+    // Format master rows with calculated fields
+    const masterList: any[] = [];
+    masterAggregatedMap.forEach((p: any) => {
+      const sa = p.shots_against || 0;
+      const sv = p.saves || 0;
+      const ga = p.goals_against || 0;
+      const gp = p.gp || 0;
+
+      masterList.push({
+        ...p,
+        toi_minutes: formatSecondsToMMSS(p.toi_seconds),
+        sv_pct: sa > 0 ? Number((sv / sa).toFixed(3)) : 0,
+        gaa: gp > 0 ? Number((ga / gp).toFixed(2)) : 0,
+        pts_per_game: gp > 0 ? Number((p.total_points / gp).toFixed(2)) : 0
+      });
+    });
+
+    // Merge api_stats_with_names with master stats
+    const combinedMap = new Map<string, any>();
+
+    // 1. Add aggregated master stats
+    masterList.forEach((m: any) => {
+      const isG = m.pos_played === 'G';
+      const key = (isG ? 'G_' : 'S_') + (m.player_id && m.player_id !== 1 ? String(m.player_id) : (m.player_name.toLowerCase() + '_' + String(m.team_name || '')));
+      combinedMap.set(key, m);
+    });
+
+    // 2. Merge / add api_stats_with_names
+    if (statsRes.data && statsRes.data.length > 0) {
+      statsRes.data.forEach((s: any) => {
+        const sName = String(s.player_name || '').trim();
+        const norm = normalizeName(sName);
+        const isG = KNOWN_GOALIES_SET.has(norm) || String(s.pos || s.pos_played || '').toUpperCase() === 'G';
+        const key = (isG ? 'G_' : 'S_') + (s.player_id && s.player_id !== 1 ? String(s.player_id) : (sName.toLowerCase() + '_' + String(s.team_name || '')));
+
+        if (combinedMap.has(key)) {
+          const existing = combinedMap.get(key);
+          combinedMap.set(key, {
+            ...existing,
+            ...s,
+            pos_played: isG ? 'G' : (s.pos_played || s.pos || existing.pos_played),
+            // Preserve goalie metrics only if genuinely a goalie
+            wins: isG ? Number(s.wins ?? existing.wins ?? 0) : 0,
+            losses: isG ? Number(s.losses ?? existing.losses ?? 0) : 0,
+            ties: isG ? Number(s.ties ?? existing.ties ?? 0) : 0,
+            otl: isG ? Number(s.otl ?? existing.otl ?? 0) : 0,
+            saves: isG ? Number(s.saves ?? s.total_saves ?? existing.saves ?? 0) : 0,
+            shots_against: isG ? Number(s.shots_against ?? s.total_shots_against ?? existing.shots_against ?? 0) : 0,
+            goals_against: isG ? Number(s.goals_against ?? s.total_goals_against ?? existing.goals_against ?? 0) : 0,
+            shutouts: isG ? Number(s.shutouts ?? existing.shutouts ?? 0) : 0,
+            sv_pct: isG ? (s.sv_pct != null ? s.sv_pct : existing.sv_pct) : null,
+            gaa: isG ? (s.gaa != null ? s.gaa : existing.gaa) : null
+          });
+        } else {
+          const tInfo = teamMap.get(String(s.team_id)) || (s.team_name ? teamMap.get(s.team_name.toLowerCase()) : null);
+          combinedMap.set(key, {
+            ...s,
+            pos_played: isG ? 'G' : (s.pos_played || s.pos || 'F'),
+            team_name: tInfo?.name || s.team_name || 'Team',
+            logo_url: tInfo?.logo || s.logo_url || ''
+          });
+        }
+      });
+    }
+
+    const finalList = Array.from(combinedMap.values());
+    setData(finalList);
   }
 
   const uniqueData = useMemo(() => {
     const map = new Map();
     data.forEach(item => {
-      if (!hasPositiveTOI(item)) return;
+      if (!hasPlayed(item)) return;
       const key = item.player_id || item.player_name;
       if (!key) return;
+
+      const resolvedPos = resolvePlayerPosition(item, posMap);
+      const enrichedItem = {
+        ...item,
+        pos: resolvedPos
+      };
+
       if (!map.has(key)) {
-        map.set(key, { ...item });
+        map.set(key, enrichedItem);
       } else {
         const existing = map.get(key);
         if ((item.gp || 0) > (existing.gp || 0)) {
-          map.set(key, { ...item });
+          map.set(key, enrichedItem);
         }
       }
     });
     return Array.from(map.values());
-  }, [data]);
+  }, [data, posMap]);
 
   const teams = useMemo(() => ['All', ...Array.from(new Set(uniqueData.map(p => p.team_name))).filter(Boolean).sort()], [uniqueData]);
 
@@ -274,84 +617,106 @@ export default function NewspaperPage() {
     return uniqueData.filter(p => p.team_name === selectedTeam);
   }, [uniqueData, selectedTeam]);
 
-  const getFilteredData = (category: 'skaters' | 'goalies' | 'defense') => {
-    return uniqueData.filter(p => {
-      const pos = (p.pos || p.position || '').toUpperCase();
-      if (category === 'goalies') return pos.includes('G');
-      if (category === 'defense') return pos.includes('D');
-      return !pos.includes('G');
-    });
-  };
-
   const sortedData = useMemo(() => {
     if (!sortConfig) return filteredData;
     return [...filteredData].sort((a, b) => {
-      let valA = a[sortConfig.key];
-      let valB = b[sortConfig.key];
+      let valA: any = a[sortConfig.key];
+      let valB: any = b[sortConfig.key];
 
       if (sortConfig.key === 'pts_per_game') {
-        const p1 = a.total_points ?? a.points ?? 0;
-        const p2 = b.total_points ?? b.points ?? 0;
+        const p1 = Number(a.total_points ?? a.points ?? 0);
+        const p2 = Number(b.total_points ?? b.points ?? 0);
         valA = a.gp ? p1 / a.gp : 0;
         valB = b.gp ? p2 / b.gp : 0;
       } else if (sortConfig.key === 'evg') {
-        valA = a.evg ?? a.total_evg ?? 0;
-        valB = b.evg ?? b.total_evg ?? 0;
+        valA = Number(a.evg ?? a.total_evg ?? 0);
+        valB = Number(b.evg ?? b.total_evg ?? 0);
       } else if (sortConfig.key === 'ev_points') {
-        const pA = a.total_points ?? a.points ?? 0;
-        const ppA = a.pp_points ?? a.total_pp_points ?? a.ppp ?? 0;
-        const shA = a.sh_points ?? a.total_sh_points ?? a.shp ?? 0;
-        valA = a.ev_points ?? a.total_ev_points ?? a.ev_pts ?? Math.max(0, pA - ppA - shA);
+        const pA = Number(a.total_points ?? a.points ?? 0);
+        const ppA = Number(a.pp_points ?? a.total_pp_points ?? a.ppp ?? 0);
+        const shA = Number(a.sh_points ?? a.total_sh_points ?? a.shp ?? 0);
+        valA = Number(a.ev_points ?? a.total_ev_points ?? a.ev_pts ?? Math.max(0, pA - ppA - shA));
 
-        const pB = b.total_points ?? b.points ?? 0;
-        const ppB = b.pp_points ?? b.total_pp_points ?? b.ppp ?? 0;
-        const shB = b.sh_points ?? b.total_sh_points ?? b.shp ?? 0;
-        valB = b.ev_points ?? b.total_ev_points ?? b.ev_pts ?? Math.max(0, pB - ppB - shB);
+        const pB = Number(b.total_points ?? b.points ?? 0);
+        const ppB = Number(b.pp_points ?? b.total_pp_points ?? b.ppp ?? 0);
+        const shB = Number(b.sh_points ?? b.total_sh_points ?? b.shp ?? 0);
+        valB = Number(b.ev_points ?? b.total_ev_points ?? b.ev_pts ?? Math.max(0, pB - ppB - shB));
       } else if (sortConfig.key === 'ppg') {
-        valA = a.ppg ?? a.total_ppg ?? a.pp_goals ?? a.total_pp_goals ?? 0;
-        valB = b.ppg ?? b.total_ppg ?? b.pp_goals ?? b.total_pp_goals ?? 0;
+        valA = Number(a.ppg ?? a.total_ppg ?? a.pp_goals ?? a.total_pp_goals ?? 0);
+        valB = Number(b.ppg ?? b.total_ppg ?? b.pp_goals ?? b.total_pp_goals ?? 0);
       } else if (sortConfig.key === 'pp_points') {
-        valA = a.pp_points ?? a.total_pp_points ?? a.ppp ?? a.pp_pts ?? 0;
-        valB = b.pp_points ?? b.total_pp_points ?? b.ppp ?? b.pp_pts ?? 0;
+        valA = Number(a.pp_points ?? a.total_pp_points ?? a.ppp ?? a.pp_pts ?? 0);
+        valB = Number(b.pp_points ?? b.total_pp_points ?? b.ppp ?? b.pp_pts ?? 0);
       } else if (sortConfig.key === 'shg') {
-        valA = a.shg ?? a.total_shg ?? a.sh_goals ?? a.total_sh_goals ?? 0;
-        valB = b.shg ?? b.total_shg ?? b.sh_goals ?? b.total_sh_goals ?? 0;
+        valA = Number(a.shg ?? a.total_shg ?? a.sh_goals ?? a.total_sh_goals ?? 0);
+        valB = Number(b.shg ?? b.total_shg ?? b.sh_goals ?? b.total_sh_goals ?? 0);
       } else if (sortConfig.key === 'sh_points') {
-        valA = a.sh_points ?? a.total_sh_points ?? a.shp ?? a.sh_pts ?? 0;
-        valB = b.sh_points ?? b.total_sh_points ?? b.shp ?? b.sh_pts ?? 0;
+        valA = Number(a.sh_points ?? a.total_sh_points ?? a.shp ?? a.sh_pts ?? 0);
+        valB = Number(b.sh_points ?? b.total_sh_points ?? b.shp ?? b.sh_pts ?? 0);
       } else if (sortConfig.key === 'gwg') {
-        valA = a.gwg ?? a.total_gwg ?? 0;
-        valB = b.gwg ?? b.total_gwg ?? 0;
+        valA = Number(a.gwg ?? a.total_gwg ?? 0);
+        valB = Number(b.gwg ?? b.total_gwg ?? 0);
       } else if (sortConfig.key === 'otg') {
-        valA = a.otg ?? a.total_otg ?? 0;
-        valB = b.otg ?? b.total_otg ?? 0;
+        valA = Number(a.otg ?? a.total_otg ?? 0);
+        valB = Number(b.otg ?? b.total_otg ?? 0);
       } else if (sortConfig.key === 'total_sog') {
-        valA = a.total_sog ?? a.sog ?? a.shots ?? 0;
-        valB = b.total_sog ?? b.sog ?? b.shots ?? 0;
+        valA = Number(a.total_sog ?? a.sog ?? a.shots ?? 0);
+        valB = Number(b.total_sog ?? b.sog ?? b.shots ?? 0);
       } else if (sortConfig.key === 'total_chks') {
-        valA = a.total_chks ?? a.chks ?? a.checks ?? 0;
-        valB = b.total_chks ?? b.chks ?? b.checks ?? 0;
+        valA = Number(a.total_chks ?? a.chks ?? a.checks ?? 0);
+        valB = Number(b.total_chks ?? b.chks ?? b.checks ?? 0);
       } else if (sortConfig.key === 'total_pim') {
-        valA = a.total_pim ?? a.pim ?? 0;
-        valB = b.total_pim ?? b.pim ?? 0;
+        valA = Number(a.total_pim ?? a.pim ?? 0);
+        valB = Number(b.total_pim ?? b.pim ?? 0);
+      } else if (sortConfig.key === 'toi_minutes') {
+        valA = parseTOI(a.toi_minutes ?? a.toi);
+        valB = parseTOI(b.toi_minutes ?? b.toi);
       } else if (sortConfig.key === 'shots_against') {
-        valA = a.shots_against ?? a.total_shots_against ?? a.total_sa ?? a.sa ?? 0;
-        valB = b.shots_against ?? b.total_shots_against ?? b.total_sa ?? a.sa ?? 0;
+        valA = Number(a.shots_against ?? a.total_shots_against ?? a.total_sa ?? a.sa ?? 0);
+        valB = Number(b.shots_against ?? b.total_shots_against ?? b.total_sa ?? b.sa ?? 0);
       } else if (sortConfig.key === 'saves') {
-        valA = a.saves ?? a.total_saves ?? a.sv ?? 0;
-        valB = b.saves ?? b.total_saves ?? b.sv ?? 0;
+        valA = Number(a.saves ?? a.total_saves ?? a.sv ?? 0);
+        valB = Number(b.saves ?? b.total_saves ?? b.sv ?? 0);
       } else if (sortConfig.key === 'goals_against') {
-        valA = a.goals_against ?? a.total_goals_against ?? a.total_ga ?? a.ga ?? 0;
-        valB = b.goals_against ?? b.total_goals_against ?? b.total_ga ?? a.ga ?? 0;
+        valA = Number(a.goals_against ?? a.total_goals_against ?? a.total_ga ?? a.ga ?? 0);
+        valB = Number(b.goals_against ?? b.total_goals_against ?? b.total_ga ?? b.ga ?? 0);
+      } else if (sortConfig.key === 'shutouts') {
+        valA = Number(a.shutouts ?? 0);
+        valB = Number(b.shutouts ?? 0);
+      } else if (sortConfig.key === 'sv_pct') {
+        valA = a.sv_pct != null && !isNaN(Number(a.sv_pct)) ? Number(a.sv_pct) : 0;
+        valB = b.sv_pct != null && !isNaN(Number(b.sv_pct)) ? Number(b.sv_pct) : 0;
+      } else if (sortConfig.key === 'gaa') {
+        valA = a.gaa != null && !isNaN(Number(a.gaa)) ? Number(a.gaa) : 999;
+        valB = b.gaa != null && !isNaN(Number(b.gaa)) ? Number(b.gaa) : 999;
+      } else if (sortConfig.key === 'wins') {
+        valA = Number(a.wins ?? 0);
+        valB = Number(b.wins ?? 0);
+      } else if (sortConfig.key === 'losses') {
+        valA = Number(a.losses ?? 0);
+        valB = Number(b.losses ?? 0);
+      } else if (sortConfig.key === 'ties') {
+        valA = Number(a.ties ?? 0);
+        valB = Number(b.ties ?? 0);
+      } else if (sortConfig.key === 'otl') {
+        valA = Number(a.otl ?? 0);
+        valB = Number(b.otl ?? 0);
       } else if (sortConfig.key === 'total_goals') {
-        valA = a.total_goals ?? a.goals ?? 0;
-        valB = b.total_goals ?? b.goals ?? 0;
+        valA = Number(a.total_goals ?? a.goals ?? 0);
+        valB = Number(b.total_goals ?? b.goals ?? 0);
       } else if (sortConfig.key === 'total_assists') {
-        valA = a.total_assists ?? a.assists ?? 0;
-        valB = b.total_assists ?? b.assists ?? 0;
+        valA = Number(a.total_assists ?? a.assists ?? 0);
+        valB = Number(b.total_assists ?? b.assists ?? 0);
       } else if (sortConfig.key === 'total_points') {
-        valA = a.total_points ?? a.points ?? ((a.total_goals ?? a.goals ?? 0) + (a.total_assists ?? a.assists ?? 0));
-        valB = b.total_points ?? b.points ?? ((b.total_goals ?? b.goals ?? 0) + (b.total_assists ?? b.assists ?? 0));
+        valA = Number(a.total_points ?? a.points ?? (Number(a.total_goals ?? a.goals ?? 0) + Number(a.total_assists ?? a.assists ?? 0)));
+        valB = Number(b.total_points ?? b.points ?? (Number(b.total_goals ?? b.goals ?? 0) + Number(b.total_assists ?? b.assists ?? 0)));
+      } else if (sortConfig.key === 'gp') {
+        valA = Number(a.gp ?? 0);
+        valB = Number(b.gp ?? 0);
+      }
+
+      if (typeof valA === 'string' && typeof valB === 'string') {
+        return sortConfig.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       }
 
       valA = valA ?? 0;
@@ -359,6 +724,16 @@ export default function NewspaperPage() {
       return sortConfig.dir === 'asc' ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
     });
   }, [filteredData, sortConfig]);
+
+  const getFilteredData = (category: 'skaters' | 'goalies' | 'defense', sourceList?: any[]) => {
+    const list = sourceList || sortedData;
+    return list.filter(p => {
+      const pos = (p.pos || '').toUpperCase();
+      if (category === 'goalies') return pos === 'G';
+      if (category === 'defense') return pos === 'D';
+      return pos !== 'G';
+    });
+  };
 
   const requestSort = (header: string) => {
     const key = sortMap[header];
@@ -435,28 +810,28 @@ export default function NewspaperPage() {
     const maxVals: Record<string, number> = {};
 
     const getNum = (p: any, key: string): number => {
-      if (key === 'total_goals') return p.total_goals ?? p.goals ?? 0;
-      if (key === 'total_assists') return p.total_assists ?? p.assists ?? 0;
-      if (key === 'total_points') return p.total_points ?? p.points ?? 0;
-      if (key === 'pts_per_game') return p.gp ? (p.total_points ?? p.points ?? 0) / p.gp : 0;
-      if (key === 'evg') return p.evg ?? p.total_evg ?? 0;
+      if (key === 'total_goals') return Number(p.total_goals ?? p.goals ?? 0);
+      if (key === 'total_assists') return Number(p.total_assists ?? p.assists ?? 0);
+      if (key === 'total_points') return Number(p.total_points ?? p.points ?? (Number(p.total_goals ?? p.goals ?? 0) + Number(p.total_assists ?? p.assists ?? 0)));
+      if (key === 'pts_per_game') return p.gp ? (Number(p.total_points ?? p.points ?? 0)) / p.gp : 0;
+      if (key === 'evg') return Number(p.evg ?? p.total_evg ?? 0);
       if (key === 'ev_points') {
-        const pts = p.total_points ?? p.points ?? 0;
-        const ppp = p.pp_points ?? p.total_pp_points ?? p.ppp ?? 0;
-        const shp = p.sh_points ?? p.total_sh_points ?? p.shp ?? 0;
-        return p.ev_points ?? p.total_ev_points ?? p.ev_pts ?? Math.max(0, pts - ppp - shp);
+        const pts = Number(p.total_points ?? p.points ?? 0);
+        const ppp = Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? 0);
+        const shp = Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? 0);
+        return Number(p.ev_points ?? p.total_ev_points ?? p.ev_pts ?? Math.max(0, pts - ppp - shp));
       }
-      if (key === 'ppg') return p.ppg ?? p.total_ppg ?? p.pp_goals ?? p.total_pp_goals ?? 0;
-      if (key === 'pp_points') return p.pp_points ?? p.total_pp_points ?? p.ppp ?? p.pp_pts ?? 0;
-      if (key === 'shg') return p.shg ?? p.total_shg ?? p.sh_goals ?? p.total_sh_goals ?? 0;
-      if (key === 'sh_points') return p.sh_points ?? p.total_sh_points ?? p.shp ?? p.sh_pts ?? 0;
-      if (key === 'gwg') return p.gwg ?? p.total_gwg ?? 0;
-      if (key === 'otg') return p.otg ?? p.total_otg ?? 0;
-      if (key === 'total_sog') return p.total_sog ?? p.sog ?? p.shots ?? 0;
-      if (key === 'total_chks') return p.total_chks ?? p.chks ?? p.checks ?? 0;
-      if (key === 'total_pim') return p.total_pim ?? p.pim ?? 0;
+      if (key === 'ppg') return Number(p.ppg ?? p.total_ppg ?? p.pp_goals ?? p.total_pp_goals ?? 0);
+      if (key === 'pp_points') return Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? p.pp_pts ?? 0);
+      if (key === 'shg') return Number(p.shg ?? p.total_shg ?? p.sh_goals ?? p.total_sh_goals ?? 0);
+      if (key === 'sh_points') return Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? p.sh_pts ?? 0);
+      if (key === 'gwg') return Number(p.gwg ?? p.total_gwg ?? 0);
+      if (key === 'otg') return Number(p.otg ?? p.total_otg ?? 0);
+      if (key === 'total_sog') return Number(p.total_sog ?? p.sog ?? p.shots ?? 0);
+      if (key === 'total_chks') return Number(p.total_chks ?? p.chks ?? p.checks ?? 0);
+      if (key === 'total_pim') return Number(p.total_pim ?? p.pim ?? 0);
       if (key === 'toi') return parseTOI(p.toi_minutes ?? p.toi);
-      if (key === 'gp') return p.gp ?? 0;
+      if (key === 'gp') return Number(p.gp ?? 0);
       return 0;
     };
 
@@ -485,16 +860,16 @@ export default function NewspaperPage() {
     const leaders: Record<string, number> = {};
 
     const getNum = (p: any, key: string): number => {
-      if (key === 'gp') return p.gp ?? 0;
-      if (key === 'wins') return p.wins ?? 0;
-      if (key === 'shots_against') return p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0;
-      if (key === 'saves') return p.saves ?? p.total_saves ?? p.sv ?? 0;
-      if (key === 'shutouts') return p.shutouts ?? 0;
+      if (key === 'gp') return Number(p.gp ?? 0);
+      if (key === 'wins') return Number(p.wins ?? 0);
+      if (key === 'shots_against') return Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
+      if (key === 'saves') return Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
+      if (key === 'shutouts') return Number(p.shutouts ?? 0);
       if (key === 'sv_pct') return p.sv_pct != null && !isNaN(Number(p.sv_pct)) ? Number(p.sv_pct) : 0;
       if (key === 'gaa') return p.gaa != null && !isNaN(Number(p.gaa)) ? Number(p.gaa) : 999;
-      if (key === 'total_goals') return p.total_goals ?? p.goals ?? 0;
-      if (key === 'total_assists') return p.total_assists ?? p.assists ?? 0;
-      if (key === 'total_points') return p.total_points ?? p.points ?? ((p.total_goals ?? p.goals ?? 0) + (p.total_assists ?? p.assists ?? 0));
+      if (key === 'total_goals') return Number(p.total_goals ?? p.goals ?? 0);
+      if (key === 'total_assists') return Number(p.total_assists ?? p.assists ?? 0);
+      if (key === 'total_points') return Number(p.total_points ?? p.points ?? (Number(p.total_goals ?? p.goals ?? 0) + Number(p.total_assists ?? p.assists ?? 0)));
       return 0;
     };
 
@@ -512,7 +887,7 @@ export default function NewspaperPage() {
 
     let minGAA = Infinity;
     goalieList.forEach(p => {
-      if (p.gaa != null && !isNaN(Number(p.gaa))) {
+      if (p.gaa != null && !isNaN(Number(p.gaa)) && Number(p.gaa) > 0) {
         const gaa = Number(p.gaa);
         if (gaa < minGAA) minGAA = gaa;
       }
@@ -654,10 +1029,38 @@ export default function NewspaperPage() {
 
       {activeTab === 'Home' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-          <StatCard title="Skaters" data={getFilteredData('skaters')} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredSkater} setHoveredPlayer={setHoveredSkater} />
-          <StatCard title="Goalies" data={getFilteredData('goalies')} category="Goalies" onTabClick={handleTabChange} hoveredPlayer={hoveredGoalie} setHoveredPlayer={setHoveredGoalie} />
-          <StatCard title="Defensemen" data={getFilteredData('defense')} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredDefense} setHoveredPlayer={setHoveredDefense} />
-          <StatCard title="Rookie Scoring Leaders" data={sortedData.filter(p => p.is_rookie)} category="Skaters" onTabClick={handleTabChange} hoveredPlayer={hoveredRookie} setHoveredPlayer={setHoveredRookie} />
+          <StatCard
+            title="Skaters"
+            data={getFilteredData('skaters', uniqueData)}
+            category="Skaters"
+            onTabClick={handleTabChange}
+            hoveredPlayer={hoveredSkater}
+            setHoveredPlayer={setHoveredSkater}
+          />
+          <StatCard
+            title="Goalies"
+            data={getFilteredData('goalies', uniqueData)}
+            category="Goalies"
+            onTabClick={handleTabChange}
+            hoveredPlayer={hoveredGoalie}
+            setHoveredPlayer={setHoveredGoalie}
+          />
+          <StatCard
+            title="Defensemen"
+            data={getFilteredData('defense', uniqueData)}
+            category="Skaters"
+            onTabClick={handleTabChange}
+            hoveredPlayer={hoveredDefense}
+            setHoveredPlayer={setHoveredDefense}
+          />
+          <StatCard
+            title="Rookie Scoring Leaders"
+            data={getFilteredData('skaters', uniqueData).filter(p => p.is_rookie === true || p.is_rookie === 'true' || p.is_rookie === 1)}
+            category="Skaters"
+            onTabClick={handleTabChange}
+            hoveredPlayer={hoveredRookie}
+            setHoveredPlayer={setHoveredRookie}
+          />
         </div>
       )}
 
@@ -687,27 +1090,27 @@ export default function NewspaperPage() {
                       {r.logo_url ? <img src={r.logo_url} className="h-5 w-5 object-contain mx-auto" alt="" /> : r.team_name}
                     </td>
                     <td className="sticky left-10 bg-white group-hover:bg-gray-50 z-10 p-1 font-bold border-r border-gray-200 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
-                      {r.player_name} {r.is_rookie && <span className="text-red-600 font-black">[R]</span>}
+                      {r.player_name} {(r.is_rookie === true || r.is_rookie === 'true' || r.is_rookie === 1) && <span className="text-red-600 font-black">[R]</span>}
                     </td>
                     {renderStatCell(r.gp, r.gp > 0 && r.gp === (activeTab === 'Skaters' ? skaterLeaders.gp : goalieLeaders.gp))}
                     {activeTab === 'Skaters' ? (
                       (() => {
-                        const goals = r.total_goals ?? r.goals ?? 0;
-                        const assists = r.total_assists ?? r.assists ?? 0;
-                        const points = r.total_points ?? r.points ?? 0;
+                        const goals = Number(r.total_goals ?? r.goals ?? 0);
+                        const assists = Number(r.total_assists ?? r.assists ?? 0);
+                        const points = Number(r.total_points ?? r.points ?? (goals + assists));
                         const ptsPerGame = r.gp ? ((points / r.gp)).toFixed(2) : '0.00';
                         const ptsPerGameNum = r.gp ? points / r.gp : 0;
-                        const evg = r.evg ?? r.total_evg ?? 0;
-                        const ppp = r.pp_points ?? r.total_pp_points ?? r.ppp ?? 0;
-                        const shp = r.sh_points ?? r.total_sh_points ?? r.shp ?? 0;
-                        const evPoints = r.ev_points ?? r.total_ev_points ?? r.ev_pts ?? Math.max(0, points - ppp - shp);
-                        const ppg = r.ppg ?? r.total_ppg ?? r.pp_goals ?? r.total_pp_goals ?? 0;
-                        const shg = r.shg ?? r.total_shg ?? r.sh_goals ?? r.total_sh_goals ?? 0;
-                        const gwg = r.gwg ?? r.total_gwg ?? 0;
-                        const otg = r.otg ?? r.total_otg ?? 0;
-                        const sog = r.total_sog ?? r.sog ?? r.shots ?? 0;
-                        const chks = r.total_chks ?? r.chks ?? r.checks ?? 0;
-                        const pim = r.total_pim ?? r.pim ?? 0;
+                        const evg = Number(r.evg ?? r.total_evg ?? 0);
+                        const ppp = Number(r.pp_points ?? r.total_pp_points ?? r.ppp ?? 0);
+                        const shp = Number(r.sh_points ?? r.total_sh_points ?? r.shp ?? 0);
+                        const evPoints = Number(r.ev_points ?? r.total_ev_points ?? r.ev_pts ?? Math.max(0, points - ppp - shp));
+                        const ppg = Number(r.ppg ?? r.total_ppg ?? r.pp_goals ?? r.total_pp_goals ?? 0);
+                        const shg = Number(r.shg ?? r.total_shg ?? r.sh_goals ?? r.total_sh_goals ?? 0);
+                        const gwg = Number(r.gwg ?? r.total_gwg ?? 0);
+                        const otg = Number(r.otg ?? r.total_otg ?? 0);
+                        const sog = Number(r.total_sog ?? r.sog ?? r.shots ?? 0);
+                        const chks = Number(r.total_chks ?? r.chks ?? r.checks ?? 0);
+                        const pim = Number(r.total_pim ?? r.pim ?? 0);
                         const toiStr = r.toi_minutes ?? r.toi ?? '-';
                         const toiSec = parseTOI(toiStr);
 
@@ -734,21 +1137,25 @@ export default function NewspaperPage() {
                       })()
                     ) : (
                       (() => {
-                        const wins = r.wins ?? 0;
-                        const losses = r.losses ?? 0;
-                        const ties = r.ties ?? 0;
-                        const otl = r.otl ?? 0;
-                        const sa = r.shots_against ?? r.total_shots_against ?? r.total_sa ?? r.sa ?? 0;
-                        const sv = r.saves ?? r.total_saves ?? r.sv ?? 0;
-                        const ga = r.goals_against ?? r.total_goals_against ?? r.total_ga ?? r.ga ?? 0;
-                        const so = r.shutouts ?? 0;
-                        const svPctNum = r.sv_pct != null && !isNaN(Number(r.sv_pct)) ? Number(r.sv_pct) : null;
+                        const wins = Number(r.wins ?? 0);
+                        const losses = Number(r.losses ?? 0);
+                        const ties = Number(r.ties ?? 0);
+                        const otl = Number(r.otl ?? 0);
+                        const sa = Number(r.shots_against ?? r.total_shots_against ?? r.total_sa ?? r.sa ?? 0);
+                        const sv = Number(r.saves ?? r.total_saves ?? r.sv ?? 0);
+                        const ga = Number(r.goals_against ?? r.total_goals_against ?? r.total_ga ?? r.ga ?? 0);
+                        const so = Number(r.shutouts ?? 0);
+                        const svPctNum = r.sv_pct != null && !isNaN(Number(r.sv_pct))
+                          ? Number(r.sv_pct)
+                          : (sa > 0 ? (sv / sa) : null);
                         const svPctStr = svPctNum != null ? svPctNum.toFixed(3) : '-';
-                        const gaaNum = r.gaa != null && !isNaN(Number(r.gaa)) ? Number(r.gaa) : null;
+                        const gaaNum = r.gaa != null && !isNaN(Number(r.gaa))
+                          ? Number(r.gaa)
+                          : (Number(r.gp || 0) > 0 ? (ga / Number(r.gp)) : null);
                         const gaaStr = gaaNum != null ? gaaNum.toFixed(2) : '-';
-                        const goals = r.total_goals ?? r.goals ?? 0;
-                        const assists = r.total_assists ?? r.assists ?? 0;
-                        const points = r.total_points ?? r.points ?? (goals + assists);
+                        const goals = Number(r.total_goals ?? r.goals ?? 0);
+                        const assists = Number(r.total_assists ?? r.assists ?? 0);
+                        const points = Number(r.total_points ?? r.points ?? (goals + assists));
 
                         return (
                           <>
