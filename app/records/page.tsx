@@ -182,7 +182,7 @@ export default function RecordsPage() {
             .order('points', { ascending: false })
             .limit(500);
           gameStatsMaster = gRows || [];
-        } catch { }
+        } catch {}
 
         // C. Aggregate Stats per Player
         const playerAggMap = new Map<string, any>();
@@ -409,10 +409,11 @@ export default function RecordsPage() {
                   type="button"
                   onClick={() => setSelectedLeague(l.id)}
                   title={l.name}
-                  className={`h-10 sm:h-12 px-2.5 sm:px-3 flex items-center justify-center transition cursor-pointer border-2 rounded-xs shrink-0 ${isSelected
+                  className={`h-10 sm:h-12 px-2.5 sm:px-3 flex items-center justify-center transition cursor-pointer border-2 rounded-xs shrink-0 ${
+                    isSelected
                       ? 'bg-black text-white border-black shadow-sm ring-2 ring-yellow-400'
                       : 'bg-[#faf8f5] text-black border-neutral-300 hover:border-black hover:bg-neutral-100'
-                    }`}
+                  }`}
                 >
                   {l.logoUrl ? (
                     <img
@@ -426,8 +427,9 @@ export default function RecordsPage() {
                       }}
                     />
                   ) : (
-                    <span className={`text-xs font-black uppercase tracking-wider px-1 ${isSelected ? 'text-yellow-400 font-black' : 'text-black'
-                      }`}>
+                    <span className={`text-xs font-black uppercase tracking-wider px-1 ${
+                      isSelected ? 'text-yellow-400 font-black' : 'text-black'
+                    }`}>
                       ALL
                     </span>
                   )}
@@ -452,10 +454,11 @@ export default function RecordsPage() {
                 key={cat.id}
                 type="button"
                 onClick={() => handleRecordTypeChange(cat.id)}
-                className={`px-3 py-1 text-xs font-black uppercase border border-black rounded transition cursor-pointer ${recordType === cat.id
+                className={`px-3 py-1 text-xs font-black uppercase border border-black rounded transition cursor-pointer ${
+                  recordType === cat.id
                     ? 'bg-black text-white'
                     : 'bg-[#faf8f5] text-black hover:bg-gray-100'
-                  }`}
+                }`}
               >
                 {cat.label}
               </button>
@@ -586,10 +589,11 @@ export default function RecordsPage() {
                     return (
                       <tr
                         key={index}
-                        className={`transition font-bold ${isFirst
+                        className={`transition font-bold ${
+                          isFirst
                             ? 'bg-yellow-100 font-black hover:bg-yellow-200'
                             : index % 2 === 0 ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-white hover:bg-yellow-50'
-                          }`}
+                        }`}
                       >
                         <td className="py-3 px-3 border-r border-black/20 text-center font-mono font-black">
                           {isFirst ? (
@@ -669,8 +673,9 @@ export default function RecordsPage() {
                 <div
                   key={idx}
                   onClick={() => handleSelectSpecificRecord(item.id)}
-                  className={`flex flex-col md:flex-row items-start md:items-center justify-between p-3.5 transition cursor-pointer gap-3 ${isSelected ? 'bg-yellow-200 font-black' : 'hover:bg-yellow-50 bg-white'
-                    }`}
+                  className={`flex flex-col md:flex-row items-start md:items-center justify-between p-3.5 transition cursor-pointer gap-3 ${
+                    isSelected ? 'bg-yellow-200 font-black' : 'hover:bg-yellow-50 bg-white'
+                  }`}
                 >
                   {/* Metric Label */}
                   <div className="w-full md:w-1/3 font-black uppercase text-xs text-black flex items-center gap-2">
@@ -696,8 +701,9 @@ export default function RecordsPage() {
 
                   {/* Action Link */}
                   <div className="w-full md:w-auto text-right">
-                    <span className={`text-xs font-black uppercase tracking-wider ${isSelected ? 'text-black underline' : 'text-blue-700 hover:underline'
-                      }`}>
+                    <span className={`text-xs font-black uppercase tracking-wider ${
+                      isSelected ? 'text-black underline' : 'text-blue-700 hover:underline'
+                    }`}>
                       {isSelected ? 'Currently Viewing' : 'View Top 10 &rarr;'}
                     </span>
                   </div>

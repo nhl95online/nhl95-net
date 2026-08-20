@@ -162,8 +162,9 @@ export default function DraftPage() {
                   <tr
                     key={i}
                     onClick={() => setPodium(d)}
-                    className={`cursor-pointer hover:bg-yellow-50 transition-colors ${podium?.player === d.player && podium?.pk === d.pk ? 'bg-yellow-100 font-bold' : ''
-                      }`}
+                    className={`cursor-pointer hover:bg-yellow-50 transition-colors ${
+                      podium?.player === d.player && podium?.pk === d.pk ? 'bg-yellow-100 font-bold' : ''
+                    }`}
                   >
                     <td className="py-2.5 px-3 font-mono font-bold">{d.year}</td>
                     <td className="py-2.5 px-3 flex items-center gap-2 font-bold uppercase">

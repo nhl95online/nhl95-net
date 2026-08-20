@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Lock, KeyRound, User, Mail, Shield, CheckCircle,
-  AlertTriangle, ArrowRight, LogIn, UserPlus, LogOut,
+import { 
+  Lock, KeyRound, User, Mail, Shield, CheckCircle, 
+  AlertTriangle, ArrowRight, LogIn, UserPlus, LogOut, 
   HockeyPuck as Puck, Trophy, ArrowLeft, RefreshCw, ShieldCheck, Zap
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -15,9 +15,9 @@ export default function LoginPage() {
   const router = useRouter();
   const [redirectUrl, setRedirectUrl] = useState<string>('/upload');
 
-  const {
-    user, profile, isLoggedIn, isAdmin, isLoading,
-    signInWithPassword, signUp, signInAsAdmin, signOut, resetPassword
+  const { 
+    user, profile, isLoggedIn, isAdmin, isLoading, 
+    signInWithPassword, signUp, signInAsAdmin, signOut, resetPassword 
   } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup' | 'forgot' | 'admin'>('signin');
@@ -285,8 +285,9 @@ export default function LoginPage() {
               setErrorMessage(null);
               setSuccessMessage(null);
             }}
-            className={`flex-1 py-2 text-center transition cursor-pointer flex items-center justify-center gap-1 ${mode === 'signin' ? 'bg-black text-white' : 'hover:bg-slate-200 text-black'
-              }`}
+            className={`flex-1 py-2 text-center transition cursor-pointer flex items-center justify-center gap-1 ${
+              mode === 'signin' ? 'bg-black text-white' : 'hover:bg-slate-200 text-black'
+            }`}
           >
             <LogIn className="w-3 h-3" />
             <span>Sign In</span>
@@ -298,8 +299,9 @@ export default function LoginPage() {
               setErrorMessage(null);
               setSuccessMessage(null);
             }}
-            className={`flex-1 py-2 text-center transition cursor-pointer border-l-2 border-black flex items-center justify-center gap-1 ${mode === 'signup' ? 'bg-black text-white' : 'hover:bg-slate-200 text-black'
-              }`}
+            className={`flex-1 py-2 text-center transition cursor-pointer border-l-2 border-black flex items-center justify-center gap-1 ${
+              mode === 'signup' ? 'bg-black text-white' : 'hover:bg-slate-200 text-black'
+            }`}
           >
             <UserPlus className="w-3 h-3" />
             <span>Register</span>
@@ -311,8 +313,9 @@ export default function LoginPage() {
               setErrorMessage(null);
               setSuccessMessage(null);
             }}
-            className={`flex-1 py-2 text-center transition cursor-pointer border-l-2 border-black flex items-center justify-center gap-1 ${mode === 'admin' ? 'bg-red-800 text-white' : 'hover:bg-slate-200 text-red-800'
-              }`}
+            className={`flex-1 py-2 text-center transition cursor-pointer border-l-2 border-black flex items-center justify-center gap-1 ${
+              mode === 'admin' ? 'bg-red-800 text-white' : 'hover:bg-slate-200 text-red-800'
+            }`}
             title="Commissioner Master Access"
           >
             <Shield className="w-3 h-3" />

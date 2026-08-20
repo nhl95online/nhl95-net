@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import {
-  Calendar, Clock, Shield, Award, Upload, Search,
+import { 
+  Calendar, Clock, Shield, Award, Upload, Search, 
   ChevronRight, AlertCircle, CheckCircle2, Trophy, Activity, Filter
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -146,7 +146,7 @@ const resolveTeamCode = (team: any): string => {
   if (!team) return '';
   const abbr = (team.abbreviation || '').trim().toUpperCase();
   if (abbr && (W_LEAGUE_SKATERS[abbr] || O_LEAGUE_SKATERS[abbr])) return abbr;
-
+  
   const name = (team.team_name || '').trim().toUpperCase();
   for (const [code, alias] of Object.entries(TEAM_CITY_ALIASES)) {
     if (abbr === code || abbr === alias || name === alias || name.includes(alias) || name.includes(code)) {
@@ -206,14 +206,14 @@ export default function SchedulePage() {
   const [seasons, setSeasons] = useState<any[]>([]);
   const [selectedLeagueType, setSelectedLeagueType] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
-
+  
   // Teams & Schedule State
   const [schedule, setSchedule] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PLAYED' | 'REMAINING'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
+  
   // Selected Game & Details
   const [selectedGame, setSelectedGame] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<'summary' | 'team_stats' | 'skaters' | 'goalies' | 'scoring' | 'penalties'>('summary');
@@ -331,7 +331,7 @@ export default function SchedulePage() {
 
       const scheduleData = schedRes.data || [];
       const statsList = statsRes.data || [];
-
+      
       let teamsList = (teamRes.data || []).filter(t => Number(t.league_id) === leagueId);
       if (teamsList.length === 0) {
         teamsList = teamRes.data || [];
@@ -402,13 +402,13 @@ export default function SchedulePage() {
         }
       });
 
-      const uniqueSeasonTeams = Array.from(activeSeasonTeamsMap.values()).sort((a, b) =>
+      const uniqueSeasonTeams = Array.from(activeSeasonTeamsMap.values()).sort((a, b) => 
         (a.team_name || '').localeCompare(b.team_name || '')
       );
 
       setTeams(uniqueSeasonTeams);
       setSchedule(combined);
-
+      
       if (combined.length > 0) {
         const firstPlayed = combined.find(g => g.isPlayed) || combined[0];
         handleSelectGame(firstPlayed);
@@ -777,10 +777,11 @@ export default function SchedulePage() {
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-4 py-1.5 h-12 md:h-14 flex items-center justify-center text-xs md:text-sm font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
+              className={`px-4 py-1.5 h-12 md:h-14 flex items-center justify-center text-xs md:text-sm font-black uppercase transition-all shrink-0 cursor-pointer ${
+                selectedLeagueType === 'ALL'
                   ? 'bg-black text-white shadow-xs'
                   : 'text-black hover:bg-neutral-100'
-                }`}
+              }`}
               title="All Leagues"
             >
               ALL
@@ -793,10 +794,11 @@ export default function SchedulePage() {
                   key={type}
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-3 py-1 flex items-center justify-center transition-all h-12 md:h-14 border-2 shrink-0 cursor-pointer ${isSelected
+                  className={`px-3 py-1 flex items-center justify-center transition-all h-12 md:h-14 border-2 shrink-0 cursor-pointer ${
+                    isSelected
                       ? 'bg-yellow-100 border-black shadow-xs ring-2 ring-black'
                       : 'border-transparent bg-transparent opacity-70 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                    }`}
+                  }`}
                   title={config?.name || `${type} League`}
                 >
                   {config?.logoUrl ? (
@@ -873,23 +875,26 @@ export default function SchedulePage() {
           <div className="flex items-center gap-1 bg-white border-2 border-black p-1 shadow-xs text-xs font-bold uppercase">
             <button
               onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1 transition cursor-pointer ${statusFilter === 'ALL' ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
-                }`}
+              className={`px-3 py-1 transition cursor-pointer ${
+                statusFilter === 'ALL' ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
+              }`}
             >
               All Fixtures ({scheduleCounts.all})
             </button>
             <button
               onClick={() => setStatusFilter('PLAYED')}
-              className={`px-3 py-1 transition cursor-pointer flex items-center gap-1 ${statusFilter === 'PLAYED' ? 'bg-green-800 text-white' : 'hover:bg-green-50 text-green-900'
-                }`}
+              className={`px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
+                statusFilter === 'PLAYED' ? 'bg-green-800 text-white' : 'hover:bg-green-50 text-green-900'
+              }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               Final / Played ({scheduleCounts.played})
             </button>
             <button
               onClick={() => setStatusFilter('REMAINING')}
-              className={`px-3 py-1 transition cursor-pointer flex items-center gap-1 ${statusFilter === 'REMAINING' ? 'bg-amber-800 text-white' : 'hover:bg-amber-50 text-amber-900'
-                }`}
+              className={`px-3 py-1 transition cursor-pointer flex items-center gap-1 ${
+                statusFilter === 'REMAINING' ? 'bg-amber-800 text-white' : 'hover:bg-amber-50 text-amber-900'
+              }`}
             >
               <Clock className="w-3.5 h-3.5" />
               Remaining ({scheduleCounts.remaining})
@@ -925,10 +930,11 @@ export default function SchedulePage() {
                     <div
                       key={game.game_id}
                       onClick={() => handleSelectGame(game)}
-                      className={`w-full p-3 border-2 transition text-xs font-bold uppercase cursor-pointer flex items-center justify-between gap-2 shadow-xs ${isSelected
+                      className={`w-full p-3 border-2 transition text-xs font-bold uppercase cursor-pointer flex items-center justify-between gap-2 shadow-xs ${
+                        isSelected
                           ? 'border-black bg-yellow-100 ring-2 ring-black font-black'
                           : game.glowClass
-                        }`}
+                      }`}
                     >
                       {/* Away Team */}
                       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -964,14 +970,15 @@ export default function SchedulePage() {
                         ) : (
                           <span className="text-slate-400 font-mono text-xs">@</span>
                         )}
-                        <span className={`text-[9px] px-1.5 py-0.2 border uppercase font-mono mt-0.5 ${game.isPlayed
+                        <span className={`text-[9px] px-1.5 py-0.2 border uppercase font-mono mt-0.5 ${
+                          game.isPlayed
                             ? game.isOT
                               ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold'
                               : game.isTie
-                                ? 'bg-green-100 text-green-900 border-green-400 font-bold'
-                                : 'bg-black text-white border-black font-bold'
+                              ? 'bg-green-100 text-green-900 border-green-400 font-bold'
+                              : 'bg-black text-white border-black font-bold'
                             : 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
-                          }`}>
+                        }`}>
                           {game.statusBadge}
                         </span>
                       </div>
@@ -1134,8 +1141,9 @@ export default function SchedulePage() {
                         <button
                           key={t.id}
                           onClick={() => setActiveTab(t.id as any)}
-                          className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 cursor-pointer ${activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
-                            }`}
+                          className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 cursor-pointer ${
+                            activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
+                          }`}
                         >
                           {t.label}
                         </button>
@@ -1248,10 +1256,10 @@ export default function SchedulePage() {
                                   {[
                                     { label: 'Total Goals', away: selectedGame.awayScore, home: selectedGame.homeScore },
                                     { label: 'Shots on Goal', away: awayStatsObj.away_shots || periodSummary?.away.totalS || 0, home: homeStatsObj.home_shots || periodSummary?.home.totalS || 0 },
-                                    {
-                                      label: 'Shooting %',
-                                      away: `${(((Number(selectedGame.awayScore) || 0) / Math.max(1, Number(awayStatsObj.away_shots) || Number(periodSummary?.away.totalS) || 1)) * 100).toFixed(1)}%`,
-                                      home: `${(((Number(selectedGame.homeScore) || 0) / Math.max(1, Number(homeStatsObj.home_shots) || Number(periodSummary?.home.totalS) || 1)) * 100).toFixed(1)}%`
+                                    { 
+                                      label: 'Shooting %', 
+                                      away: `${(((Number(selectedGame.awayScore) || 0) / Math.max(1, Number(awayStatsObj.away_shots) || Number(periodSummary?.away.totalS) || 1)) * 100).toFixed(1)}%`, 
+                                      home: `${(((Number(selectedGame.homeScore) || 0) / Math.max(1, Number(homeStatsObj.home_shots) || Number(periodSummary?.home.totalS) || 1)) * 100).toFixed(1)}%` 
                                     },
                                     { label: 'Power Play Goals / Opps', away: `${awayStatsObj.away_pp_goals || 0} / ${awayStatsObj.away_pp_opps || 0}`, home: `${homeStatsObj.home_pp_goals || 0} / ${homeStatsObj.home_pp_opps || 0}` },
                                     { label: 'Power Play Time', away: formatDayFractionOrTime(awayStatsObj.away_pp_minutes), home: formatDayFractionOrTime(homeStatsObj.home_pp_minutes) },

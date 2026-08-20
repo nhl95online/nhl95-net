@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
           for (const mId of mhtIdArray) {
             await supabase
               .from('league_gamestats')
-              .update({
+              .update({ 
                 home_team_id: targetRicId,
                 home_coach_id: 19,
                 home_coach: 'bclinton_666'
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
             await supabase
               .from('league_gamestats')
-              .update({
+              .update({ 
                 away_team_id: targetRicId,
                 away_coach_id: 19,
                 away_coach: 'bclinton_666'
@@ -287,14 +287,14 @@ async function recalculateSeasonStandings(sId: number) {
     if (!num || num === 999 || num === 0 || num === 68) return null;
     if (teamMap[num]) return num;
 
-    const matchTeam = (teamsRes.data || []).find((t: any) =>
-      Number(t.team_id) === num ||
+    const matchTeam = (teamsRes.data || []).find((t: any) => 
+      Number(t.team_id) === num || 
       Number(t.coach_id) === num
     );
 
     if (matchTeam) {
-      const seasonMatch = (teamsRes.data || []).find((t: any) =>
-        Number(t.league_id) === sId &&
+      const seasonMatch = (teamsRes.data || []).find((t: any) => 
+        Number(t.league_id) === sId && 
         (
           (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
           (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||

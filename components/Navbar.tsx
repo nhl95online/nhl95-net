@@ -41,10 +41,10 @@ export default function Navbar() {
       {/* Top Banner with Search, Discord & Auth Status */}
       <div className="bg-black text-white px-3 sm:px-6 py-1.5 flex flex-col sm:flex-row justify-between items-center gap-1.5 text-[11px] sm:text-xs uppercase tracking-widest">
         <div className="flex items-center gap-3">
-          <a
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+          <a 
+            href={DISCORD_URL} 
+            target="_blank" 
+            rel="noopener noreferrer" 
             className="hover:text-cyan-400 text-center transition-colors truncate max-w-full"
           >
             Join the NHL95 Digital Hockey World!
@@ -86,8 +86,8 @@ export default function Navbar() {
                 className="text-black bg-white px-2 py-0.5 text-xs outline-none w-full border border-black/20 font-sans"
               />
             </div>
-            <button
-              type="submit"
+            <button 
+              type="submit" 
               className="hover:text-cyan-400 bg-neutral-800 sm:bg-transparent px-2 py-0.5 rounded-none font-bold text-xs uppercase cursor-pointer"
             >
               Search
@@ -99,10 +99,10 @@ export default function Navbar() {
       {/* Primary Header Row - Logo & Mobile Hamburger */}
       <div className="py-3 sm:py-5 px-4 flex justify-between sm:justify-center items-center border-b border-black relative">
         <Link href="/" onClick={closeMobileMenu} className="flex items-center justify-center">
-          <img
-            src={LOGO_URL}
-            alt="NHL95 Online League"
-            className="h-10 sm:h-14 md:h-16 max-w-[220px] sm:max-w-none object-contain"
+          <img 
+            src={LOGO_URL} 
+            alt="NHL95 Online League" 
+            className="h-10 sm:h-14 md:h-16 max-w-[220px] sm:max-w-none object-contain" 
           />
         </Link>
 
@@ -125,9 +125,9 @@ export default function Navbar() {
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
         {/* Desktop Dropdown for Rosters & Trades */}
-        <div
-          className="relative"
-          onMouseEnter={() => setIsRostersOpen(true)}
+        <div 
+          className="relative" 
+          onMouseEnter={() => setIsRostersOpen(true)} 
           onMouseLeave={() => setIsRostersOpen(false)}
         >
           <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
@@ -148,12 +148,13 @@ export default function Navbar() {
         <Link href="/records" className="hover:underline transition">Records</Link>
 
         {/* Upload Action Button */}
-        <Link
-          href="/upload"
-          className={`hover:underline transition px-2.5 py-1 text-xs font-bold rounded-xs shadow-2xs flex items-center gap-1.5 ${isLoggedIn
-              ? 'bg-red-700 text-white hover:bg-black'
+        <Link 
+          href="/upload" 
+          className={`hover:underline transition px-2.5 py-1 text-xs font-bold rounded-xs shadow-2xs flex items-center gap-1.5 ${
+            isLoggedIn 
+              ? 'bg-red-700 text-white hover:bg-black' 
               : 'bg-black text-white hover:bg-neutral-800'
-            }`}
+          }`}
           title={isLoggedIn ? `Logged in as ${profile?.coach_name || 'Coach'}` : 'Upload Game Stats (Login Required)'}
         >
           {isLoggedIn && <ShieldCheck className="w-3.5 h-3.5 text-yellow-300" />}
@@ -212,29 +213,29 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link
-            href="/team"
+          <Link 
+            href="/team" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 text-red-800 font-black flex items-center justify-between"
           >
             Teams <span>→</span>
           </Link>
-          <Link
-            href="/standings"
+          <Link 
+            href="/standings" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Standings <span>→</span>
           </Link>
-          <Link
-            href="/playoffs"
+          <Link 
+            href="/playoffs" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Playoffs <span>→</span>
           </Link>
-          <Link
-            href="/schedule"
+          <Link 
+            href="/schedule" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
@@ -252,22 +253,22 @@ export default function Navbar() {
             </button>
             {isMobileRostersOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
-                <Link
-                  href="/trades"
+                <Link 
+                  href="/trades" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • Trade Machine
                 </Link>
-                <Link
-                  href="/draft"
+                <Link 
+                  href="/draft" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • Draft Central
                 </Link>
-                <Link
-                  href="/players"
+                <Link 
+                  href="/players" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
@@ -277,36 +278,36 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link
-            href="/stats"
+          <Link 
+            href="/stats" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Player Stats <span>→</span>
           </Link>
-          <Link
-            href="/awards"
+          <Link 
+            href="/awards" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Awards <span>→</span>
           </Link>
-          <Link
-            href="/managers"
+          <Link 
+            href="/managers" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Managers <span>→</span>
           </Link>
-          <Link
-            href="/records"
+          <Link 
+            href="/records" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             League Records <span>→</span>
           </Link>
-          <Link
-            href="/upload"
+          <Link 
+            href="/upload" 
             onClick={closeMobileMenu}
             className="py-2.5 px-3 bg-black text-white text-center rounded-xs font-black hover:bg-red-700 transition-colors mt-2 flex items-center justify-center gap-2"
           >

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import {
+import { 
   Trophy, ChevronDown, CheckCircle2, X, ZoomIn, ZoomOut, RotateCcw, Info
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -80,7 +80,7 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
 
   const isComplete = homeWins >= winsNeeded || awayWins >= winsNeeded;
   const winner: 'home' | 'away' | null = homeWins >= winsNeeded ? 'home' : (awayWins >= winsNeeded ? 'away' : null);
-
+  
   let leader: 'home' | 'away' | 'tied' | null = null;
   if (homeWins > awayWins) leader = 'home';
   else if (awayWins > homeWins) leader = 'away';
@@ -89,8 +89,8 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
   let statusPill = `BO${seriesLength}`;
 
   if (isComplete) {
-    const winnerName = winner === 'home'
-      ? (match.home_team?.abbreviation || 'HOM')
+    const winnerName = winner === 'home' 
+      ? (match.home_team?.abbreviation || 'HOM') 
       : (match.away_team?.abbreviation || 'AWY');
     const winningScore = Math.max(homeWins, awayWins);
     const losingScore = Math.min(homeWins, awayWins);
@@ -99,8 +99,8 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
     if (homeWins === awayWins) {
       statusPill = `TIED ${homeWins}-${awayWins}`;
     } else {
-      const leaderName = leader === 'home'
-        ? (match.home_team?.abbreviation || 'HOM')
+      const leaderName = leader === 'home' 
+        ? (match.home_team?.abbreviation || 'HOM') 
         : (match.away_team?.abbreviation || 'AWY');
       const leaderScore = Math.max(homeWins, awayWins);
       const trailerScore = Math.min(homeWins, awayWins);
@@ -158,10 +158,11 @@ const MatchupCard = ({
   const [awayImgFailed, setAwayImgFailed] = useState(false);
 
   return (
-    <div
+    <div 
       onClick={() => onSelect && onSelect(match, label)}
-      className={`border-2 border-black p-1 bg-[#fdfaf5] w-[160px] font-serif shadow-[2px_2px_0px_rgba(0,0,0,0.2)] select-none shrink-0 mx-auto transition-all hover:shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 cursor-pointer ${isChampionship ? 'ring-2 ring-black/40 bg-[#fffdf9]' : ''
-        }`}
+      className={`border-2 border-black p-1 bg-[#fdfaf5] w-[160px] font-serif shadow-[2px_2px_0px_rgba(0,0,0,0.2)] select-none shrink-0 mx-auto transition-all hover:shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 cursor-pointer ${
+        isChampionship ? 'ring-2 ring-black/40 bg-[#fffdf9]' : ''
+      }`}
     >
       {/* Match Label Header Strip */}
       <div className="text-[7.5px] font-black border-b border-black mb-1 text-center uppercase tracking-widest flex justify-between px-1 items-center bg-black text-white py-0.5">
@@ -172,7 +173,7 @@ const MatchupCard = ({
       </div>
 
       <div className="flex flex-col items-center w-full">
-
+        
         {/* 1. HOME TEAM LINE (TOP) */}
         <div className="w-full flex items-center justify-center min-h-[22px] mb-0.5 px-0.5">
           <div className="flex items-center justify-center gap-1 w-full">
@@ -205,7 +206,7 @@ const MatchupCard = ({
 
         {/* 2. THE SCOREBOARD SANDWICH */}
         <div className="flex flex-col gap-0.5 border-y border-black/25 py-0.5 w-full bg-black/[0.015]">
-
+          
           {/* Top Team Row */}
           <div className="flex items-center w-full px-1">
             <span className="text-[8.5px] font-sans font-black tracking-tight w-[28px] text-left shrink-0 opacity-80 uppercase">
@@ -218,8 +219,8 @@ const MatchupCard = ({
 
                 if (!gameResult) {
                   return (
-                    <div
-                      key={`home-g-${index}`}
+                    <div 
+                      key={`home-g-${index}`} 
                       className="text-[7.5px] font-mono font-bold w-[13px] h-[13px] flex items-center justify-center border border-black/30 bg-white rounded-none text-black/40"
                     >
                       -
@@ -236,8 +237,9 @@ const MatchupCard = ({
                 return (
                   <div
                     key={`home-g-${index}`}
-                    className={`text-[7.5px] font-mono font-bold w-[13px] h-[13px] flex items-center justify-center border border-black/40 bg-white rounded-none ${isWinner ? 'text-emerald-700 font-black bg-emerald-50' : 'text-black'
-                      }`}
+                    className={`text-[7.5px] font-mono font-bold w-[13px] h-[13px] flex items-center justify-center border border-black/40 bg-white rounded-none ${
+                      isWinner ? 'text-emerald-700 font-black bg-emerald-50' : 'text-black'
+                    }`}
                   >
                     {hasScore ? topTeamScore : '-'}
                   </div>
@@ -258,8 +260,8 @@ const MatchupCard = ({
 
                 if (!gameResult) {
                   return (
-                    <div
-                      key={`away-g-${index}`}
+                    <div 
+                      key={`away-g-${index}`} 
                       className="text-[7.5px] font-mono font-bold w-[13px] h-[13px] flex items-center justify-center border border-black/30 bg-white rounded-none text-black/40"
                     >
                       -
@@ -276,8 +278,9 @@ const MatchupCard = ({
                 return (
                   <div
                     key={`away-g-${index}`}
-                    className={`text-[7.5px] font-mono font-bold w-[13px] h-[13px] flex items-center justify-center border border-black/40 bg-white rounded-none ${isWinner ? 'text-emerald-700 font-black bg-emerald-50' : 'text-black'
-                      }`}
+                    className={`text-[7.5px] font-mono font-bold w-[13px] h-[13px] flex items-center justify-center border border-black/40 bg-white rounded-none ${
+                      isWinner ? 'text-emerald-700 font-black bg-emerald-50' : 'text-black'
+                    }`}
                   >
                     {hasScore ? bottomTeamScore : '-'}
                   </div>
@@ -348,7 +351,7 @@ const SeriesModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg bg-[#fbf8f2] border-4 border-black text-black font-serif shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-
+        
         {/* Newspaper Modal Masthead */}
         <div className="bg-black text-white p-3 border-b-2 border-black flex items-center justify-between">
           <div>
@@ -370,20 +373,21 @@ const SeriesModal = ({
         {/* Versus Matchup News Clipping */}
         <div className="p-4 border-b-2 border-black bg-[#fdfaf5]">
           <div className="grid grid-cols-5 items-center gap-3 text-center">
-
+            
             {/* Home Team */}
-            <div className={`col-span-2 flex flex-col items-center p-2.5 border-2 border-black ${homeWonSeries ? 'bg-amber-100/60 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white'
-              }`}>
+            <div className={`col-span-2 flex flex-col items-center p-2.5 border-2 border-black ${
+              homeWonSeries ? 'bg-amber-100/60 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white'
+            }`}>
               {match.home_team_seed && (
                 <span className="text-[8.5px] font-sans font-black uppercase text-black/60 mb-0.5">
                   Seed ({match.home_team_seed})
                 </span>
               )}
               {home?.banner_url ? (
-                <img
-                  src={home.banner_url}
-                  alt={home.team_name}
-                  className="h-[20px] max-w-[100px] w-auto object-contain my-0.5"
+                <img 
+                  src={home.banner_url} 
+                  alt={home.team_name} 
+                  className="h-[20px] max-w-[100px] w-auto object-contain my-0.5" 
                   style={{ maxHeight: '20px', maxWidth: '100px', height: '20px', width: 'auto', objectFit: 'contain' }}
                 />
               ) : (
@@ -411,18 +415,19 @@ const SeriesModal = ({
             </div>
 
             {/* Away Team */}
-            <div className={`col-span-2 flex flex-col items-center p-2.5 border-2 border-black ${awayWonSeries ? 'bg-amber-100/60 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white'
-              }`}>
+            <div className={`col-span-2 flex flex-col items-center p-2.5 border-2 border-black ${
+              awayWonSeries ? 'bg-amber-100/60 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-white'
+            }`}>
               {match.away_team_seed && (
                 <span className="text-[8.5px] font-sans font-black uppercase text-black/60 mb-0.5">
                   Seed ({match.away_team_seed})
                 </span>
               )}
               {away?.banner_url ? (
-                <img
-                  src={away.banner_url}
-                  alt={away.team_name}
-                  className="h-[20px] max-w-[100px] w-auto object-contain my-0.5"
+                <img 
+                  src={away.banner_url} 
+                  alt={away.team_name} 
+                  className="h-[20px] max-w-[100px] w-auto object-contain my-0.5" 
                   style={{ maxHeight: '20px', maxWidth: '100px', height: '20px', width: 'auto', objectFit: 'contain' }}
                 />
               ) : (
@@ -483,8 +488,9 @@ const SeriesModal = ({
                         </span>
                       </div>
 
-                      <span className={`px-1.5 py-0.2 text-[8.5px] font-sans font-black uppercase ${homeWon ? 'bg-emerald-100 text-emerald-900 border border-emerald-700' : 'bg-neutral-100 text-neutral-900 border border-black'
-                        }`}>
+                      <span className={`px-1.5 py-0.2 text-[8.5px] font-sans font-black uppercase ${
+                        homeWon ? 'bg-emerald-100 text-emerald-900 border border-emerald-700' : 'bg-neutral-100 text-neutral-900 border border-black'
+                      }`}>
                         {homeWon ? (home?.abbreviation || 'HOM') : (away?.abbreviation || 'AWY')} Win
                       </span>
                     </div>
@@ -518,7 +524,7 @@ export default function PlayoffBracket() {
   const [matches, setMatches] = useState<PlayoffMatch[]>([]);
   const [seasons, setSeasons] = useState<any[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<number | string>('');
-
+  
   // Selected series for modal breakdown
   const [selectedSeries, setSelectedSeries] = useState<{ match: PlayoffMatch; label: string } | null>(null);
 
@@ -630,7 +636,7 @@ export default function PlayoffBracket() {
     }
   };
 
-  const getMatch = (label: string): PlayoffMatch =>
+  const getMatch = (label: string): PlayoffMatch => 
     matches.find(m => m.match_label === label) || { match_label: label, results: [] };
 
   // Helper function to extract and calculate champion details
@@ -695,7 +701,7 @@ export default function PlayoffBracket() {
 
   return (
     <div className="min-h-screen w-full bg-[#f4f1ea] text-black font-serif pb-12 overflow-x-hidden">
-
+      
       {/* ==========================================
           1. CLEAN NEWSPAPER MASTHEAD HEADER
       ========================================== */}
@@ -721,7 +727,7 @@ export default function PlayoffBracket() {
 
         {/* Clean Dropdown & Controls Toolbar */}
         <div className="w-full max-w-[1440px] mx-auto flex flex-wrap items-center justify-between mb-3 gap-2 px-1">
-
+          
           {/* Season / Edition Selector */}
           {seasons.length > 0 && (
             <div className="flex items-center gap-2">
@@ -777,11 +783,11 @@ export default function PlayoffBracket() {
         {/* ==========================================
             2. UNIFORM 7-COLUMN BRACKET CANVAS
         ========================================== */}
-        <div
+        <div 
           style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
           className="min-w-[1260px] max-w-[1440px] mx-auto transition-transform duration-200"
         >
-
+          
           {/* Column Header Titles */}
           <div className="grid grid-cols-7 gap-1 mb-1 px-1 text-center font-sans font-black text-[8px] uppercase tracking-widest text-black/70">
             <div>Quarter Finals</div>
@@ -795,7 +801,7 @@ export default function PlayoffBracket() {
 
           {/* Canvas Row Layout */}
           <div className="grid grid-cols-7 bg-[#fbf7f0] py-6 px-2 border-y-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,0.15)] items-stretch">
-
+            
             {/* ==================== LEFT BRACKET SIDE ==================== */}
 
             {/* 1. LEFT QUARTER FINALS (4 Matches) */}
@@ -842,12 +848,12 @@ export default function PlayoffBracket() {
 
             {/* 4. CHAMPIONSHIP TITLE MATCH & DYNAMIC SUPABASE TROPHY */}
             <div className="relative flex flex-col justify-center items-center h-[640px] bg-black/[0.015] px-1 text-center border-x border-black/10">
-
+              
               {/* Trophy Section - Positioned comfortably at the top */}
               <div className="absolute top-4 left-0 right-0 flex flex-col items-center pointer-events-none">
                 {championData ? (
                   <div className="flex flex-col items-center animate-in fade-in duration-300 max-w-[155px] pointer-events-auto">
-
+                    
                     {/* Trophy Image with subtle shimmer */}
                     {cupMeta.trophyUrl && (
                       <div className="relative overflow-hidden mb-1 group">

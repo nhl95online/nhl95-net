@@ -18,8 +18,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   V: {
     name: 'Vintage',
@@ -163,8 +163,8 @@ export default function AllTeamsContent() {
         }
 
         const combined = (teamsData || []).map((team: any) => {
-          const record = standingsData?.find((s: any) =>
-            Number(s.team_id) === Number(team.team_id) &&
+          const record = standingsData?.find((s: any) => 
+            Number(s.team_id) === Number(team.team_id) && 
             (selectedSeason === 0 ? Number(s.season_id) === Number(team.league_id) : true)
           );
           const w = Number(record?.w) || 0;
@@ -312,10 +312,11 @@ export default function AllTeamsContent() {
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-black hover:bg-neutral-100'
-                }`}
+              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
+                selectedLeagueType === 'ALL'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-black hover:bg-neutral-100'
+              }`}
               title="All Leagues"
             >
               ALL
@@ -328,10 +329,11 @@ export default function AllTeamsContent() {
                   key={type}
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
-                    ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
-                    : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                    }`}
+                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
+                      : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
+                  }`}
                   title={config?.name || `${type} League`}
                 >
                   {config?.logoUrl ? (

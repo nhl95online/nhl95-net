@@ -158,13 +158,14 @@ export function parseSaveStateBuffer(
   const homeShootPct = homeShots > 0 ? Number((homeGoals / homeShots).toFixed(3)) : 0;
 
   // 3. Roster Info & Player Names
-  const awayGCount = teamPositionCounts[awayTeamCode]?.goalies ?? 2;
-  const awayFCount = teamPositionCounts[awayTeamCode]?.forwards ?? 5;
-  const awayDCount = teamPositionCounts[awayTeamCode]?.defensemen ?? 3;
+  const defaultPos = config?.defaultPositionCounts || { goalies: 2, forwards: 5, defensemen: 3 };
+  const awayGCount = teamPositionCounts[awayTeamCode]?.goalies ?? defaultPos.goalies;
+  const awayFCount = teamPositionCounts[awayTeamCode]?.forwards ?? defaultPos.forwards;
+  const awayDCount = teamPositionCounts[awayTeamCode]?.defensemen ?? defaultPos.defensemen;
 
-  const homeGCount = teamPositionCounts[homeTeamCode]?.goalies ?? 2;
-  const homeFCount = teamPositionCounts[homeTeamCode]?.forwards ?? 5;
-  const homeDCount = teamPositionCounts[homeTeamCode]?.defensemen ?? 3;
+  const homeGCount = teamPositionCounts[homeTeamCode]?.goalies ?? defaultPos.goalies;
+  const homeFCount = teamPositionCounts[homeTeamCode]?.forwards ?? defaultPos.forwards;
+  const homeDCount = teamPositionCounts[homeTeamCode]?.defensemen ?? defaultPos.defensemen;
 
   // Assemble Away player roster with positions
   const awayGoalieNames = goalieDict[awayTeamCode] || ['Goalie 1', 'Goalie 2'];

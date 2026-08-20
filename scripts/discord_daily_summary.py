@@ -6,9 +6,11 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 import discord
 
+# --- CONFIGURATION ---
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 HOURS_BACK = 24
 
+# Output path to update the Next.js site directly
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_FILE = os.path.join(BASE_DIR, "public", "daily_briefing.json")
 
@@ -19,6 +21,7 @@ intents.guilds = True
 client = discord.Client(intents=intents)
 
 def fetch_nhl_news():
+    """Fetches real-world NHL breaking headlines via public RSS feed."""
     news_items = []
     try:
         req = urllib.request.Request(
@@ -50,6 +53,7 @@ def fetch_nhl_news():
     return news_items
 
 def generate_funny_commentary(channel_name, messages):
+    """Generates humorous tabloid-style gazette summaries for Discord chatter."""
     chan_lower = channel_name.lower()
     
     if "cooking" in chan_lower:
@@ -128,6 +132,7 @@ async def on_ready():
     for guild in client.guilds:
         print(f"--- Processing Server: {guild.name} ---")
         
+        # 1. Fetch Discord Scheduled Events (Live + Upcoming)
         try:
             guild_events = await guild.fetch_scheduled_events()
             for evt in guild_events:
@@ -148,6 +153,7 @@ async def on_ready():
         except Exception as e:
             print(f"Could not fetch scheduled events: {e}")
 
+        # 2. Fetch Text Channel Messages & Announcements
         for channel in guild.text_channels:
             permissions = channel.permissions_for(guild.me)
             if not (permissions.read_messages and permissions.read_message_history):
@@ -195,6 +201,7 @@ async def on_ready():
 
     now_str = datetime.now().strftime("%B %d, %Y at %I:%M %p")
 
+    # Fallback events if no live scheduled events exist in Discord
     if not all_events:
         all_events = [
             { "date": "June 28", "time": "8:00 PM", "title": "Trade Deadline", "description": "Rosters lock for playoffs", "is_live": False },
@@ -202,14 +209,17 @@ async def on_ready():
             { "date": "July 05", "time": "12:00 PM", "title": "Free Agency Opens", "description": "Contract negotiations begin", "is_live": False }
         ]
 
+    # Fetch Real-World NHL Current News
     nhl_news = fetch_nhl_news()
 
+    # Pick quote of the day
     qotd = quotes[-1] if quotes else {
         "quote": "I can't view it, but yes that's me.",
         "author": "Unholy",
         "context": "Confirming archival Sabres footage through pure aura"
     }
 
+    # Generate complete daily briefing JSON
     briefing = {
         "updated_at": f"Published {now_str}",
         "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
@@ -227,6 +237,7 @@ async def on_ready():
         "sections": all_channel_data
     }
 
+    # Write to public/daily_briefing.json
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         json.dump(briefing, f, indent=2, ensure_ascii=False)

@@ -9,78 +9,28 @@
     "defensemen": 3
   },
   "teamCodes": {
-    "0": "AUT",
-    "1": "BAR",
-    "2": "BAY",
-    "3": "BFC",
-    "4": "DHG",
-    "5": "GRH",
-    "6": "HAM",
-    "7": "HIG",
-    "8": "ING",
-    "9": "ITA",
-    "10": "KAR",
-    "11": "MHA",
-    "12": "MHT",
-    "13": "MGG",
-    "14": "NBK",
-    "15": "OCW",
-    "16": "PIT",
-    "17": "PRO",
-    "18": "RIC",
-    "19": "ROC",
-    "20": "SHS",
-    "21": "SVF",
-    "22": "SUM",
-    "23": "TAI",
-    "24": "TEG",
-    "25": "TBP",
-    "26": "VHV",
-    "27": "WDY",
-    "28": "ETI"
+    "0": "AUT", "1": "BAR", "2": "BAY", "3": "BFC", "4": "DHG", "5": "GRH",
+    "6": "HAM", "7": "HIG", "8": "ING", "9": "ITA", "10": "KAR", "11": "MHA",
+    "12": "MHT", "13": "MGG", "14": "NBK", "15": "OCW", "16": "PIT", "17": "PRO",
+    "18": "RIC", "19": "ROC", "20": "SHS", "21": "SVF", "22": "SUM", "23": "TAI",
+    "24": "TEG", "25": "TBP", "26": "VHV", "27": "WDY", "28": "ETI"
   },
   "teamPositionCounts": {
-    "AUT": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    },
-    "BAR": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    }
+    "AUT": { "goalies": 2, "forwards": 5, "defensemen": 3 },
+    "BAR": { "goalies": 2, "forwards": 5, "defensemen": 3 }
   },
   "goalies": {
-    "AUT": [
-      "Goalie 1",
-      "Goalie 2"
-    ],
-    "BAR": [
-      "Goalie 1",
-      "Goalie 2"
-    ]
+    "AUT": ["Goalie 1", "Goalie 2"],
+    "BAR": ["Goalie 1", "Goalie 2"]
   },
   "skaters": {
     "AUT": [
-      "Forward 1",
-      "Forward 2",
-      "Forward 3",
-      "Forward 4",
-      "Forward 5",
-      "Defense 1",
-      "Defense 2",
-      "Defense 3"
+      "Forward 1", "Forward 2", "Forward 3", "Forward 4", "Forward 5",
+      "Defense 1", "Defense 2", "Defense 3"
     ],
     "BAR": [
-      "Forward 1",
-      "Forward 2",
-      "Forward 3",
-      "Forward 4",
-      "Forward 5",
-      "Defense 1",
-      "Defense 2",
-      "Defense 3"
+      "Forward 1", "Forward 2", "Forward 3", "Forward 4", "Forward 5",
+      "Defense 1", "Defense 2", "Defense 3"
     ]
   }
 }

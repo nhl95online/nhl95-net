@@ -375,7 +375,7 @@ export default function NewspaperPage() {
 
   async function loadData(leagueId: string) {
     const sId = parseInt(leagueId, 10);
-
+    
     // Fetch stats, master player game stats, rosters, database, and teams in parallel
     const [statsRes, masterRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
       supabase.from('api_stats_with_names').select('*').eq('league_id', sId),
@@ -926,10 +926,11 @@ export default function NewspaperPage() {
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
+              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
+                selectedLeagueType === 'ALL'
                   ? 'bg-black text-white shadow-xs'
                   : 'text-black hover:bg-neutral-100'
-                }`}
+              }`}
               title="All Leagues"
             >
               ALL
@@ -942,10 +943,11 @@ export default function NewspaperPage() {
                   key={type}
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
+                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
+                    isSelected
                       ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
                       : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                    }`}
+                  }`}
                   title={config?.name || `${type} League`}
                 >
                   {config?.logoUrl ? (
@@ -1016,11 +1018,12 @@ export default function NewspaperPage() {
       {/* Tabs */}
       <div className="flex gap-4 mb-4 text-xs uppercase border-b border-black pb-2 justify-center">
         {['Home', 'Skaters', 'Goalies'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => handleTabChange(tab)}
-            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors ${activeTab === tab ? 'bg-black text-white' : 'text-gray-600 hover:text-black hover:bg-black/5'
-              }`}
+          <button 
+            key={tab} 
+            onClick={() => handleTabChange(tab)} 
+            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors ${
+              activeTab === tab ? 'bg-black text-white' : 'text-gray-600 hover:text-black hover:bg-black/5'
+            }`}
           >
             {tab}
           </button>

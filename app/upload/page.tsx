@@ -3,35 +3,29 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Upload, FileCode, CheckCircle, AlertTriangle, Download,
+import { 
+  Upload, FileCode, CheckCircle, AlertTriangle, Download, 
   Database, RefreshCw, Sliders, Settings, FileSpreadsheet, Eye, Check, Code,
-  Lock, ShieldCheck, LogIn
+  Lock, ShieldCheck, LogIn, PlusCircle, FileUp
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
-
-
-// ==========================================
-// 1. DATA TYPES & INTERFACES
-// ==========================================
-
-export interface TeamPositionCount {
-  goalies: number;
-  forwards: number;
-  defensemen: number;
-}
-
-export interface SeasonConfig {
-  seasonId: number | string;
-  seasonName: string;
-  leagueCode?: string;
-  leagueType: string;
-  teamCodes: Record<number, string>;
-  teamPositionCounts: Record<string, TeamPositionCount>;
-  goalies: Record<string, string[]>;
-  skaters: Record<string, string[]>;
-}
+import { 
+  SeasonConfig, 
+  TeamPositionCount, 
+  AVAILABLE_SEASONS, 
+  getSeasonConfig, 
+  registerSeason, 
+  loadSeasonFromJson, 
+  getAllSeasons,
+  ParsedGame,
+  ParsedTeamStats,
+  ParsedGoal,
+  ParsedPenalty,
+  ParsedSkaterStat,
+  ParsedGoalieStat
+} from '@/lib/seasons';
+import { parseSaveStateBuffer } from '@/lib/parsers/savestate';
 
 export function getLeagueCode(seasonId: number | string): string {
   const sId = Number(seasonId);
@@ -42,310 +36,6 @@ export function getLeagueCode(seasonId: number | string): string {
     1: 'W01'
   };
   return map[sId] || `W${String(sId).padStart(2, '0')}`;
-}
-
-export interface ParsedGoal {
-  goalNum: number;
-  period: number;
-  time: string;
-  seconds: number;
-  team: string;
-  side: 'Home' | 'Away';
-  scorer: string;
-  assist1: string;
-  assist2: string;
-  type: string;
-}
-
-export interface ParsedPenalty {
-  penNum: number;
-  period: number;
-  time: string;
-  seconds: number;
-  team: string;
-  side: 'Home' | 'Away';
-  player: string;
-  type: string;
-}
-
-export interface ParsedSkaterStat {
-  name: string;
-  pos: 'F' | 'D';
-  team: string;
-  side: 'Home' | 'Away';
-  goals: number;
-  assists: number;
-  points: number;
-  sog: number;
-  checks: number;
-  pim: number;
-  ppp: number;
-  shp: number;
-  toi: string;
-  toiSeconds: number;
-}
-
-export interface ParsedGoalieStat {
-  name: string;
-  pos: 'G';
-  team: string;
-  side: 'Home' | 'Away';
-  goals: number;
-  assists: number;
-  points: number;
-  so: number;
-  ga: number;
-  saves: number;
-  shots: number;
-  savePct: number;
-  w: number;
-  l: number;
-  t: number;
-  otl: number;
-  toi: string;
-  toiSeconds: number;
-}
-
-export interface ParsedTeamStats {
-  teamCode: string;
-  goals: number;
-  shots: number;
-  shootingPct: number;
-  ppGoals: number;
-  ppTries: number;
-  ppTime: string;
-  ppShots: number;
-  shGoals: number;
-  breakawayGoals: number;
-  breakawayTries: number;
-  oneTimerGoals: number;
-  oneTimerTries: number;
-  penaltyShotGoals: number;
-  penaltyShotTries: number;
-  faceoffWins: number;
-  checks: number;
-  penalties: number;
-  pim: number;
-  attackZoneTime: string;
-  passComps: number;
-  passTries: number;
-  goalsP1: number;
-  goalsP2: number;
-  goalsP3: number;
-  goalsOT: number;
-  shotsP1: number;
-  shotsP2: number;
-  shotsP3: number;
-  shotsOT: number;
-}
-
-export interface ParsedGame {
-  matchup: string;
-  homeTeam: ParsedTeamStats;
-  awayTeam: ParsedTeamStats;
-  isOT: boolean;
-  gameLength: string;
-  totalFaceoffs: number;
-  goals: ParsedGoal[];
-  penalties: ParsedPenalty[];
-  homeGoalies: ParsedGoalieStat[];
-  awayGoalies: ParsedGoalieStat[];
-  homeSkaters: ParsedSkaterStat[];
-  awaySkaters: ParsedSkaterStat[];
-}
-
-// ==========================================
-// 2. OFFICIAL W-LEAGUE ROSTERS & CONSTANTS
-// ==========================================
-
-export const DEFAULT_TEAM_CODES: Record<number, string> = {
-  0: 'AUT', 1: 'BAR', 2: 'BAY', 3: 'BFC', 4: 'DHG', 5: 'GRH',
-  6: 'HAM', 7: 'HIG', 8: 'ING', 9: 'ITA', 10: 'KAR', 11: 'MHA',
-  12: 'MHT', 13: 'MGG', 14: 'NBK', 15: 'OCW', 16: 'PIT', 17: 'PRO',
-  18: 'RIC', 19: 'ROC', 20: 'SHS', 21: 'SVF', 22: 'SUM', 23: 'TAI',
-  24: 'TEG', 25: 'TBP', 26: 'VHV', 27: 'WDY', 28: 'ETI'
-};
-
-export const W_LEAGUE_GOALIES: Record<string, string[]> = {
-  AUT: ['Carey Price', 'Evgeni Nabokov'],
-  BAR: ['Jean-Sebastien Giguere', 'Semyon Varlamov'],
-  BAY: ['Cory Schneider', 'Jimmy Howard'],
-  BFC: ['Robin Lehner', 'Braden Holtby'],
-  DHG: ['Nikolai Khabibulin', 'Anders Lindback'],
-  GRH: ['Ilya Bryzgalov', 'Darcy Kuemper'],
-  HAM: ['Viktor Fasth', 'Tuukka Rask'],
-  HIG: ['Henrik Lundqvist', 'Dan Ellis'],
-  ING: ['Pekka Rinne', 'Scott Clemmensen'],
-  ITA: ['Ben Scrivens', 'Matt Hackett'],
-  KAR: ['Roberto Luongo', 'Jhonas Enroth'],
-  MHA: ['Jose Theodore', 'Steve Mason'],
-  MHT: ['Johan Hedberg', 'Carter Hutton'],
-  MGG: ['Kari Lehtonen', 'Mike Smith'],
-  NBK: ['Jonathan Quick', 'Jake Allen'],
-  OCW: ['Marc-Andre Fleury', 'Brian Elliott'],
-  PIT: ['Cam Ward', 'Martin Biron'],
-  PRO: ['Chad Johnson', 'Devan Dubnyk'],
-  RIC: ['Ben Bishop', 'Jonathan Bernier'],
-  ROC: ['Ray Emery', 'Jacob Markstrom'],
-  SHS: ['Miikka Kiprusoff', 'Al Montoya'],
-  SVF: ['Martin Brodeur', 'Anton Khudobin'],
-  SUM: ['Corey Crawford', 'Ryan Miller'],
-  TAI: ['Craig Anderson', 'James Reimer'],
-  TEG: ['Peter Budaj', 'Sergei Bobrovsky'],
-  TBP: ['Jonas Hiller', 'Niklas Backstrom'],
-  VHV: ['Antti Niemi', 'Thomas Greiss'],
-  WDY: ['Jaroslav Halak', 'Tomas Vokoun'],
-  ETI: ['Ondrej Pavelec', 'Richard Bachman']
-};
-
-export const W_LEAGUE_SKATERS: Record<string, string[]> = {
-  AUT: ['Joe Pavelski', 'Martin St.Louis', 'Ryan Johansen', 'Brad Richards', 'Wayne Simmonds', 'Mark Giordano', 'Dustin Byfuglien', 'Sergei Gonchar'],
-  BAR: ['Steve Sullivan', 'Gabriel Landeskog', 'Filip Forsberg', 'Artem Anisimov', 'James Neal', 'Trevor Daley', 'Joni Pitkanen', 'Dougie Hamilton'],
-  BAY: ['Vincent Lecavalier', 'Jonathan Toews', 'Jason Spezza', 'Tyler Johnson', 'Zach Parise', 'Tyler Myers', 'Victor Hedman', 'Mike Green'],
-  BFC: ['Nail Yakupov', 'Olli Jokinen', 'Sidney Crosby', 'Tyler Seguin', 'Brandon Saad', 'Zdeno Chara', 'Kris Letang', 'Nick Leddy'],
-  DHG: ['Joffrey Lupul', 'Alex Tanguay', 'Ondrej Palat', 'David Desharnais', 'Chris Kreider', 'Eric Brewer', 'Cory Sarich', 'Jake Muzzin'],
-  GRH: ['Paul Stastny', 'Jonathan Huberdeau', 'P.A. Parenteau', 'Alexander Semin', 'Brandon Dubinsky', 'Dan Boyle', 'Jack Johnson', 'Radko Gudas'],
-  HAM: ['Vladimir Tarasenko', 'Jaden Schwartz', 'Daniel Briere', 'David Backes', 'Troy Brouwer', 'Kimmo Timonen', 'Alex Goligoski', 'Jack Hillen'],
-  HIG: ['Corey Perry', 'Sean Couturier', 'Carl Hagelin', 'Mark Stone', 'Cam Atkinson', 'Brent Seabrook', 'Niklas Hjalmarsson', 'Ryan Ellis'],
-  ING: ['Teemu Selanne', 'Patrick Kane', 'Dainius Zubrus', 'Jaromir Jagr', 'Jamie Langenbrunner', 'Drew Doughty', 'Rostislav Klesla', 'Erik Karlsson'],
-  ITA: ['Michael Grabner', 'Gustav Nyquist', 'Mats Zuccarello', 'Darren Helm', 'Andrew Cogliano', 'Tyson Barrie', 'T.J. Brodie', 'Braydon Coburn'],
-  KAR: ['Evgeni Malkin', 'Alex Ovechkin', 'Brendan Gallagher', 'Blake Wheeler', 'Pavel Datsyuk', 'Oliver Ekman-Larsson', 'John Carlson', 'Brent Burns'],
-  MHA: ['Alexander Steen', 'Jordan Staal', 'Ryan Kesler', 'Mike Richards', 'Ryan Smyth', 'Roman Hamrlik', 'Cody Franson', 'Ed Jovanovski'],
-  MHT: ['Phil Kessel', 'Jean-Gabriel Pageau', 'Chris Stewart', 'Marian Gaborik', 'Jeff Skinner', 'Torey Krug', 'Justin Schultz', 'Cam Fowler'],
-  MGG: ['Jarome Iginla', 'J.T. Miller', 'Mark Scheifele', 'Patrick Marleau', 'Ryan Getzlaf', 'Paul Martin', 'Chris Phillips', 'P.K. Subban'],
-  NBK: ['Jordan Eberle', 'Jiri Hudler', 'Ray Whitney', 'Logan Couture', 'Claude Giroux', 'Duncan Keith', 'Ryan McDonagh', 'Roman Josi'],
-  OCW: ['John Tavares', 'T.J. Oshie', 'Alex Galchenyuk', 'David Krejci', 'Patrice Bergeron', 'Shea Weber', 'Alex Pietrangelo', 'Keith Yandle'],
-  PIT: ['Marian Hossa', 'Mika Zibanejad', 'Brad Marchand', 'Ryan Callahan', 'Jakob Silfverberg', 'Jordan Leopold', 'Erik Johnson', 'Tomas Kaberle'],
-  PRO: ['Milan Hejduk', 'Chris Kunitz', 'Tomas Plekanec', 'Thomas Vanek', 'James Van Riemsdyk', 'Andrew Ference', 'Andy Greene', 'Hal Gill'],
-  RIC: ['Cory Conacher', 'Max Pacioretty', 'Jason Pominville', 'Joe Thornton', 'Kyle Okposo', 'Derek Morris', 'Andrei Markov', 'Ryan Suter'],
-  ROC: ['Ryan Nugent-Hopkins', 'Richard Panik', 'Nathan Horton', 'Bobby Ryan', 'Valtteri Filppula', 'Chris Pronger', 'Brian Campbell', 'Jonas Brodin'],
-  SHS: ['Beau Bennett', 'Daniel Alfredsson', 'Jamie Benn', 'Eric Staal', 'Bryan Little', 'Marc-Edouard Vlasic', 'Justin Faulk', 'Kevin Shattenkirk'],
-  SVF: ['Evander Kane', 'Shane Doan', 'Tyler Bozak', 'Brayden Schenn', 'Anze Kopitar', 'Jared Spurgeon', 'Zach Bogosian', 'Brayden McNabb'],
-  SUM: ['Daniel Sedin', 'Henrik Sedin', 'Jiri Tlusty', 'Derek Stepan', 'Tyler Ennis', 'Niklas Kronwall', 'Marc Staal', 'Alec Martinez'],
-  TAI: ['Vaclav Prospal', 'Matt Frattin', 'Taylor Hall', 'Mike Fisher', 'Matt Duchene', 'Lubomir Visnovsky', 'Tobias Enstrom', 'James Wisniewski'],
-  TEG: ['Todd Bertuzzi', 'Mikael Granlund', 'Justin Williams', 'Nazem Kadri', 'Steven Stamkos', 'Brad Stuart', 'Matt Niskanen', 'Dion Phaneuf'],
-  TBP: ['Anders Lee', 'Rick Nash', 'Milan Lucic', 'Jeff Carter', 'Patrik Elias', 'Anton Stralman', 'Chris Tanev', 'Alexander Edler'],
-  VHV: ['Dustin Brown', 'David Perron', 'Ryan O\'Reilly', 'Mike Ribeiro', 'Mikko Koivu', 'Andrej Sekera', 'Willie Mitchell', 'Mark Streit'],
-  WDY: ['Kyle Turris', 'Simon Gagne', 'Andrew Ladd', 'Jakub Voracek', 'Nicklas Backstrom', 'Mark Cundari', 'Grant Clitsome', 'Matt Carle'],
-  ETI: ['Marcus Johansson', 'Nick Bonino', 'Michal Handzus', 'Alex Chiasson', 'Matt Kassian', 'Raphael Diaz', 'Bryce Salvador', 'Jay Rosehill']
-};
-
-export const W_LEAGUE_POSITION_COUNTS: Record<string, TeamPositionCount> = Object.keys(W_LEAGUE_SKATERS).reduce((acc, team) => {
-  acc[team] = { goalies: 2, forwards: 5, defensemen: 3 };
-  return acc;
-}, {} as Record<string, TeamPositionCount>);
-
-export const O_LEAGUE_TEAM_CODES: Record<number, string> = {
-  0: 'BOS',
-  1: 'CHI',
-  2: 'DTC',
-  3: 'MTL',
-  4: 'NYR',
-  5: 'TOR'
-};
-
-export const O_LEAGUE_GOALIES: Record<string, string[]> = {
-  BOS: ['Hal Winkler', 'Charles Stewart'],
-  CHI: ['Hugh Lehman', '--'],
-  DTC: ['Hap Holmes', 'Herb Stuart'],
-  MTL: ['George Hainsworth', '--'],
-  NYR: ['Lorne Chabot', '--'],
-  TOR: ['John-Ross Roach', '--']
-};
-
-export const O_LEAGUE_SKATERS: Record<string, string[]> = {
-  BOS: [
-    'Percy Galbraith', 'Jimmy Herbert', 'Harry Oliver', 'Frank Fredrickson', 'Carson Cooper',
-    'Lionel Hitchman', 'Eddie Shore', 'Billy Stuart'
-  ],
-  CHI: [
-    'Babe Dye', 'George Hay', 'Dick Irvin', 'Mickey MacKay', 'Charley McVeigh',
-    'Bob Trapp', 'Percy Traub', 'Gord Fraser'
-  ],
-  DTC: [
-    'Duke Keats', 'Frank Foyston', 'Fred Gordon', 'Johnny Sheppard', 'Jack Walker',
-    'Jack Arbour', 'Art Duncan', 'Clem Loughlin'
-  ],
-  MTL: [
-    'Pit Lepine', 'Howie Morenz', 'Art Gagne', 'Aurele Joliat', 'Billy Boucher',
-    'Albert Leduc', 'Herb Gardiner', 'Sylvio Mantha'
-  ],
-  NYR: [
-    'Frank Boucher', 'Bill Cook', 'Bun Cook', 'Murray Murdoch', 'Paul Thompson',
-    'Reg Mackey', 'Stan Brown', 'Clarence Abel'
-  ],
-  TOR: [
-    'Ace Bailey', 'Bill Carson', 'George Patterson', 'Butch Keeling', 'Corb Denneny',
-    'Hap Day', 'Bert Corbeau', 'Bill Brydge'
-  ]
-};
-
-export const O_LEAGUE_POSITION_COUNTS: Record<string, TeamPositionCount> = Object.keys(O_LEAGUE_SKATERS).reduce((acc, team) => {
-  acc[team] = { goalies: 2, forwards: 5, defensemen: 3 };
-  return acc;
-}, {} as Record<string, TeamPositionCount>);
-
-export const AVAILABLE_SEASONS: SeasonConfig[] = [
-  {
-    seasonId: 39,
-    seasonName: 'O League - Season 1 (O01 / Season 39)',
-    leagueType: 'O',
-    teamCodes: O_LEAGUE_TEAM_CODES,
-    teamPositionCounts: O_LEAGUE_POSITION_COUNTS,
-    goalies: O_LEAGUE_GOALIES,
-    skaters: O_LEAGUE_SKATERS
-  },
-  {
-    seasonId: 40,
-    seasonName: 'W League - Season 18 (W18 / Season 40)',
-    leagueType: 'W',
-    teamCodes: DEFAULT_TEAM_CODES,
-    teamPositionCounts: W_LEAGUE_POSITION_COUNTS,
-    goalies: W_LEAGUE_GOALIES,
-    skaters: W_LEAGUE_SKATERS
-  }
-];
-
-export const GOAL_TYPE_DICT: Record<number, { side: 'Home' | 'Away'; status: string }> = {
-  0: { side: 'Home', status: 'SH2' },
-  1: { side: 'Home', status: 'SH' },
-  2: { side: 'Home', status: 'EV' },
-  3: { side: 'Home', status: 'PP' },
-  4: { side: 'Home', status: 'PP2' },
-  128: { side: 'Away', status: 'SH2' },
-  129: { side: 'Away', status: 'SH' },
-  130: { side: 'Away', status: 'EV' },
-  131: { side: 'Away', status: 'PP' },
-  132: { side: 'Away', status: 'PP2' }
-};
-
-export const PENALTY_DICT: Record<number, { side: 'Home' | 'Away'; type: string }> = {
-  18: { side: 'Home', type: 'Boarding' },
-  22: { side: 'Home', type: 'Charging' },
-  24: { side: 'Home', type: 'Slashing' },
-  26: { side: 'Home', type: 'Roughing' },
-  28: { side: 'Home', type: 'Cross-Checking' },
-  30: { side: 'Home', type: 'Hooking' },
-  32: { side: 'Home', type: 'Tripping' },
-  34: { side: 'Home', type: 'Interference' },
-  36: { side: 'Home', type: 'Holding' },
-  38: { side: 'Home', type: 'Fighting' },
-  146: { side: 'Away', type: 'Boarding' },
-  150: { side: 'Away', type: 'Charging' },
-  152: { side: 'Away', type: 'Slashing' },
-  154: { side: 'Away', type: 'Roughing' },
-  156: { side: 'Away', type: 'Cross-Checking' },
-  158: { side: 'Away', type: 'Hooking' },
-  160: { side: 'Away', type: 'Tripping' },
-  162: { side: 'Away', type: 'Interference' },
-  164: { side: 'Away', type: 'Holding' },
-  166: { side: 'Away', type: 'Fighting' }
-};
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
 function parseTimeToDayFraction(timeStr: string): string {
@@ -483,479 +173,6 @@ export function matchTeamFromList(code: string, teamsList: any[]) {
   return undefined;
 }
 
-export function parseSaveStateBuffer(buffer: Uint8Array, config?: Partial<SeasonConfig>): ParsedGame {
-  const teamCodes = config?.teamCodes || DEFAULT_TEAM_CODES;
-  const teamPositionCounts = config?.teamPositionCounts || W_LEAGUE_POSITION_COUNTS;
-  const goalieDict = config?.goalies || W_LEAGUE_GOALIES;
-  const skaterDict = config?.skaters || W_LEAGUE_SKATERS;
-
-  if (buffer.length < 52000) {
-    throw new Error(`Invalid save state: file size too small (${buffer.length} bytes, minimum 52KB expected).`);
-  }
-
-  let offset = 32;
-  if (buffer[48980 + offset] > 30 && buffer[48980] <= 30) {
-    offset = 0;
-  }
-
-  const d = buffer;
-
-  // Away General Stats
-  const awayGoals = d[50682 + offset];
-  const awayPPGoals = d[50672 + offset];
-  const awayPPTries = d[50674 + offset];
-  const awayPPTimeSec = d[51522 + offset] + d[51523 + offset] * 256;
-  const awayPPShots = d[51524 + offset];
-  const awaySHGoals = d[51526 + offset];
-  const awayBreakGoals = d[51530 + offset];
-  const awayBreakTries = d[51528 + offset];
-  const awayOneTimerGoals = d[51534 + offset];
-  const awayOneTimerTries = d[51532 + offset];
-  const awayPenShotGoals = d[51538 + offset];
-  const awayPenShotTries = d[51536 + offset];
-  const awayFaceoffWins = d[50684 + offset];
-  const awayChecks = d[50686 + offset];
-  const awayPenalties = d[50676 + offset];
-  const awayPIM = d[50678 + offset];
-  const awayAttackZoneTimeSec = d[50680 + offset] + d[50681 + offset] * 256;
-  const awayPassComps = d[50690 + offset];
-  let awayPassTries = d[50688 + offset];
-  if (awayPassTries < awayPassComps) awayPassTries += 256;
-
-  const awayGoalsP1 = d[51506 + offset];
-  const awayGoalsP2 = d[51508 + offset];
-  const awayGoalsP3 = d[51510 + offset];
-  const awayGoalsOT = d[51512 + offset];
-  const awayShotsP1 = d[51514 + offset];
-  const awayShotsP2 = d[51516 + offset];
-  const awayShotsP3 = d[51518 + offset];
-  const awayShotsOT = d[51520 + offset];
-
-  const awayTeamCodeByte = d[48982 + offset];
-  const awayTeamCode = teamCodes[awayTeamCodeByte] || `TM_${awayTeamCodeByte}`;
-  const awayShots = awayShotsP1 + awayShotsP2 + awayShotsP3 + awayShotsOT;
-  const awayShootPct = awayShots > 0 ? Number((awayGoals / awayShots).toFixed(3)) : 0;
-
-  // Home General Stats
-  const homeGoals = d[49812 + offset];
-  const homePPGoals = d[49802 + offset];
-  const homePPTries = d[49804 + offset];
-  const homePPTimeSec = d[50652 + offset] + d[50653 + offset] * 256;
-  const homePPShots = d[50654 + offset];
-  const homeSHGoals = d[50656 + offset];
-  const homeBreakGoals = d[50660 + offset];
-  const homeBreakTries = d[50658 + offset];
-  const homeOneTimerGoals = d[50664 + offset];
-  const homeOneTimerTries = d[50662 + offset];
-  const homePenShotGoals = d[50668 + offset];
-  const homePenShotTries = d[50666 + offset];
-  const homeFaceoffWins = d[49814 + offset];
-  const homeChecks = d[49816 + offset];
-  const homePenalties = d[49806 + offset];
-  const homePIM = d[49808 + offset];
-  const homeAttackZoneTimeSec = d[49810 + offset] + d[49811 + offset] * 256;
-  const homePassComps = d[49820 + offset];
-  let homePassTries = d[49818 + offset];
-  if (homePassTries < homePassComps) homePassTries += 256;
-
-  const homeGoalsP1 = d[50636 + offset];
-  const homeGoalsP2 = d[50638 + offset];
-  const homeGoalsP3 = d[50640 + offset];
-  const homeGoalsOT = d[50642 + offset];
-  const homeShotsP1 = d[50644 + offset];
-  const homeShotsP2 = d[50646 + offset];
-  const homeShotsP3 = d[50648 + offset];
-  const homeShotsOT = d[50650 + offset];
-
-  const homeTeamCodeByte = d[48980 + offset];
-  const homeTeamCode = teamCodes[homeTeamCodeByte] || `TM_${homeTeamCodeByte}`;
-  const homeShots = homeShotsP1 + homeShotsP2 + homeShotsP3 + homeShotsOT;
-  const homeShootPct = homeShots > 0 ? Number((homeGoals / homeShots).toFixed(3)) : 0;
-
-  // Roster Configuration
-  const awayGCount = teamPositionCounts[awayTeamCode]?.goalies ?? 2;
-  const awayFCount = teamPositionCounts[awayTeamCode]?.forwards ?? 5;
-  const awayDCount = teamPositionCounts[awayTeamCode]?.defensemen ?? 3;
-
-  const homeGCount = teamPositionCounts[homeTeamCode]?.goalies ?? 2;
-  const homeFCount = teamPositionCounts[homeTeamCode]?.forwards ?? 5;
-  const homeDCount = teamPositionCounts[homeTeamCode]?.defensemen ?? 3;
-
-  const awayGoalieNames = goalieDict[awayTeamCode] || ['Goalie 1', 'Goalie 2'];
-  const awaySkaterNames = skaterDict[awayTeamCode] || ['F1', 'F2', 'F3', 'F4', 'F5', 'D1', 'D2', 'D3'];
-
-  const awayPlayers: Array<{ name: string; pos: 'G' | 'F' | 'D' }> = [];
-  for (let i = 0; i < awayGCount; i++) awayPlayers.push({ name: awayGoalieNames[i] || `Goalie ${i + 1}`, pos: 'G' });
-  for (let i = 0; i < awayFCount; i++) awayPlayers.push({ name: awaySkaterNames[i] || `Forward ${i + 1}`, pos: 'F' });
-  for (let i = 0; i < awayDCount; i++) awayPlayers.push({ name: awaySkaterNames[awayFCount + i] || `Defense ${i + 1}`, pos: 'D' });
-
-  const homeGoalieNames = goalieDict[homeTeamCode] || ['Goalie 1', 'Goalie 2'];
-  const homeSkaterNames = skaterDict[homeTeamCode] || ['F1', 'F2', 'F3', 'F4', 'F5', 'D1', 'D2', 'D3'];
-
-  const homePlayers: Array<{ name: string; pos: 'G' | 'F' | 'D' }> = [];
-  for (let i = 0; i < homeGCount; i++) homePlayers.push({ name: homeGoalieNames[i] || `Goalie ${i + 1}`, pos: 'G' });
-  for (let i = 0; i < homeFCount; i++) homePlayers.push({ name: homeSkaterNames[i] || `Forward ${i + 1}`, pos: 'F' });
-  for (let i = 0; i < homeDCount; i++) homePlayers.push({ name: homeSkaterNames[homeFCount + i] || `Defense ${i + 1}`, pos: 'D' });
-
-  // Scoring Summary
-  const numGoals = Math.floor(d[49196 + offset] / 6);
-  const startGoalByte = 49198 + offset;
-  const parsedGoals: ParsedGoal[] = [];
-
-  for (let i = 0; i < numGoals; i++) {
-    const b1 = d[startGoalByte + 1 + i * 6];
-    let perFactor = 0;
-    if (b1 < 64) perFactor = 0;
-    else if (b1 < 128) perFactor = 64;
-    else if (b1 < 192) perFactor = 128;
-    else perFactor = 192;
-
-    const periodNum = Math.floor(perFactor / 64) + 1;
-    const secondsNum = (b1 - perFactor) * 256 + d[startGoalByte + i * 6];
-    const typeCode = d[startGoalByte + 3 + i * 6];
-    const goalTypeObj = GOAL_TYPE_DICT[typeCode] || { side: typeCode >= 128 ? 'Away' : 'Home', status: 'EV' };
-
-    const side = goalTypeObj.side;
-    const goalTeam = side === 'Home' ? homeTeamCode : awayTeamCode;
-    const scorerSlot = d[startGoalByte + 2 + i * 6];
-    const assist1Slot = d[startGoalByte + 5 + i * 6];
-    const assist2Slot = d[startGoalByte + 4 + i * 6];
-
-    const rosterList = side === 'Home' ? homePlayers : awayPlayers;
-    const scorer = rosterList[scorerSlot]?.name || `Player #${scorerSlot + 1}`;
-    const assist1 = assist1Slot === 255 ? '--' : (rosterList[assist1Slot]?.name || `Player #${assist1Slot + 1}`);
-    const assist2 = assist2Slot === 255 ? '--' : (rosterList[assist2Slot]?.name || `Player #${assist2Slot + 1}`);
-
-    parsedGoals.push({
-      goalNum: i + 1,
-      period: periodNum,
-      time: formatTime(secondsNum),
-      seconds: secondsNum,
-      team: goalTeam,
-      side,
-      scorer,
-      assist1,
-      assist2,
-      type: goalTypeObj.status
-    });
-  }
-
-  // Penalty Summary
-  const numPens = Math.floor(d[49558 + offset] / 4);
-  const startPenByte = 49560 + offset;
-  const parsedPenalties: ParsedPenalty[] = [];
-
-  for (let i = 0; i < numPens; i++) {
-    const b1 = d[startPenByte + 1 + i * 4];
-    let perFactor = 0;
-    if (b1 < 64) perFactor = 0;
-    else if (b1 < 128) perFactor = 64;
-    else if (b1 < 192) perFactor = 128;
-    else perFactor = 192;
-
-    const periodNum = Math.floor(perFactor / 64) + 1;
-    const secondsNum = (b1 - perFactor) * 256 + d[startPenByte + i * 4];
-    const penCode = d[startPenByte + 3 + i * 4];
-    const penObj = PENALTY_DICT[penCode] || { side: penCode >= 146 ? 'Away' : 'Home', type: 'Penalty' };
-
-    const side = penObj.side;
-    const penTeam = side === 'Home' ? homeTeamCode : awayTeamCode;
-    const playerSlot = d[startPenByte + 2 + i * 4];
-    const rosterList = side === 'Home' ? homePlayers : awayPlayers;
-    const player = rosterList[playerSlot]?.name || `Player #${playerSlot + 1}`;
-
-    parsedPenalties.push({
-      penNum: i + 1,
-      period: periodNum,
-      time: formatTime(secondsNum),
-      seconds: secondsNum,
-      team: penTeam,
-      side,
-      player,
-      type: penObj.type
-    });
-  }
-
-  // OT & Game Length
-  const hasOT =
-    awayGoalsOT > 0 || awayShotsOT > 0 || homeGoalsOT > 0 || homeShotsOT > 0 ||
-    (parsedPenalties.length > 0 && parsedPenalties[parsedPenalties.length - 1].period === 4);
-
-  let gameLengthSec = 900;
-  if (hasOT) {
-    if (homeGoals === awayGoals) gameLengthSec = 1200;
-    else {
-      const otLength = parsedGoals.length > 0 ? parsedGoals[parsedGoals.length - 1].seconds : 0;
-      gameLengthSec = 900 + otLength;
-    }
-  }
-
-  // Away Player Extraction
-  const awayTotalSlots = awayGCount + awayFCount + awayDCount;
-  const awayRawPlayerStats: any[] = [];
-  let awaySwapVal = 1;
-  const awayStartByte = 50852 + offset;
-
-  for (let i = 0; i < awayTotalSlots; i++) {
-    const goals = d[awayStartByte + 0 + i + awaySwapVal];
-    const assists = d[awayStartByte + 26 + i + awaySwapVal];
-    const shots = d[awayStartByte + 52 + i + awaySwapVal];
-    const checks = d[awayStartByte + 104 + i + awaySwapVal];
-    const pim = d[awayStartByte + 78 + i + awaySwapVal];
-    const toiMin = d[awayStartByte + 130 + 1 + i * 2] * 256;
-    const toiSec = d[awayStartByte + 130 + i * 2];
-    const toi = Math.min(toiMin + toiSec, gameLengthSec);
-
-    awayRawPlayerStats.push({
-      name: awayPlayers[i]?.name || `Away Player ${i + 1}`,
-      pos: awayPlayers[i]?.pos || 'F',
-      goals, assists, points: goals + assists, shots, checks, pim, toi
-    });
-    awaySwapVal *= -1;
-  }
-
-  // Home Player Extraction
-  const homeTotalSlots = homeGCount + homeFCount + homeDCount;
-  const homeRawPlayerStats: any[] = [];
-  let homeSwapVal = 1;
-  const homeStartByte = 49982 + offset;
-
-  for (let i = 0; i < homeTotalSlots; i++) {
-    const goals = d[homeStartByte + 0 + i + homeSwapVal];
-    const assists = d[homeStartByte + 26 + i + homeSwapVal];
-    const shots = d[homeStartByte + 52 + i + homeSwapVal];
-    const checks = d[homeStartByte + 104 + i + homeSwapVal];
-    const pim = d[homeStartByte + 78 + i + homeSwapVal];
-    const toiMin = d[homeStartByte + 130 + 1 + i * 2] * 256;
-    const toiSec = d[homeStartByte + 130 + i * 2];
-    const toi = Math.min(toiMin + toiSec, gameLengthSec);
-
-    homeRawPlayerStats.push({
-      name: homePlayers[i]?.name || `Home Player ${i + 1}`,
-      pos: homePlayers[i]?.pos || 'F',
-      goals, assists, points: goals + assists, shots, checks, pim, toi
-    });
-    homeSwapVal *= -1;
-  }
-
-  // Format Away Goalies & Skaters
-  const awayRecGoalieIdx = (awayRawPlayerStats[0]?.toi || 0) >= (awayRawPlayerStats[1]?.toi || 0) ? 0 : 1;
-  const awayGoalies: ParsedGoalieStat[] = [];
-  for (let i = 0; i < awayGCount; i++) {
-    const gRaw = awayRawPlayerStats[i];
-    if (!gRaw) continue;
-    const gName = gRaw.name;
-    const gGoals = parsedGoals.filter(g => g.scorer === gName).length;
-    const isRec = awayRecGoalieIdx === i;
-
-    const w = isRec && awayGoals > homeGoals ? 1 : 0;
-    const l = isRec && awayGoals < homeGoals && !hasOT ? 1 : 0;
-    const t = isRec && awayGoals === homeGoals ? 1 : 0;
-    const otl = isRec && awayGoals < homeGoals && hasOT ? 1 : 0;
-
-    const ga = gRaw.goals;
-    const assists = gRaw.assists;
-    const shots = gRaw.shots;
-    const saves = shots >= ga ? shots - ga : 0;
-    const savePct = shots > 0 ? Number(((shots - ga) / shots).toFixed(3)) : 0;
-    const so = ga === 0 && isRec && shots > 0 ? 1 : 0;
-
-    awayGoalies.push({
-      name: gName,
-      pos: 'G',
-      team: awayTeamCode,
-      side: 'Away',
-      goals: gGoals,
-      assists,
-      points: gGoals + assists,
-      so, ga, saves, shots, savePct, w, l, t, otl,
-      toi: formatTime(gRaw.toi),
-      toiSeconds: gRaw.toi
-    });
-  }
-
-  const awaySkaters: ParsedSkaterStat[] = [];
-  for (let i = awayGCount; i < awayTotalSlots; i++) {
-    const sRaw = awayRawPlayerStats[i];
-    if (!sRaw) continue;
-    const sName = sRaw.name;
-
-    let ppp = 0;
-    let shp = 0;
-    for (const goal of parsedGoals) {
-      if (goal.scorer === sName || goal.assist1 === sName || goal.assist2 === sName) {
-        if (goal.type.startsWith('PP')) ppp++;
-        if (goal.type.startsWith('SH')) shp++;
-      }
-    }
-
-    awaySkaters.push({
-      name: sName,
-      pos: sRaw.pos as 'F' | 'D',
-      team: awayTeamCode,
-      side: 'Away',
-      goals: sRaw.goals,
-      assists: sRaw.assists,
-      points: sRaw.points,
-      sog: sRaw.shots,
-      checks: sRaw.checks,
-      pim: sRaw.pim,
-      ppp, shp,
-      toi: formatTime(sRaw.toi),
-      toiSeconds: sRaw.toi
-    });
-  }
-
-  // Format Home Goalies & Skaters
-  const homeRecGoalieIdx = (homeRawPlayerStats[0]?.toi || 0) >= (homeRawPlayerStats[1]?.toi || 0) ? 0 : 1;
-  const homeGoalies: ParsedGoalieStat[] = [];
-  for (let i = 0; i < homeGCount; i++) {
-    const gRaw = homeRawPlayerStats[i];
-    if (!gRaw) continue;
-    const gName = gRaw.name;
-    const gGoals = parsedGoals.filter(g => g.scorer === gName).length;
-    const isRec = homeRecGoalieIdx === i;
-
-    const w = isRec && homeGoals > awayGoals ? 1 : 0;
-    const l = isRec && homeGoals < awayGoals && !hasOT ? 1 : 0;
-    const t = isRec && homeGoals === awayGoals ? 1 : 0;
-    const otl = isRec && homeGoals < awayGoals && hasOT ? 1 : 0;
-
-    const ga = gRaw.goals;
-    const assists = gRaw.assists;
-    const shots = gRaw.shots;
-    const saves = shots >= ga ? shots - ga : 0;
-    const savePct = shots > 0 ? Number(((shots - ga) / shots).toFixed(3)) : 0;
-    const so = ga === 0 && isRec && shots > 0 ? 1 : 0;
-
-    homeGoalies.push({
-      name: gName,
-      pos: 'G',
-      team: homeTeamCode,
-      side: 'Home',
-      goals: gGoals,
-      assists,
-      points: gGoals + assists,
-      so, ga, saves, shots, savePct, w, l, t, otl,
-      toi: formatTime(gRaw.toi),
-      toiSeconds: gRaw.toi
-    });
-  }
-
-  const homeSkaters: ParsedSkaterStat[] = [];
-  for (let i = homeGCount; i < homeTotalSlots; i++) {
-    const sRaw = homeRawPlayerStats[i];
-    if (!sRaw) continue;
-    const sName = sRaw.name;
-
-    let ppp = 0;
-    let shp = 0;
-    for (const goal of parsedGoals) {
-      if (goal.scorer === sName || goal.assist1 === sName || goal.assist2 === sName) {
-        if (goal.type.startsWith('PP')) ppp++;
-        if (goal.type.startsWith('SH')) shp++;
-      }
-    }
-
-    homeSkaters.push({
-      name: sName,
-      pos: sRaw.pos as 'F' | 'D',
-      team: homeTeamCode,
-      side: 'Home',
-      goals: sRaw.goals,
-      assists: sRaw.assists,
-      points: sRaw.points,
-      sog: sRaw.shots,
-      checks: sRaw.checks,
-      pim: sRaw.pim,
-      ppp, shp,
-      toi: formatTime(sRaw.toi),
-      toiSeconds: sRaw.toi
-    });
-  }
-
-  const homeTeamStats: ParsedTeamStats = {
-    teamCode: homeTeamCode,
-    goals: homeGoals,
-    shots: homeShots,
-    shootingPct: homeShootPct,
-    ppGoals: homePPGoals,
-    ppTries: homePPTries,
-    ppTime: formatTime(homePPTimeSec),
-    ppShots: homePPShots,
-    shGoals: homeSHGoals,
-    breakawayGoals: homeBreakGoals,
-    breakawayTries: homeBreakTries,
-    oneTimerGoals: homeOneTimerGoals,
-    oneTimerTries: homeOneTimerTries,
-    penaltyShotGoals: homePenShotGoals,
-    penaltyShotTries: homePenShotTries,
-    faceoffWins: homeFaceoffWins,
-    checks: homeChecks,
-    penalties: homePenalties,
-    pim: homePIM,
-    attackZoneTime: formatTime(awayAttackZoneTimeSec ? homeAttackZoneTimeSec : 0),
-    passComps: homePassComps,
-    passTries: homePassTries,
-    goalsP1: homeGoalsP1,
-    goalsP2: homeGoalsP2,
-    goalsP3: homeGoalsP3,
-    goalsOT: homeGoalsOT,
-    shotsP1: homeShotsP1,
-    shotsP2: homeShotsP2,
-    shotsP3: homeShotsP3,
-    shotsOT: homeShotsOT
-  };
-
-  const awayTeamStats: ParsedTeamStats = {
-    teamCode: awayTeamCode,
-    goals: awayGoals,
-    shots: awayShots,
-    shootingPct: awayShootPct,
-    ppGoals: awayPPGoals,
-    ppTries: awayPPTries,
-    ppTime: formatTime(awayPPTimeSec),
-    ppShots: awayPPShots,
-    shGoals: awaySHGoals,
-    breakawayGoals: awayBreakGoals,
-    breakawayTries: awayBreakTries,
-    oneTimerGoals: awayOneTimerGoals,
-    oneTimerTries: awayOneTimerTries,
-    penaltyShotGoals: awayPenShotGoals,
-    penaltyShotTries: awayPenShotTries,
-    faceoffWins: awayFaceoffWins,
-    checks: awayChecks,
-    penalties: awayPenalties,
-    pim: awayPIM,
-    attackZoneTime: formatTime(awayAttackZoneTimeSec),
-    passComps: awayPassComps,
-    passTries: awayPassTries,
-    goalsP1: awayGoalsP1,
-    goalsP2: awayGoalsP2,
-    goalsP3: awayGoalsP3,
-    goalsOT: awayGoalsOT,
-    shotsP1: awayShotsP1,
-    shotsP2: awayShotsP2,
-    shotsP3: awayShotsP3,
-    shotsOT: awayShotsOT
-  };
-
-  return {
-    matchup: `${awayTeamCode} @ ${homeTeamCode}`,
-    homeTeam: homeTeamStats,
-    awayTeam: awayTeamStats,
-    isOT: hasOT,
-    gameLength: formatTime(gameLengthSec),
-    totalFaceoffs: awayFaceoffWins + homeFaceoffWins,
-    goals: parsedGoals,
-    penalties: parsedPenalties,
-    homeGoalies,
-    awayGoalies,
-    homeSkaters,
-    awaySkaters
-  };
-}
-
 // ==========================================
 // 3. REACT UPLOAD COMPONENT
 // ==========================================
@@ -981,7 +198,13 @@ export default function UploadPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [insertedRowData, setInsertedRowData] = useState<any | null>(null);
 
+  const [seasonsList, setSeasonsList] = useState<SeasonConfig[]>(() => getAllSeasons());
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
+  const [showAddSeasonModal, setShowAddSeasonModal] = useState<boolean>(false);
+  const [newSeasonJson, setNewSeasonJson] = useState<string>('');
+  const [newSeasonError, setNewSeasonError] = useState<string | null>(null);
+  const [newSeasonSuccess, setNewSeasonSuccess] = useState<string | null>(null);
+
   const [customConfigJson, setCustomConfigJson] = useState<string>('');
   const [configAppliedMessage, setConfigAppliedMessage] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{ testing: boolean; message: string | null; error: boolean }>({ testing: false, message: null, error: false });
@@ -1008,6 +231,85 @@ export default function UploadPage() {
     message: null
   });
   const [allowOverwrite, setAllowOverwrite] = useState<boolean>(false);
+
+  const handleDownloadTemplate = () => {
+    const templateData = {
+      seasonId: 41,
+      seasonName: "W League - Season 19 (W19 / Season 41)",
+      leagueCode: "W19",
+      leagueType: "W",
+      defaultPositionCounts: { goalies: 2, forwards: 5, defensemen: 3 },
+      teamCodes: {
+        "0": "AUT", "1": "BAR", "2": "BAY", "3": "BFC", "4": "DHG", "5": "GRH",
+        "6": "HAM", "7": "HIG", "8": "ING", "9": "ITA", "10": "KAR", "11": "MHA",
+        "12": "MHT", "13": "MGG", "14": "NBK", "15": "OCW", "16": "PIT", "17": "PRO",
+        "18": "RIC", "19": "ROC", "20": "SHS", "21": "SVF", "22": "SUM", "23": "TAI",
+        "24": "TEG", "25": "TBP", "26": "VHV", "27": "WDY", "28": "ETI"
+      },
+      teamPositionCounts: {
+        "AUT": { goalies: 2, forwards: 5, defensemen: 3 },
+        "BAR": { goalies: 2, forwards: 5, defensemen: 3 }
+      },
+      goalies: {
+        "AUT": ["Carey Price", "Evgeni Nabokov"],
+        "BAR": ["Jean-Sebastien Giguere", "Semyon Varlamov"]
+      },
+      skaters: {
+        "AUT": [
+          "Joe Pavelski", "Martin St.Louis", "Ryan Johansen", "Brad Richards", "Wayne Simmonds",
+          "Mark Giordano", "Dustin Byfuglien", "Sergei Gonchar"
+        ],
+        "BAR": [
+          "Steve Sullivan", "Gabriel Landeskog", "Filip Forsberg", "Artem Anisimov", "James Neal",
+          "Trevor Daley", "Joni Pitkanen", "Dougie Hamilton"
+        ]
+      }
+    };
+    const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'template_season.json';
+    a.click();
+  };
+
+  const handleImportSeasonJson = (jsonString: string) => {
+    setNewSeasonError(null);
+    setNewSeasonSuccess(null);
+    try {
+      const added = loadSeasonFromJson(jsonString);
+      const updatedList = getAllSeasons();
+      setSeasonsList([...updatedList]);
+      setSelectedSeasonId(added.seasonId);
+      setCustomConfigJson(JSON.stringify(added, null, 2));
+      setNewSeasonSuccess(`Season "${added.seasonName}" (ID: ${added.seasonId}) registered and loaded!`);
+      setTimeout(() => {
+        setShowAddSeasonModal(false);
+        setNewSeasonSuccess(null);
+        setNewSeasonJson('');
+      }, 1500);
+      if (file) {
+        processFile(file);
+      }
+    } catch (err: any) {
+      setNewSeasonError(err.message || "Failed to parse and register season JSON.");
+    }
+  };
+
+  const handleSeasonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const f = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          setNewSeasonJson(text);
+          handleImportSeasonJson(text);
+        }
+      };
+      reader.readAsText(f);
+    }
+  };
 
   const testSupabaseConnection = async () => {
     setConnectionStatus({ testing: true, message: null, error: false });
@@ -1056,9 +358,9 @@ export default function UploadPage() {
   }, [selectedSeasonId]);
 
   useEffect(() => {
-    const config = AVAILABLE_SEASONS.find(s => String(s.seasonId) === String(selectedSeasonId)) || AVAILABLE_SEASONS[0];
+    const config = getSeasonConfig(selectedSeasonId);
     setCustomConfigJson(JSON.stringify(config, null, 2));
-  }, [selectedSeasonId]);
+  }, [selectedSeasonId, seasonsList]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -1199,16 +501,16 @@ export default function UploadPage() {
       : (knownAway?.coach_id || awayTeamId);
 
     const homeCoachName = (homeTeam as any)?.league_coaches?.coach_name ||
-      (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
-      knownHome?.coach_name ||
-      homeTeam?.team_name ||
-      homeTeamCode;
+                          (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
+                          knownHome?.coach_name ||
+                          homeTeam?.team_name ||
+                          homeTeamCode;
 
     const awayCoachName = (awayTeam as any)?.league_coaches?.coach_name ||
-      (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
-      knownAway?.coach_name ||
-      awayTeam?.team_name ||
-      awayTeamCode;
+                          (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
+                          knownAway?.coach_name ||
+                          awayTeam?.team_name ||
+                          awayTeamCode;
 
     return {
       league_id: sId,
@@ -1299,8 +601,8 @@ export default function UploadPage() {
         unplayedGameId: unplayed ? Number(unplayed.game_id) : null,
         playedGameIds: playedList,
         isAllPlayed,
-        message: isAllPlayed
-          ? `All scheduled games for this matchup are already marked as PLAYED (Game #${playedList.join(', #')}).`
+        message: isAllPlayed 
+          ? `All scheduled games for this matchup are already marked as PLAYED (Game #${playedList.join(', #')}).` 
           : `Scheduled fixture Game #${unplayed?.game_id} is unplayed and ready for submission.`
       });
     }
@@ -1326,7 +628,7 @@ export default function UploadPage() {
     try {
       const response = await fetch('/api/save-game', {
         method: 'POST',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'Authorization': session?.access_token ? `Bearer ${session.access_token}` : (adminPasscode ? `Admin ${adminPasscode}` : ''),
           'x-admin-key': adminPasscode || ''
@@ -1350,7 +652,7 @@ export default function UploadPage() {
       setSaveSuccess(data.message || `Successfully committed ${parsedGame.matchup} to Supabase!`);
       setSaveDetails(data.details || null);
       setInsertedRowData(data.insertedRow || null);
-
+      
       // Update schedule status to reflected played
       setScheduleStatus(prev => ({
         ...prev,
@@ -1683,12 +985,21 @@ export default function UploadPage() {
               if (file) processFile(file);
             }}
           >
-            {AVAILABLE_SEASONS.map(s => (
+            {seasonsList.map(s => (
               <option key={s.seasonId} value={s.seasonId}>
                 {s.seasonName}
               </option>
             ))}
           </select>
+
+          <button
+            onClick={() => setShowAddSeasonModal(!showAddSeasonModal)}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold uppercase border-2 border-black bg-emerald-100 hover:bg-black hover:text-white transition cursor-pointer"
+            title="Import or create a new season configuration"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-emerald-800" />
+            Add New Season
+          </button>
 
           <button
             onClick={() => setShowConfigModal(!showConfigModal)}
@@ -1722,9 +1033,9 @@ export default function UploadPage() {
             <button
               onClick={parsedGame ? handleSaveToSupabase : () => document.getElementById('file-input')?.click()}
               disabled={isSaving || (Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
-              style={{
-                backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a',
-                color: '#ffffff'
+              style={{ 
+                backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a', 
+                color: '#ffffff' 
               }}
               className="flex items-center gap-2.5 px-5 py-2.5 hover:opacity-90 text-white font-black text-xs md:text-sm uppercase tracking-wider border-2 border-black transition shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               title={parsedGame ? "Save parsed game stats to Supabase" : "Click to select a save state file and submit"}
@@ -1734,8 +1045,8 @@ export default function UploadPage() {
                 {isSaving
                   ? "Publishing to Supabase..."
                   : parsedGame
-                    ? (scheduleStatus.isAllPlayed && !allowOverwrite ? "Matchup Already Played" : "Push to Supabase")
-                    : "Submit to Supabase"}
+                  ? (scheduleStatus.isAllPlayed && !allowOverwrite ? "Matchup Already Played" : "Push to Supabase")
+                  : "Submit to Supabase"}
               </span>
             </button>
           )}
@@ -1785,8 +1096,9 @@ export default function UploadPage() {
 
       {/* Connection Test Banner */}
       {connectionStatus.message && (
-        <div className={`mb-6 p-4 border-2 text-xs font-bold uppercase flex items-center justify-between ${connectionStatus.error ? 'bg-red-50 border-red-800 text-red-900' : 'bg-green-50 border-green-800 text-green-900'
-          }`}>
+        <div className={`mb-6 p-4 border-2 text-xs font-bold uppercase flex items-center justify-between ${
+          connectionStatus.error ? 'bg-red-50 border-red-800 text-red-900' : 'bg-green-50 border-green-800 text-green-900'
+        }`}>
           <div className="flex items-center gap-2">
             {connectionStatus.error ? (
               <AlertTriangle className="w-5 h-5 text-red-700 shrink-0" />
@@ -1801,6 +1113,86 @@ export default function UploadPage() {
           >
             Dismiss
           </button>
+        </div>
+      )}
+
+      {/* Add New Season Ingestion Modal */}
+      {showAddSeasonModal && (
+        <div className="mb-6 p-4 bg-emerald-50 border-2 border-emerald-900 shadow-md">
+          <div className="flex justify-between items-center mb-2 border-b border-emerald-900/30 pb-2">
+            <div className="flex items-center gap-2">
+              <PlusCircle className="w-4 h-4 text-emerald-900" />
+              <h3 className="text-sm font-black uppercase text-emerald-950">
+                Add / Import New Season Configuration
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowAddSeasonModal(false)}
+              className="text-xs font-bold uppercase underline hover:text-red-700"
+            >
+              Close
+            </button>
+          </div>
+          <p className="text-xs text-emerald-900/80 mb-3">
+            Paste or upload any new season JSON configuration (e.g. Q League, Season 41, Vintage, or custom tournament). The parser and season dropdown will immediately register and populate all team codes, position counts, and player rosters.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-emerald-800 text-emerald-950 text-xs font-bold uppercase cursor-pointer hover:bg-emerald-100 transition shadow-2xs">
+              <FileUp className="w-3.5 h-3.5 text-emerald-800" />
+              <span>Upload Season JSON File</span>
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleSeasonFileUpload}
+                className="hidden"
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-emerald-800 text-emerald-950 text-xs font-bold uppercase hover:bg-emerald-100 transition shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-800" />
+              <span>Download Starter Template JSON</span>
+            </button>
+          </div>
+
+          <textarea
+            rows={7}
+            placeholder='Paste your Season JSON here (e.g. {"seasonId": 41, "seasonName": "Season 41", "leagueType": "W", "teamCodes": {...}, "goalies": {...}, "skaters": {...}})...'
+            className="w-full font-mono text-xs p-3 bg-white border border-emerald-900/40 text-black outline-none"
+            value={newSeasonJson}
+            onChange={(e) => setNewSeasonJson(e.target.value)}
+          />
+
+          {newSeasonError && (
+            <div className="mt-2 p-2 bg-red-100 border border-red-700 text-red-900 text-xs font-bold flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-700 shrink-0" />
+              <span>{newSeasonError}</span>
+            </div>
+          )}
+
+          {newSeasonSuccess && (
+            <div className="mt-2 p-2 bg-emerald-100 border border-emerald-700 text-emerald-900 text-xs font-bold flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>{newSeasonSuccess}</span>
+            </div>
+          )}
+
+          <div className="mt-3 flex items-center justify-between">
+            <button
+              onClick={() => handleImportSeasonJson(newSeasonJson)}
+              disabled={!newSeasonJson.trim()}
+              className="px-4 py-1.5 bg-emerald-900 hover:bg-black text-white text-xs font-bold uppercase transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Register & Activate Season
+            </button>
+            <span className="text-[11px] text-emerald-900 font-medium">
+              Registered Seasons Active: <strong>{seasonsList.length}</strong>
+            </span>
+          </div>
         </div>
       )}
 
@@ -2085,8 +1477,9 @@ export default function UploadPage() {
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 ${activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
-                      }`}
+                    className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 ${
+                      activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
+                    }`}
                   >
                     {t.label}
                   </button>
@@ -2455,9 +1848,9 @@ export default function UploadPage() {
                         <button
                           onClick={handleSaveToSupabase}
                           disabled={isSaving || (Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
-                          style={{
-                            backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a',
-                            color: '#ffffff'
+                          style={{ 
+                            backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a', 
+                            color: '#ffffff' 
                           }}
                           className="flex items-center gap-2 px-4 py-1.5 hover:opacity-90 text-white font-black text-xs uppercase border-2 border-black transition shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >

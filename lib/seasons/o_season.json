@@ -17,123 +17,45 @@
     "defensemen": 3
   },
   "teamPositionCounts": {
-    "BOS": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    },
-    "CHI": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    },
-    "DTC": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    },
-    "MTL": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    },
-    "NYR": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    },
-    "TOR": {
-      "goalies": 2,
-      "forwards": 5,
-      "defensemen": 3
-    }
+    "BOS": { "goalies": 2, "forwards": 5, "defensemen": 3 },
+    "CHI": { "goalies": 2, "forwards": 5, "defensemen": 3 },
+    "DTC": { "goalies": 2, "forwards": 5, "defensemen": 3 },
+    "MTL": { "goalies": 2, "forwards": 5, "defensemen": 3 },
+    "NYR": { "goalies": 2, "forwards": 5, "defensemen": 3 },
+    "TOR": { "goalies": 2, "forwards": 5, "defensemen": 3 }
   },
   "goalies": {
-    "BOS": [
-      "Hal Winkler",
-      "Charles Stewart"
-    ],
-    "CHI": [
-      "Hugh Lehman",
-      "--"
-    ],
-    "DTC": [
-      "Hap Holmes",
-      "Herb Stuart"
-    ],
-    "MTL": [
-      "George Hainsworth",
-      "--"
-    ],
-    "NYR": [
-      "Lorne Chabot",
-      "--"
-    ],
-    "TOR": [
-      "John-Ross Roach",
-      "--"
-    ]
+    "BOS": ["Hal Winkler", "Charles Stewart"],
+    "CHI": ["Hugh Lehman", "--"],
+    "DTC": ["Hap Holmes", "Herb Stuart"],
+    "MTL": ["George Hainsworth", "--"],
+    "NYR": ["Lorne Chabot", "--"],
+    "TOR": ["John-Ross Roach", "--"]
   },
   "skaters": {
     "BOS": [
-      "Percy Galbraith",
-      "Jimmy Herbert",
-      "Harry Oliver",
-      "Frank Fredrickson",
-      "Carson Cooper",
-      "Lionel Hitchman",
-      "Eddie Shore",
-      "Billy Stuart"
+      "Percy Galbraith", "Jimmy Herbert", "Harry Oliver", "Frank Fredrickson", "Carson Cooper",
+      "Lionel Hitchman", "Eddie Shore", "Billy Stuart"
     ],
     "CHI": [
-      "Babe Dye",
-      "George Hay",
-      "Dick Irvin",
-      "Mickey MacKay",
-      "Charley McVeigh",
-      "Bob Trapp",
-      "Percy Traub",
-      "Gord Fraser"
+      "Babe Dye", "George Hay", "Dick Irvin", "Mickey MacKay", "Charley McVeigh",
+      "Bob Trapp", "Percy Traub", "Gord Fraser"
     ],
     "DTC": [
-      "Duke Keats",
-      "Frank Foyston",
-      "Fred Gordon",
-      "Johnny Sheppard",
-      "Jack Walker",
-      "Jack Arbour",
-      "Art Duncan",
-      "Clem Loughlin"
+      "Duke Keats", "Frank Foyston", "Fred Gordon", "Johnny Sheppard", "Jack Walker",
+      "Jack Arbour", "Art Duncan", "Clem Loughlin"
     ],
     "MTL": [
-      "Pit Lepine",
-      "Howie Morenz",
-      "Art Gagne",
-      "Aurele Joliat",
-      "Billy Boucher",
-      "Albert Leduc",
-      "Herb Gardiner",
-      "Sylvio Mantha"
+      "Pit Lepine", "Howie Morenz", "Art Gagne", "Aurele Joliat", "Billy Boucher",
+      "Albert Leduc", "Herb Gardiner", "Sylvio Mantha"
     ],
     "NYR": [
-      "Frank Boucher",
-      "Bill Cook",
-      "Bun Cook",
-      "Murray Murdoch",
-      "Paul Thompson",
-      "Reg Mackey",
-      "Stan Brown",
-      "Clarence Abel"
+      "Frank Boucher", "Bill Cook", "Bun Cook", "Murray Murdoch", "Paul Thompson",
+      "Reg Mackey", "Stan Brown", "Clarence Abel"
     ],
     "TOR": [
-      "Ace Bailey",
-      "Bill Carson",
-      "George Patterson",
-      "Butch Keeling",
-      "Corb Denneny",
-      "Hap Day",
-      "Bert Corbeau",
-      "Bill Brydge"
+      "Ace Bailey", "Bill Carson", "George Patterson", "Butch Keeling", "Corb Denneny",
+      "Hap Day", "Bert Corbeau", "Bill Brydge"
     ]
   }
 }
