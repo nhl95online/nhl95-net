@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, ChevronDown, Search, User, LogIn, LogOut, ShieldCheck } from 'lucide-react';
-import { useAuth } from '@/lib/auth-context';
+import { Menu, X, ChevronDown, Search, User } from 'lucide-react';
 
 export default function Navbar() {
   const [isRostersOpen, setIsRostersOpen] = useState(false);
@@ -12,7 +11,6 @@ export default function Navbar() {
   const [isMobileRostersOpen, setIsMobileRostersOpen] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
-  const { user, profile, isLoggedIn, signOut } = useAuth();
 
   const LOGO_URL = "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/NHL95.net_banner.png";
   const DISCORD_URL = "https://discord.gg/Rp3An7Hx2f";
@@ -30,15 +28,9 @@ export default function Navbar() {
     setIsMobileRostersOpen(false);
   };
 
-  const handleSignOut = async () => {
-    closeMobileMenu();
-    await signOut();
-    router.push('/');
-  };
-
   return (
     <nav className="bg-[#f4f1ea] text-black font-serif border-b-2 border-black sticky top-0 z-50 shadow-xs">
-      {/* Top Banner with Search, Discord & Auth Status */}
+      {/* Top Banner with Search & Discord */}
       <div className="bg-black text-white px-3 sm:px-6 py-1.5 flex flex-col sm:flex-row justify-between items-center gap-1.5 text-[11px] sm:text-xs uppercase tracking-widest">
         <div className="flex items-center gap-3">
           <a 
@@ -52,31 +44,6 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap justify-center w-full sm:w-auto">
-          {/* Top Bar Auth Chip */}
-          {isLoggedIn ? (
-            <div className="flex items-center gap-2 text-[10px] font-sans font-bold bg-neutral-900 border border-neutral-700 px-2 py-0.5">
-              <span className="text-green-400 flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" />
-                <span className="max-w-[120px] truncate">{profile?.coach_name || 'Coach'}</span>
-              </span>
-              <button
-                onClick={handleSignOut}
-                className="text-neutral-400 hover:text-red-400 uppercase tracking-normal underline cursor-pointer ml-1"
-                title="Sign out of league"
-              >
-                Sign Out
-              </button>
-            </div>
-          ) : (
-            <Link
-              href="/login"
-              className="flex items-center gap-1 text-[10px] font-sans font-bold text-amber-300 hover:text-white uppercase transition-colors px-1.5 py-0.5 border border-amber-500/50 hover:border-white"
-            >
-              <LogIn className="w-3 h-3" />
-              <span>Player Login</span>
-            </Link>
-          )}
-
           <form onSubmit={handleSearch} className="flex gap-1.5 items-center w-full sm:w-auto justify-center">
             <div className="relative flex-1 sm:w-44">
               <input
@@ -312,7 +279,6 @@ export default function Navbar() {
             className="py-2.5 px-3 bg-black text-white text-center rounded-xs font-black hover:bg-red-700 transition-colors mt-2 flex items-center justify-center gap-2"
           >
             <span>Upload Game File</span>
-            {isLoggedIn && <ShieldCheck className="w-4 h-4 text-green-400" />}
           </Link>
         </div>
       )}

@@ -9,7 +9,6 @@ import {
   Lock, ShieldCheck, LogIn, PlusCircle, FileUp
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth-context';
 import { 
   SeasonConfig, 
   TeamPositionCount, 
@@ -179,7 +178,6 @@ export function matchTeamFromList(code: string, teamsList: any[]) {
 
 export default function UploadPage() {
   const router = useRouter();
-  const { user, session, profile, isLoggedIn, isAdmin, adminPasscode, signInAsAdmin } = useAuth();
   const [selectedSeasonId, setSelectedSeasonId] = useState<number | string>(40);
   const [file, setFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState<boolean>(false);
@@ -615,11 +613,6 @@ export default function UploadPage() {
   const handleSaveToSupabase = async () => {
     if (!parsedGame) return;
 
-    if (!isLoggedIn) {
-      router.push('/login?redirect=/upload');
-      return;
-    }
-
     setIsSaving(true);
     setSaveSuccess(null);
     setSaveError(null);
@@ -629,9 +622,7 @@ export default function UploadPage() {
       const response = await fetch('/api/save-game', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': session?.access_token ? `Bearer ${session.access_token}` : (adminPasscode ? `Admin ${adminPasscode}` : ''),
-          'x-admin-key': adminPasscode || ''
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           game: parsedGame,
@@ -894,85 +885,6 @@ export default function UploadPage() {
         </p>
       </div>
 
-      {/* Ingestion Authorization Status Banner */}
-      {!isLoggedIn ? (
-        <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-800 text-amber-950 shadow-xs">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <Lock className="w-5 h-5 text-amber-800 shrink-0" />
-              <div>
-                <span className="font-black text-xs uppercase block">Guest / Spectator Mode</span>
-                <p className="text-[11px] text-amber-900 mt-0.5">
-                  Anyone can browse stats and preview save states locally. To submit official match scores to Supabase, you must be logged in as a verified league player or commissioner.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowAdminUnlock(!showAdminUnlock)}
-                className="px-3 py-1.5 bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold uppercase border border-amber-800 transition cursor-pointer"
-              >
-                ⚡ Commissioner Unlock
-              </button>
-              <Link
-                href="/login?redirect=/upload"
-                className="px-3.5 py-1.5 bg-black text-white text-xs font-black uppercase tracking-wider hover:bg-red-700 transition border border-black flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Log In</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Quick Admin Passcode Unlock Input */}
-          {showAdminUnlock && (
-            <div className="mt-3 pt-3 border-t border-amber-800/30 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <input
-                type="password"
-                placeholder="Enter Commissioner Passcode (e.g. admin, nhl95)..."
-                value={adminPassInput}
-                onChange={(e) => {
-                  setAdminPassInput(e.target.value);
-                  setAdminUnlockError(null);
-                }}
-                className="px-3 py-1 text-xs font-mono bg-white border border-amber-900 text-black flex-1 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={async () => {
-                  const res = await signInAsAdmin(adminPassInput);
-                  if (!res.success) {
-                    setAdminUnlockError(res.error || 'Invalid passcode');
-                  } else {
-                    setShowAdminUnlock(false);
-                  }
-                }}
-                className="px-4 py-1 bg-red-800 hover:bg-black text-white text-xs font-bold uppercase border border-black cursor-pointer"
-              >
-                Unlock Ingestion
-              </button>
-              {adminUnlockError && (
-                <span className="text-xs text-red-700 font-bold">{adminUnlockError}</span>
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="mb-6 p-3 bg-emerald-50 border-2 border-emerald-800 text-emerald-950 flex items-center justify-between text-xs font-bold uppercase shadow-xs">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-            <span>
-              Authenticated League Staff: <strong>{profile?.coach_name || user?.email}</strong> {profile?.team_name ? `(${profile.team_name})` : ''} • Ready for Ingestion.
-            </span>
-          </div>
-          <span className="text-[10px] font-mono bg-emerald-200 text-emerald-900 px-2 py-0.5 border border-emerald-600 font-bold">
-            {isAdmin ? 'Commissioner / Admin' : 'Authorized Coach'}
-          </span>
-        </div>
-      )}
-
-
       {/* Control Strip & Season Selector */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-white border-2 border-black p-4 mb-6 shadow-sm">
         <div className="flex items-center gap-3 flex-wrap">
@@ -1020,16 +932,6 @@ export default function UploadPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {!isLoggedIn ? (
-            <button
-              onClick={() => router.push('/login?redirect=/upload')}
-              className="flex items-center gap-2 px-4 py-2.5 bg-black hover:bg-red-700 text-white font-black text-xs md:text-sm uppercase tracking-wider border-2 border-black transition shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] cursor-pointer"
-              title="Log in with your league account to submit game stats"
-            >
-              <Lock className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>Log In to Submit Stats</span>
-            </button>
-          ) : (
             <button
               onClick={parsedGame ? handleSaveToSupabase : () => document.getElementById('file-input')?.click()}
               disabled={isSaving || (Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
@@ -1049,7 +951,6 @@ export default function UploadPage() {
                   : "Submit to Supabase"}
               </span>
             </button>
-          )}
         </div>
       </div>
 
