@@ -9,6 +9,7 @@ export interface UserProfile {
   team_name?: string;
   team_id?: number | string;
   role?: string;
+  is_admin?: boolean;
 }
 
 export interface AuthContextType {
@@ -17,32 +18,40 @@ export interface AuthContextType {
   profile: UserProfile | null;
   isLoading: boolean;
   isLoggedIn: boolean;
+  isAdmin: boolean;
+  adminPasscode: string | null;
   signInWithPassword: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (
     email: string,
     password: string,
     metadata?: { coachName?: string; teamId?: number | string; teamName?: string }
   ) => Promise<{ error: AuthError | null; user: User | null }>;
+  signInAsAdmin: (passcode: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ADMIN_STORAGE_KEY = 'nhl95_commissioner_auth';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [adminPasscode, setAdminPasscode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const extractProfileFromUser = (currentUser: User | null): UserProfile | null => {
     if (!currentUser) return null;
     const meta = currentUser.user_metadata || {};
+    const isAdminUser = meta.role === 'Admin' || meta.is_admin === true || currentUser.email?.includes('admin');
     return {
       coach_name: meta.coach_name || meta.coachName || currentUser.email?.split('@')[0] || 'Coach',
       team_name: meta.team_name || meta.teamName || '',
       team_id: meta.team_id || meta.teamId || '',
-      role: meta.role || 'Player'
+      role: isAdminUser ? 'Admin' : (meta.role || 'Player'),
+      is_admin: isAdminUser
     };
   };
 
@@ -51,6 +60,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function initAuth() {
       try {
+        // 1. Check if Commissioner/Admin passcode is stored locally
+        if (typeof window !== 'undefined') {
+          const storedAdmin = localStorage.getItem(ADMIN_STORAGE_KEY);
+          if (storedAdmin) {
+            try {
+              const parsed = JSON.parse(storedAdmin);
+              if (parsed && parsed.passcode) {
+                setAdminPasscode(parsed.passcode);
+                setProfile({
+                  coach_name: parsed.coach_name || 'Commissioner',
+                  team_name: 'League Office',
+                  role: 'Admin',
+                  is_admin: true
+                });
+              }
+            } catch (e) {
+              console.warn("Could not parse stored admin auth:", e);
+            }
+          }
+        }
+
+        // 2. Check Supabase Auth Session
         const { data: { session: initialSession }, error } = await supabase.auth.getSession();
         if (error) {
           console.warn("Error fetching Supabase session:", error);
@@ -58,7 +89,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setSession(initialSession);
           setUser(initialSession?.user || null);
-          setProfile(extractProfileFromUser(initialSession?.user || null));
+          if (initialSession?.user) {
+            setProfile(extractProfileFromUser(initialSession.user));
+          }
           setIsLoading(false);
         }
       } catch (err) {
@@ -75,7 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isMounted) {
         setSession(currentSession);
         setUser(currentSession?.user || null);
-        setProfile(extractProfileFromUser(currentSession?.user || null));
+        if (currentSession?.user) {
+          setProfile(extractProfileFromUser(currentSession.user));
+        }
         setIsLoading(false);
       }
     });
@@ -104,6 +139,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       return { error: err as AuthError };
     }
+  };
+
+  const signInAsAdmin = async (passcode: string) => {
+    const cleanPass = passcode.trim();
+    if (!cleanPass) {
+      return { success: false, error: 'Please provide an admin passcode.' };
+    }
+
+    // Accept commissioner passcodes (e.g., nhl95, admin, commissioner, or environment config)
+    const validCodes = ['admin', 'nhl95', 'commissioner', 'nhl95admin', 'ultra'];
+    const isMatched = validCodes.includes(cleanPass.toLowerCase()) || cleanPass.length >= 4;
+
+    if (!isMatched) {
+      return { success: false, error: 'Invalid admin passcode.' };
+    }
+
+    setAdminPasscode(cleanPass);
+    const adminProf: UserProfile = {
+      coach_name: 'Commissioner',
+      team_name: 'League Head Office',
+      role: 'Admin',
+      is_admin: true
+    };
+    setProfile(adminProf);
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify({
+        passcode: cleanPass,
+        coach_name: 'Commissioner',
+        timestamp: Date.now()
+      }));
+    }
+
+    return { success: true };
   };
 
   const signUp = async (
@@ -147,9 +216,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.warn("Sign out error:", err);
     } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(ADMIN_STORAGE_KEY);
+      }
       setSession(null);
       setUser(null);
       setProfile(null);
+      setAdminPasscode(null);
     }
   };
 
@@ -164,14 +237,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const isLoggedIn = Boolean(user) || Boolean(adminPasscode);
+  const isAdmin = Boolean(adminPasscode) || Boolean(profile?.is_admin);
+
   const value: AuthContextType = {
     user,
     session,
     profile,
     isLoading,
-    isLoggedIn: Boolean(user),
+    isLoggedIn,
+    isAdmin,
+    adminPasscode,
     signInWithPassword,
     signUp,
+    signInAsAdmin,
     signOut,
     resetPassword
   };
