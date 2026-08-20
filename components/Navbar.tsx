@@ -76,7 +76,7 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* Mobile Hamburger Toggle */}
+        {/* Mobile Hamburger Toggle (Visible on screens < md) */}
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -87,14 +87,14 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* Desktop Navigation Links */}
+      {/* Desktop Navigation Links Row (Visible on screens >= md) */}
       <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-8 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
         <Link href="/team" className="hover:underline transition text-red-700">Teams</Link>
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
-        {/* Rosters Dropdown */}
+        {/* Desktop Dropdown for Rosters & Trades */}
         <div
           className="relative"
           onMouseEnter={() => setIsRostersOpen(true)}
@@ -112,7 +112,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Stats Dropdown */}
+        {/* Desktop Dropdown for Stats */}
         <div
           className="relative"
           onMouseEnter={() => setIsStatsOpen(true)}
@@ -142,9 +142,10 @@ export default function Navbar() {
         </Link>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer (Visible on screens < md when toggled) */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
+
           <Link
             href="/team"
             onClick={closeMobileMenu}
