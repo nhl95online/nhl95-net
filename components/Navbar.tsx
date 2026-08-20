@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, ChevronDown, LogIn } from 'lucide-react';
+import { Menu, X, ChevronDown } from 'lucide-react';
 
 export default function Navbar() {
   const [isRostersOpen, setIsRostersOpen] = useState(false);
@@ -76,7 +76,7 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* Mobile Hamburger Toggle (Visible on screens < md) */}
+        {/* Mobile Hamburger Toggle */}
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -87,14 +87,14 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* Desktop Navigation Links Row (Visible on screens >= md) */}
+      {/* Desktop Navigation Links */}
       <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-8 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
         <Link href="/team" className="hover:underline transition text-red-700">Teams</Link>
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
-        {/* Desktop Dropdown for Rosters & Trades */}
+        {/* Rosters Dropdown */}
         <div
           className="relative"
           onMouseEnter={() => setIsRostersOpen(true)}
@@ -112,7 +112,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Desktop Dropdown for Stats */}
+        {/* Stats Dropdown */}
         <div
           className="relative"
           onMouseEnter={() => setIsStatsOpen(true)}
@@ -140,33 +140,11 @@ export default function Navbar() {
         >
           <span>Upload</span>
         </Link>
-
-        {/* Desktop Login Button */}
-        <Link
-          href="/login"
-          className="hover:bg-amber-400 bg-amber-300 text-black border border-black px-2.5 py-1 text-xs font-black rounded-xs shadow-2xs flex items-center gap-1 transition-colors"
-          title="Log in as Coach or Commissioner"
-        >
-          <LogIn className="w-3.5 h-3.5" />
-          <span>Login</span>
-        </Link>
       </div>
 
-      {/* Mobile Drawer (Visible on screens < md when toggled) */}
+      {/* Mobile Drawer */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
-          {/* Mobile Login Link */}
-          <div className="p-2.5 bg-black text-white flex items-center justify-between rounded-xs mb-1">
-            <Link
-              href="/login"
-              onClick={closeMobileMenu}
-              className="w-full text-center text-xs text-amber-300 hover:text-white flex items-center justify-center gap-1.5 font-bold"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Coach / Player Login</span>
-            </Link>
-          </div>
-
           <Link
             href="/team"
             onClick={closeMobileMenu}
