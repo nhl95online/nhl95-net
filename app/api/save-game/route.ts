@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { supabase as defaultSupabase } from '@/lib/supabase';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 
-                    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || 
-                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-                    '';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false }
-});
-
+const supabase = serviceKey
+  ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
+  : defaultSupabase;
 
 import {
   parseTimeToDayFraction,
@@ -1102,9 +1099,9 @@ async function sendDiscordBoxscore(params: {
 
   // 1. Period Line Score
   const periodTable = `\`\`\`\n` +
-    `Team   1st  2nd  3rd  OT  Total\n` +
-    `${pad(awayCode, 5, true)}  ${pad(game.awayTeam?.goalsP1 || 0, 2, false)}   ${pad(game.awayTeam?.goalsP2 || 0, 2, false)}   ${pad(game.awayTeam?.goalsP3 || 0, 2, false)}   ${isOT ? pad(game.awayTeam?.goalsOT || 0, 2, false) + '   ' : ' 0   '}${pad(awayGoals, 2, false)}\n` +
-    `${pad(homeCode, 5, true)}  ${pad(game.homeTeam?.goalsP1 || 0, 2, false)}   ${pad(game.homeTeam?.goalsP2 || 0, 2, false)}   ${pad(game.homeTeam?.goalsP3 || 0, 2, false)}   ${isOT ? pad(game.homeTeam?.goalsOT || 0, 2, false) + '   ' : ' 0   '}${pad(homeGoals, 2, false)}\n` +
+    `      1rst 2nd 3rd OT Total\n` +
+    `${pad(awayCode, 4, true)}  ${pad(game.awayTeam?.goalsP1 || 0, 3, false)} ${pad(game.awayTeam?.goalsP2 || 0, 3, false)} ${pad(game.awayTeam?.goalsP3 || 0, 3, false)} ${isOT ? pad(game.awayTeam?.goalsOT || 0, 2, false) : ' 0'} ${pad(awayGoals, 4, false)}\n` +
+    `${pad(homeCode, 4, true)}  ${pad(game.homeTeam?.goalsP1 || 0, 3, false)} ${pad(game.homeTeam?.goalsP2 || 0, 3, false)} ${pad(game.homeTeam?.goalsP3 || 0, 3, false)} ${isOT ? pad(game.homeTeam?.goalsOT || 0, 2, false) : ' 0'} ${pad(homeGoals, 4, false)}\n` +
     `\`\`\``;
 
   // 2. Side-by-Side Game Stats Table (matching exact layout from retro screen)
