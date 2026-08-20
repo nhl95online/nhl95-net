@@ -1060,6 +1060,120 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
   }
 }
 
+export interface ThreeStarsCandidate {
+  star: number;
+  name: string;
+  team: string;
+  pos: string;
+  summary: string;
+  score: number;
+}
+
+function calculateThreeStars(game: any, awayCode: string, homeCode: string): ThreeStarsCandidate[] {
+  const candidates: { name: string; team: string; pos: string; summary: string; score: number }[] = [];
+  const awayGoals = Number(game?.awayTeam?.goals || 0);
+  const homeGoals = Number(game?.homeTeam?.goals || 0);
+  const awayWon = awayGoals > homeGoals;
+  const homeWon = homeGoals > awayGoals;
+
+  // 1. Away Goalies
+  (game?.awayGoalies || []).forEach((g: any) => {
+    const ga = Number(g.ga ?? g.goals_against ?? 0);
+    const sv = Number(g.saves ?? g.sv ?? 0);
+    const sh = Number(g.shots ?? g.shots_against ?? (sv + ga) ?? 0);
+    const svPct = sh > 0 ? sv / sh : 0;
+    if (sh === 0 && ga === 0) return;
+
+    let score = (sv * 0.3) + (awayWon ? 4.5 : 0) - (ga * 1.2);
+    if (ga === 0 && sh >= 4) score += 5.0;
+    if (svPct >= 0.85) score += 2.0;
+
+    const summary = `${sv} SV on ${sh} SH (${(svPct * 100).toFixed(1)}%)${awayWon ? ' [WIN]' : ''}${ga === 0 && sh > 0 ? ' [SO]' : ''}`;
+    candidates.push({ name: g.name, team: awayCode, pos: 'G', summary, score });
+  });
+
+  // 2. Home Goalies
+  (game?.homeGoalies || []).forEach((g: any) => {
+    const ga = Number(g.ga ?? g.goals_against ?? 0);
+    const sv = Number(g.saves ?? g.sv ?? 0);
+    const sh = Number(g.shots ?? g.shots_against ?? (sv + ga) ?? 0);
+    const svPct = sh > 0 ? sv / sh : 0;
+    if (sh === 0 && ga === 0) return;
+
+    let score = (sv * 0.3) + (homeWon ? 4.5 : 0) - (ga * 1.2);
+    if (ga === 0 && sh >= 4) score += 5.0;
+    if (svPct >= 0.85) score += 2.0;
+
+    const summary = `${sv} SV on ${sh} SH (${(svPct * 100).toFixed(1)}%)${homeWon ? ' [WIN]' : ''}${ga === 0 && sh > 0 ? ' [SO]' : ''}`;
+    candidates.push({ name: g.name, team: homeCode, pos: 'G', summary, score });
+  });
+
+  // 3. Away Skaters
+  (game?.awaySkaters || []).forEach((s: any) => {
+    const g = Number(s.goals ?? s.g ?? 0);
+    const a = Number(s.assists ?? s.a ?? 0);
+    const pts = g + a;
+    const sog = Number(s.sog ?? s.shots ?? 0);
+    const chk = Number(s.checks ?? s.chk ?? 0);
+    const ppp = Number(s.ppp ?? s.pp_points ?? 0);
+    const shp = Number(s.shp ?? s.sh_points ?? 0);
+
+    let score = (g * 4.0) + (a * 2.5) + (sog * 0.25) + (chk * 0.15) + (ppp * 0.5) + (shp * 1.0) + (awayWon && pts > 0 ? 1.5 : 0);
+    if (pts === 0 && sog < 4 && chk < 4) return;
+
+    const statParts: string[] = [];
+    if (g > 0) statParts.push(`${g}G`);
+    if (a > 0) statParts.push(`${a}A`);
+    if (pts > 0) statParts.push(`(${pts} PTS)`);
+    if (sog > 0) statParts.push(`${sog} SOG`);
+    if (chk > 2) statParts.push(`${chk} CHK`);
+
+    candidates.push({
+      name: s.name,
+      team: awayCode,
+      pos: s.pos || 'F',
+      summary: statParts.join(', ') || `${sog} SOG`,
+      score
+    });
+  });
+
+  // 4. Home Skaters
+  (game?.homeSkaters || []).forEach((s: any) => {
+    const g = Number(s.goals ?? s.g ?? 0);
+    const a = Number(s.assists ?? s.a ?? 0);
+    const pts = g + a;
+    const sog = Number(s.sog ?? s.shots ?? 0);
+    const chk = Number(s.checks ?? s.chk ?? 0);
+    const ppp = Number(s.ppp ?? s.pp_points ?? 0);
+    const shp = Number(s.shp ?? s.sh_points ?? 0);
+
+    let score = (g * 4.0) + (a * 2.5) + (sog * 0.25) + (chk * 0.15) + (ppp * 0.5) + (shp * 1.0) + (homeWon && pts > 0 ? 1.5 : 0);
+    if (pts === 0 && sog < 4 && chk < 4) return;
+
+    const statParts: string[] = [];
+    if (g > 0) statParts.push(`${g}G`);
+    if (a > 0) statParts.push(`${a}A`);
+    if (pts > 0) statParts.push(`(${pts} PTS)`);
+    if (sog > 0) statParts.push(`${sog} SOG`);
+    if (chk > 2) statParts.push(`${chk} CHK`);
+
+    candidates.push({
+      name: s.name,
+      team: homeCode,
+      pos: s.pos || 'F',
+      summary: statParts.join(', ') || `${sog} SOG`,
+      score
+    });
+  });
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  return candidates.slice(0, 3).map((c, idx) => ({
+    star: idx + 1,
+    ...c
+  }));
+}
+
 async function sendDiscordBoxscore(params: {
   game: any;
   seasonId: number | string;
@@ -1215,6 +1329,15 @@ async function sendDiscordBoxscore(params: {
     penaltyBlock = "`No penalties assessed.`";
   }
 
+  // 0. Three Stars of the Game
+  const threeStars = calculateThreeStars(game, awayCode, homeCode);
+  const threeStarsBlock = threeStars.length > 0
+    ? threeStars.map((s, idx) => {
+      const starPrefix = idx === 0 ? '⭐ **1st Star:**' : idx === 1 ? '⭐⭐ **2nd Star:**' : '⭐⭐⭐ **3rd Star:**';
+      return `${starPrefix} **${s.name}** (${s.team}) — \`${s.summary}\``;
+    }).join('\n')
+    : null;
+
   // Build Rich Discord Embed
   const embed = {
     author: {
@@ -1226,6 +1349,7 @@ async function sendDiscordBoxscore(params: {
     color: awayGoals > homeGoals ? 0x2b82d9 : 0xd9532b,
     thumbnail: winningLogo ? { url: winningLogo } : undefined,
     fields: [
+      ...(threeStarsBlock ? [{ name: "🌟 Three Stars of the Game", value: threeStarsBlock, inline: false }] : []),
       { name: "📊 Period Summary", value: periodTable, inline: false },
       { name: "⚡ Game Stats", value: gameStatsTable, inline: false },
       { name: `🔴 ${awayName.toUpperCase()} (${awayCode}) LINEUP`, value: formatBoxscoreBlock(game.awayGoalies, game.awaySkaters), inline: false },

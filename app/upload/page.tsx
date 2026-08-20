@@ -173,8 +173,122 @@ export function matchTeamFromList(code: string, teamsList: any[]) {
 }
 
 // ==========================================
-// 2.5 RETRO BOXSCORE SCREEN COMPONENT
+// 2.5 RETRO BOXSCORE SCREEN COMPONENT & 3 STARS
 // ==========================================
+
+export interface ThreeStarsCandidate {
+  star: number;
+  name: string;
+  team: string;
+  pos: string;
+  summary: string;
+  score: number;
+}
+
+export function calculateThreeStars(game: any, awayCode: string, homeCode: string): ThreeStarsCandidate[] {
+  const candidates: { name: string; team: string; pos: string; summary: string; score: number }[] = [];
+  const awayGoals = Number(game?.awayTeam?.goals || 0);
+  const homeGoals = Number(game?.homeTeam?.goals || 0);
+  const awayWon = awayGoals > homeGoals;
+  const homeWon = homeGoals > awayGoals;
+
+  // 1. Away Goalies
+  (game?.awayGoalies || []).forEach((g: any) => {
+    const ga = Number(g.ga ?? g.goals_against ?? 0);
+    const sv = Number(g.saves ?? g.sv ?? 0);
+    const sh = Number(g.shots ?? g.shots_against ?? (sv + ga) ?? 0);
+    const svPct = sh > 0 ? sv / sh : 0;
+    if (sh === 0 && ga === 0) return;
+
+    let score = (sv * 0.3) + (awayWon ? 4.5 : 0) - (ga * 1.2);
+    if (ga === 0 && sh >= 4) score += 5.0;
+    if (svPct >= 0.85) score += 2.0;
+
+    const summary = `${sv} SV on ${sh} SH (${(svPct * 100).toFixed(1)}%)${awayWon ? ' [WIN]' : ''}${ga === 0 && sh > 0 ? ' [SO]' : ''}`;
+    candidates.push({ name: g.name, team: awayCode, pos: 'G', summary, score });
+  });
+
+  // 2. Home Goalies
+  (game?.homeGoalies || []).forEach((g: any) => {
+    const ga = Number(g.ga ?? g.goals_against ?? 0);
+    const sv = Number(g.saves ?? g.sv ?? 0);
+    const sh = Number(g.shots ?? g.shots_against ?? (sv + ga) ?? 0);
+    const svPct = sh > 0 ? sv / sh : 0;
+    if (sh === 0 && ga === 0) return;
+
+    let score = (sv * 0.3) + (homeWon ? 4.5 : 0) - (ga * 1.2);
+    if (ga === 0 && sh >= 4) score += 5.0;
+    if (svPct >= 0.85) score += 2.0;
+
+    const summary = `${sv} SV on ${sh} SH (${(svPct * 100).toFixed(1)}%)${homeWon ? ' [WIN]' : ''}${ga === 0 && sh > 0 ? ' [SO]' : ''}`;
+    candidates.push({ name: g.name, team: homeCode, pos: 'G', summary, score });
+  });
+
+  // 3. Away Skaters
+  (game?.awaySkaters || []).forEach((s: any) => {
+    const g = Number(s.goals ?? s.g ?? 0);
+    const a = Number(s.assists ?? s.a ?? 0);
+    const pts = g + a;
+    const sog = Number(s.sog ?? s.shots ?? 0);
+    const chk = Number(s.checks ?? s.chk ?? 0);
+    const ppp = Number(s.ppp ?? s.pp_points ?? 0);
+    const shp = Number(s.shp ?? s.sh_points ?? 0);
+
+    let score = (g * 4.0) + (a * 2.5) + (sog * 0.25) + (chk * 0.15) + (ppp * 0.5) + (shp * 1.0) + (awayWon && pts > 0 ? 1.5 : 0);
+    if (pts === 0 && sog < 4 && chk < 4) return;
+
+    const statParts: string[] = [];
+    if (g > 0) statParts.push(`${g}G`);
+    if (a > 0) statParts.push(`${a}A`);
+    if (pts > 0) statParts.push(`(${pts} PTS)`);
+    if (sog > 0) statParts.push(`${sog} SOG`);
+    if (chk > 2) statParts.push(`${chk} CHK`);
+
+    candidates.push({
+      name: s.name,
+      team: awayCode,
+      pos: s.pos || 'F',
+      summary: statParts.join(', ') || `${sog} SOG`,
+      score
+    });
+  });
+
+  // 4. Home Skaters
+  (game?.homeSkaters || []).forEach((s: any) => {
+    const g = Number(s.goals ?? s.g ?? 0);
+    const a = Number(s.assists ?? s.a ?? 0);
+    const pts = g + a;
+    const sog = Number(s.sog ?? s.shots ?? 0);
+    const chk = Number(s.checks ?? s.chk ?? 0);
+    const ppp = Number(s.ppp ?? s.pp_points ?? 0);
+    const shp = Number(s.shp ?? s.sh_points ?? 0);
+
+    let score = (g * 4.0) + (a * 2.5) + (sog * 0.25) + (chk * 0.15) + (ppp * 0.5) + (shp * 1.0) + (homeWon && pts > 0 ? 1.5 : 0);
+    if (pts === 0 && sog < 4 && chk < 4) return;
+
+    const statParts: string[] = [];
+    if (g > 0) statParts.push(`${g}G`);
+    if (a > 0) statParts.push(`${a}A`);
+    if (pts > 0) statParts.push(`(${pts} PTS)`);
+    if (sog > 0) statParts.push(`${sog} SOG`);
+    if (chk > 2) statParts.push(`${chk} CHK`);
+
+    candidates.push({
+      name: s.name,
+      team: homeCode,
+      pos: s.pos || 'F',
+      summary: statParts.join(', ') || `${sog} SOG`,
+      score
+    });
+  });
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  return candidates.slice(0, 3).map((c, idx) => ({
+    star: idx + 1,
+    ...c
+  }));
+}
 
 export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams: any[] }) {
   const awayTeam = matchTeamFromList(game.awayTeam.teamCode, dbTeams);
@@ -193,9 +307,35 @@ export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams
   const homeLogo = homeTeam?.logo_url || "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/brule_cup.png";
 
   const totalFaceoffs = (Number(game.awayTeam.faceoffWins) || 0) + (Number(game.homeTeam.faceoffWins) || 0);
+  const threeStars = calculateThreeStars(game, awayCode, homeCode);
 
   return (
-    <div className="bg-black text-white p-4 font-mono select-none overflow-x-auto border-4 border-neutral-900 shadow-2xl rounded-xs">
+    <div className="bg-black text-white p-4 font-mono select-none overflow-x-auto border-4 border-neutral-900 shadow-2xl rounded-xs space-y-4">
+      {/* Three Stars of the Game Banner */}
+      {threeStars.length > 0 && (
+        <div className="p-3 bg-neutral-950 border-2 border-yellow-500/70 rounded-xs shadow-md">
+          <div className="text-[11px] font-black uppercase tracking-widest text-yellow-400 mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">⭐ Three Stars of the Game</span>
+            <span className="text-[10px] text-slate-400 font-sans">Official League Stars</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+            {threeStars.map((star, idx) => (
+              <div key={idx} className="flex items-center gap-2 p-2 bg-neutral-900/90 border border-yellow-500/30 rounded-xs">
+                <span className="text-yellow-400 font-black text-xs shrink-0 font-mono">
+                  {idx === 0 ? '⭐ 1st' : idx === 1 ? '⭐⭐ 2nd' : '⭐⭐⭐ 3rd'}
+                </span>
+                <div className="truncate">
+                  <div className="font-bold text-white truncate text-xs">
+                    {star.name} <span className="text-[#00ff00]">({star.team})</span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 truncate font-sans">{star.summary}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="min-w-[1000px] grid grid-cols-12 gap-5 items-start text-xs">
 
         {/* LEFT COLUMN: Away & Home Rosters + Banners (Col-span 5) */}
@@ -203,17 +343,22 @@ export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams
 
           {/* AWAY TEAM SECTION */}
           <div>
-            {/* Away Banner */}
-            <div className="flex items-center justify-between bg-neutral-950 border border-white/30 p-1.5 mb-2.5">
-              <div className="flex items-center gap-2">
-                <img src={awayLogo} alt={awayCode} className="w-8 h-8 object-contain bg-black border border-white/40" />
-                <div className="bg-[#cc0000] border-2 border-white px-2 py-0.5 shadow-xs">
-                  <span className="font-black text-white text-xs tracking-wider uppercase drop-shadow-md">
+            {/* Away Team Logo & Score */}
+            <div className="flex items-center justify-between bg-black pb-2 mb-2">
+              <div className="flex items-center gap-3">
+                {awayLogo ? (
+                  <img
+                    src={awayLogo}
+                    alt={awayName}
+                    className="h-10 max-h-12 max-w-[280px] object-contain drop-shadow-md"
+                  />
+                ) : (
+                  <div className="bg-neutral-900 border border-white/40 px-3 py-1 text-white font-black text-xs uppercase tracking-wider">
                     {awayName} {awayCoach ? `• ${awayCoach}` : ''}
-                  </span>
-                </div>
+                  </div>
+                )}
               </div>
-              <span className="font-mono font-black text-3xl text-[#00ff00] px-2 drop-shadow-[0_0_8px_rgba(0,255,0,0.8)]">
+              <span className="font-mono font-black text-4xl text-[#00ff00] px-2 drop-shadow-[0_0_10px_rgba(0,255,0,0.9)]">
                 {game.awayTeam.goals}
               </span>
             </div>
@@ -293,17 +438,22 @@ export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams
 
           {/* HOME TEAM SECTION */}
           <div>
-            {/* Home Banner */}
-            <div className="flex items-center justify-between bg-neutral-950 border border-white/30 p-1.5 mb-2.5">
-              <div className="flex items-center gap-2">
-                <img src={homeLogo} alt={homeCode} className="w-8 h-8 object-contain bg-black border border-white/40" />
-                <div className="bg-[#003366] border-2 border-white px-2 py-0.5 shadow-xs">
-                  <span className="font-black text-white text-xs tracking-wider uppercase drop-shadow-md">
+            {/* Home Team Logo & Score */}
+            <div className="flex items-center justify-between bg-black pb-2 mb-2">
+              <div className="flex items-center gap-3">
+                {homeLogo ? (
+                  <img
+                    src={homeLogo}
+                    alt={homeName}
+                    className="h-10 max-h-12 max-w-[280px] object-contain drop-shadow-md"
+                  />
+                ) : (
+                  <div className="bg-neutral-900 border border-white/40 px-3 py-1 text-white font-black text-xs uppercase tracking-wider">
                     {homeName} {homeCoach ? `• ${homeCoach}` : ''}
-                  </span>
-                </div>
+                  </div>
+                )}
               </div>
-              <span className="font-mono font-black text-3xl text-[#00ff00] px-2 drop-shadow-[0_0_8px_rgba(0,255,0,0.8)]">
+              <span className="font-mono font-black text-4xl text-[#00ff00] px-2 drop-shadow-[0_0_10px_rgba(0,255,0,0.9)]">
                 {game.homeTeam.goals}
               </span>
             </div>
