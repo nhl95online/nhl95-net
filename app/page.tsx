@@ -258,246 +258,67 @@ export default function HomePage() {
       const numericLeagueId = Number(selectedSeason) || 40;
 
       try {
-        const [schedRes, statsRes, teamsRes, standingsRes] = await Promise.all([
-          supabase
-            .from('league_schedule')
-            .select('game_id, home_team_id, away_team_id, played, league_id, home_score, away_score, game_meta')
-            .eq('league_id', numericLeagueId)
-            .order('game_id', { ascending: true }),
-          supabase
-            .from('league_gamestats')
-            .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats')
-            .eq('league_id', numericLeagueId),
-          supabase
-            .from('league_teams')
-            .select('team_id, team_name, abbreviation, logo_url, coach_id, league_id'),
+        const [standingsRes, teamsRes] = await Promise.all([
           supabase
             .from('league_standings')
             .select(`
-              team_id, gp, w, l, t, otl, pts, gf, ga, gd, is_champion,
-              league_teams(abbreviation, logo_url)
+              team_id, gp, w, l, t, otl, pts, is_champion,
+              league_teams(team_id, abbreviation, logo_url, team_name)
             `)
             .eq('season_id', numericLeagueId)
-            .order('pts', { ascending: false })
+            .order('pts', { ascending: false }),
+          supabase
+            .from('league_teams')
+            .select('team_id, team_name, abbreviation, logo_url')
         ]);
 
         if (!isMounted) return;
 
-        const allScheduleData = schedRes.data || [];
-        const statsData = statsRes.data || [];
-        const allTeamsData = teamsRes.data || [];
-        const standardData = standingsRes.data || [];
+        const standingsData = standingsRes.data || [];
+        const allTeams = teamsRes.data || [];
 
-        // Champion mapping from league_standings
-        const championMap = new Map<number, boolean>();
-        standardData.forEach((row: any) => {
-          if (row.is_champion) {
-            championMap.set(Number(row.team_id), true);
-          }
+        // Build fallback lookup for teams
+        const teamMap = new Map<number, any>();
+        allTeams.forEach((t: any) => {
+          teamMap.set(Number(t.team_id), t);
         });
 
-        // If there are played games in gamestats or schedule, compute live standings
-        if (statsData.length > 0 || allScheduleData.some((g: any) => {
-          const rawPlayed = String(g.played || '').trim().toLowerCase();
-          return rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
-        })) {
-          const teamMap: Record<number, any> = {};
+        const formatted = standingsData.map((row: any) => {
+          const tId = Number(row.team_id);
+          const meta = teamMap.get(tId);
 
-          // Collect active team IDs for this season
-          const activeTeamIds = new Set<number>();
-          allTeamsData.forEach((t: any) => {
-            if (Number(t.league_id) === numericLeagueId) activeTeamIds.add(Number(t.team_id));
-          });
-          allScheduleData.forEach((g: any) => {
-            const h = Number(g.home_team_id);
-            const a = Number(g.away_team_id);
-            if (h && h !== 999 && h !== 0 && h !== 68) activeTeamIds.add(h);
-            if (a && a !== 999 && a !== 0 && a !== 68) activeTeamIds.add(a);
-          });
-          statsData.forEach((s: any) => {
-            const h = Number(s.home_team_id);
-            const a = Number(s.away_team_id);
-            if (h && h !== 999 && h !== 0 && h !== 68) activeTeamIds.add(h);
-            if (a && a !== 999 && a !== 0 && a !== 68) activeTeamIds.add(a);
-          });
+          const teamObj = Array.isArray(row.league_teams)
+            ? row.league_teams[0]
+            : row.league_teams;
 
-          // Also add any teams from standardData
-          standardData.forEach((s: any) => {
-            const tId = Number(s.team_id);
-            if (tId && tId !== 999 && tId !== 0 && tId !== 68) activeTeamIds.add(tId);
-          });
+          const abbr = teamObj?.abbreviation || meta?.abbreviation || (tId ? `TM${tId}` : 'N/A');
+          const logo = teamObj?.logo_url || meta?.logo_url || null;
 
-          activeTeamIds.forEach((tId) => {
-            const tInfo = allTeamsData.find((t: any) => Number(t.team_id) === tId);
-            teamMap[tId] = {
-              team_id: tId,
-              gp: 0,
-              w: 0,
-              l: 0,
-              t: 0,
-              otl: 0,
-              pts: 0,
-              gf: 0,
-              ga: 0,
-              is_champion: Boolean(championMap.get(tId)),
-              league_teams: {
-                abbreviation: tInfo?.abbreviation || `TM${tId}`,
-                logo_url: tInfo?.logo_url || null
-              }
-            };
-          });
-
-          const resolveTeamKey = (id: any): number | null => {
-            const num = Number(id);
-            if (!num || num === 999 || num === 0 || num === 68) return null;
-            if (teamMap[num]) return num;
-
-            const matchTeam = allTeamsData.find((t: any) =>
-              Number(t.team_id) === num || Number(t.coach_id) === num
-            );
-
-            if (matchTeam) {
-              const seasonMatch = allTeamsData.find((t: any) =>
-                Number(t.league_id) === numericLeagueId &&
-                (
-                  (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
-                  (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
-                  (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id))
-                )
-              );
-
-              if (seasonMatch && teamMap[Number(seasonMatch.team_id)]) {
-                return Number(seasonMatch.team_id);
-              }
-            }
-
-            const tInfo = matchTeam || allTeamsData.find((t: any) => Number(t.team_id) === num);
-            teamMap[num] = {
-              team_id: num,
-              gp: 0,
-              w: 0,
-              l: 0,
-              t: 0,
-              otl: 0,
-              pts: 0,
-              gf: 0,
-              ga: 0,
-              is_champion: Boolean(championMap.get(num)),
-              league_teams: {
-                abbreviation: tInfo?.abbreviation || `TM${num}`,
-                logo_url: tInfo?.logo_url || null
-              }
-            };
-            return num;
-          };
-
-          const applyGame = (rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any, statsObj?: any) => {
-            const hId = resolveTeamKey(rawHId);
-            const aId = resolveTeamKey(rawAId);
-
-            if (!hId || !aId || hId === aId) return;
-            if (!teamMap[hId] || !teamMap[aId]) return;
-
-            let isOT = false;
-            let isTie = false;
-
-            if (gameMeta) {
-              try {
-                const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
-                isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
-                  meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
-                isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
-              } catch {
-                const lowStr = String(gameMeta || '').toLowerCase();
-                isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
-                  lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
-                isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
-              }
-            }
-
-            if (!isOT && statsObj) {
-              try {
-                const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
-                const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
-                if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-                  Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
-                  isOT = true;
-                }
-              } catch { }
-            }
-
-            if (homeScore === awayScore && !isOT) {
-              isTie = true;
-            }
-
-            teamMap[hId].gp += 1;
-            teamMap[aId].gp += 1;
-            teamMap[hId].gf += homeScore;
-            teamMap[hId].ga += awayScore;
-            teamMap[aId].gf += awayScore;
-            teamMap[aId].ga += homeScore;
-
-            if (isTie) {
-              teamMap[hId].ties += 1;
-              teamMap[hId].pts += 1;
-              teamMap[aId].ties += 1;
-              teamMap[aId].pts += 1;
-            } else if (homeScore > awayScore) {
-              teamMap[hId].wins += 1;
-              teamMap[hId].pts += 2;
-              if (isOT) {
-                teamMap[aId].otl += 1;
-                teamMap[aId].pts += 1;
-              } else {
-                teamMap[aId].l += 1;
-              }
-            } else if (awayScore > homeScore) {
-              teamMap[aId].wins += 1;
-              teamMap[aId].pts += 2;
-              if (isOT) {
-                teamMap[hId].otl += 1;
-                teamMap[hId].pts += 1;
-              } else {
-                teamMap[hId].l += 1;
-              }
+          return {
+            ...row,
+            team_id: tId,
+            gp: Number(row.gp) || 0,
+            w: Number(row.w) || 0,
+            l: Number(row.l) || 0,
+            t: Number(row.t) || 0,
+            otl: Number(row.otl) || 0,
+            pts: Number(row.pts) || 0,
+            is_champion: Boolean(row.is_champion),
+            league_teams: {
+              abbreviation: abbr,
+              logo_url: logo
             }
           };
+        });
 
-          const processedStatsGameIds = new Set<string>();
-          statsData.forEach((stats: any) => {
-            const gIdStr = String(stats.game_id).trim();
-            processedStatsGameIds.add(gIdStr);
-            const homeScore = Number(stats.home_score) || 0;
-            const awayScore = Number(stats.away_score) || 0;
-            applyGame(stats.home_team_id, stats.away_team_id, homeScore, awayScore, stats.game_meta, stats);
-          });
+        // Secondary sort: pts DESC, wins DESC, gp ASC
+        formatted.sort((a: any, b: any) => {
+          if (b.pts !== a.pts) return b.pts - a.pts;
+          if (b.w !== a.w) return b.w - a.w;
+          return a.gp - b.gp;
+        });
 
-          allScheduleData.forEach((game: any) => {
-            const gIdStr = String(game.game_id).trim();
-            const rawPlayed = String(game.played || '').trim().toLowerCase();
-            const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
-
-            if (isPlayed && !processedStatsGameIds.has(gIdStr) && game.game_meta) {
-              const homeScore = Number(game.home_score) || 0;
-              const awayScore = Number(game.away_score) || 0;
-              applyGame(game.home_team_id, game.away_team_id, homeScore, awayScore, game.game_meta, game);
-            }
-          });
-
-          const freshStandings = Object.values(teamMap);
-          freshStandings.sort((a: any, b: any) => {
-            if (b.pts !== a.pts) return b.pts - a.pts;
-            if (b.w !== a.w) return b.w - a.w;
-            const gdA = (a.gf || 0) - (a.ga || 0);
-            const gdB = (b.gf || 0) - (b.ga || 0);
-            if (gdB !== gdA) return gdB - gdA;
-            return (a.league_teams?.abbreviation || '').localeCompare(b.league_teams?.abbreviation || '');
-          });
-
-          setStandings(freshStandings);
-        } else {
-          setStandings(standardData);
-        }
+        setStandings(formatted);
       } catch (err) {
         console.error("DEBUG - Error loading standings:", err);
       }
@@ -505,19 +326,19 @@ export default function HomePage() {
 
     loadStandings();
 
-    // Subscribe to real-time changes on league_gamestats, league_standings, and league_schedule
+    // Subscribe to real-time changes on league_standings, league_gamestats, and league_schedule
     const channel = supabase
       .channel(`realtime-standings-${selectedSeason}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'league_gamestats' },
+        { event: '*', schema: 'public', table: 'league_standings' },
         () => {
           loadStandings();
         }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'league_standings' },
+        { event: '*', schema: 'public', table: 'league_gamestats' },
         () => {
           loadStandings();
         }
@@ -848,7 +669,7 @@ export default function HomePage() {
                       )}
                     </td>
                     <td className="py-1 text-center font-mono">
-                      {s.w ?? 0}-{s.l ?? 0}-{s.t ?? 0}-{s.otl ?? 0}
+                      {(s.w ?? s.wins ?? 0)}-{(s.l ?? s.losses ?? 0)}-{(s.t ?? s.ties ?? 0)}-{(s.otl ?? s.otLosses ?? 0)}
                     </td>
                     <td className="py-1 font-bold text-center">{s.pts ?? 0}</td>
                   </tr>
