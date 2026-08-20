@@ -3,19 +3,19 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Upload, FileCode, CheckCircle, AlertTriangle, Download, 
+import {
+  Upload, FileCode, CheckCircle, AlertTriangle, Download,
   Database, RefreshCw, Sliders, Settings, FileSpreadsheet, Eye, Check, Code,
   Lock, ShieldCheck, LogIn, PlusCircle, FileUp
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { 
-  SeasonConfig, 
-  TeamPositionCount, 
-  AVAILABLE_SEASONS, 
-  getSeasonConfig, 
-  registerSeason, 
-  loadSeasonFromJson, 
+import {
+  SeasonConfig,
+  TeamPositionCount,
+  AVAILABLE_SEASONS,
+  getSeasonConfig,
+  registerSeason,
+  loadSeasonFromJson,
   getAllSeasons,
   ParsedGame,
   ParsedTeamStats,
@@ -499,16 +499,16 @@ export default function UploadPage() {
       : (knownAway?.coach_id || awayTeamId);
 
     const homeCoachName = (homeTeam as any)?.league_coaches?.coach_name ||
-                          (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
-                          knownHome?.coach_name ||
-                          homeTeam?.team_name ||
-                          homeTeamCode;
+      (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
+      knownHome?.coach_name ||
+      homeTeam?.team_name ||
+      homeTeamCode;
 
     const awayCoachName = (awayTeam as any)?.league_coaches?.coach_name ||
-                          (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
-                          knownAway?.coach_name ||
-                          awayTeam?.team_name ||
-                          awayTeamCode;
+      (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
+      knownAway?.coach_name ||
+      awayTeam?.team_name ||
+      awayTeamCode;
 
     return {
       league_id: sId,
@@ -599,8 +599,8 @@ export default function UploadPage() {
         unplayedGameId: unplayed ? Number(unplayed.game_id) : null,
         playedGameIds: playedList,
         isAllPlayed,
-        message: isAllPlayed 
-          ? `All scheduled games for this matchup are already marked as PLAYED (Game #${playedList.join(', #')}).` 
+        message: isAllPlayed
+          ? `All scheduled games for this matchup are already marked as PLAYED (Game #${playedList.join(', #')}).`
           : `Scheduled fixture Game #${unplayed?.game_id} is unplayed and ready for submission.`
       });
     }
@@ -621,7 +621,7 @@ export default function UploadPage() {
     try {
       const response = await fetch('/api/save-game', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -643,7 +643,7 @@ export default function UploadPage() {
       setSaveSuccess(data.message || `Successfully committed ${parsedGame.matchup} to Supabase!`);
       setSaveDetails(data.details || null);
       setInsertedRowData(data.insertedRow || null);
-      
+
       // Update schedule status to reflected played
       setScheduleStatus(prev => ({
         ...prev,
@@ -932,25 +932,25 @@ export default function UploadPage() {
         </div>
 
         <div className="flex items-center gap-2">
-            <button
-              onClick={parsedGame ? handleSaveToSupabase : () => document.getElementById('file-input')?.click()}
-              disabled={isSaving || (Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
-              style={{ 
-                backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a', 
-                color: '#ffffff' 
-              }}
-              className="flex items-center gap-2.5 px-5 py-2.5 hover:opacity-90 text-white font-black text-xs md:text-sm uppercase tracking-wider border-2 border-black transition shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              title={parsedGame ? "Save parsed game stats to Supabase" : "Click to select a save state file and submit"}
-            >
-              <Database className="w-4 h-4 md:w-5 md:h-5 text-white shrink-0" />
-              <span>
-                {isSaving
-                  ? "Publishing to Supabase..."
-                  : parsedGame
+          <button
+            onClick={parsedGame ? handleSaveToSupabase : () => document.getElementById('file-input')?.click()}
+            disabled={isSaving || (Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
+            style={{
+              backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a',
+              color: '#ffffff'
+            }}
+            className="flex items-center gap-2.5 px-5 py-2.5 hover:opacity-90 text-white font-black text-xs md:text-sm uppercase tracking-wider border-2 border-black transition shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            title={parsedGame ? "Save parsed game stats to Supabase" : "Click to select a save state file and submit"}
+          >
+            <Database className="w-4 h-4 md:w-5 md:h-5 text-white shrink-0" />
+            <span>
+              {isSaving
+                ? "Publishing to Supabase..."
+                : parsedGame
                   ? (scheduleStatus.isAllPlayed && !allowOverwrite ? "Matchup Already Played" : "Push to Supabase")
                   : "Submit to Supabase"}
-              </span>
-            </button>
+            </span>
+          </button>
         </div>
       </div>
 
@@ -997,9 +997,8 @@ export default function UploadPage() {
 
       {/* Connection Test Banner */}
       {connectionStatus.message && (
-        <div className={`mb-6 p-4 border-2 text-xs font-bold uppercase flex items-center justify-between ${
-          connectionStatus.error ? 'bg-red-50 border-red-800 text-red-900' : 'bg-green-50 border-green-800 text-green-900'
-        }`}>
+        <div className={`mb-6 p-4 border-2 text-xs font-bold uppercase flex items-center justify-between ${connectionStatus.error ? 'bg-red-50 border-red-800 text-red-900' : 'bg-green-50 border-green-800 text-green-900'
+          }`}>
           <div className="flex items-center gap-2">
             {connectionStatus.error ? (
               <AlertTriangle className="w-5 h-5 text-red-700 shrink-0" />
@@ -1378,9 +1377,8 @@ export default function UploadPage() {
                   <button
                     key={t.id}
                     onClick={() => setActiveTab(t.id as any)}
-                    className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 ${
-                      activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
-                    }`}
+                    className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 ${activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
+                      }`}
                   >
                     {t.label}
                   </button>
@@ -1749,9 +1747,9 @@ export default function UploadPage() {
                         <button
                           onClick={handleSaveToSupabase}
                           disabled={isSaving || (Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
-                          style={{ 
-                            backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a', 
-                            color: '#ffffff' 
+                          style={{
+                            backgroundColor: (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) ? '#991b1b' : '#16a34a',
+                            color: '#ffffff'
                           }}
                           className="flex items-center gap-2 px-4 py-1.5 hover:opacity-90 text-white font-black text-xs uppercase border-2 border-black transition shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_rgba(0,0,0,1)] hover:translate-x-[1px] hover:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
@@ -1777,12 +1775,17 @@ export default function UploadPage() {
                       <div className="border border-black p-3 bg-white">
                         <div className="flex justify-between items-center mb-2 pb-1 border-b border-black/20">
                           <span className="font-bold text-xs uppercase text-green-900">2. league_player_stats_master</span>
-                          <span className="text-[10px] font-mono text-slate-500">{parsedGame.homeSkaters.length + parsedGame.awaySkaters.length + parsedGame.homeGoalies.length + parsedGame.awayGoalies.length} Player Rows</span>
+                          <span className="text-[10px] font-mono text-slate-500">
+                            {[...parsedGame.awaySkaters, ...parsedGame.homeSkaters].filter(s => (s.toiSeconds || 0) > 0 || s.goals > 0 || s.assists > 0 || s.sog > 0 || s.checks > 0 || s.pim > 0).length +
+                              [...parsedGame.awayGoalies, ...parsedGame.homeGoalies].filter(g => (g.toiSeconds || 0) > 0 || g.shots > 0 || g.saves > 0 || g.ga > 0 || g.w || g.l || g.t || g.otl).length} Player Rows
+                          </span>
                         </div>
                         <pre className="p-2 bg-slate-900 text-amber-300 font-mono text-[10px] overflow-x-auto max-h-[160px]">
                           {JSON.stringify([
-                            ...parsedGame.awaySkaters.slice(0, 2).map(s => ({ player: s.name, pos: s.pos, g: s.goals, a: s.assists, pts: s.points, sog: s.sog, chk: s.checks, pim: s.pim, ppp: s.ppp, shp: s.shp, toi: s.toiSeconds })),
-                            ...parsedGame.awayGoalies.slice(0, 1).map(g => ({ goalie: g.name, pos: 'G', ga: g.ga, sv: g.saves, sog: g.shots, w: g.w, l: g.l, t: g.t, otl: g.otl, toi: g.toiSeconds }))
+                            ...parsedGame.awaySkaters.filter(s => (s.toiSeconds || 0) > 0 || s.goals > 0 || s.assists > 0 || s.sog > 0 || s.checks > 0 || s.pim > 0).map(s => ({ player: s.name, pos: s.pos, g: s.goals, a: s.assists, pts: s.points, sog: s.sog, chk: s.checks, pim: s.pim, ppp: s.ppp, shp: s.shp, toi: s.toiSeconds })),
+                            ...parsedGame.homeSkaters.filter(s => (s.toiSeconds || 0) > 0 || s.goals > 0 || s.assists > 0 || s.sog > 0 || s.checks > 0 || s.pim > 0).map(s => ({ player: s.name, pos: s.pos, g: s.goals, a: s.assists, pts: s.points, sog: s.sog, chk: s.checks, pim: s.pim, ppp: s.ppp, shp: s.shp, toi: s.toiSeconds })),
+                            ...parsedGame.awayGoalies.filter(g => (g.toiSeconds || 0) > 0 || g.shots > 0 || g.saves > 0 || g.ga > 0 || g.w || g.l || g.t || g.otl).map(g => ({ goalie: g.name, pos: 'G', ga: g.ga, sv: g.saves, sog: g.shots, w: g.w, l: g.l, t: g.t, otl: g.otl, toi: g.toiSeconds })),
+                            ...parsedGame.homeGoalies.filter(g => (g.toiSeconds || 0) > 0 || g.shots > 0 || g.saves > 0 || g.ga > 0 || g.w || g.l || g.t || g.otl).map(g => ({ goalie: g.name, pos: 'G', ga: g.ga, sv: g.saves, sog: g.shots, w: g.w, l: g.l, t: g.t, otl: g.otl, toi: g.toiSeconds }))
                           ], null, 2)}
                         </pre>
                       </div>

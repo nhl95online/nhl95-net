@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     let teamsData: any[] | null = null;
     const { data: seasonTeams } = await supabase
       .from('league_teams')
-      .select('team_id, team_name, abbreviation, coach_id, league_id, league_coaches(coach_id, coach_name)')
+      .select('team_id, team_name, abbreviation, coach_id, league_id, logo_url, league_coaches(coach_id, coach_name)')
       .eq('league_id', sId);
 
     if (seasonTeams && seasonTeams.length > 0) {
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     } else {
       const { data: allTeams } = await supabase
         .from('league_teams')
-        .select('team_id, team_name, abbreviation, coach_id, league_id, league_coaches(coach_id, coach_name)');
+        .select('team_id, team_name, abbreviation, coach_id, league_id, logo_url, league_coaches(coach_id, coach_name)');
       teamsData = allTeams;
     }
 
@@ -88,16 +88,16 @@ export async function POST(req: NextRequest) {
       : (knownAway?.coach_id || awayTeamId);
 
     const homeCoachName = (homeTeam as any)?.league_coaches?.coach_name ||
-                          (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
-                          knownHome?.coach_name ||
-                          homeTeam?.team_name ||
-                          homeTeamCode;
+      (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
+      knownHome?.coach_name ||
+      homeTeam?.team_name ||
+      homeTeamCode;
 
     const awayCoachName = (awayTeam as any)?.league_coaches?.coach_name ||
-                          (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
-                          knownAway?.coach_name ||
-                          awayTeam?.team_name ||
-                          awayTeamCode;
+      (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
+      knownAway?.coach_name ||
+      awayTeam?.team_name ||
+      awayTeamCode;
 
     // 2. Fetch ALL Rosters for this active season (league_id: sId)
     const { data: seasonRosters } = await supabase
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       // 3. ANY team in the active season roster (handles player trades / line switches)
       const anySeasonRoster = seasonRosters?.find(
         r => r.player_name?.trim().toLowerCase() === clean ||
-             (lastName.length > 2 && r.player_name?.trim().toLowerCase().includes(lastName))
+          (lastName.length > 2 && r.player_name?.trim().toLowerCase().includes(lastName))
       );
       if (anySeasonRoster?.player_id) return Number(anySeasonRoster.player_id);
 
@@ -350,33 +350,88 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const parseToiSeconds = (toiVal: any): number => {
+      if (typeof toiVal === 'number') return isNaN(toiVal) ? 0 : toiVal;
+      if (typeof toiVal === 'string') {
+        const trimmed = toiVal.trim();
+        if (!trimmed || trimmed === '-' || trimmed === '--' || trimmed === '0:00' || trimmed === '00:00') return 0;
+        if (trimmed.includes(':')) {
+          const parts = trimmed.split(':').map(Number);
+          if (parts.length === 3) return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+          return (parts[0] || 0) * 60 + (parts[1] || 0);
+        }
+        const num = parseFloat(trimmed);
+        return isNaN(num) ? 0 : num;
+      }
+      return 0;
+    };
+
+    const hasSkaterPlayed = (s: any): boolean => {
+      if (!s) return false;
+      const name = String(s.name || s.player || s.player_name || '').trim();
+      if (!name || name === '--') return false;
+      const toiSec = parseToiSeconds(s.toiSeconds ?? s.toi_seconds ?? s.toi);
+      const goals = Number(s.goals ?? s.g) || 0;
+      const assists = Number(s.assists ?? s.a) || 0;
+      const points = Number(s.points ?? s.pts) || 0;
+      const shots = Number(s.sog ?? s.shots) || 0;
+      const checks = Number(s.checks ?? s.chk) || 0;
+      const pim = Number(s.pim) || 0;
+      const ppp = Number(s.ppp ?? s.pp_points) || 0;
+      const shp = Number(s.shp ?? s.sh_points) || 0;
+      return toiSec > 0 || goals > 0 || assists > 0 || points > 0 || shots > 0 || checks > 0 || pim > 0 || ppp > 0 || shp > 0;
+    };
+
+    const hasGoaliePlayed = (g: any): boolean => {
+      if (!g) return false;
+      const name = String(g.name || g.goalie || g.player || g.player_name || '').trim();
+      if (!name || name === '--') return false;
+      const toiSec = parseToiSeconds(g.toiSeconds ?? g.toi_seconds ?? g.toi);
+      const shots = Number(g.shots ?? g.shots_against ?? g.sog) || 0;
+      const saves = Number(g.saves ?? g.sv) || 0;
+      const ga = Number(g.ga ?? g.goals_against) || 0;
+      const goals = Number(g.goals ?? g.g) || 0;
+      const assists = Number(g.assists ?? g.a) || 0;
+      const hasDecision = Boolean(g.w) || Boolean(g.l) || Boolean(g.t) || Boolean(g.otl);
+      return toiSec > 0 || shots > 0 || saves > 0 || ga > 0 || hasDecision || goals > 0 || assists > 0;
+    };
+
     const playerStatsRows: any[] = [];
 
     // Away Skaters
     (game.awaySkaters || []).forEach((s: any) => {
-      const ppg = (game.goals || []).filter((g: any) => g.scorer === s.name && g.type?.startsWith('PP')).length;
-      const shg = (game.goals || []).filter((g: any) => g.scorer === s.name && g.type?.startsWith('SH')).length;
-      const evg = Math.max(0, (Number(s.goals) || 0) - ppg - shg);
-      const isGWG = gwgScorerName && s.name?.trim().toLowerCase() === gwgScorerName.trim().toLowerCase() ? 1 : 0;
-      const isOTG = otgScorerName && s.name?.trim().toLowerCase() === otgScorerName.trim().toLowerCase() ? 1 : 0;
+      if (!hasSkaterPlayed(s)) return;
+      const sName = String(s.name || s.player || s.player_name || '').trim();
+      const ppg = (game.goals || []).filter((g: any) => g.scorer === sName && g.type?.startsWith('PP')).length;
+      const shg = (game.goals || []).filter((g: any) => g.scorer === sName && g.type?.startsWith('SH')).length;
+      const goals = Number(s.goals ?? s.g) || 0;
+      const assists = Number(s.assists ?? s.a) || 0;
+      const shots = Number(s.sog ?? s.shots) || 0;
+      const checks = Number(s.checks ?? s.chk) || 0;
+      const pim = Number(s.pim) || 0;
+      const ppp = Number(s.ppp ?? s.pp_points) || 0;
+      const shp = Number(s.shp ?? s.sh_points) || 0;
+      const evg = Math.max(0, goals - ppg - shg);
+      const isGWG = gwgScorerName && sName.toLowerCase() === gwgScorerName.trim().toLowerCase() ? 1 : 0;
+      const isOTG = otgScorerName && sName.toLowerCase() === otgScorerName.trim().toLowerCase() ? 1 : 0;
 
       playerStatsRows.push({
         game_id: finalGameId,
         league_id: sId,
         team_id: awayTeamId,
-        player_id: getPlayerId(s.name, awayTeamId),
+        player_id: getPlayerId(sName, awayTeamId),
         pos_played: s.pos || 'F',
-        goals: Number(s.goals) || 0,
-        assists: Number(s.assists) || 0,
-        shots: Number(s.sog) || 0,
-        checks: Number(s.checks) || 0,
-        pim: Number(s.pim) || 0,
-        pp_points: Number(s.ppp) || 0,
-        sh_points: Number(s.shp) || 0,
-        evg: Number(evg) || 0,
+        goals,
+        assists,
+        shots,
+        checks,
+        pim,
+        pp_points: ppp,
+        sh_points: shp,
+        evg,
         gwg: isGWG,
         otg: isOTG,
-        toi: Number(s.toiSeconds) || 0,
+        toi: parseToiSeconds(s.toiSeconds ?? s.toi_seconds ?? s.toi),
         saves: 0,
         shots_against: 0,
         goals_against: 0,
@@ -389,29 +444,38 @@ export async function POST(req: NextRequest) {
 
     // Home Skaters
     (game.homeSkaters || []).forEach((s: any) => {
-      const ppg = (game.goals || []).filter((g: any) => g.scorer === s.name && g.type?.startsWith('PP')).length;
-      const shg = (game.goals || []).filter((g: any) => g.scorer === s.name && g.type?.startsWith('SH')).length;
-      const evg = Math.max(0, (Number(s.goals) || 0) - ppg - shg);
-      const isGWG = gwgScorerName && s.name?.trim().toLowerCase() === gwgScorerName.trim().toLowerCase() ? 1 : 0;
-      const isOTG = otgScorerName && s.name?.trim().toLowerCase() === otgScorerName.trim().toLowerCase() ? 1 : 0;
+      if (!hasSkaterPlayed(s)) return;
+      const sName = String(s.name || s.player || s.player_name || '').trim();
+      const ppg = (game.goals || []).filter((g: any) => g.scorer === sName && g.type?.startsWith('PP')).length;
+      const shg = (game.goals || []).filter((g: any) => g.scorer === sName && g.type?.startsWith('SH')).length;
+      const goals = Number(s.goals ?? s.g) || 0;
+      const assists = Number(s.assists ?? s.a) || 0;
+      const shots = Number(s.sog ?? s.shots) || 0;
+      const checks = Number(s.checks ?? s.chk) || 0;
+      const pim = Number(s.pim) || 0;
+      const ppp = Number(s.ppp ?? s.pp_points) || 0;
+      const shp = Number(s.shp ?? s.sh_points) || 0;
+      const evg = Math.max(0, goals - ppg - shg);
+      const isGWG = gwgScorerName && sName.toLowerCase() === gwgScorerName.trim().toLowerCase() ? 1 : 0;
+      const isOTG = otgScorerName && sName.toLowerCase() === otgScorerName.trim().toLowerCase() ? 1 : 0;
 
       playerStatsRows.push({
         game_id: finalGameId,
         league_id: sId,
         team_id: homeTeamId,
-        player_id: getPlayerId(s.name, homeTeamId),
+        player_id: getPlayerId(sName, homeTeamId),
         pos_played: s.pos || 'F',
-        goals: Number(s.goals) || 0,
-        assists: Number(s.assists) || 0,
-        shots: Number(s.sog) || 0,
-        checks: Number(s.checks) || 0,
-        pim: Number(s.pim) || 0,
-        pp_points: Number(s.ppp) || 0,
-        sh_points: Number(s.shp) || 0,
-        evg: Number(evg) || 0,
+        goals,
+        assists,
+        shots,
+        checks,
+        pim,
+        pp_points: ppp,
+        sh_points: shp,
+        evg,
         gwg: isGWG,
         otg: isOTG,
-        toi: Number(s.toiSeconds) || 0,
+        toi: parseToiSeconds(s.toiSeconds ?? s.toi_seconds ?? s.toi),
         saves: 0,
         shots_against: 0,
         goals_against: 0,
@@ -424,14 +488,16 @@ export async function POST(req: NextRequest) {
 
     // Away Goalies
     (game.awayGoalies || []).forEach((g: any) => {
+      if (!hasGoaliePlayed(g)) return;
+      const gName = String(g.name || g.goalie || g.player || g.player_name || '').trim();
       playerStatsRows.push({
         game_id: finalGameId,
         league_id: sId,
         team_id: awayTeamId,
-        player_id: getPlayerId(g.name, awayTeamId),
+        player_id: getPlayerId(gName, awayTeamId),
         pos_played: 'G',
-        goals: Number(g.goals) || 0,
-        assists: Number(g.assists) || 0,
+        goals: Number(g.goals ?? g.g) || 0,
+        assists: Number(g.assists ?? g.a) || 0,
         shots: 0,
         checks: 0,
         pim: 0,
@@ -440,10 +506,10 @@ export async function POST(req: NextRequest) {
         evg: 0,
         gwg: 0,
         otg: 0,
-        toi: Number(g.toiSeconds) || 0,
-        saves: Number(g.saves) || 0,
-        shots_against: Number(g.shots) || 0,
-        goals_against: Number(g.ga) || 0,
+        toi: parseToiSeconds(g.toiSeconds ?? g.toi_seconds ?? g.toi),
+        saves: Number(g.saves ?? g.sv) || 0,
+        shots_against: Number(g.shots ?? g.shots_against ?? g.sog) || 0,
+        goals_against: Number(g.ga ?? g.goals_against) || 0,
         is_win: Boolean(g.w),
         is_loss: Boolean(g.l),
         is_tie: Boolean(g.t),
@@ -453,14 +519,16 @@ export async function POST(req: NextRequest) {
 
     // Home Goalies
     (game.homeGoalies || []).forEach((g: any) => {
+      if (!hasGoaliePlayed(g)) return;
+      const gName = String(g.name || g.goalie || g.player || g.player_name || '').trim();
       playerStatsRows.push({
         game_id: finalGameId,
         league_id: sId,
         team_id: homeTeamId,
-        player_id: getPlayerId(g.name, homeTeamId),
+        player_id: getPlayerId(gName, homeTeamId),
         pos_played: 'G',
-        goals: Number(g.goals) || 0,
-        assists: Number(g.assists) || 0,
+        goals: Number(g.goals ?? g.g) || 0,
+        assists: Number(g.assists ?? g.a) || 0,
         shots: 0,
         checks: 0,
         pim: 0,
@@ -469,10 +537,10 @@ export async function POST(req: NextRequest) {
         evg: 0,
         gwg: 0,
         otg: 0,
-        toi: Number(g.toiSeconds) || 0,
-        saves: Number(g.saves) || 0,
-        shots_against: Number(g.shots) || 0,
-        goals_against: Number(g.ga) || 0,
+        toi: parseToiSeconds(g.toiSeconds ?? g.toi_seconds ?? g.toi),
+        saves: Number(g.saves ?? g.sv) || 0,
+        shots_against: Number(g.shots ?? g.shots_against ?? g.sog) || 0,
+        goals_against: Number(g.ga ?? g.goals_against) || 0,
         is_win: Boolean(g.w),
         is_loss: Boolean(g.l),
         is_tie: Boolean(g.t),
@@ -619,8 +687,8 @@ export async function POST(req: NextRequest) {
         game,
         seasonId: sId,
         gameId: finalGameId,
-        homeTeamName: homeTeam?.team_name || homeTeamCode,
-        awayTeamName: awayTeam?.team_name || awayTeamCode,
+        homeTeam: homeTeam || { team_name: homeTeamCode, abbreviation: homeTeamCode },
+        awayTeam: awayTeam || { team_name: awayTeamCode, abbreviation: awayTeamCode },
         homeCoachName,
         awayCoachName
       });
@@ -765,14 +833,14 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
       if (!num || num === 999 || num === 0 || num === 68) return null;
       if (teamMap[num]) return num;
 
-      const matchTeam = (teamsRes.data || []).find((t: any) => 
-        Number(t.team_id) === num || 
+      const matchTeam = (teamsRes.data || []).find((t: any) =>
+        Number(t.team_id) === num ||
         Number(t.coach_id) === num
       );
 
       if (matchTeam) {
-        const seasonMatch = (teamsRes.data || []).find((t: any) => 
-          Number(t.league_id) === sId && 
+        const seasonMatch = (teamsRes.data || []).find((t: any) =>
+          Number(t.league_id) === sId &&
           (
             (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
             (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
@@ -996,8 +1064,8 @@ async function sendDiscordBoxscore(params: {
   game: any;
   seasonId: number | string;
   gameId: number;
-  homeTeamName: string;
-  awayTeamName: string;
+  homeTeam: any;
+  awayTeam: any;
   homeCoachName: string;
   awayCoachName: string;
 }) {
@@ -1010,68 +1078,164 @@ async function sendDiscordBoxscore(params: {
     return { skipped: true };
   }
 
-  const { game, seasonId, gameId, homeCoachName, awayCoachName } = params;
-  const awayCode = (game.awayTeam?.teamCode || 'AWAY').toUpperCase();
-  const homeCode = (game.homeTeam?.teamCode || 'HOME').toUpperCase();
+  const { game, seasonId, gameId, homeTeam, awayTeam, homeCoachName, awayCoachName } = params;
+  const awayCode = (game.awayTeam?.teamCode || awayTeam?.abbreviation || 'AWAY').toUpperCase();
+  const homeCode = (game.homeTeam?.teamCode || homeTeam?.abbreviation || 'HOME').toUpperCase();
+  const awayName = awayTeam?.team_name || W_LEAGUE_COACH_MAP[awayCode]?.city || awayCode;
+  const homeName = homeTeam?.team_name || W_LEAGUE_COACH_MAP[homeCode]?.city || homeCode;
   const awayGoals = Number(game.awayTeam?.goals || 0);
   const homeGoals = Number(game.homeTeam?.goals || 0);
   const isOT = Boolean(game.isOT);
 
-  // Determine top performers / 3 stars
-  const allSkaters = [
-    ...(game.awaySkaters || []).map((s: any) => ({ ...s, side: awayCode })),
-    ...(game.homeSkaters || []).map((s: any) => ({ ...s, side: homeCode }))
-  ].sort((a: any, b: any) => (Number(b.points) || 0) - (Number(a.points) || 0) || (Number(b.goals) || 0) - (Number(a.goals) || 0));
+  const awayLogo = awayTeam?.logo_url || null;
+  const homeLogo = homeTeam?.logo_url || null;
+  const winningLogo = awayGoals > homeGoals ? awayLogo : (homeGoals > awayGoals ? homeLogo : (homeLogo || awayLogo));
 
-  const allGoalies = [
-    ...(game.awayGoalies || []).map((g: any) => ({ ...g, side: awayCode })),
-    ...(game.homeGoalies || []).map((g: any) => ({ ...g, side: homeCode }))
-  ].sort((a: any, b: any) => (Number(b.saves) || 0) - (Number(a.saves) || 0));
+  // Helper string padder
+  const pad = (val: any, len: number, alignLeft = true): string => {
+    const s = String(val ?? '').slice(0, len);
+    return alignLeft ? s.padEnd(len) : s.padStart(len);
+  };
 
-  const stars: string[] = [];
-  if (allSkaters[0] && (allSkaters[0].points > 0 || allSkaters[0].goals > 0)) {
-    stars.push(`🥇 **${allSkaters[0].name}** (${allSkaters[0].side}) — ${allSkaters[0].goals}G, ${allSkaters[0].assists}A (${allSkaters[0].points} PTS)`);
-  }
-  if (allSkaters[1] && (allSkaters[1].points > 0 || allSkaters[1].goals > 0)) {
-    stars.push(`🥈 **${allSkaters[1].name}** (${allSkaters[1].side}) — ${allSkaters[1].goals}G, ${allSkaters[1].assists}A (${allSkaters[1].points} PTS)`);
-  }
-  if (allGoalies[0] && allGoalies[0].shots > 0) {
-    stars.push(`🥉 **${allGoalies[0].name}** (${allGoalies[0].side}) — ${allGoalies[0].saves} SV, ${allGoalies[0].shots} SH (.${Math.round((allGoalies[0].savePct || 0) * 1000)} SV%)`);
-  }
-
-  // Scoring list
-  const scoringLines = (game.goals || []).slice(0, 12).map((g: any) => {
-    const assists = [g.assist1, g.assist2].filter((a: any) => a && a !== '--').join(', ');
-    const assistStr = assists ? ` (${assists})` : '';
-    const typeStr = g.type && g.type !== 'EV' ? ` [${g.type}]` : '';
-    return `• **P${g.period} ${g.time}** - ${g.team} **${g.scorer}**${assistStr}${typeStr}`;
-  });
-
+  // 1. Period Line Score
   const periodTable = `\`\`\`\n` +
-    `Team   1   2   3  ${isOT ? 'OT  ' : ''}T\n` +
-    `${awayCode.padEnd(5)} ${String(game.awayTeam?.goalsP1 || 0).padStart(2)}  ${String(game.awayTeam?.goalsP2 || 0).padStart(2)}  ${String(game.awayTeam?.goalsP3 || 0).padStart(2)}  ${isOT ? String(game.awayTeam?.goalsOT || 0).padStart(2) + '  ' : ''}${String(awayGoals).padStart(2)}\n` +
-    `${homeCode.padEnd(5)} ${String(game.homeTeam?.goalsP1 || 0).padStart(2)}  ${String(game.homeTeam?.goalsP2 || 0).padStart(2)}  ${String(game.homeTeam?.goalsP3 || 0).padStart(2)}  ${isOT ? String(game.homeTeam?.goalsOT || 0).padStart(2) + '  ' : ''}${String(homeGoals).padStart(2)}\n` +
+    `Team   1st  2nd  3rd  OT  Total\n` +
+    `${pad(awayCode, 5, true)}  ${pad(game.awayTeam?.goalsP1 || 0, 2, false)}   ${pad(game.awayTeam?.goalsP2 || 0, 2, false)}   ${pad(game.awayTeam?.goalsP3 || 0, 2, false)}   ${isOT ? pad(game.awayTeam?.goalsOT || 0, 2, false) + '   ' : ' 0   '}${pad(awayGoals, 2, false)}\n` +
+    `${pad(homeCode, 5, true)}  ${pad(game.homeTeam?.goalsP1 || 0, 2, false)}   ${pad(game.homeTeam?.goalsP2 || 0, 2, false)}   ${pad(game.homeTeam?.goalsP3 || 0, 2, false)}   ${isOT ? pad(game.homeTeam?.goalsOT || 0, 2, false) + '   ' : ' 0   '}${pad(homeGoals, 2, false)}\n` +
     `\`\`\``;
 
-  const teamStatsBlock = 
-    `**Shots on Goal:** ${awayCode} ${game.awayTeam?.shots || 0} - ${game.homeTeam?.shots || 0} ${homeCode}\n` +
-    `**Powerplays:** ${awayCode} ${game.awayTeam?.ppGoals || 0}/${game.awayTeam?.ppTries || 0} - ${homeCode} ${game.homeTeam?.ppGoals || 0}/${game.homeTeam?.ppTries || 0}\n` +
-    `**Body Checks:** ${awayCode} ${game.awayTeam?.checks || 0} - ${homeCode} ${game.homeTeam?.checks || 0}\n` +
-    `**Faceoffs Won:** ${awayCode} ${game.awayTeam?.faceoffWins || 0} - ${homeCode} ${game.homeTeam?.faceoffWins || 0}\n` +
-    `**Pass %:** ${awayCode} ${Math.round(((game.awayTeam?.passComps || 0) / Math.max(1, game.awayTeam?.passTries || 1)) * 100)}% - ${homeCode} ${Math.round(((game.homeTeam?.passComps || 0) / Math.max(1, game.homeTeam?.passTries || 1)) * 100)}%`;
+  // 2. Side-by-Side Game Stats Table (matching exact layout from retro screen)
+  const aShots = game.awayTeam?.shots || 0;
+  const hShots = game.homeTeam?.shots || 0;
+  const aShoot = aShots > 0 ? ((awayGoals / aShots) * 100).toFixed(2) + '%' : '0.00%';
+  const hShoot = hShots > 0 ? ((homeGoals / hShots) * 100).toFixed(2) + '%' : '0.00%';
 
+  const totalFaceoffs = (Number(game.awayTeam?.faceoffWins) || 0) + (Number(game.homeTeam?.faceoffWins) || 0);
+  const aFO = `${game.awayTeam?.faceoffWins || 0}/${totalFaceoffs}`;
+  const hFO = `${game.homeTeam?.faceoffWins || 0}/${totalFaceoffs}`;
+
+  const aPP = `${game.awayTeam?.ppGoals || 0}/${game.awayTeam?.ppTries || 0}`;
+  const hPP = `${game.homeTeam?.ppGoals || 0}/${game.homeTeam?.ppTries || 0}`;
+
+  const aBrk = `${game.awayTeam?.breakawayGoals || 0}/${game.awayTeam?.breakawayTries || 0}`;
+  const hBrk = `${game.homeTeam?.breakawayGoals || 0}/${game.homeTeam?.breakawayTries || 0}`;
+
+  const a1T = `${game.awayTeam?.oneTimerGoals || 0}/${game.awayTeam?.oneTimerTries || 0}`;
+  const h1T = `${game.homeTeam?.oneTimerGoals || 0}/${game.homeTeam?.oneTimerTries || 0}`;
+
+  const aPS = `${game.awayTeam?.penaltyShotGoals || 0}/${game.awayTeam?.penaltyShotTries || 0}`;
+  const hPS = `${game.homeTeam?.penaltyShotGoals || 0}/${game.homeTeam?.penaltyShotTries || 0}`;
+
+  const statsRows = [
+    `${pad(aShots, 7, false)}       Shots       ${pad(hShots, 7, true)}`,
+    `${pad(game.awayTeam?.shotsP1 || 0, 7, false)}    1st Period    ${pad(game.homeTeam?.shotsP1 || 0, 7, true)}`,
+    `${pad(game.awayTeam?.shotsP2 || 0, 7, false)}    2nd Period    ${pad(game.homeTeam?.shotsP2 || 0, 7, true)}`,
+    `${pad(game.awayTeam?.shotsP3 || 0, 7, false)}    3rd Period    ${pad(game.homeTeam?.shotsP3 || 0, 7, true)}`,
+    `${pad(game.awayTeam?.shotsOT || 0, 7, false)}     Overtime     ${pad(game.homeTeam?.shotsOT || 0, 7, true)}`,
+    `${pad(aShoot, 7, false)}    Shooting %    ${pad(hShoot, 7, true)}`,
+    `${pad(aPP, 7, false)}    PowerPlay     ${pad(hPP, 7, true)}`,
+    `${pad(game.awayTeam?.ppShots || 0, 7, false)}  PowerPlay Shots  ${pad(game.homeTeam?.ppShots || 0, 7, true)}`,
+    `${pad(game.awayTeam?.shGoals || 0, 7, false)}  Shorthanded G    ${pad(game.homeTeam?.shGoals || 0, 7, true)}`,
+    `${pad(aBrk, 7, false)}    Breakaways    ${pad(hBrk, 7, true)}`,
+    `${pad(a1T, 7, false)}    One-Timers    ${pad(h1T, 7, true)}`,
+    `${pad(aPS, 7, false)}  Penalty Shots   ${pad(hPS, 7, true)}`,
+    `${pad(aFO, 7, false)}     Faceoffs     ${pad(hFO, 7, true)}`,
+    `${pad(game.awayTeam?.checks || 0, 7, false)}   Body Checks    ${pad(game.homeTeam?.checks || 0, 7, true)}`,
+    `${pad(game.awayTeam?.penalties || 0, 7, false)}    Penalties     ${pad(game.homeTeam?.penalties || 0, 7, true)}`,
+    `${pad(game.awayTeam?.attackZoneTime || '0:00', 7, false)}   Attack Zone    ${pad(game.homeTeam?.attackZoneTime || '0:00', 7, true)}`
+  ];
+
+  const gameStatsTable = `\`\`\`\n${pad(awayName.toUpperCase(), 14, true)}   Game Stats   ${pad(homeName.toUpperCase(), 14, false)}\n` +
+    statsRows.join('\n') + `\n\`\`\``;
+
+  // 3. Lineup Boxscores (Goalies + Skaters with G-A, Pts, SOG, CHK, PIM, PPP, SHP, TOI)
+  const formatBoxscoreBlock = (goalies: any[], skaters: any[]) => {
+    let gLines = `Goalies            G-A Pts SO GA SV SH   SV%   TOI\n`;
+    (goalies || []).forEach(g => {
+      const gName = pad(g.name || 'Goalie', 18, true);
+      const ga = pad(g.ga ?? g.goals_against ?? 0, 2, false);
+      const sv = pad(g.saves ?? g.sv ?? 0, 2, false);
+      const sh = pad(g.shots ?? g.shots_against ?? (Number(g.saves || 0) + Number(g.ga || 0)) ?? 0, 2, false);
+      const svPct = typeof g.savePct === 'number' ? g.savePct.toFixed(3) : (Number(sh) > 0 ? (Number(sv) / Number(sh)).toFixed(3) : '0.000');
+      const toi = pad(g.toi || '15:00', 5, false);
+      const so = pad(g.so ?? (Number(ga) === 0 ? 1 : 0), 2, false);
+      gLines += `${gName} 0-0   0 ${so} ${ga} ${sv} ${sh} ${svPct} ${toi}\n`;
+    });
+
+    let sLines = `Players            G-A Pts SOG CHK PIM PPP SHP   TOI\n`;
+    (skaters || []).forEach(s => {
+      const sName = pad(s.name || 'Player', 18, true);
+      const goals = Number(s.goals ?? s.g) || 0;
+      const assists = Number(s.assists ?? s.a) || 0;
+      const gaStr = `${goals}-${assists}`;
+      const pts = pad(goals + assists, 3, false);
+      const sog = pad(s.sog ?? s.shots ?? 0, 3, false);
+      const chk = pad(s.checks ?? s.chk ?? 0, 3, false);
+      const pim = pad(s.pim ?? 0, 3, false);
+      const ppp = pad(s.ppp ?? s.pp_points ?? 0, 3, false);
+      const shp = pad(s.shp ?? s.sh_points ?? 0, 3, false);
+      const toi = pad(s.toi || '15:00', 5, false);
+      sLines += `${sName} ${pad(gaStr, 4, true)} ${pts} ${sog} ${chk} ${pim} ${ppp} ${shp} ${toi}\n`;
+    });
+
+    return `\`\`\`\n${gLines}\n${sLines}\`\`\``;
+  };
+
+  // 4. Scoring Summary Table
+  let scoringBlock = `\`\`\`\nPer. Time Team Goal             Primary          Secondary        Type\n`;
+  if (game.goals && game.goals.length > 0) {
+    game.goals.forEach((g: any) => {
+      const per = pad(g.period, 3, false);
+      const time = pad(g.time, 5, false);
+      const team = pad(g.team, 4, false);
+      const scorer = pad(g.scorer, 16, true);
+      const a1 = pad(g.assist1 && g.assist1 !== '--' ? g.assist1 : '--', 16, true);
+      const a2 = pad(g.assist2 && g.assist2 !== '--' ? g.assist2 : '--', 16, true);
+      const type = pad(g.type || 'EV', 4, true);
+      scoringBlock += `${per} ${time} ${team} ${scorer} ${a1} ${a2} ${type}\n`;
+    });
+    scoringBlock += `\`\`\``;
+  } else {
+    scoringBlock = "`No goals scored in this match.`";
+  }
+
+  // 5. Penalty Summary Table
+  let penaltyBlock = `\`\`\`\nPer. Time Team Player             Penalty\n`;
+  if (game.penalties && game.penalties.length > 0) {
+    game.penalties.forEach((p: any) => {
+      const per = pad(p.period, 3, false);
+      const time = pad(p.time, 5, false);
+      const team = pad(p.team, 4, false);
+      const player = pad(p.player, 18, true);
+      const type = pad(p.type, 15, true);
+      penaltyBlock += `${per} ${time} ${team} ${player} ${type}\n`;
+    });
+    penaltyBlock += `\`\`\``;
+  } else {
+    penaltyBlock = "`No penalties assessed.`";
+  }
+
+  // Build Rich Discord Embed
   const embed = {
-    title: `🏒 FINAL: ${awayCode} (${awayGoals}) @ ${homeCode} (${homeGoals})${isOT ? ' [OT]' : ''}`,
-    description: `**Season ${seasonId} (${getLeagueCode(seasonId)}) • Game #${gameId}**\n**Coaches:** ${awayCoachName} vs ${homeCoachName}`,
+    author: {
+      name: `WN95HL OFFICIAL BOXSCORE • SEASON ${seasonId} (${getLeagueCode(seasonId)})`,
+      icon_url: "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/brule_cup.png"
+    },
+    title: `🏒 ${awayName.toUpperCase()} (${awayGoals}) at ${homeName.toUpperCase()} (${homeGoals})${isOT ? ' [OT]' : ''}`,
+    description: `**Game #${gameId}** • Nostradamus Coliseum\n**Matchup:** ${awayName} (${awayCoachName}) vs ${homeName} (${homeCoachName})`,
     color: awayGoals > homeGoals ? 0x2b82d9 : 0xd9532b,
+    thumbnail: winningLogo ? { url: winningLogo } : undefined,
     fields: [
-      { name: "📊 Line Score", value: periodTable, inline: false },
-      { name: "⚡ Team Stats", value: teamStatsBlock, inline: true },
-      { name: "⭐ Top Performers", value: stars.length > 0 ? stars.join("\n") : "No individual points", inline: true },
-      ...(scoringLines.length > 0 ? [{ name: "🚨 Scoring Summary", value: scoringLines.join("\n"), inline: false }] : [])
+      { name: "📊 Period Summary", value: periodTable, inline: false },
+      { name: "⚡ Game Stats", value: gameStatsTable, inline: false },
+      { name: `🔴 ${awayName.toUpperCase()} (${awayCode}) LINEUP`, value: formatBoxscoreBlock(game.awayGoalies, game.awaySkaters), inline: false },
+      { name: `🔵 ${homeName.toUpperCase()} (${homeCode}) LINEUP`, value: formatBoxscoreBlock(game.homeGoalies, game.homeSkaters), inline: false },
+      { name: "🚨 Scoring Summary", value: scoringBlock, inline: false },
+      { name: "🛑 Penalty Summary", value: penaltyBlock, inline: false }
     ],
     footer: {
-      text: "NHL95 Gazette Boxscore System • nhl95.net"
+      text: "NHL95 Gazette Boxscore System • nhl95.net",
+      icon_url: "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/brule_cup.png"
     },
     timestamp: new Date().toISOString()
   };
@@ -1107,4 +1271,5 @@ async function sendDiscordBoxscore(params: {
     return { error: err.message };
   }
 }
+
 

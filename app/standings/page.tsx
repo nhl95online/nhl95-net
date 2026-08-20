@@ -154,16 +154,16 @@ export default function StandingsPage() {
         const seasonTeams = allTeams.filter((t: any) => Number(t.league_id) === sId);
         const effectiveTeams = seasonTeams.length > 0 ? seasonTeams : allTeams;
 
-        const mhtTeam = effectiveTeams.find((t: any) => 
-          (t.abbreviation || '').trim().toUpperCase() === 'MHT' || 
-          Number(t.coach_id) === 13 || 
+        const mhtTeam = effectiveTeams.find((t: any) =>
+          (t.abbreviation || '').trim().toUpperCase() === 'MHT' ||
+          Number(t.coach_id) === 13 ||
           (t.team_name || '').toUpperCase().includes('MINHATTRICK') ||
           (t.team_name || '').toUpperCase().includes('MANOTICK')
         );
 
-        const ricTeam = effectiveTeams.find((t: any) => 
-          (t.abbreviation || '').trim().toUpperCase() === 'RIC' || 
-          Number(t.coach_id) === 19 || 
+        const ricTeam = effectiveTeams.find((t: any) =>
+          (t.abbreviation || '').trim().toUpperCase() === 'RIC' ||
+          Number(t.coach_id) === 19 ||
           (t.team_name || '').toUpperCase().includes('RICHFIELD') ||
           (t.team_name || '').toUpperCase().includes('RICHMOND')
         );
@@ -245,9 +245,9 @@ export default function StandingsPage() {
 
       // Reload live standings
       await loadStandings(sId);
-      setRecalcMessage({ 
-        text: `Standings Updated! Season ${sId} live standings synchronized.${fixMhtToRic ? ' (MHT games reassigned to RIC - Richfield now has 4 GP)' : ''}`, 
-        error: false 
+      setRecalcMessage({
+        text: `Standings Updated! Season ${sId} live standings synchronized.${fixMhtToRic ? ' (MHT games reassigned to RIC - Richfield now has 4 GP)' : ''}`,
+        error: false
       });
       setTimeout(() => setRecalcMessage(null), 6000);
     } catch (e: any) {
@@ -534,10 +534,10 @@ export default function StandingsPage() {
         }, numericLeagueId);
 
         teamMap[tId] = {
-          ...(baseTeamMap[tId] || { 
-            id: tId, 
-            name: tInfo?.team_name || `Retro Club #${tId}`, 
-            abbr: tInfo?.abbreviation || `TM${tId}`, 
+          ...(baseTeamMap[tId] || {
+            id: tId,
+            name: tInfo?.team_name || `Retro Club #${tId}`,
+            abbr: tInfo?.abbreviation || `TM${tId}`,
             banner_url: bannerInfo.primaryUrl,
             fallback_urls: bannerInfo.fallbackUrls
           }),
@@ -560,15 +560,15 @@ export default function StandingsPage() {
         if (teamMap[num]) return num;
 
         // Try finding by coach_id or team_id in allTeamsData
-        const matchTeam = allTeamsData.find((t: any) => 
-          Number(t.team_id) === num || 
+        const matchTeam = allTeamsData.find((t: any) =>
+          Number(t.team_id) === num ||
           Number(t.coach_id) === num
         );
 
         if (matchTeam) {
           // Look for this team in active season teamMap
-          const seasonMatch = allTeamsData.find((t: any) => 
-            Number(t.league_id) === numericLeagueId && 
+          const seasonMatch = allTeamsData.find((t: any) =>
+            Number(t.league_id) === numericLeagueId &&
             (
               (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
               (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
@@ -617,12 +617,12 @@ export default function StandingsPage() {
           try {
             const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
             isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
-                   meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+              meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
             isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
           } catch {
             const lowStr = String(gameMeta || '').toLowerCase();
             isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
-                   lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+              lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
             isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
           }
         }
@@ -632,10 +632,10 @@ export default function StandingsPage() {
             const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
             const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
             if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-                Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+              Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
               isOT = true;
             }
-          } catch {}
+          } catch { }
         }
 
         if (homeScore === awayScore && !isOT) {
@@ -1098,9 +1098,8 @@ export default function StandingsPage() {
 
         {/* Recalculation Notification Banner */}
         {recalcMessage && (
-          <div className={`p-2.5 mb-3 text-xs font-bold uppercase flex items-center justify-between border ${
-            recalcMessage.error ? 'bg-red-50 text-red-900 border-red-400' : 'bg-green-50 text-green-900 border-green-400'
-          }`}>
+          <div className={`p-2.5 mb-3 text-xs font-bold uppercase flex items-center justify-between border ${recalcMessage.error ? 'bg-red-50 text-red-900 border-red-400' : 'bg-green-50 text-green-900 border-green-400'
+            }`}>
             <span>{recalcMessage.text}</span>
             <button onClick={() => setRecalcMessage(null)} className="text-xs font-mono font-bold hover:underline cursor-pointer">✕</button>
           </div>

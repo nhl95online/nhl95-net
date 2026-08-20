@@ -395,6 +395,11 @@ export function parseSaveStateBuffer(
     const savePct = shots > 0 ? Number(((shots - ga) / shots).toFixed(3)) : 0;
     const so = ga === 0 && isRec && shots > 0 ? 1 : 0;
 
+    // Filter out goalies who did not play
+    if ((gRaw.toi || 0) === 0 && shots === 0 && saves === 0 && ga === 0 && !w && !l && !t && !otl && gGoals === 0 && assists === 0) {
+      continue;
+    }
+
     awayGoalies.push({
       name: gName,
       pos: 'G',
@@ -431,6 +436,11 @@ export function parseSaveStateBuffer(
         if (goal.type.startsWith('PP')) ppp++;
         if (goal.type.startsWith('SH')) shp++;
       }
+    }
+
+    // Filter out skaters who did not play
+    if ((sRaw.toi || 0) === 0 && sRaw.goals === 0 && sRaw.assists === 0 && sRaw.shots === 0 && sRaw.checks === 0 && sRaw.pim === 0 && ppp === 0 && shp === 0) {
+      continue;
     }
 
     awaySkaters.push({
@@ -473,6 +483,11 @@ export function parseSaveStateBuffer(
     const savePct = shots > 0 ? Number(((shots - ga) / shots).toFixed(3)) : 0;
     const so = ga === 0 && isRec && shots > 0 ? 1 : 0;
 
+    // Filter out goalies who did not play
+    if ((gRaw.toi || 0) === 0 && shots === 0 && saves === 0 && ga === 0 && !w && !l && !t && !otl && gGoals === 0 && assists === 0) {
+      continue;
+    }
+
     homeGoalies.push({
       name: gName,
       pos: 'G',
@@ -509,6 +524,11 @@ export function parseSaveStateBuffer(
         if (goal.type.startsWith('PP')) ppp++;
         if (goal.type.startsWith('SH')) shp++;
       }
+    }
+
+    // Filter out skaters who did not play
+    if ((sRaw.toi || 0) === 0 && sRaw.goals === 0 && sRaw.assists === 0 && sRaw.shots === 0 && sRaw.checks === 0 && sRaw.pim === 0 && ppp === 0 && shp === 0) {
+      continue;
     }
 
     homeSkaters.push({

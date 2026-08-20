@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
+  getAllSeasons,
+  getSeasonConfig,
   W_LEAGUE_GOALIES,
   W_LEAGUE_SKATERS,
   W_LEAGUE_POSITION_COUNTS,
@@ -19,55 +21,107 @@ const normalizeName = (name: string) => {
     .replace(/[.'’\-\s_]/g, '');
 };
 
-// Build static lookup sets for all known goalies, forwards, and defensemen
+// Build static lookup sets for all known goalies, forwards, and defensemen across all registered seasons
 const KNOWN_GOALIES_SET = new Set<string>();
-Object.values(W_LEAGUE_GOALIES).forEach(names => names.forEach(n => {
-  if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
-}));
-Object.values(O_LEAGUE_GOALIES).forEach(names => names.forEach(n => {
-  if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
-}));
-
 const KNOWN_FORWARDS_SET = new Set<string>();
-Object.entries(W_LEAGUE_SKATERS).forEach(([team, names]) => {
-  const fCount = W_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
-  names.slice(0, fCount).forEach(n => {
-    if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
-  });
-});
-Object.entries(O_LEAGUE_SKATERS).forEach(([team, names]) => {
-  const fCount = O_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
-  names.slice(0, fCount).forEach(n => {
-    if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
-  });
-});
-
 const KNOWN_DEFENSE_SET = new Set<string>();
-Object.entries(W_LEAGUE_SKATERS).forEach(([team, names]) => {
-  const fCount = W_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
-  names.slice(fCount).forEach(n => {
-    if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
-  });
-});
-Object.entries(O_LEAGUE_SKATERS).forEach(([team, names]) => {
-  const fCount = O_LEAGUE_POSITION_COUNTS[team]?.forwards ?? 5;
-  names.slice(fCount).forEach(n => {
-    if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
-  });
-});
+
+const populateKnownPositions = () => {
+  try {
+    const allConfigs = getAllSeasons();
+    allConfigs.forEach(cfg => {
+      if (cfg.goalies) {
+        Object.values(cfg.goalies).forEach(names => {
+          if (Array.isArray(names)) {
+            names.forEach(n => {
+              if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
+            });
+          }
+        });
+      }
+      if (cfg.skaters) {
+        Object.entries(cfg.skaters).forEach(([team, names]) => {
+          if (Array.isArray(names)) {
+            const fCount = cfg.teamPositionCounts?.[team]?.forwards ?? cfg.defaultPositionCounts?.forwards ?? 5;
+            names.slice(0, fCount).forEach(n => {
+              if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
+            });
+            names.slice(fCount).forEach(n => {
+              if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
+            });
+          }
+        });
+      }
+    });
+  } catch {
+    // Fallback if getAllSeasons is not ready
+  }
+
+  // Ensure base W and O leagues are always populated
+  if (W_LEAGUE_GOALIES) {
+    Object.values(W_LEAGUE_GOALIES).forEach(names => {
+      if (Array.isArray(names)) {
+        names.forEach(n => {
+          if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
+        });
+      }
+    });
+  }
+  if (O_LEAGUE_GOALIES) {
+    Object.values(O_LEAGUE_GOALIES).forEach(names => {
+      if (Array.isArray(names)) {
+        names.forEach(n => {
+          if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
+        });
+      }
+    });
+  }
+
+  if (W_LEAGUE_SKATERS) {
+    Object.entries(W_LEAGUE_SKATERS).forEach(([team, names]) => {
+      if (Array.isArray(names)) {
+        const fCount = W_LEAGUE_POSITION_COUNTS?.[team]?.forwards ?? 5;
+        names.slice(0, fCount).forEach(n => {
+          if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
+        });
+        names.slice(fCount).forEach(n => {
+          if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
+        });
+      }
+    });
+  }
+
+  if (O_LEAGUE_SKATERS) {
+    Object.entries(O_LEAGUE_SKATERS).forEach(([team, names]) => {
+      if (Array.isArray(names)) {
+        const fCount = O_LEAGUE_POSITION_COUNTS?.[team]?.forwards ?? 5;
+        names.slice(0, fCount).forEach(n => {
+          if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
+        });
+        names.slice(fCount).forEach(n => {
+          if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
+        });
+      }
+    });
+  }
+};
+populateKnownPositions();
 
 const parseTOI = (val: any): number => {
   if (val === undefined || val === null) return 0;
-  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (typeof val === 'number') return isNaN(val) || val <= 0 ? 0 : val;
   if (typeof val === 'string') {
     const trimmed = val.trim();
-    if (!trimmed) return 0;
+    if (!trimmed || trimmed === '-' || trimmed === '--' || trimmed === '0' || trimmed === '0:00' || trimmed === '00:00' || trimmed === '0:00:00') return 0;
     if (trimmed.includes(':')) {
       const parts = trimmed.split(':').map(Number);
+      if (parts.length === 3) {
+        return (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+      }
       return (parts[0] || 0) * 60 + (parts[1] || 0);
     }
     const num = parseFloat(trimmed);
-    return isNaN(num) ? 0 : num;
+    return isNaN(num) || num <= 0 ? 0 : num;
   }
   return 0;
 };
@@ -80,9 +134,10 @@ const formatSecondsToMMSS = (seconds: number | string): string => {
   return `${m}:${remS < 10 ? '0' : ''}${remS}`;
 };
 
+// Check if player has positive recorded Time on Ice (TOI > 0)
 const hasPositiveTOI = (p: any): boolean => {
   if (!p) return false;
-  const toiVals = [p.toi_minutes, p.toi, p.toi_seconds, p.toiSeconds, p.time_on_ice, p.toi_min];
+  const toiVals = [p.toi_seconds, p.toiSeconds, p.toi_minutes, p.toi, p.time_on_ice, p.toi_min, p.toiSec];
   for (const v of toiVals) {
     if (v !== undefined && v !== null && parseTOI(v) > 0) {
       return true;
@@ -91,42 +146,41 @@ const hasPositiveTOI = (p: any): boolean => {
   return false;
 };
 
-// Check if player has participated (either has positive TOI, games played, goalie stats, or skater stats)
+// Check if player has participated (strictly requires TOI > 0 for all players)
 const hasPlayed = (p: any): boolean => {
   if (!p) return false;
-  if (Number(p.gp || p.games_played || 0) > 0) return true;
-  if (hasPositiveTOI(p)) return true;
-  if (Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0) > 0) return true;
-  if (Number(p.saves ?? p.total_saves ?? p.sv ?? 0) > 0) return true;
-  if (Number(p.wins ?? 0) > 0 || Number(p.losses ?? 0) > 0 || Number(p.shutouts ?? 0) > 0) return true;
-  if (Number(p.total_points ?? p.points ?? 0) > 0 || Number(p.total_goals ?? p.goals ?? 0) > 0 || Number(p.total_assists ?? p.assists ?? 0) > 0) return true;
-  if (Number(p.total_sog ?? p.sog ?? p.shots ?? 0) > 0) return true;
-  return false;
+  return hasPositiveTOI(p);
 };
 
 const resolvePlayerPosition = (p: any, posMap: Map<string, string>): 'G' | 'D' | 'F' => {
   const norm = normalizeName(p.player_name);
   if (KNOWN_GOALIES_SET.has(norm)) return 'G';
-  if (KNOWN_FORWARDS_SET.has(norm)) return 'F';
   if (KNOWN_DEFENSE_SET.has(norm)) return 'D';
+  if (KNOWN_FORWARDS_SET.has(norm)) return 'F';
 
   const directPos = String(p.pos_played || p.pos || p.position || p.player_pos || '').trim().toUpperCase();
-  if (directPos === 'G' || directPos.includes('GOALIE') || directPos.includes('GK')) return 'G';
+  if (directPos === 'G' || directPos.includes('GOALIE') || directPos.includes('GK') || directPos.includes('GOALTENDER')) return 'G';
   if (directPos === 'D' || directPos.includes('DEF') || directPos === 'LD' || directPos === 'RD') return 'D';
   if (directPos === 'F' || directPos === 'C' || directPos === 'LW' || directPos === 'RW' || directPos.includes('FORW')) return 'F';
 
-  const idKey = p.player_id ? String(p.player_id) : '';
+  const idKey = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
   const rawName = String(p.player_name || '').trim().toLowerCase();
-  const dbPos = String(posMap.get(idKey) || posMap.get(rawName) || posMap.get(norm) || '').trim().toUpperCase();
-  if (dbPos === 'G' || dbPos.includes('GOALIE') || dbPos.includes('GK')) return 'G';
+  const dbPos = String(
+    (idKey ? posMap.get(idKey) : '') ||
+    posMap.get(rawName) ||
+    posMap.get(norm) ||
+    ''
+  ).trim().toUpperCase();
+
+  if (dbPos === 'G' || dbPos.includes('GOALIE') || dbPos.includes('GK') || dbPos.includes('GOALTENDER')) return 'G';
   if (dbPos === 'D' || dbPos.includes('DEF') || dbPos === 'LD' || dbPos === 'RD') return 'D';
-  if (dbPos === 'F' || dbPos === 'C' || dbPos === 'LW' || dbPos === 'RW') return 'F';
+  if (dbPos === 'F' || dbPos === 'C' || dbPos === 'LW' || dbPos === 'RW' || dbPos.includes('FORW')) return 'F';
 
   const sa = Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
   const sv = Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
   const sog = Number(p.total_sog ?? p.sog ?? p.shots ?? 0);
   const chks = Number(p.total_chks ?? p.chks ?? p.checks ?? 0);
-  if ((sa > 0 || sv > 0) && sog === 0 && chks === 0) {
+  if ((sa > 0 || sv > 0 || Number(p.wins ?? 0) > 0 || Number(p.shutouts ?? 0) > 0) && sog === 0 && chks === 0) {
     return 'G';
   }
 
@@ -141,7 +195,7 @@ const StatCard = ({ title, data, category, minGP = 10, onTabClick, hoveredPlayer
     let list = [...data];
     if (category === 'Goalies') {
       const minGames = minGP !== undefined ? minGP : 10;
-      list = list.filter(p => Number(p.gp || 0) >= minGames);
+      list = list.filter(p => Number(p.gp || 0) >= minGames && hasPositiveTOI(p));
 
       if (activeSubTab === 'GAA') {
         return list.sort((a, b) => {
@@ -192,8 +246,8 @@ const StatCard = ({ title, data, category, minGP = 10, onTabClick, hoveredPlayer
   }, [data, activeSubTab, category, minGP]);
 
   const defaultTop = sorted[0];
-  const activeTop = hoveredPlayer && sorted.some(p => (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name))
-    ? sorted.find(p => (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name))
+  const activeTop = hoveredPlayer && sorted.some(p => (p.player_id && p.player_id === hoveredPlayer.player_id) || (p.player_name && p.player_name === hoveredPlayer.player_name))
+    ? sorted.find(p => (p.player_id && p.player_id === hoveredPlayer.player_id) || (p.player_name && p.player_name === hoveredPlayer.player_name))
     : defaultTop;
 
   const top = activeTop || defaultTop;
@@ -201,13 +255,13 @@ const StatCard = ({ title, data, category, minGP = 10, onTabClick, hoveredPlayer
   const getValue = (p: any) => {
     if (!p) return 0;
     if (activeSubTab === 'GAA') {
-      if (p.gaa != null && !isNaN(Number(p.gaa))) return Number(p.gaa).toFixed(2);
+      if (p.gaa != null && !isNaN(Number(p.gaa)) && Number(p.gaa) > 0) return Number(p.gaa).toFixed(2);
       const gp = Number(p.gp ?? 0);
       const ga = Number(p.goals_against ?? p.total_goals_against ?? p.total_ga ?? p.ga ?? 0);
       return gp > 0 ? (ga / gp).toFixed(2) : '-';
     }
     if (activeSubTab === 'SV%') {
-      if (p.sv_pct != null && !isNaN(Number(p.sv_pct))) return Number(p.sv_pct).toFixed(3);
+      if (p.sv_pct != null && !isNaN(Number(p.sv_pct)) && Number(p.sv_pct) > 0) return Number(p.sv_pct).toFixed(3);
       const sa = Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
       const sv = Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
       return sa > 0 ? (sv / sa).toFixed(3) : '-';
@@ -248,11 +302,11 @@ const StatCard = ({ title, data, category, minGP = 10, onTabClick, hoveredPlayer
             <img src={top.logo_url || '/placeholder.png'} className="h-16 w-16 mx-auto mb-2 object-contain" alt="Team" />
             <p className="font-bold text-xs truncate">{top.player_name} {(top.is_rookie === true || top.is_rookie === 'true' || top.is_rookie === 1) && <span className="text-red-600 font-black">[R]</span>}</p>
             <p className="text-[10px] text-gray-500 mb-2">{top.team_name}</p>
-            <p className="text-3xl font-black">{getValue(top)}</p>
+            <p className="text-3xl font-black text-black">{getValue(top)}</p>
           </div>
           <div className="w-2/3 flex flex-col justify-between">
             {sorted.slice(0, 10).map((p, i) => {
-              const isHovered = hoveredPlayer && (p.player_id || p.player_name) === (hoveredPlayer.player_id || hoveredPlayer.player_name);
+              const isHovered = hoveredPlayer && ((p.player_id && p.player_id === hoveredPlayer.player_id) || (p.player_name && p.player_name === hoveredPlayer.player_name));
               return (
                 <div
                   key={i}
@@ -263,7 +317,7 @@ const StatCard = ({ title, data, category, minGP = 10, onTabClick, hoveredPlayer
                   <span className="truncate flex-1">
                     {i + 1}. {p.player_name} {(p.is_rookie === true || p.is_rookie === 'true' || p.is_rookie === 1) && <span className="text-red-600 font-black text-[9px]">[R]</span>}
                   </span>
-                  <span className="font-bold ml-12">{getValue(p)}</span>
+                  <span className="font-black text-black ml-12">{getValue(p)}</span>
                 </div>
               );
             })}
@@ -293,9 +347,15 @@ const SEASON_TYPES: Record<number, string> = {
   31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
 };
 
+// Dynamic helper: extracts league type (W, Q, O, V, G, etc.) from league name or code automatically
 const getLeaguePrefix = (league: { league_id: number | string; league_name?: string }) => {
   const name = String(league.league_name || '').trim().toUpperCase();
   if (name) {
+    if (name.includes('ORIGINAL') || name.startsWith('O6') || name.startsWith('O')) return 'O';
+    if (name.includes('THE Q') || name.startsWith('Q')) return 'Q';
+    if (name.includes('VINTAGE') || name.startsWith('V')) return 'V';
+    if (name.includes('GOLDEN') || name.startsWith('G')) return 'G';
+    if (name.includes('W LEAGUE') || name.startsWith('W')) return 'W';
     const match = name.match(/^[A-Z]+/);
     if (match && match[0]) return match[0];
   }
@@ -312,7 +372,7 @@ export default function NewspaperPage() {
   const [selectedTeam, setSelectedTeam] = useState('All');
   const [data, setData] = useState<any[]>([]);
   const [posMap, setPosMap] = useState<Map<string, string>>(new Map());
-  const [sortConfig, setSortConfig] = useState<{ key: string, dir: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
 
   const [hoveredSkater, setHoveredSkater] = useState<any>(null);
   const [hoveredGoalie, setHoveredGoalie] = useState<any>(null);
@@ -344,7 +404,7 @@ export default function NewspaperPage() {
       if (p) extracted.add(p);
     });
     if (extracted.size === 0) {
-      return ['W', 'Q', 'O', 'V'];
+      return ['W', 'Q', 'O', 'V', 'G'];
     }
     const priority = ['W', 'Q', 'O', 'V', 'G'];
     return Array.from(extracted).sort((a, b) => {
@@ -375,7 +435,34 @@ export default function NewspaperPage() {
 
   async function loadData(leagueId: string) {
     const sId = parseInt(leagueId, 10);
-    
+
+    // Dynamic config refresh for the active league/season
+    try {
+      const cfg = getSeasonConfig(sId);
+      if (cfg?.goalies) {
+        Object.values(cfg.goalies).forEach(names => {
+          if (Array.isArray(names)) {
+            names.forEach(n => {
+              if (n && n !== '--') KNOWN_GOALIES_SET.add(normalizeName(n));
+            });
+          }
+        });
+      }
+      if (cfg?.skaters) {
+        Object.entries(cfg.skaters).forEach(([team, names]) => {
+          if (Array.isArray(names)) {
+            const fCount = cfg.teamPositionCounts?.[team]?.forwards ?? cfg.defaultPositionCounts?.forwards ?? 5;
+            names.slice(0, fCount).forEach(n => {
+              if (n && n !== '--') KNOWN_FORWARDS_SET.add(normalizeName(n));
+            });
+            names.slice(fCount).forEach(n => {
+              if (n && n !== '--') KNOWN_DEFENSE_SET.add(normalizeName(n));
+            });
+          }
+        });
+      }
+    } catch { }
+
     // Fetch stats, master player game stats, rosters, database, and teams in parallel
     const [statsRes, masterRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
       supabase.from('api_stats_with_names').select('*').eq('league_id', sId),
@@ -405,13 +492,16 @@ export default function NewspaperPage() {
       playerDbRes.data.forEach((p: any) => {
         const pos = String(p.pos || '').trim().toUpperCase();
         const pName = String(p.player_name || '').trim();
-        const pId = p.player_id ? String(p.player_id) : '';
+        const norm = normalizeName(pName);
+        const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
         if (pos) {
           if (pId) newPosMap.set(pId, pos);
           if (pName) newPosMap.set(pName.toLowerCase(), pos);
+          if (norm) newPosMap.set(norm, pos);
         }
         if (pId) playerMetaMap.set(pId, p);
         if (pName) playerMetaMap.set(pName.toLowerCase(), p);
+        if (norm) playerMetaMap.set(norm, p);
       });
     }
 
@@ -419,13 +509,16 @@ export default function NewspaperPage() {
       rosterRes.data.forEach((p: any) => {
         const pos = String(p.pos || p.position || '').trim().toUpperCase();
         const pName = String(p.player_name || '').trim();
-        const pId = p.player_id ? String(p.player_id) : '';
+        const norm = normalizeName(pName);
+        const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
         if (pos) {
           if (pId) newPosMap.set(pId, pos);
           if (pName) newPosMap.set(pName.toLowerCase(), pos);
+          if (norm) newPosMap.set(norm, pos);
         }
         if (pId) playerMetaMap.set(pId, { ...(playerMetaMap.get(pId) || {}), ...p });
         if (pName) playerMetaMap.set(pName.toLowerCase(), { ...(playerMetaMap.get(pName.toLowerCase()) || {}), ...p });
+        if (norm) playerMetaMap.set(norm, { ...(playerMetaMap.get(norm) || {}), ...p });
       });
     }
 
@@ -435,12 +528,15 @@ export default function NewspaperPage() {
     const masterAggregatedMap = new Map<string, any>();
     if (masterRes.data && masterRes.data.length > 0) {
       masterRes.data.forEach((row: any) => {
-        const isG = String(row.pos_played || '').toUpperCase() === 'G';
-        const pId = row.player_id ? String(row.player_id) : '';
+        const directPos = String(row.pos_played || '').toUpperCase();
+        const pId = row.player_id && String(row.player_id) !== '1' && String(row.player_id) !== '0' ? String(row.player_id) : '';
         const rawPName = String(row.player_name || '').trim();
-        const meta = (pId ? playerMetaMap.get(pId) : null) || (rawPName ? playerMetaMap.get(rawPName.toLowerCase()) : null);
-        const resolvedName = meta?.player_name || rawPName || (pId && pId !== '1' ? `Player #${pId}` : (isG ? 'Goalie' : 'Skater'));
-        const key = (isG ? 'G_' : 'S_') + (pId && pId !== '1' ? pId : (resolvedName.toLowerCase() + '_' + String(row.team_id || '')));
+        const norm = normalizeName(rawPName);
+        const meta = (pId ? playerMetaMap.get(pId) : null) || (rawPName ? playerMetaMap.get(rawPName.toLowerCase()) : null) || (norm ? playerMetaMap.get(norm) : null);
+        const resolvedName = meta?.player_name || rawPName || (pId ? `Player #${pId}` : (directPos === 'G' ? 'Goalie' : 'Skater'));
+
+        const isG = directPos === 'G' || KNOWN_GOALIES_SET.has(normalizeName(resolvedName)) || (Number(row.shots_against || 0) > 0 || Number(row.saves || 0) > 0);
+        const key = (isG ? 'G_' : 'S_') + (pId ? pId : (normalizeName(resolvedName) + '_' + String(row.team_id || '')));
 
         const tInfo = teamMap.get(String(row.team_id)) || (meta?.team_default ? teamMap.get(meta.team_default) : null);
         const teamName = tInfo?.name || row.team_name || 'Team';
@@ -539,7 +635,9 @@ export default function NewspaperPage() {
     // 1. Add aggregated master stats
     masterList.forEach((m: any) => {
       const isG = m.pos_played === 'G';
-      const key = (isG ? 'G_' : 'S_') + (m.player_id && m.player_id !== 1 ? String(m.player_id) : (m.player_name.toLowerCase() + '_' + String(m.team_name || '')));
+      const norm = normalizeName(m.player_name);
+      const pId = m.player_id && String(m.player_id) !== '1' && String(m.player_id) !== '0' ? String(m.player_id) : '';
+      const key = (isG ? 'G_' : 'S_') + (pId ? pId : `${norm}_${m.team_id || m.team_name || ''}`);
       combinedMap.set(key, m);
     });
 
@@ -548,34 +646,49 @@ export default function NewspaperPage() {
       statsRes.data.forEach((s: any) => {
         const sName = String(s.player_name || '').trim();
         const norm = normalizeName(sName);
-        const isG = KNOWN_GOALIES_SET.has(norm) || String(s.pos || s.pos_played || '').toUpperCase() === 'G';
-        const key = (isG ? 'G_' : 'S_') + (s.player_id && s.player_id !== 1 ? String(s.player_id) : (sName.toLowerCase() + '_' + String(s.team_name || '')));
+        const resolvedPPos = resolvePlayerPosition(s, newPosMap);
+        const isG = resolvedPPos === 'G';
+        const pId = s.player_id && String(s.player_id) !== '1' && String(s.player_id) !== '0' ? String(s.player_id) : '';
+        const key = (isG ? 'G_' : 'S_') + (pId ? pId : `${norm}_${s.team_id || s.team_name || ''}`);
+
+        const sa = Number(s.shots_against ?? s.total_shots_against ?? s.total_sa ?? s.sa ?? 0);
+        const sv = Number(s.saves ?? s.total_saves ?? s.sv ?? 0);
+        const ga = Number(s.goals_against ?? s.total_goals_against ?? s.total_ga ?? s.ga ?? 0);
+        const gp = Number(s.gp ?? s.games_played ?? 0);
+        const svPct = isG ? (s.sv_pct != null && !isNaN(Number(s.sv_pct)) ? Number(s.sv_pct) : (sa > 0 ? Number((sv / sa).toFixed(3)) : 0)) : null;
+        const gaa = isG ? (s.gaa != null && !isNaN(Number(s.gaa)) ? Number(s.gaa) : (gp > 0 ? Number((ga / gp).toFixed(2)) : 0)) : null;
 
         if (combinedMap.has(key)) {
           const existing = combinedMap.get(key);
           combinedMap.set(key, {
             ...existing,
             ...s,
-            pos_played: isG ? 'G' : (s.pos_played || s.pos || existing.pos_played),
-            // Preserve goalie metrics only if genuinely a goalie
-            wins: isG ? Number(s.wins ?? existing.wins ?? 0) : 0,
-            losses: isG ? Number(s.losses ?? existing.losses ?? 0) : 0,
-            ties: isG ? Number(s.ties ?? existing.ties ?? 0) : 0,
-            otl: isG ? Number(s.otl ?? existing.otl ?? 0) : 0,
-            saves: isG ? Number(s.saves ?? s.total_saves ?? existing.saves ?? 0) : 0,
-            shots_against: isG ? Number(s.shots_against ?? s.total_shots_against ?? existing.shots_against ?? 0) : 0,
-            goals_against: isG ? Number(s.goals_against ?? s.total_goals_against ?? existing.goals_against ?? 0) : 0,
-            shutouts: isG ? Number(s.shutouts ?? existing.shutouts ?? 0) : 0,
-            sv_pct: isG ? (s.sv_pct != null ? s.sv_pct : existing.sv_pct) : null,
-            gaa: isG ? (s.gaa != null ? s.gaa : existing.gaa) : null
+            pos_played: isG ? 'G' : (s.pos_played || s.pos || resolvedPPos || existing.pos_played),
+            gp: Math.max(Number(existing.gp || 0), gp),
+            wins: isG ? Math.max(Number(s.wins ?? 0), Number(existing.wins ?? 0)) : 0,
+            losses: isG ? Math.max(Number(s.losses ?? 0), Number(existing.losses ?? 0)) : 0,
+            ties: isG ? Math.max(Number(s.ties ?? 0), Number(existing.ties ?? 0)) : 0,
+            otl: isG ? Math.max(Number(s.otl ?? 0), Number(existing.otl ?? 0)) : 0,
+            saves: isG ? Math.max(sv, Number(existing.saves ?? 0)) : 0,
+            shots_against: isG ? Math.max(sa, Number(existing.shots_against ?? 0)) : 0,
+            goals_against: isG ? Math.max(ga, Number(existing.goals_against ?? 0)) : 0,
+            shutouts: isG ? Math.max(Number(s.shutouts ?? 0), Number(existing.shutouts ?? 0)) : 0,
+            sv_pct: isG ? (svPct ?? existing.sv_pct) : null,
+            gaa: isG ? (gaa ?? existing.gaa) : null
           });
         } else {
           const tInfo = teamMap.get(String(s.team_id)) || (s.team_name ? teamMap.get(s.team_name.toLowerCase()) : null);
           combinedMap.set(key, {
             ...s,
-            pos_played: isG ? 'G' : (s.pos_played || s.pos || 'F'),
+            pos_played: isG ? 'G' : (s.pos_played || s.pos || resolvedPPos),
             team_name: tInfo?.name || s.team_name || 'Team',
-            logo_url: tInfo?.logo || s.logo_url || ''
+            logo_url: tInfo?.logo || s.logo_url || '',
+            shots_against: sa,
+            saves: sv,
+            goals_against: ga,
+            sv_pct: svPct,
+            gaa: gaa,
+            gp: gp
           });
         }
       });
@@ -586,11 +699,14 @@ export default function NewspaperPage() {
   }
 
   const uniqueData = useMemo(() => {
-    const map = new Map();
+    const map = new Map<string, any>();
     data.forEach(item => {
-      if (!hasPlayed(item)) return;
-      const key = item.player_id || item.player_name;
-      if (!key) return;
+      // Strictly exclude any player whose TOI is 0 or unrecorded
+      if (!hasPositiveTOI(item)) return;
+
+      const rawName = String(item.player_name || '').trim();
+      const norm = normalizeName(rawName);
+      if (!norm && !item.player_id) return;
 
       const resolvedPos = resolvePlayerPosition(item, posMap);
       const enrichedItem = {
@@ -598,11 +714,15 @@ export default function NewspaperPage() {
         pos: resolvedPos
       };
 
+      const pId = item.player_id && String(item.player_id) !== '1' && String(item.player_id) !== '0' ? String(item.player_id) : '';
+      const teamKey = String(item.team_id || item.team_name || '');
+      const key = (resolvedPos === 'G' ? 'G_' : 'S_') + (pId ? pId : `${norm}_${teamKey}`);
+
       if (!map.has(key)) {
         map.set(key, enrichedItem);
       } else {
         const existing = map.get(key);
-        if ((item.gp || 0) > (existing.gp || 0)) {
+        if (Number(item.gp || 0) > Number(existing.gp || 0) || Number(item.total_points || 0) > Number(existing.total_points || 0)) {
           map.set(key, enrichedItem);
         }
       }
@@ -618,20 +738,28 @@ export default function NewspaperPage() {
   }, [uniqueData, selectedTeam]);
 
   const sortedData = useMemo(() => {
-    if (!sortConfig) return filteredData;
-    return [...filteredData].sort((a, b) => {
-      let valA: any = a[sortConfig.key];
-      let valB: any = b[sortConfig.key];
+    const effectiveSortConfig = sortConfig || (
+      activeTab === 'Goalies'
+        ? { key: 'sv_pct', dir: 'desc' as const }
+        : activeTab === 'Skaters'
+          ? { key: 'total_points', dir: 'desc' as const }
+          : null
+    );
 
-      if (sortConfig.key === 'pts_per_game') {
+    if (!effectiveSortConfig) return filteredData;
+    return [...filteredData].sort((a, b) => {
+      let valA: any = a[effectiveSortConfig.key];
+      let valB: any = b[effectiveSortConfig.key];
+
+      if (effectiveSortConfig.key === 'pts_per_game') {
         const p1 = Number(a.total_points ?? a.points ?? 0);
         const p2 = Number(b.total_points ?? b.points ?? 0);
         valA = a.gp ? p1 / a.gp : 0;
         valB = b.gp ? p2 / b.gp : 0;
-      } else if (sortConfig.key === 'evg') {
+      } else if (effectiveSortConfig.key === 'evg') {
         valA = Number(a.evg ?? a.total_evg ?? 0);
         valB = Number(b.evg ?? b.total_evg ?? 0);
-      } else if (sortConfig.key === 'ev_points') {
+      } else if (effectiveSortConfig.key === 'ev_points') {
         const pA = Number(a.total_points ?? a.points ?? 0);
         const ppA = Number(a.pp_points ?? a.total_pp_points ?? a.ppp ?? 0);
         const shA = Number(a.sh_points ?? a.total_sh_points ?? a.shp ?? 0);
@@ -641,93 +769,115 @@ export default function NewspaperPage() {
         const ppB = Number(b.pp_points ?? b.total_pp_points ?? b.ppp ?? 0);
         const shB = Number(b.sh_points ?? b.total_sh_points ?? b.shp ?? 0);
         valB = Number(b.ev_points ?? b.total_ev_points ?? b.ev_pts ?? Math.max(0, pB - ppB - shB));
-      } else if (sortConfig.key === 'ppg') {
+      } else if (effectiveSortConfig.key === 'ppg') {
         valA = Number(a.ppg ?? a.total_ppg ?? a.pp_goals ?? a.total_pp_goals ?? 0);
         valB = Number(b.ppg ?? b.total_ppg ?? b.pp_goals ?? b.total_pp_goals ?? 0);
-      } else if (sortConfig.key === 'pp_points') {
+      } else if (effectiveSortConfig.key === 'pp_points') {
         valA = Number(a.pp_points ?? a.total_pp_points ?? a.ppp ?? a.pp_pts ?? 0);
         valB = Number(b.pp_points ?? b.total_pp_points ?? b.ppp ?? b.pp_pts ?? 0);
-      } else if (sortConfig.key === 'shg') {
+      } else if (effectiveSortConfig.key === 'shg') {
         valA = Number(a.shg ?? a.total_shg ?? a.sh_goals ?? a.total_sh_goals ?? 0);
         valB = Number(b.shg ?? b.total_shg ?? b.sh_goals ?? b.total_sh_goals ?? 0);
-      } else if (sortConfig.key === 'sh_points') {
+      } else if (effectiveSortConfig.key === 'sh_points') {
         valA = Number(a.sh_points ?? a.total_sh_points ?? a.shp ?? a.sh_pts ?? 0);
         valB = Number(b.sh_points ?? b.total_sh_points ?? b.shp ?? b.sh_pts ?? 0);
-      } else if (sortConfig.key === 'gwg') {
+      } else if (effectiveSortConfig.key === 'gwg') {
         valA = Number(a.gwg ?? a.total_gwg ?? 0);
         valB = Number(b.gwg ?? b.total_gwg ?? 0);
-      } else if (sortConfig.key === 'otg') {
+      } else if (effectiveSortConfig.key === 'otg') {
         valA = Number(a.otg ?? a.total_otg ?? 0);
         valB = Number(b.otg ?? b.total_otg ?? 0);
-      } else if (sortConfig.key === 'total_sog') {
+      } else if (effectiveSortConfig.key === 'total_sog') {
         valA = Number(a.total_sog ?? a.sog ?? a.shots ?? 0);
         valB = Number(b.total_sog ?? b.sog ?? b.shots ?? 0);
-      } else if (sortConfig.key === 'total_chks') {
+      } else if (effectiveSortConfig.key === 'total_chks') {
         valA = Number(a.total_chks ?? a.chks ?? a.checks ?? 0);
         valB = Number(b.total_chks ?? b.chks ?? b.checks ?? 0);
-      } else if (sortConfig.key === 'total_pim') {
+      } else if (effectiveSortConfig.key === 'total_pim') {
         valA = Number(a.total_pim ?? a.pim ?? 0);
         valB = Number(b.total_pim ?? b.pim ?? 0);
-      } else if (sortConfig.key === 'toi_minutes') {
+      } else if (effectiveSortConfig.key === 'toi_minutes') {
         valA = parseTOI(a.toi_minutes ?? a.toi);
         valB = parseTOI(b.toi_minutes ?? b.toi);
-      } else if (sortConfig.key === 'shots_against') {
+      } else if (effectiveSortConfig.key === 'shots_against') {
         valA = Number(a.shots_against ?? a.total_shots_against ?? a.total_sa ?? a.sa ?? 0);
         valB = Number(b.shots_against ?? b.total_shots_against ?? b.total_sa ?? b.sa ?? 0);
-      } else if (sortConfig.key === 'saves') {
+      } else if (effectiveSortConfig.key === 'saves') {
         valA = Number(a.saves ?? a.total_saves ?? a.sv ?? 0);
         valB = Number(b.saves ?? b.total_saves ?? b.sv ?? 0);
-      } else if (sortConfig.key === 'goals_against') {
+      } else if (effectiveSortConfig.key === 'goals_against') {
         valA = Number(a.goals_against ?? a.total_goals_against ?? a.total_ga ?? a.ga ?? 0);
         valB = Number(b.goals_against ?? b.total_goals_against ?? b.total_ga ?? b.ga ?? 0);
-      } else if (sortConfig.key === 'shutouts') {
+      } else if (effectiveSortConfig.key === 'shutouts') {
         valA = Number(a.shutouts ?? 0);
         valB = Number(b.shutouts ?? 0);
-      } else if (sortConfig.key === 'sv_pct') {
-        valA = a.sv_pct != null && !isNaN(Number(a.sv_pct)) ? Number(a.sv_pct) : 0;
-        valB = b.sv_pct != null && !isNaN(Number(b.sv_pct)) ? Number(b.sv_pct) : 0;
-      } else if (sortConfig.key === 'gaa') {
-        valA = a.gaa != null && !isNaN(Number(a.gaa)) ? Number(a.gaa) : 999;
-        valB = b.gaa != null && !isNaN(Number(b.gaa)) ? Number(b.gaa) : 999;
-      } else if (sortConfig.key === 'wins') {
+      } else if (effectiveSortConfig.key === 'sv_pct') {
+        const saA = Number(a.shots_against ?? a.total_shots_against ?? a.total_sa ?? a.sa ?? 0);
+        const svA = Number(a.saves ?? a.total_saves ?? a.sv ?? 0);
+        valA = a.sv_pct != null && !isNaN(Number(a.sv_pct)) && Number(a.sv_pct) > 0 ? Number(a.sv_pct) : (saA > 0 ? (svA / saA) : 0);
+
+        const saB = Number(b.shots_against ?? b.total_shots_against ?? b.total_sa ?? b.sa ?? 0);
+        const svB = Number(b.saves ?? b.total_saves ?? b.sv ?? 0);
+        valB = b.sv_pct != null && !isNaN(Number(b.sv_pct)) && Number(b.sv_pct) > 0 ? Number(b.sv_pct) : (saB > 0 ? (svB / saB) : 0);
+      } else if (effectiveSortConfig.key === 'gaa') {
+        valA = a.gaa != null && !isNaN(Number(a.gaa)) && Number(a.gaa) > 0 ? Number(a.gaa) : 999;
+        valB = b.gaa != null && !isNaN(Number(b.gaa)) && Number(b.gaa) > 0 ? Number(b.gaa) : 999;
+      } else if (effectiveSortConfig.key === 'wins') {
         valA = Number(a.wins ?? 0);
         valB = Number(b.wins ?? 0);
-      } else if (sortConfig.key === 'losses') {
+      } else if (effectiveSortConfig.key === 'losses') {
         valA = Number(a.losses ?? 0);
         valB = Number(b.losses ?? 0);
-      } else if (sortConfig.key === 'ties') {
+      } else if (effectiveSortConfig.key === 'ties') {
         valA = Number(a.ties ?? 0);
         valB = Number(b.ties ?? 0);
-      } else if (sortConfig.key === 'otl') {
+      } else if (effectiveSortConfig.key === 'otl') {
         valA = Number(a.otl ?? 0);
         valB = Number(b.otl ?? 0);
-      } else if (sortConfig.key === 'total_goals') {
+      } else if (effectiveSortConfig.key === 'total_goals') {
         valA = Number(a.total_goals ?? a.goals ?? 0);
         valB = Number(b.total_goals ?? b.goals ?? 0);
-      } else if (sortConfig.key === 'total_assists') {
+      } else if (effectiveSortConfig.key === 'total_assists') {
         valA = Number(a.total_assists ?? a.assists ?? 0);
         valB = Number(b.total_assists ?? b.assists ?? 0);
-      } else if (sortConfig.key === 'total_points') {
+      } else if (effectiveSortConfig.key === 'total_points') {
         valA = Number(a.total_points ?? a.points ?? (Number(a.total_goals ?? a.goals ?? 0) + Number(a.total_assists ?? a.assists ?? 0)));
         valB = Number(b.total_points ?? b.points ?? (Number(b.total_goals ?? b.goals ?? 0) + Number(b.total_assists ?? b.assists ?? 0)));
-      } else if (sortConfig.key === 'gp') {
+      } else if (effectiveSortConfig.key === 'gp') {
         valA = Number(a.gp ?? 0);
         valB = Number(b.gp ?? 0);
       }
 
       if (typeof valA === 'string' && typeof valB === 'string') {
-        return sortConfig.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        return effectiveSortConfig.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
       }
 
       valA = valA ?? 0;
       valB = valB ?? 0;
-      return sortConfig.dir === 'asc' ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+
+      if (valA === valB) {
+        if (effectiveSortConfig.key === 'sv_pct') {
+          const svA = Number(a.saves ?? a.total_saves ?? a.sv ?? 0);
+          const svB = Number(b.saves ?? b.total_saves ?? b.sv ?? 0);
+          if (svA !== svB) return effectiveSortConfig.dir === 'asc' ? svA - svB : svB - svA;
+          return effectiveSortConfig.dir === 'asc' ? Number(a.wins || 0) - Number(b.wins || 0) : Number(b.wins || 0) - Number(a.wins || 0);
+        }
+        if (effectiveSortConfig.key === 'total_points') {
+          const gA = Number(a.total_goals ?? a.goals ?? 0);
+          const gB = Number(b.total_goals ?? b.goals ?? 0);
+          if (gA !== gB) return effectiveSortConfig.dir === 'asc' ? gA - gB : gB - gA;
+        }
+      }
+
+      return effectiveSortConfig.dir === 'asc' ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
     });
-  }, [filteredData, sortConfig]);
+  }, [filteredData, sortConfig, activeTab]);
 
   const getFilteredData = (category: 'skaters' | 'goalies' | 'defense', sourceList?: any[]) => {
     const list = sourceList || sortedData;
     return list.filter(p => {
+      // Must have positive TOI
+      if (!hasPositiveTOI(p)) return false;
       const pos = (p.pos || '').toUpperCase();
       if (category === 'goalies') return pos === 'G';
       if (category === 'defense') return pos === 'D';
@@ -750,7 +900,7 @@ export default function NewspaperPage() {
     if (tab === 'Skaters') {
       setSortConfig({ key: 'total_points', dir: 'desc' });
     } else if (tab === 'Goalies') {
-      setSortConfig({ key: 'gaa', dir: 'asc' });
+      setSortConfig({ key: 'sv_pct', dir: 'desc' });
     } else {
       setSortConfig(null);
     }
@@ -773,21 +923,102 @@ export default function NewspaperPage() {
   };
 
   const exportToCSV = () => {
-    const currentList = getFilteredData(activeTab === 'Goalies' ? 'goalies' : 'skaters');
+    const isGoalieTab = activeTab === 'Goalies';
+    const currentList = getFilteredData(isGoalieTab ? 'goalies' : 'skaters');
     if (currentList.length === 0) return;
 
-    const keys = Object.keys(currentList[0]);
-    const csvRows = [
-      keys.join(','),
-      ...currentList.map(row => keys.map(k => JSON.stringify(row[k] ?? '')).join(','))
-    ];
+    let headers: string[] = [];
+    let rows: string[][] = [];
 
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+    if (isGoalieTab) {
+      headers = ['TEAM', 'PLAYER', 'GP', 'W', 'L', 'T', 'OTL', 'SA', 'SV', 'GA', 'SO', 'SV%', 'GAA', 'G', 'A', 'P'];
+      rows = currentList.map(r => {
+        const sa = Number(r.shots_against ?? r.total_shots_against ?? r.total_sa ?? r.sa ?? 0);
+        const sv = Number(r.saves ?? r.total_saves ?? r.sv ?? 0);
+        const ga = Number(r.goals_against ?? r.total_goals_against ?? r.total_ga ?? r.ga ?? 0);
+        const gp = Number(r.gp || 0);
+        const svPct = r.sv_pct != null && !isNaN(Number(r.sv_pct)) ? Number(r.sv_pct).toFixed(3) : (sa > 0 ? (sv / sa).toFixed(3) : '-');
+        const gaa = r.gaa != null && !isNaN(Number(r.gaa)) ? Number(r.gaa).toFixed(2) : (gp > 0 ? (ga / gp).toFixed(2) : '-');
+        const g = Number(r.total_goals ?? r.goals ?? 0);
+        const a = Number(r.total_assists ?? r.assists ?? 0);
+        const p = Number(r.total_points ?? r.points ?? (g + a));
+
+        return [
+          r.team_name || '',
+          r.player_name || '',
+          String(gp),
+          String(r.wins ?? 0),
+          String(r.losses ?? 0),
+          String(r.ties ?? 0),
+          String(r.otl ?? 0),
+          String(sa),
+          String(sv),
+          String(ga),
+          String(r.shutouts ?? 0),
+          svPct,
+          gaa,
+          String(g),
+          String(a),
+          String(p)
+        ];
+      });
+    } else {
+      headers = ['TEAM', 'PLAYER', 'POS', 'GP', 'G', 'A', 'PTS', 'PTS/G', 'EVG', 'EV PTS', 'PPG', 'PP PTS', 'SHG', 'SH PTS', 'GWG', 'OTG', 'SOG', 'CHKS', 'PIM', 'TOI'];
+      rows = currentList.map(r => {
+        const gp = Number(r.gp || 0);
+        const g = Number(r.total_goals ?? r.goals ?? 0);
+        const a = Number(r.total_assists ?? r.assists ?? 0);
+        const pts = Number(r.total_points ?? r.points ?? (g + a));
+        const ptsPerG = gp > 0 ? (pts / gp).toFixed(2) : '0.00';
+        const ppp = Number(r.pp_points ?? r.total_pp_points ?? r.ppp ?? 0);
+        const shp = Number(r.sh_points ?? r.total_sh_points ?? r.shp ?? 0);
+        const evPoints = Number(r.ev_points ?? r.total_ev_points ?? r.ev_pts ?? Math.max(0, pts - ppp - shp));
+        const evg = Number(r.evg ?? r.total_evg ?? 0);
+        const ppg = Number(r.ppg ?? r.total_ppg ?? r.pp_goals ?? r.total_pp_goals ?? 0);
+        const shg = Number(r.shg ?? r.total_shg ?? r.sh_goals ?? r.total_sh_goals ?? 0);
+        const gwg = Number(r.gwg ?? r.total_gwg ?? 0);
+        const otg = Number(r.otg ?? r.total_otg ?? 0);
+        const sog = Number(r.total_sog ?? r.sog ?? r.shots ?? 0);
+        const chks = Number(r.total_chks ?? r.chks ?? r.checks ?? 0);
+        const pim = Number(r.total_pim ?? r.pim ?? 0);
+        const toi = r.toi_minutes ?? r.toi ?? '-';
+
+        return [
+          r.team_name || '',
+          r.player_name || '',
+          r.pos || 'F',
+          String(gp),
+          String(g),
+          String(a),
+          String(pts),
+          ptsPerG,
+          String(evg),
+          String(evPoints),
+          String(ppg),
+          String(ppp),
+          String(shg),
+          String(shp),
+          String(gwg),
+          String(otg),
+          String(sog),
+          String(chks),
+          String(pim),
+          String(toi)
+        ];
+      });
+    }
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => JSON.stringify(cell ?? '')).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.setAttribute('href', url);
-    a.setAttribute('download', `league_stats_${activeTab.toLowerCase()}.csv`);
-    a.click();
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `league_stats_${activeTab.toLowerCase()}.csv`);
+    link.click();
   };
 
   const sortMap: Record<string, string> = {
@@ -822,9 +1053,9 @@ export default function NewspaperPage() {
         return Number(p.ev_points ?? p.total_ev_points ?? p.ev_pts ?? Math.max(0, pts - ppp - shp));
       }
       if (key === 'ppg') return Number(p.ppg ?? p.total_ppg ?? p.pp_goals ?? p.total_pp_goals ?? 0);
-      if (key === 'pp_points') return Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? p.pp_pts ?? 0);
+      if (key === 'pp_points') return Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? a.pp_pts ?? 0);
       if (key === 'shg') return Number(p.shg ?? p.total_shg ?? p.sh_goals ?? p.total_sh_goals ?? 0);
-      if (key === 'sh_points') return Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? p.sh_pts ?? 0);
+      if (key === 'sh_points') return Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? a.sh_pts ?? 0);
       if (key === 'gwg') return Number(p.gwg ?? p.total_gwg ?? 0);
       if (key === 'otg') return Number(p.otg ?? p.total_otg ?? 0);
       if (key === 'total_sog') return Number(p.total_sog ?? p.sog ?? p.shots ?? 0);
@@ -865,8 +1096,16 @@ export default function NewspaperPage() {
       if (key === 'shots_against') return Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
       if (key === 'saves') return Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
       if (key === 'shutouts') return Number(p.shutouts ?? 0);
-      if (key === 'sv_pct') return p.sv_pct != null && !isNaN(Number(p.sv_pct)) ? Number(p.sv_pct) : 0;
-      if (key === 'gaa') return p.gaa != null && !isNaN(Number(p.gaa)) ? Number(p.gaa) : 999;
+      if (key === 'sv_pct') {
+        const sa = Number(p.shots_against ?? p.total_shots_against ?? p.total_sa ?? p.sa ?? 0);
+        const sv = Number(p.saves ?? p.total_saves ?? p.sv ?? 0);
+        return p.sv_pct != null && !isNaN(Number(p.sv_pct)) ? Number(p.sv_pct) : (sa > 0 ? sv / sa : 0);
+      }
+      if (key === 'gaa') {
+        const gp = Number(p.gp ?? 0);
+        const ga = Number(p.goals_against ?? p.total_goals_against ?? p.total_ga ?? p.ga ?? 0);
+        return p.gaa != null && !isNaN(Number(p.gaa)) && Number(p.gaa) > 0 ? Number(p.gaa) : (gp > 0 ? ga / gp : 999);
+      }
       if (key === 'total_goals') return Number(p.total_goals ?? p.goals ?? 0);
       if (key === 'total_assists') return Number(p.total_assists ?? p.assists ?? 0);
       if (key === 'total_points') return Number(p.total_points ?? p.points ?? (Number(p.total_goals ?? p.goals ?? 0) + Number(p.total_assists ?? p.assists ?? 0)));
@@ -887,9 +1126,9 @@ export default function NewspaperPage() {
 
     let minGAA = Infinity;
     goalieList.forEach(p => {
-      if (p.gaa != null && !isNaN(Number(p.gaa)) && Number(p.gaa) > 0) {
-        const gaa = Number(p.gaa);
-        if (gaa < minGAA) minGAA = gaa;
+      const gaaVal = getNum(p, 'gaa');
+      if (gaaVal > 0 && gaaVal < minGAA) {
+        minGAA = gaaVal;
       }
     });
     if (minGAA !== Infinity) {
@@ -903,11 +1142,11 @@ export default function NewspaperPage() {
     return (
       <td className="p-1">
         {isLeader ? (
-          <span className="bg-black text-red-600 font-black px-1.5 py-0.5 inline-block">
+          <span className="font-black text-black">
             {val}
           </span>
         ) : (
-          <span className={isBold ? 'font-bold' : ''}>{val}</span>
+          <span className={isBold ? 'font-bold text-black' : ''}>{val}</span>
         )}
       </td>
     );
@@ -926,11 +1165,10 @@ export default function NewspaperPage() {
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
-                selectedLeagueType === 'ALL'
+              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
                   ? 'bg-black text-white shadow-xs'
                   : 'text-black hover:bg-neutral-100'
-              }`}
+                }`}
               title="All Leagues"
             >
               ALL
@@ -943,11 +1181,10 @@ export default function NewspaperPage() {
                   key={type}
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
-                    isSelected
+                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
                       ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
                       : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                  }`}
+                    }`}
                   title={config?.name || `${type} League`}
                 >
                   {config?.logoUrl ? (
@@ -985,23 +1222,21 @@ export default function NewspaperPage() {
               ))}
             </select>
 
-            {activeTab === 'Home' && (
-              <select
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-                className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer text-xs sm:text-sm"
-              >
-                {teams.map((t) => (
-                  <option key={t} value={t}>
-                    {t === 'All' ? 'All Teams' : t}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              value={selectedTeam}
+              onChange={(e) => setSelectedTeam(e.target.value)}
+              className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer text-xs sm:text-sm"
+            >
+              {teams.map((t) => (
+                <option key={t} value={t}>
+                  {t === 'All' ? 'All Teams' : t}
+                </option>
+              ))}
+            </select>
 
             <button
               onClick={handleResetFilters}
-              className="bg-black text-white px-2.5 sm:px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800 rounded-xs"
+              className="bg-black text-white px-2.5 sm:px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800 rounded-xs cursor-pointer"
             >
               Reset
             </button>
@@ -1009,7 +1244,7 @@ export default function NewspaperPage() {
         </div>
 
         <div className="flex justify-end">
-          <button onClick={exportToCSV} className="flex items-center gap-1.5 bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800 rounded-xs w-full sm:w-auto justify-center">
+          <button onClick={exportToCSV} className="flex items-center gap-1.5 bg-black text-white px-3 py-1 text-xs font-bold uppercase hover:bg-gray-800 rounded-xs w-full sm:w-auto justify-center cursor-pointer">
             <FileSpreadsheet className="h-3.5 w-3.5" /> Export CSV
           </button>
         </div>
@@ -1018,12 +1253,11 @@ export default function NewspaperPage() {
       {/* Tabs */}
       <div className="flex gap-4 mb-4 text-xs uppercase border-b border-black pb-2 justify-center">
         {['Home', 'Skaters', 'Goalies'].map((tab) => (
-          <button 
-            key={tab} 
-            onClick={() => handleTabChange(tab)} 
-            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors ${
-              activeTab === tab ? 'bg-black text-white' : 'text-gray-600 hover:text-black hover:bg-black/5'
-            }`}
+          <button
+            key={tab}
+            onClick={() => handleTabChange(tab)}
+            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors cursor-pointer ${activeTab === tab ? 'bg-black text-white' : 'text-gray-600 hover:text-black hover:bg-black/5'
+              }`}
           >
             {tab}
           </button>
@@ -1034,7 +1268,7 @@ export default function NewspaperPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <StatCard
             title="Skaters"
-            data={getFilteredData('skaters', uniqueData)}
+            data={getFilteredData('skaters', filteredData)}
             category="Skaters"
             onTabClick={handleTabChange}
             hoveredPlayer={hoveredSkater}
@@ -1042,15 +1276,16 @@ export default function NewspaperPage() {
           />
           <StatCard
             title="Goalies"
-            data={getFilteredData('goalies', uniqueData)}
+            data={getFilteredData('goalies', filteredData)}
             category="Goalies"
+            minGP={10}
             onTabClick={handleTabChange}
             hoveredPlayer={hoveredGoalie}
             setHoveredPlayer={setHoveredGoalie}
           />
           <StatCard
             title="Defensemen"
-            data={getFilteredData('defense', uniqueData)}
+            data={getFilteredData('defense', filteredData)}
             category="Skaters"
             onTabClick={handleTabChange}
             hoveredPlayer={hoveredDefense}
@@ -1058,7 +1293,7 @@ export default function NewspaperPage() {
           />
           <StatCard
             title="Rookie Scoring Leaders"
-            data={getFilteredData('skaters', uniqueData).filter(p => p.is_rookie === true || p.is_rookie === 'true' || p.is_rookie === 1)}
+            data={getFilteredData('skaters', filteredData).filter(p => p.is_rookie === true || p.is_rookie === 'true' || p.is_rookie === 1)}
             category="Skaters"
             onTabClick={handleTabChange}
             hoveredPlayer={hoveredRookie}
