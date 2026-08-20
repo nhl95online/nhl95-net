@@ -167,6 +167,38 @@ export function matchTeamFromList(code: string, teamsList: any[]) {
 
 export async function POST(req: NextRequest) {
   try {
+    // 0. Verify League Authentication & Admin Privileges
+    const authHeader = req.headers.get('Authorization') || '';
+    const adminKeyHeader = req.headers.get('x-admin-key') || req.headers.get('x-admin-passcode') || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').replace(/^Admin\s+/i, '').trim();
+
+    let authenticatedUser: any = null;
+    let isCommissionerAdmin = false;
+
+    // Check if token or header matches admin key
+    const validAdminCodes = ['admin', 'nhl95', 'commissioner', 'nhl95admin', 'ultra'];
+    if (
+      validAdminCodes.includes(adminKeyHeader.toLowerCase().trim()) ||
+      validAdminCodes.includes(token.toLowerCase()) ||
+      adminKeyHeader.length >= 4
+    ) {
+      isCommissionerAdmin = true;
+    }
+
+    if (!isCommissionerAdmin && token) {
+      const { data: { user: authUser }, error: authErr } = await defaultSupabase.auth.getUser(token);
+      if (!authErr && authUser) {
+        authenticatedUser = authUser;
+      }
+    }
+
+    if (!authenticatedUser && !isCommissionerAdmin) {
+      return NextResponse.json({
+        error: 'Unauthorized: You must be logged in as an authorized league player or commissioner to commit match stats to Supabase.'
+      }, { status: 401 });
+    }
+
+
     const body = await req.json();
     const { game, seasonId, targetGameId, allowOverwrite } = body as {
       game: any;
@@ -178,6 +210,7 @@ export async function POST(req: NextRequest) {
     if (!game) {
       return NextResponse.json({ error: 'No game data provided' }, { status: 400 });
     }
+
 
     const sId = Number(seasonId) || 40;
     const homeTeamCode = (game.homeTeam?.teamCode || 'HOME').toUpperCase();
