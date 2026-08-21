@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download, RefreshCw } from 'lucide-react';
+import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type SortField = 'seed' | 'wins' | 'losses' | 'ties' | 'pts' | 'gf' | 'ga' | 'gd' | 'otWins' | 'otLosses' | 'season_id';
@@ -133,129 +133,6 @@ export default function StandingsPage() {
 
   // Playoff Cutoff Count State
   const [playoffCutoffCount, setPlayoffCutoffCount] = useState<number>(0);
-
-  // Recalculation States
-  const [isRecalculating, setIsRecalculating] = useState<boolean>(false);
-  const [recalcMessage, setRecalcMessage] = useState<{ text: string; error: boolean } | null>(null);
-
-  const handleRecalculateStandings = async (fixMhtToRic = false) => {
-    setIsRecalculating(true);
-    setRecalcMessage(null);
-    try {
-      const sId = Number(selectedLeagueId) || 40;
-
-      if (fixMhtToRic) {
-        // Direct browser-side reassignment of any MHT/segathon games to RIC/Richfield
-        const { data: teamsData } = await supabase
-          .from('league_teams')
-          .select('team_id, team_name, abbreviation, coach_id, league_id');
-
-        const allTeams = teamsData || [];
-        const seasonTeams = allTeams.filter((t: any) => Number(t.league_id) === sId);
-        const effectiveTeams = seasonTeams.length > 0 ? seasonTeams : allTeams;
-
-        const mhtTeam = effectiveTeams.find((t: any) =>
-          (t.abbreviation || '').trim().toUpperCase() === 'MHT' ||
-          Number(t.coach_id) === 13 ||
-          (t.team_name || '').toUpperCase().includes('MINHATTRICK') ||
-          (t.team_name || '').toUpperCase().includes('MANOTICK')
-        );
-
-        const ricTeam = effectiveTeams.find((t: any) =>
-          (t.abbreviation || '').trim().toUpperCase() === 'RIC' ||
-          Number(t.coach_id) === 19 ||
-          (t.team_name || '').toUpperCase().includes('RICHFIELD') ||
-          (t.team_name || '').toUpperCase().includes('RICHMOND')
-        );
-
-        const mhtIds = new Set<number>();
-        if (mhtTeam?.team_id) mhtIds.add(Number(mhtTeam.team_id));
-        allTeams.forEach((t: any) => {
-          const abbr = (t.abbreviation || '').trim().toUpperCase();
-          const name = (t.team_name || '').toUpperCase();
-          if (abbr === 'MHT' || Number(t.coach_id) === 13 || name.includes('MINHATTRICK') || name.includes('MANOTICK')) {
-            mhtIds.add(Number(t.team_id));
-          }
-        });
-
-        const ricId = ricTeam?.team_id ? Number(ricTeam.team_id) : 0;
-
-        if (ricId && mhtIds.size > 0) {
-          for (const mId of Array.from(mhtIds)) {
-            await supabase
-              .from('league_gamestats')
-              .update({ home_team_id: ricId, home_coach_id: 19, home_coach: 'bclinton_666' })
-              .eq('league_id', sId)
-              .eq('home_team_id', mId);
-
-            await supabase
-              .from('league_gamestats')
-              .update({ away_team_id: ricId, away_coach_id: 19, away_coach: 'bclinton_666' })
-              .eq('league_id', sId)
-              .eq('away_team_id', mId);
-
-            await supabase
-              .from('league_schedule')
-              .update({ played: false })
-              .eq('league_id', sId)
-              .or(`home_team_id.eq.${mId},away_team_id.eq.${mId}`);
-          }
-
-          await supabase
-            .from('league_gamestats')
-            .update({ home_team_id: ricId, home_coach_id: 19, home_coach: 'bclinton_666' })
-            .eq('league_id', sId)
-            .eq('home_coach_id', 13);
-
-          await supabase
-            .from('league_gamestats')
-            .update({ away_team_id: ricId, away_coach_id: 19, away_coach: 'bclinton_666' })
-            .eq('league_id', sId)
-            .eq('away_coach_id', 13);
-
-          // Update game results text
-          const { data: gRows } = await supabase
-            .from('league_gamestats')
-            .select('game_id, game_results')
-            .eq('league_id', sId);
-
-          if (gRows && gRows.length > 0) {
-            for (const g of gRows) {
-              if (g.game_results && g.game_results.includes('MHT')) {
-                const updated = g.game_results.replace(/\bMHT\b/g, 'RIC');
-                await supabase
-                  .from('league_gamestats')
-                  .update({ game_results: updated })
-                  .eq('game_id', g.game_id);
-              }
-            }
-          }
-        }
-      }
-
-      // Also call server-side recalculate API
-      await fetch('/api/recalculate-standings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seasonId: sId,
-          fixMhtToRic
-        })
-      });
-
-      // Reload live standings
-      await loadStandings(sId);
-      setRecalcMessage({
-        text: `Standings Updated! Season ${sId} live standings synchronized.${fixMhtToRic ? ' (MHT games reassigned to RIC - Richfield now has 4 GP)' : ''}`,
-        error: false
-      });
-      setTimeout(() => setRecalcMessage(null), 6000);
-    } catch (e: any) {
-      setRecalcMessage({ text: e.message || 'Error updating standings', error: true });
-    } finally {
-      setIsRecalculating(false);
-    }
-  };
 
   // 1. Dynamic Load: Fetch all valid seasons and rules configurations
   useEffect(() => {
@@ -1047,32 +924,6 @@ export default function StandingsPage() {
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
-              {/* Recalculate & Reassign Standings Actions */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleRecalculateStandings(false)}
-                  disabled={isRecalculating}
-                  className="flex items-center gap-1 text-xs border border-black/30 font-sans font-bold uppercase px-2 sm:px-2.5 py-1 hover:border-black bg-white hover:bg-neutral-50 transition-colors text-black/80 hover:text-black rounded-xs shadow-2xs disabled:opacity-50 cursor-pointer"
-                  title="Recalculate and synchronize standings for this season from played game stats"
-                >
-                  <RefreshCw className={`w-3 h-3 ${isRecalculating ? 'animate-spin' : ''}`} />
-                  {isRecalculating ? 'Syncing...' : 'Re-Sync'}
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (confirm("Reassign any games misattributed to MHT over to RIC (Richfield) and recalculate Season Standings?")) {
-                      handleRecalculateStandings(true);
-                    }
-                  }}
-                  disabled={isRecalculating}
-                  className="flex items-center gap-1 text-[11px] border border-amber-700 font-sans font-bold uppercase px-2 py-1 bg-amber-50 hover:bg-amber-100 transition-colors text-amber-900 rounded-xs shadow-2xs disabled:opacity-50 cursor-pointer"
-                  title="Fix: Push any MHT played games to RIC (Richfield) and recalculate standings"
-                >
-                  Fix MHT → RIC
-                </button>
-              </div>
-
               <button
                 onClick={downloadCSV}
                 className="flex items-center gap-1 text-xs border border-black/20 font-sans font-bold uppercase px-2.5 py-1 hover:border-black transition-colors text-black/70 hover:text-black rounded-xs"
@@ -1095,15 +946,6 @@ export default function StandingsPage() {
             </div>
           </div>
         </div>
-
-        {/* Recalculation Notification Banner */}
-        {recalcMessage && (
-          <div className={`p-2.5 mb-3 text-xs font-bold uppercase flex items-center justify-between border ${recalcMessage.error ? 'bg-red-50 text-red-900 border-red-400' : 'bg-green-50 text-green-900 border-green-400'
-            }`}>
-            <span>{recalcMessage.text}</span>
-            <button onClick={() => setRecalcMessage(null)} className="text-xs font-mono font-bold hover:underline cursor-pointer">✕</button>
-          </div>
-        )}
 
         {/* Dynamic Structural Grid Layout Area */}
         <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 mb-4 font-sans select-none text-xs">
