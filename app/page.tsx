@@ -239,7 +239,7 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    fetch('/daily_briefing.json')
+    fetch(`/daily_briefing.json?t=${Date.now()}`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error('Not found');
         return res.json();
