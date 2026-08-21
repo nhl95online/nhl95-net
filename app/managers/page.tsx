@@ -18,8 +18,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
   },
   V: {
     name: 'Vintage',
@@ -352,15 +352,30 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
     return Array.from(new Set(coach.teams.map(t => t.league_type)));
   }, [coach.teams]);
 
+  const primaryTeam = displayedTeams[0] || coach.teams[0];
+
   return (
     <div className="border-2 border-black p-4 bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-transform duration-100 hover:translate-y-[-1px]">
       <div>
         {/* Manager Header Row */}
         <div className="flex justify-between items-start border-b-2 border-black pb-2.5 mb-3 gap-2">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base sm:text-lg font-black uppercase truncate text-black leading-tight">
-              {coach.coach_name}
-            </h2>
+            {primaryTeam ? (
+              <Link
+                href={`/team/${primaryTeam.team_id}?season=${primaryTeam.league_id}`}
+                className="group inline-flex items-center gap-1.5"
+                title={`Open ${coach.coach_name}'s team file for ${primaryTeam.season_badge}`}
+              >
+                <h2 className="text-base sm:text-lg font-black uppercase truncate text-black group-hover:text-red-800 group-hover:underline leading-tight">
+                  {coach.coach_name}
+                </h2>
+                <ExternalLink className="w-3.5 h-3.5 text-neutral-400 group-hover:text-red-800 transition-colors shrink-0" />
+              </Link>
+            ) : (
+              <h2 className="text-base sm:text-lg font-black uppercase truncate text-black leading-tight">
+                {coach.coach_name}
+              </h2>
+            )}
             {coach.discord_tag && (
               <p className="text-[11px] font-mono text-slate-600 font-bold truncate">
                 @{coach.discord_tag}
@@ -388,8 +403,8 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
         {/* Team Assignments with Logos */}
         <div className="mb-2">
           <div className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between">
-            <span>Teams Coached ({displayedTeams.length})</span>
-            {displayedTeams.length > 0 && <span className="text-[9px] text-slate-400">Latest &rarr; Past</span>}
+            <span>Teams & Seasons Coached ({displayedTeams.length})</span>
+            {displayedTeams.length > 0 && <span className="text-[9px] text-slate-400">Click team to view season</span>}
           </div>
 
           {displayedTeams.length === 0 ? (
@@ -406,17 +421,18 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
         </div>
       </div>
 
-      {/* Footer link to latest team */}
-      {displayedTeams.length > 0 && (
+      {/* Footer link to primary team */}
+      {primaryTeam && (
         <div className="pt-3 mt-3 border-t border-black/15 flex justify-between items-center text-xs">
           <span className="font-mono text-[10px] text-slate-600 font-bold uppercase">
-            Primary: {displayedTeams[0].abbreviation}
+            Active: {primaryTeam.abbreviation} ({primaryTeam.season_badge})
           </span>
           <Link
-            href={`/team/${displayedTeams[0].team_id}?season=${displayedTeams[0].league_id}`}
+            href={`/team/${primaryTeam.team_id}?season=${primaryTeam.league_id}`}
             className="font-bold text-red-800 uppercase hover:underline text-[11px] flex items-center gap-1"
+            title={`View team page for Season ${primaryTeam.season_badge}`}
           >
-            Team Hub <ExternalLink className="w-3 h-3" />
+            Go to Team Page &rarr;
           </Link>
         </div>
       )}

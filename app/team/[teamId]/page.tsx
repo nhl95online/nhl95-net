@@ -18,12 +18,12 @@ const SEASON_TYPES: Record<number, string> = {
 
 const TEAM_CITY_ALIASES: Record<string, string> = {
   // W League
-  AUT: 'AUTUN', BAR: 'BARCELONA', BAY: 'BAYFIELD', BFC: 'BUFFALO', DHG: 'DURHAM',
-  GRH: 'GRAND RAPIDS', HAM: 'HAMILTON', HIG: 'HIGHLAND', ING: 'INGLEWOOD', ITA: 'ITALY',
-  KAR: 'KARLSTAD', MHA: 'MANHATTAN', MHT: 'MANOTICK', MGG: 'MAGOG', NBK: 'NEW BRUNSWICK',
-  OCW: 'OTTAWA', PIT: 'PITTSBURGH', PRO: 'PROVIDENCE', RIC: 'RICHMOND', ROC: 'ROCHESTER',
-  SHS: 'SHERWOOD', SVF: 'SAINT-VINCENT', SUM: 'SUMMERSIDE', TAI: 'TAIPEI', TEG: 'TEGUCIGALPA',
-  TBP: 'TAMPA', VHV: 'VICTORIAVILLE', WDY: 'WOODBURY', ETI: 'ETOBICOKE',
+  AUT: 'AUTOBAHN', BAR: 'BARRIE', BAY: 'BAYTOWN', BFC: 'BETTY FORD', DHG: 'DEVIN HILL',
+  GRH: 'GRAND RIVER', HAM: 'HAMILTON', HIG: 'HIGHLAND', ING: 'INGLEWOOD', ITA: 'ITALY',
+  KAR: 'KAROLINA', MHA: 'MARYHILL', MHT: 'MINHATTRICK', MGG: 'MINNESOTA', NBK: 'NORTH BAY',
+  OCW: 'ORANGE COUNTY', PIT: 'PITTSBURGH', PRO: 'PROVIDENCE', RIC: 'RICHFIELD', ROC: 'ROCKFORD',
+  SHS: 'SOUTH HILLS', SVF: 'SUGAR VALLEY', SUM: 'SUMTER', TAI: 'TAIPEI', TEG: 'TEGUCIGALPA',
+  TBP: 'THUNDER BAY', VHV: 'VALHALLA', WDY: 'WOODLYNNE', ETI: 'EASTER ISLAND',
   // O League
   BOS: 'BOSTON', CHI: 'CHICAGO', DTC: 'DETROIT', MTL: 'MONTREAL', NYR: 'NEW YORK', TOR: 'TORONTO',
   DET: 'DETROIT', NY: 'NEW YORK'
@@ -115,7 +115,7 @@ const resolveTeamCode = (team: any): string => {
   if (!team) return '';
   const abbr = (team.abbreviation || '').trim().toUpperCase();
   if (abbr && (W_LEAGUE_SKATERS[abbr] || O_LEAGUE_SKATERS[abbr])) return abbr;
-  
+
   const name = (team.team_name || '').trim().toUpperCase();
   for (const [code, alias] of Object.entries(TEAM_CITY_ALIASES)) {
     if (abbr === code || abbr === alias || name === alias || name.includes(alias) || name.includes(code)) {
@@ -392,7 +392,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
                 const pMeta = typeof meta === 'string' ? JSON.parse(meta) : meta;
                 isOT = pMeta.is_ot === true || pMeta.is_ot === 'true' || pMeta.is_ot === 1;
                 isTie = pMeta.is_tie === true || pMeta.is_tie === 'true' || pMeta.is_tie === 1;
-              } catch {}
+              } catch { }
             }
             if (teamScore === oppScore) {
               outcome = isOT ? 'OTL' : 'T';
@@ -488,7 +488,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
           .in('team_id', coachTeamIds);
 
         const mappedCoachStandings = (coachAllStandingsData || []).map((s: any) => {
-          const matchingTeam = coachTeamsList.find((t: any) => 
+          const matchingTeam = coachTeamsList.find((t: any) =>
             Number(t.team_id) === Number(s.team_id) && Number(t.league_id) === Number(s.season_id)
           ) || coachTeamsList.find((t: any) => Number(t.team_id) === Number(s.team_id))
             || teamData;
@@ -980,9 +980,13 @@ function TeamPageContent({ teamId }: { teamId: string }) {
 
           {/* Team & Coach Summary Pills with Black Lettering */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-bold uppercase">
-            <span className="bg-black text-white px-2.5 py-1 rounded">
-              Coach: {coachName}
-            </span>
+            <Link
+              href={`/managers?q=${encodeURIComponent(coachName)}`}
+              className="bg-black text-white hover:bg-red-800 px-2.5 py-1 rounded transition-colors flex items-center gap-1"
+              title={`View ${coachName} in Managers Directory`}
+            >
+              Coach: {coachName} &rarr;
+            </Link>
             <span className="bg-black text-white px-2.5 py-1 rounded">
               Arena: {arenaName}
             </span>
@@ -1004,33 +1008,29 @@ function TeamPageContent({ teamId }: { teamId: string }) {
       <nav className="flex flex-wrap gap-2 border-b-2 border-black pb-2 mb-6">
         <button
           onClick={() => setActiveTab('roster')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'roster' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${activeTab === 'roster' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+            }`}
         >
           Roster & Stats ({roster.length})
         </button>
         <button
           onClick={() => setActiveTab('schedule')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'schedule' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${activeTab === 'schedule' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+            }`}
         >
           Schedule & Results ({scheduleGames.length})
         </button>
         <button
           onClick={() => setActiveTab('seasons')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'seasons' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${activeTab === 'seasons' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+            }`}
         >
           Coach All-Time Season Log ({coachSeasonsStandings.length} Seasons)
         </button>
         <button
           onClick={() => setActiveTab('records')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'records' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-          }`}
+          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${activeTab === 'records' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+            }`}
         >
           Coach Career Records & Bests
         </button>
@@ -1187,9 +1187,8 @@ function TeamPageContent({ teamId }: { teamId: string }) {
                       <tr
                         key={game.game_id || idx}
                         onClick={() => game.played && handleOpenBoxscore(game)}
-                        className={`border-b border-gray-200 font-bold transition ${
-                          game.played ? 'cursor-pointer hover:bg-yellow-100' : 'hover:bg-gray-50'
-                        } ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
+                        className={`border-b border-gray-200 font-bold transition ${game.played ? 'cursor-pointer hover:bg-yellow-100' : 'hover:bg-gray-50'
+                          } ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
                       >
                         <td className="p-2 text-gray-600 font-mono">#{game.game_id || idx + 1}</td>
                         <td className="p-2 uppercase text-[11px]">
@@ -1315,11 +1314,10 @@ function TeamPageContent({ teamId }: { teamId: string }) {
                         <tr
                           key={`${s.season_id}-${s.team_id || idx}`}
                           onClick={() => handleSeasonChange(Number(s.season_id), Number(s.team_id))}
-                          className={`border-b border-gray-200 font-bold cursor-pointer transition ${
-                            isCurrent
+                          className={`border-b border-gray-200 font-bold cursor-pointer transition ${isCurrent
                               ? 'bg-yellow-200 border-2 border-black font-black'
                               : idx % 2 === 0 ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-white hover:bg-yellow-50'
-                          }`}
+                            }`}
                         >
                           <td className="p-2 uppercase flex items-center gap-2">
                             <span className="font-black">{s.season_code || s.season_name}</span>
@@ -1354,9 +1352,8 @@ function TeamPageContent({ teamId }: { teamId: string }) {
                                 e.stopPropagation();
                                 handleSeasonChange(Number(s.season_id), Number(s.team_id));
                               }}
-                              className={`text-[10px] uppercase font-black px-2 py-0.5 border border-black rounded transition cursor-pointer ${
-                                isCurrent ? 'bg-black text-white' : 'bg-white hover:bg-black hover:text-white'
-                              }`}
+                              className={`text-[10px] uppercase font-black px-2 py-0.5 border border-black rounded transition cursor-pointer ${isCurrent ? 'bg-black text-white' : 'bg-white hover:bg-black hover:text-white'
+                                }`}
                             >
                               {isCurrent ? 'Viewing' : 'Select'}
                             </button>
@@ -1628,9 +1625,8 @@ function TeamPageContent({ teamId }: { teamId: string }) {
                     key={t.id}
                     type="button"
                     onClick={() => setBoxscoreTab(t.id as any)}
-                    className={`px-4 py-2 transition whitespace-nowrap border-r border-black/20 cursor-pointer ${
-                      boxscoreTab === t.id ? 'bg-black text-white' : 'hover:bg-gray-100 text-black'
-                    }`}
+                    className={`px-4 py-2 transition whitespace-nowrap border-r border-black/20 cursor-pointer ${boxscoreTab === t.id ? 'bg-black text-white' : 'hover:bg-gray-100 text-black'
+                      }`}
                   >
                     {t.label}
                   </button>

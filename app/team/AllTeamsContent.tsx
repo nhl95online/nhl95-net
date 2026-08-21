@@ -18,8 +18,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
   },
   V: {
     name: 'Vintage',
@@ -72,12 +72,14 @@ export const formatSeasonBadge = (seasonId: number | string, seasonName?: string
 export default function AllTeamsContent() {
   const [seasons, setSeasons] = useState<any[]>([]);
   const [selectedLeagueType, setSelectedLeagueType] = useState<string>('ALL');
-  const [selectedSeason, setSelectedSeason] = useState<number>(0);
-  const [teams, setTeams] = useState<any[]>([]);
   const searchParams = useSearchParams();
   const router = useRouter();
-  const query = searchParams.get('q') || "";
+  const coachParam = searchParams.get('coach') || "";
+  const seasonParam = searchParams.get('season');
+  const query = searchParams.get('q') || coachParam || "";
   const [searchVal, setSearchVal] = useState(query);
+  const [selectedSeason, setSelectedSeason] = useState<number>(seasonParam ? Number(seasonParam) : 0);
+  const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -163,8 +165,8 @@ export default function AllTeamsContent() {
         }
 
         const combined = (teamsData || []).map((team: any) => {
-          const record = standingsData?.find((s: any) => 
-            Number(s.team_id) === Number(team.team_id) && 
+          const record = standingsData?.find((s: any) =>
+            Number(s.team_id) === Number(team.team_id) &&
             (selectedSeason === 0 ? Number(s.season_id) === Number(team.league_id) : true)
           );
           const w = Number(record?.w) || 0;
@@ -312,11 +314,10 @@ export default function AllTeamsContent() {
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
-                selectedLeagueType === 'ALL'
+              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
                   ? 'bg-black text-white shadow-xs'
                   : 'text-black hover:bg-neutral-100'
-              }`}
+                }`}
               title="All Leagues"
             >
               ALL
@@ -329,11 +330,10 @@ export default function AllTeamsContent() {
                   key={type}
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
-                    isSelected
+                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
                       ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
                       : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                  }`}
+                    }`}
                   title={config?.name || `${type} League`}
                 >
                   {config?.logoUrl ? (
@@ -478,7 +478,13 @@ function TeamCard({ team, selectedSeason, seasonName }: { team: any; selectedSea
         <div className="text-xs text-gray-800 mt-1 space-y-0.5 font-medium">
           <div>
             <span className="font-bold text-black uppercase text-[11px]">COACH:</span>{' '}
-            <span className="text-gray-700">{team.coachName}</span>
+            <Link
+              href={teamLink}
+              className="text-gray-900 font-bold hover:text-red-700 hover:underline"
+              title={`View ${team.team_name} season file`}
+            >
+              {team.coachName}
+            </Link>
           </div>
           <div className="flex flex-wrap gap-x-2 items-center">
             <div>
@@ -506,12 +512,20 @@ function TeamCard({ team, selectedSeason, seasonName }: { team: any; selectedSea
             Roster
           </Link>
           <span className="text-gray-300">|</span>
-          <Link href="/schedule" className="hover:underline">
+          <Link href={`/schedule?season=${targetSeason}`} className="hover:underline">
             Schedule
           </Link>
           <span className="text-gray-300">|</span>
-          <Link href="/stats" className="hover:underline">
+          <Link href={`/stats?season=${targetSeason}`} className="hover:underline">
             Statistics
+          </Link>
+          <span className="text-gray-300">|</span>
+          <Link
+            href={`/managers?q=${encodeURIComponent(team.coachName)}`}
+            className="text-neutral-600 hover:text-black hover:underline"
+            title={`View ${team.coachName} in Front Office Directory`}
+          >
+            Coach File
           </Link>
         </div>
       </div>
