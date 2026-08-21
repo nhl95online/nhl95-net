@@ -151,13 +151,6 @@ export default function Navbar() {
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 text-red-800 font-black flex items-center justify-between"
           >
-            Teams <span>→</span>
-          </Link>
-          <Link
-            href="/standings"
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
-          >
             Standings <span>→</span>
           </Link>
           <Link
@@ -251,10 +244,10 @@ export default function Navbar() {
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
-            Managers <span>→</span>
+            Teams <span>→</span>
           </Link>
           <Link
-            href="/records"
+            href="/standings"
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
