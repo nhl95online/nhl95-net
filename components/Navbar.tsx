@@ -8,9 +8,11 @@ import { Menu, X, ChevronDown } from 'lucide-react';
 export default function Navbar() {
   const [isRostersOpen, setIsRostersOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [isExtrasOpen, setIsExtrasOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileRostersOpen, setIsMobileRostersOpen] = useState(false);
   const [isMobileStatsOpen, setIsMobileStatsOpen] = useState(false);
+  const [isMobileExtrasOpen, setIsMobileExtrasOpen] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
 
@@ -29,6 +31,7 @@ export default function Navbar() {
     setIsMobileMenuOpen(false);
     setIsMobileRostersOpen(false);
     setIsMobileStatsOpen(false);
+    setIsMobileExtrasOpen(false);
   };
 
   return (
@@ -89,12 +92,11 @@ export default function Navbar() {
 
       {/* Desktop Navigation Links Row (Visible on screens >= md) */}
       <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-8 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
-        <Link href="/team" className="hover:underline transition text-red-700">Teams</Link>
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
-        {/* Desktop Dropdown for Rosters & Trades */}
+        {/* Desktop Dropdown for Rosters & Teams */}
         <div
           className="relative"
           onMouseEnter={() => setIsRostersOpen(true)}
@@ -105,6 +107,7 @@ export default function Navbar() {
           </button>
           {isRostersOpen && (
             <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
+              <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">Teams</Link>
               <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
               <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
               <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
@@ -128,9 +131,38 @@ export default function Navbar() {
             </div>
           )}
         </div>
+
         <Link href="/awards" className="hover:underline transition">Awards</Link>
-        <Link href="/managers" className="hover:underline transition">Managers</Link>
         <Link href="/records" className="hover:underline transition">Records</Link>
+
+        {/* Setup Guide tab (to the left of Extras) */}
+        <Link href="/setup-guide" className="hover:underline transition text-amber-900 font-black">
+          Setup Guide
+        </Link>
+
+        {/* Desktop Dropdown for Extras (3 subgroups: ROMs, Managers, Stream Overlays) */}
+        <div
+          className="relative"
+          onMouseEnter={() => setIsExtrasOpen(true)}
+          onMouseLeave={() => setIsExtrasOpen(false)}
+        >
+          <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
+            Extras <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+          {isExtrasOpen && (
+            <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-56 flex flex-col z-50 shadow-lg">
+              <Link href="/roms" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                ROMs & Files
+              </Link>
+              <Link href="/managers" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                Managers Directory
+              </Link>
+              <Link href="/setup-guide?tab=overlays" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                Stream Overlays & Tools
+              </Link>
+            </div>
+          )}
+        </div>
 
         {/* Upload Action Button */}
         <Link
@@ -147,9 +179,9 @@ export default function Navbar() {
         <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
 
           <Link
-            href="/team"
+            href="/standings"
             onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 text-red-800 font-black flex items-center justify-between"
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Standings <span>→</span>
           </Link>
@@ -174,11 +206,18 @@ export default function Navbar() {
               onClick={() => setIsMobileRostersOpen(!isMobileRostersOpen)}
               className="w-full py-2 px-3 hover:bg-black/5 flex items-center justify-between uppercase font-bold text-xs"
             >
-              <span>Rosters & Trades</span>
+              <span>Rosters & Teams</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${isMobileRostersOpen ? 'rotate-180' : ''}`} />
             </button>
             {isMobileRostersOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
+                <Link
+                  href="/team"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-red-800"
+                >
+                  • Teams
+                </Link>
                 <Link
                   href="/trades"
                   onClick={closeMobileMenu}
@@ -232,6 +271,7 @@ export default function Navbar() {
               </div>
             )}
           </div>
+
           <Link
             href="/awards"
             onClick={closeMobileMenu}
@@ -240,19 +280,57 @@ export default function Navbar() {
             Awards <span>→</span>
           </Link>
           <Link
-            href="/managers"
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
-          >
-            Teams <span>→</span>
-          </Link>
-          <Link
-            href="/standings"
+            href="/records"
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             League Records <span>→</span>
           </Link>
+
+          <Link
+            href="/setup-guide"
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between text-amber-900 font-black"
+          >
+            Setup Guide <span>→</span>
+          </Link>
+
+          {/* Mobile Collapsible Extras Section */}
+          <div className="border-b border-black/10">
+            <button
+              onClick={() => setIsMobileExtrasOpen(!isMobileExtrasOpen)}
+              className="w-full py-2 px-3 hover:bg-black/5 flex items-center justify-between uppercase font-bold text-xs"
+            >
+              <span>Extras</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${isMobileExtrasOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isMobileExtrasOpen && (
+              <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
+                <Link
+                  href="/roms"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • ROMs & Files
+                </Link>
+                <Link
+                  href="/managers"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Managers Directory
+                </Link>
+                <Link
+                  href="/setup-guide?tab=overlays"
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Stream Overlays & Tools
+                </Link>
+              </div>
+            )}
+          </div>
+
           <Link
             href="/upload"
             onClick={closeMobileMenu}
