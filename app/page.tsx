@@ -88,18 +88,18 @@ const DEFAULT_BRIEFING = {
   },
   nhl_wire: [
     {
-      title: "NHL Offseason: Trade Buzz Intensifies as Training Camps Near",
-      link: "https://www.nhl.com/news",
+      title: "NHL - The Home of the Puck",
+      link: "https://www.nhl.com",
       date: "Today"
     },
     {
-      title: "Scouting Reports: Top Prospects Gear Up for Rookie Showcases",
-      link: "https://www.nhl.com/news",
+      title: "The Competing Website",
+      link: "https://wn95-online.vercel.app/",
       date: "Today"
     },
     {
-      title: "Free Agency Rewind: Big Summer Moves That Shifted Division Balance",
-      link: "https://www.nhl.com/news",
+      title: "The Other Sega Hockey Game",
+      link: "https://nhl94.com/",
       date: "Today"
     }
   ],
@@ -421,12 +421,12 @@ export default function HomePage() {
               try {
                 const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
                 isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
-                       meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+                  meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
                 isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
               } catch {
                 const lowStr = String(gameMeta || '').toLowerCase();
                 isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
-                       lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+                  lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
                 isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
               }
             }
@@ -436,10 +436,10 @@ export default function HomePage() {
                 const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
                 const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
                 if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-                    Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+                  Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
                   isOT = true;
                 }
-              } catch {}
+              } catch { }
             }
 
             if (homeScore === awayScore && !isOT) {
@@ -600,14 +600,14 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-2 sm:p-4 md:p-6">
       <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 text-center">
         <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-        <p className="text-xs sm:text-sm italic">"Ask Ticklepuss where you want to be tickled"</p>
+        <p className="text-xs sm:text-sm italic">"Welcome to the Darkside of NHL95"</p>
       </header>
 
       {/* Real-World NHL Current News Wire Bar */}
       {briefing?.nhl_wire && briefing.nhl_wire.length > 0 && (
         <div className="border-y-2 border-black py-1.5 px-3 mb-6 bg-neutral-100 flex items-center gap-3 overflow-hidden text-xs">
           <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
-            AP NHL WIRE
+            NHL.com Updates
           </span>
           <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap no-scrollbar text-neutral-800">
             {briefing.nhl_wire.map((story: any, sIdx: number) => (
@@ -864,8 +864,8 @@ export default function HomePage() {
                 type="button"
                 onClick={() => handleLeagueChange(league)}
                 className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors shrink-0 ${selectedLeague === league
-                    ? 'bg-black text-white'
-                    : 'bg-white text-black hover:bg-neutral-200'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-200'
                   }`}
               >
                 {league}
