@@ -1,139 +1,744 @@
 {
-  "updated_at": "Today • Late Edition",
+  "updated_at": "Published August 21, 2026 at 12:21 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
-  "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Reels",
+  "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "I can't view it, but yes that's me.",
-    "author": "Unholy",
-    "context": "Confirming archival Sabres footage through pure aura"
+    "quote": "I was going to ask you if you knew this guy.",
+    "author": "chalkitup7777",
+    "context": "Uttered in #hai"
   },
+  "total_messages": 114,
   "bulletin": {
-    "title": "COMMISSIONER'S DESK: SEASON 40 PUCK DROP",
-    "text": "All team managers are instructed to confirm their active rosters and check emulator netplay configs. Rulebook updates regarding manual goalies and crease violations are now in full effect.",
+    "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
+    "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
     "author": "League HQ",
     "date": "Today"
   },
-  "nhl_wire": [
-    {
-      "title": "NHL Offseason Trade Buzz Intensifies as Training Camps Near",
-      "link": "https://www.nhl.com/news",
-      "date": "Today"
-    },
-    {
-      "title": "Top Draft Prospects Gear Up for Rookie Showcase Tournaments",
-      "link": "https://www.nhl.com/news",
-      "date": "Today"
-    },
-    {
-      "title": "Free Agency Rewind: Big Summer Moves That Shifted Division Power",
-      "link": "https://www.nhl.com/news",
-      "date": "Today"
-    }
-  ],
   "events": [
     {
-      "date": "LIVE NOW",
-      "time": "",
-      "title": "W18 Exhibition Series: Segathon vs Unholy",
-      "description": "Genesis Netplay showdown streaming live in #highlights.",
-      "url": "https://www.twitch.tv/segathonsow",
-      "is_live": true,
-      "interested": 8
+      "date": "Oct 24",
+      "time": "03:45 AM",
+      "title": "Season 18 Regular Season End Date",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1521589776472473763",
+      "interested": 8,
+      "is_live": false
     },
     {
-      "date": "June 28",
-      "time": "8:00 PM",
-      "title": "Trade Deadline",
-      "description": "Rosters lock for playoffs. Final buzzer on all blockbuster trades.",
-      "is_live": false,
-      "interested": 14
+      "date": "Oct 24",
+      "time": "08:00 PM",
+      "title": "Season 18 Playoffs Start Date",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1521590134301261974",
+      "interested": 8,
+      "is_live": false
     },
     {
-      "date": "July 01",
-      "time": "7:00 PM",
-      "title": "Draft Lottery",
-      "description": "Ping pong balls decide franchise future.",
-      "is_live": false,
-      "interested": 18
+      "date": "Nov 28",
+      "time": "04:45 AM",
+      "title": "Season 18 Playoffs End Date",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1521590330238046290",
+      "interested": 7,
+      "is_live": false
     },
     {
-      "date": "July 05",
-      "time": "12:00 PM",
-      "title": "Free Agency Opens",
-      "description": "High-stakes contract negotiations begin on the wire.",
-      "is_live": false,
-      "interested": 12
+      "date": "Dec 03",
+      "time": "02:00 PM",
+      "title": "2014 Entry Draft",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1521590788495249419",
+      "interested": 7,
+      "is_live": false
+    }
+  ],
+  "nhl_wire": [
+    {
+      "title": "NHL Offseason: Trade Buzz Intensifies as Training Camps Near",
+      "link": "https://www.nhl.com",
+      "date": "Today"
+    },
+    {
+      "title": "Scouting Reports: Top Prospects Gear Up for Rookie Showcase",
+      "link": "https://www.nhl.com",
+      "date": "Today"
+    },
+    {
+      "title": "Free Agency Rewind: Big Moves That Shifted Division Balance",
+      "link": "https://www.nhl.com",
+      "date": "Today"
     }
   ],
   "sections": [
     {
-      "channel": "cooking-with-puss",
-      "badge": "CULINARY CONTROVERSY",
-      "title": "Late Night Buffet Rants",
-      "commentary": "At 2:43 AM, GaelicGopher called out an anonymous Chinese buffet influencer as 'horrible' before immediately admitting to hate-watching the entire filmography.",
+      "channel": "open-discussion",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #open-discussion",
+      "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "02:43",
+          "time": "17:26",
+          "author": "segathon",
+          "text": "Time to move HAI WEST"
+        },
+        {
+          "time": "17:26",
+          "author": "segathon",
+          "text": "Nips can host"
+        },
+        {
+          "time": "17:26",
+          "author": "segathon",
+          "text": "how many tvs can we get in his dining room"
+        },
+        {
+          "time": "17:29",
+          "author": "Ticklepuss",
+          "text": "Get Jake into the league"
+        },
+        {
+          "time": "17:35",
+          "author": "shawnmb",
+          "text": "\"Energetic Leader. Titles don't matter\""
+        },
+        {
+          "time": "17:35",
+          "author": "shawnmb",
+          "text": "Sounds like a guy who's never won a Brule"
+        },
+        {
+          "time": "17:37",
+          "author": "Ticklepuss",
+          "text": "He sounds like a real good time"
+        },
+        {
+          "time": "19:33",
+          "author": "chalkitup7777",
+          "text": "He sounds unemployed"
+        },
+        {
+          "time": "20:35",
+          "author": "Lloyd10xmas",
+          "text": "World class(!)"
+        },
+        {
+          "time": "20:36",
+          "author": "Lloyd10xmas",
+          "text": "Yinz in the place to be(!)"
+        },
+        {
+          "time": "21:10",
+          "author": "Pink_Elephants",
+          "text": "Charleston > Pittsburgh"
+        },
+        {
+          "time": "21:42",
           "author": "GaelicGopher",
-          "text": "@segathon FYI, that Chinese buffet loser....he's horrible (and I've somehow watched every single episode)"
+          "text": "Honest question 🙋‍♂️, I’ve seen some channels get messages deleted.  When the main playing channels like Saves/Box Scores/Draft selections get all over-run by numbskulls…..is there a way to delete all the gibberish?  Or cut and paste it into this thread?\nAsking for a friend"
+        },
+        {
+          "time": "21:42",
+          "author": "Adolf Oliver Nipples",
+          "text": "except in affordability, job market, quality of life, and overall vibes."
+        },
+        {
+          "time": "21:43",
+          "author": "GaelicGopher",
+          "text": "At least you don’t have this guy"
+        },
+        {
+          "time": "21:44",
+          "author": "Ticklepuss",
+          "text": "Charleston WV? <:HIG:897245384601108490>"
+        },
+        {
+          "time": "21:44",
+          "author": "Ticklepuss",
+          "text": "Is there a Carnegie Museum there?"
+        },
+        {
+          "time": "21:45",
+          "author": "Pink_Elephants",
+          "text": "The picture says Charleston SC <:SUM:878394564468170812>"
+        },
+        {
+          "time": "21:45",
+          "author": "Pink_Elephants",
+          "text": "Pittsburgh only has 2 colors… that’s kinda lame"
+        },
+        {
+          "time": "21:47",
+          "author": "Adolf Oliver Nipples",
+          "text": "also...what are the units of measure for \"overall vibes\""
+        },
+        {
+          "time": "21:49",
+          "author": "Lloyd10xmas",
+          "text": "Gotta love Philly(!)"
+        },
+        {
+          "time": "21:49",
+          "author": "Pink_Elephants",
+          "text": "And let’s be honest Cleveland Ketchup > whatever ketchup comes out of Pittsburgh"
+        },
+        {
+          "time": "21:53",
+          "author": "Ticklepuss",
+          "text": "Think opposite of Kinsale"
+        },
+        {
+          "time": "22:04",
+          "author": "Pink_Elephants",
+          "text": "Someone with a LinkedIn account should invite Daniel Harrington to play in our league."
+        },
+        {
+          "time": "01:46",
+          "author": "shawnmb",
+          "text": "What is a Carnegie Museum?"
+        },
+        {
+          "time": "01:49",
+          "author": "Ticklepuss",
+          "text": "Where we store our dinosaurs"
+        },
+        {
+          "time": "01:52",
+          "author": "Unholy",
+          "text": "It’s like a Hall but it’s a Museum"
+        },
+        {
+          "time": "01:52",
+          "author": "GaelicGopher",
+          "text": "Well tell all those Night at the Museum folk that tomorrow is a Friday Frenzy….get some!!"
+        },
+        {
+          "time": "02:20",
+          "author": "Ticklepuss",
+          "text": "I am starting to think @DSN and I were simply too rinsed to realize we only played 1 game last night."
+        },
+        {
+          "time": "02:21",
+          "author": "Ticklepuss",
+          "text": "We played a game.  Said “ggs” and went on our way"
+        },
+        {
+          "time": "02:24",
+          "author": "Ellis",
+          "text": "This game short of 15 minutes fiasco should be done now!"
+        },
+        {
+          "time": "02:49",
+          "author": "DSN",
+          "text": "I was/am baked."
+        },
+        {
+          "time": "02:54",
+          "author": "Lloyd10xmas",
+          "text": "Uppers help you remember things(!)"
         }
       ]
     },
     {
-      "channel": "knightsvision",
-      "badge": "HOT SCOOP",
-      "title": "Sabres Classics Identification Incident",
-      "commentary": "Segathon uncovered mystery vintage tape. Unholy confirmed it was 100% him on the ice without even loading the link.",
+      "channel": "complaints",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #complaints",
+      "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "16:04",
-          "author": "segathon",
-          "text": "is this you @Unholy (https://x.com/SabresClassics/...)"
+          "time": "14:19",
+          "author": "Ticklepuss",
+          "text": "Complaint:  Granlund being #27 makes me think Kovalev is still on my team"
         },
         {
-          "time": "16:32",
+          "time": "14:35",
+          "author": "Ticklepuss",
+          "text": "Complaint:  Penalties"
+        },
+        {
+          "time": "16:43",
+          "author": "The Villain CTJ",
+          "text": "Complaint: Steven Stamkos is a piece of shit for scoring so many on me last night. \n\nThat is all"
+        },
+        {
+          "time": "01:00",
+          "author": "MNYoda",
+          "text": "Fuck that guy"
+        },
+        {
+          "time": "11:42",
+          "author": "bclinton_666",
+          "text": "Just a heads up. While playing @MNYoda last night I discovered the 9th vector."
+        }
+      ]
+    },
+    {
+      "channel": "praise",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #praise",
+      "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "00:59",
+          "author": "MNYoda",
+          "text": "fuck that guy"
+        },
+        {
+          "time": "01:35",
+          "author": "UltraMagnus",
+          "text": "Leading Rookies ans Dmen"
+        }
+      ]
+    },
+    {
+      "channel": "season-games",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #season-games",
+      "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "14:16",
+          "author": "Lloyd10xmas",
+          "text": "Looking to play my rival soon(!)"
+        },
+        {
+          "time": "17:06",
+          "author": "Adolf Oliver Nipples",
+          "text": "Season Games"
+        },
+        {
+          "time": "19:12",
+          "author": "Lloyd10xmas",
+          "text": "Anyone else playing any hockey today?"
+        },
+        {
+          "time": "19:19",
+          "author": "segathon",
+          "text": "maybe these guys on the soon to be shame list"
+        },
+        {
+          "time": "19:20",
+          "author": "Lloyd10xmas",
+          "text": "Great season so far @Unholy(!)"
+        },
+        {
+          "time": "19:20",
+          "author": "Lloyd10xmas",
+          "text": "https://klipy.com/gifs/dumb-and-dumber-dumb-and-dumber-gif-4"
+        },
+        {
+          "time": "19:20",
+          "author": "krav1",
+          "text": "Season Games"
+        },
+        {
+          "time": "19:28",
+          "author": "Ticklepuss",
+          "text": "No"
+        },
+        {
+          "time": "21:49",
+          "author": "red",
+          "text": "Season games"
+        },
+        {
+          "time": "23:03",
+          "author": "DON DON",
+          "text": "Fuck on"
+        },
+        {
+          "time": "23:03",
+          "author": "DON DON",
+          "text": "Season Games"
+        },
+        {
+          "time": "23:39",
+          "author": "Adolf Oliver Nipples",
+          "text": "Season Games"
+        },
+        {
+          "time": "23:41",
+          "author": "DON DON",
+          "text": "N game"
+        },
+        {
+          "time": "23:46",
+          "author": "wolf_of_highland",
+          "text": "https://klipy.com/gifs/sean-couturier-1"
+        },
+        {
+          "time": "23:46",
+          "author": "wolf_of_highland",
+          "text": "Season games"
+        },
+        {
+          "time": "00:21",
+          "author": "DON DON",
+          "text": "Fuck off"
+        },
+        {
+          "time": "00:26",
+          "author": "MNYoda",
+          "text": "season games"
+        },
+        {
+          "time": "00:35",
+          "author": "NathanMB",
+          "text": "season games"
+        },
+        {
+          "time": "00:56",
+          "author": "MNYoda",
+          "text": "season games"
+        },
+        {
+          "time": "01:04",
+          "author": "NathanMB",
+          "text": "https://klipy.com/gifs/matt-duchene-nashville"
+        },
+        {
+          "time": "01:09",
+          "author": "MNYoda",
+          "text": "https://klipy.com/gifs/dead-124"
+        },
+        {
+          "time": "01:09",
+          "author": "MNYoda",
+          "text": "@NathanMB"
+        },
+        {
+          "time": "01:44",
+          "author": "shawnmb",
+          "text": "Season Games"
+        },
+        {
+          "time": "01:58",
+          "author": "MNYoda",
+          "text": "season games"
+        },
+        {
+          "time": "01:59",
           "author": "Unholy",
-          "text": "I can't view it, but yes that's me."
+          "text": "Fuck on"
+        },
+        {
+          "time": "02:00",
+          "author": "Unholy",
+          "text": "Season games"
+        },
+        {
+          "time": "02:29",
+          "author": "MNYoda",
+          "text": "season games"
+        }
+      ]
+    },
+    {
+      "channel": "2013-saves",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #2013-saves",
+      "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "12:23",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/haul-out-the-holly-hallmarkies"
+        },
+        {
+          "time": "12:40",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/im-sorry-eric-cartman"
+        },
+        {
+          "time": "12:40",
+          "author": "UltraMagnus",
+          "text": "@Ticklepuss do you have your other game vs Barrie. There was only 1 game that loaded"
+        },
+        {
+          "time": "12:42",
+          "author": "shawnmb",
+          "text": "Pull it together team"
+        },
+        {
+          "time": "12:55",
+          "author": "Ticklepuss",
+          "text": "I am so confused.  What time were these games posted?  I don't even see them above"
+        },
+        {
+          "time": "12:56",
+          "author": "UltraMagnus",
+          "text": "these ones."
+        },
+        {
+          "time": "13:00",
+          "author": "Ticklepuss",
+          "text": "I can look later.  Does this mean that both saves were the same game?  I was heavily intoxicated so that's very possible."
+        },
+        {
+          "time": "13:00",
+          "author": "UltraMagnus",
+          "text": "1 was with Barrie and the other with Rockford"
+        },
+        {
+          "time": "13:07",
+          "author": "Ticklepuss",
+          "text": "https://klipy.com/gifs/huh-cat-huh-m4rtin-17"
+        },
+        {
+          "time": "13:07",
+          "author": "Ticklepuss",
+          "text": "fascinating"
+        },
+        {
+          "time": "13:18",
+          "author": "Ticklepuss",
+          "text": "I think @The Villain CTJ should take care of this"
+        },
+        {
+          "time": "13:19",
+          "author": "Ticklepuss",
+          "text": "or is it @DSN ?"
+        },
+        {
+          "time": "13:19",
+          "author": "Ticklepuss",
+          "text": "who did I play?  who should i have played?"
+        },
+        {
+          "time": "13:20",
+          "author": "UltraMagnus",
+          "text": "Barrie you played. But Im checkign all the states to make sure"
+        },
+        {
+          "time": "13:47",
+          "author": "Ticklepuss",
+          "text": "BSB is being a dick it seems.  I'm assuming the 15 minute check isn't working quite as expected."
+        },
+        {
+          "time": "13:55",
+          "author": "Lloyd10xmas",
+          "text": "What’s all the commotion about?"
+        },
+        {
+          "time": "14:28",
+          "author": "Ticklepuss",
+          "text": "@UltraMagnus what happens when it says the game is < 15 minutes? I uploaded the Pitt one last night, will that one be reprocessed?  @DSN can you try uploading our other game?   Everyone report back to me when this is resolved"
+        },
+        {
+          "time": "14:29",
+          "author": "The Villain CTJ",
+          "text": "@Ticklepuss I think our games were uploaded ok. @GMDS and I had an issue where it said we somehow played less than 15 minutes."
+        },
+        {
+          "time": "14:33",
+          "author": "Ticklepuss",
+          "text": "Looks that way.  I had one of those also in my sweep of Highland"
+        },
+        {
+          "time": "14:36",
+          "author": "Adolf Oliver Nipples",
+          "text": "Yinz ding dongs"
+        },
+        {
+          "time": "14:41",
+          "author": "Ellis",
+          "text": "I'm removing this bullshit 15 min check"
+        },
+        {
+          "time": "14:57",
+          "author": "GaelicGopher",
+          "text": "Man, you guys need to get your act together.  How in the world would someone upload a bad/wrong state 🤣🤔🤨<:MGG:897245448522313738> .\nIm glad my controller broke last night or I probably would have added to the fiasco.\n\nOh, as Thread Czar I have to Add…WRONG CHANNEL"
+        },
+        {
+          "time": "15:08",
+          "author": "segathon",
+          "text": "I hope the tickleweb ticker is getting all this"
+        },
+        {
+          "time": "15:10",
+          "author": "Ticklepuss",
+          "text": "this channel isn't monitored by TW for obvious reasons"
+        },
+        {
+          "time": "15:45",
+          "author": "DSN",
+          "text": "We need to play a second."
+        },
+        {
+          "time": "15:46",
+          "author": "DSN",
+          "text": "I was also under the influence."
+        },
+        {
+          "time": "15:49",
+          "author": "Ticklepuss",
+          "text": "We only played one?  Riveting"
+        },
+        {
+          "time": "15:57",
+          "author": "Adolf Oliver Nipples",
+          "text": "Just delete all 30 states from yesterday"
+        },
+        {
+          "time": "16:08",
+          "author": "UltraMagnus",
+          "text": "Just post what you play. @Leaguers"
+        },
+        {
+          "time": "16:13",
+          "author": "Ticklepuss",
+          "text": "I posted the Pitt/Teg state.  Sounds like Darsi and I only played 1 game for some reason, so just disregard the 2nd state I uploaded.  The state of the Highland game is also posted but says less than 15 minutes.  I'm close to washing my hands of this"
+        },
+        {
+          "time": "17:09",
+          "author": "bclinton_666",
+          "text": "Same thing happened to @GaelicGopher and me for our second game after I beat him 9-1. I would like that game reinstated as well rather than the second game."
+        },
+        {
+          "time": "21:38",
+          "author": "wolf_of_highland",
+          "text": "you guys ruined this channel"
+        },
+        {
+          "time": "21:54",
+          "author": "krav1",
+          "text": "<:BFC:1302374329627054195> <:PRO:918148694820405308>"
+        },
+        {
+          "time": "23:06",
+          "author": "The Villain CTJ",
+          "text": "Hoping that would work lol"
+        },
+        {
+          "time": "02:03",
+          "author": "Ellis",
+          "text": "@The Villain CTJ above is yours"
+        },
+        {
+          "time": "02:23",
+          "author": "krav1",
+          "text": "<:BFC:1302374329627054195> <:RIC:878393337009283134>"
+        }
+      ]
+    },
+    {
+      "channel": "blubber-magazine",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #blubber-magazine",
+      "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "14:46",
+          "author": "Ticklepuss",
+          "text": "🚨 TickleBlurb: 15 minute state check declared dead on arrival"
+        },
+        {
+          "time": "02:01",
+          "author": "Ticklepuss",
+          "text": "🚨 TickleBlurb: MarylandMike captures 3rd Pure title with pair of 8-3 victories.  Pat Raw named playoff MVP."
+        },
+        {
+          "time": "02:02",
+          "author": "Ticklepuss",
+          "text": "🚨 TickleBlurb: Krav lets down entire commonwealth of Pennsylvania"
+        }
+      ]
+    },
+    {
+      "channel": "live-streams",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #live-streams",
+      "commentary": "Heated debate and banter erupts in #live-streams over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "01:08",
+          "author": "krav1",
+          "text": "https://www.twitch.tv/krav1234"
+        }
+      ],
+      "clips": [
+        {
+          "name": "krav1234",
+          "url": "https://www.twitch.tv/krav1234"
         }
       ]
     },
     {
       "channel": "highlights",
       "badge": "TAPE ROOM",
-      "title": "Segathon Drops Triple Twitch Bombshell",
-      "commentary": "Three high-octane clips dropped in rapid succession featuring textbook manual goalie saves and cross-crease snipes.",
-      "clips": [
-        {
-          "name": "HilariousHumbleCake",
-          "url": "https://www.twitch.tv/segathonsow/clip/HilariousHumbleCakeOptimizePrime-jXgK-FCJEkSEPWRN"
-        },
-        {
-          "name": "ProtectiveTangibleLlama",
-          "url": "https://www.twitch.tv/segathonsow/clip/ProtectiveTangibleLlamaDoubleRainbow-SheU_4EQkkT-SvHC"
-        },
-        {
-          "name": "CrepuscularAltruisticSandwich",
-          "url": "https://www.twitch.tv/segathonsow/clip/CrepuscularAltruisticSandwichAMPEnergyCherry-qp00z_PkiDpFAEEZ"
-        }
-      ],
+      "title": "Reel-to-Reel Reel Dump",
+      "commentary": "Film room flooded with twitch highlight reels featuring questionable wrap-arounds, diving poke-checks, and goalie heroics.",
       "messages": [
         {
-          "time": "13:15 - 13:23",
+          "time": "12:24",
           "author": "segathon",
-          "text": "Posted 3 Twitch highlight reels"
+          "text": "I was wondering why you didnt defend a cross crease that i telegraphed"
+        }
+      ]
+    },
+    {
+      "channel": "cooking-with-puss",
+      "badge": "CULINARY CONTROVERSY",
+      "title": "Kitchen Confidential & Hate-Watching",
+      "commentary": "Late-night food critique reaches boiling point as members profess deep disdain for online buffet content while simultaneously watching every single second.",
+      "messages": [
+        {
+          "time": "20:56",
+          "author": "marylandmike.",
+          "text": "Nothing Bundt Cakes are delicious"
         }
       ]
     },
     {
       "channel": "crib-notes-with-pinot-and-gummies",
       "badge": "LATE NIGHT INTEL",
-      "title": "The Monday Night Detour",
-      "commentary": "Under the influence of premium pinot and gummies, GaelicGopher declared 'Monday night de tour'. Scouts are analyzing the playbook.",
+      "title": "Post-Midnight Tactical Reflections",
+      "commentary": "Cryptic communications transmitted during late-night downtime. Scouts are still deciphering the deeper strategic playbook.",
       "messages": [
         {
-          "time": "02:14",
+          "time": "23:50",
           "author": "GaelicGopher",
-          "text": "Monday night de tour"
+          "text": "Tomorrow, you all are in Big Big Trouble.  Haven’t used a new Paddle in ages.  The 8-vector-Sector - Whatever Passing is going to be legendary!!!"
+        },
+        {
+          "time": "00:18",
+          "author": "Ticklepuss",
+          "text": "Fun fact.  Blue and red paddles don’t work on a console"
+        },
+        {
+          "time": "09:51",
+          "author": "DON DON",
+          "text": "They are gonna break in a week"
+        },
+        {
+          "time": "11:53",
+          "author": "DON DON",
+          "text": "Ive always had bad luck with remotes like that"
+        }
+      ]
+    },
+    {
+      "channel": "knightsvision",
+      "badge": "HOT SCOOP",
+      "title": "Archival Identity Verification Incident",
+      "commentary": "Vintage game film circulated through the wire. Unholy confirmed his legendary on-ice persona by sheer instinct without even rendering the media.",
+      "messages": [
+        {
+          "time": "19:05",
+          "author": "segathon",
+          "text": "Turn by the old Sinclair station in lakeville has been told to be numerous times"
+        }
+      ]
+    },
+    {
+      "channel": "hai",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #hai",
+      "commentary": "Heated debate and banter erupts in #hai over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "12:55",
+          "author": "chalkitup7777",
+          "text": "I was going to ask you if you knew this guy."
         }
       ]
     }
