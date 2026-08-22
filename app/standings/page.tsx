@@ -130,21 +130,28 @@ export const extractPlayoffTeams = (row: any): number => {
 
 export const extractGamesPerTeam = (row: any): number => {
   if (!row) return 82;
-  const val = row.games_per_team ?? row.games ?? row.schedule_games ?? row.games_count;
-  if (val !== undefined && val !== null) {
-    const parsed = parseInt(String(val), 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
+
+  // 1. Primary source: leagues table rules_json -> game_per_team (or games_per_team)
   if (row.rules_json) {
     try {
       const rules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
-      const rVal = rules?.games_per_team ?? rules?.games ?? rules?.schedule_games;
+      const rVal = rules?.game_per_team ?? rules?.games_per_team ?? rules?.game_count ?? rules?.games_count ?? rules?.games;
       if (rVal !== undefined && rVal !== null) {
         const parsed = parseInt(String(rVal), 10);
         if (!isNaN(parsed) && parsed > 0) return parsed;
       }
-    } catch { }
+    } catch (e) {
+      console.error("Failed to parse rules_json for game_per_team", e);
+    }
   }
+
+  // 2. Direct column check on table row
+  const val = row.game_per_team ?? row.games_per_team ?? row.games ?? row.schedule_games ?? row.games_count;
+  if (val !== undefined && val !== null) {
+    const parsed = parseInt(String(val), 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+
   return 82;
 };
 
@@ -831,7 +838,9 @@ export default function StandingsPage() {
     }
 
     const maxPlayedInSeason = freshStandings.reduce((max: number, t: any) => Math.max(max, Number(t.gp) || 0), 0);
-    const resolvedGamesPerTeam = Math.max(maxSchedGames, maxPlayedInSeason, customGamesLimit, 14);
+    const resolvedGamesPerTeam = customGamesLimit > 0
+      ? customGamesLimit
+      : Math.max(maxSchedGames, maxPlayedInSeason, 82);
     if (resolvedGamesPerTeam > 0) {
       setGamesPerTeam(resolvedGamesPerTeam);
     }
