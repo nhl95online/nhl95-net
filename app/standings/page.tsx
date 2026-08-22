@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -20,8 +21,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
   },
   V: {
     name: 'Vintage',
@@ -134,16 +135,16 @@ export default function StandingsPage() {
   // Playoff Cutoff Count State
   const [playoffCutoffCount, setPlayoffCutoffCount] = useState<number>(0);
 
-  // 1. Dynamic Load: Fetch all valid seasons and rules configurations
+  // 1. Dynamic Load: Fetch all valid seasons and rules configurations from leagues table
   useEffect(() => {
     const fetchSeasons = async () => {
       let { data, error } = await supabase
-        .from('league_seasons')
+        .from('leagues')
         .select('*');
 
       if (error || !data || data.length === 0) {
         const fallbackQuery = await supabase
-          .from('leagues')
+          .from('league_seasons')
           .select('*');
 
         data = fallbackQuery.data;
@@ -153,11 +154,12 @@ export default function StandingsPage() {
       if (error || !data || data.length === 0) {
         const emergencyFallback = Array.from({ length: 40 }, (_, i) => {
           const id = 40 - i;
-          return { league_id: String(id), league_name: `Season ${id.toString().padStart(2, '0')}` };
+          return { league_id: String(id), league_name: `Season ${id.toString().padStart(2, '0')}`, games_per_team: 82, playoff_teams: 8 };
         });
         setSeasons(emergencyFallback);
         setActiveSeasonId("40");
         setSelectedLeagueId("40");
+        setPlayoffCutoffCount(8);
         return;
       }
 
@@ -165,23 +167,41 @@ export default function StandingsPage() {
         const lId = row.league_id !== undefined ? row.league_id : (row.id || row.season_id);
         const dynamicName = row.league_name || row.name || row.season_name || `Season ${lId}`;
 
-        // Dynamic extraction of schedule lengths from rules JSON definition fields
+        // Dynamic extraction of schedule lengths from rules JSON definition fields or games_per_team column
         let customGamesLimit = 82;
-        try {
-          if (row.rules_json) {
+        if (row.games_per_team) {
+          customGamesLimit = parseInt(String(row.games_per_team), 10) || 82;
+        } else if (row.rules_json) {
+          try {
             const parsedRules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
             if (parsedRules?.games_per_team) {
-              customGamesLimit = parseInt(parsedRules.games_per_team) || 82;
+              customGamesLimit = parseInt(String(parsedRules.games_per_team), 10) || 82;
             }
+          } catch (e) {
+            console.error("Failed parsing rules_json", e);
           }
-        } catch (e) {
-          console.error("Failed parsing rules_json", e);
+        }
+
+        // Extract playoff_teams from Leagues table
+        let customPlayoffTeams: number | null = null;
+        if (row.playoff_teams !== undefined && row.playoff_teams !== null) {
+          const p = parseInt(String(row.playoff_teams), 10);
+          if (!isNaN(p) && p > 0) customPlayoffTeams = p;
+        } else if (row.rules_json) {
+          try {
+            const parsedRules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
+            if (parsedRules?.playoff_teams) {
+              const p = parseInt(String(parsedRules.playoff_teams), 10);
+              if (!isNaN(p) && p > 0) customPlayoffTeams = p;
+            }
+          } catch (e) { }
         }
 
         return {
           league_id: String(lId).trim(),
           league_name: String(dynamicName).trim(),
-          games_per_team: customGamesLimit
+          games_per_team: customGamesLimit,
+          playoff_teams: customPlayoffTeams
         };
       })
         .sort((a, b) => Number(b.league_id) - Number(a.league_id));
@@ -193,6 +213,9 @@ export default function StandingsPage() {
         setActiveSeasonId(latestSeason.league_id);
         setSelectedLeagueId(latestSeason.league_id);
         setGamesPerTeam(latestSeason.games_per_team || 82);
+        if (latestSeason.playoff_teams) {
+          setPlayoffCutoffCount(latestSeason.playoff_teams);
+        }
       }
     };
 
@@ -340,17 +363,61 @@ export default function StandingsPage() {
     const numericLeagueId = parseInt(String(leagueId).replace(/\D/g, '')) || 1;
     const baseTeamMap = await getTeamMetadataMap(numericLeagueId);
 
-    const { data: playoffData } = await supabase
-      .from('league_playoffs')
-      .select('team_id')
-      .eq('season_id', numericLeagueId);
+    // Fetch playoff_teams from the leagues table for this season
+    let playoffCutoff = 0;
 
-    if (playoffData && playoffData.length > 0) {
-      const uniquePlayoffTeams = new Set(playoffData.map(p => p.team_id));
-      setPlayoffCutoffCount(uniquePlayoffTeams.size);
-    } else {
-      setPlayoffCutoffCount(0);
+    const { data: leagueRecord } = await supabase
+      .from('leagues')
+      .select('league_id, playoff_teams, games_per_team, rules_json')
+      .eq('league_id', numericLeagueId)
+      .maybeSingle();
+
+    if (leagueRecord) {
+      if (leagueRecord.playoff_teams !== undefined && leagueRecord.playoff_teams !== null) {
+        const p = parseInt(String(leagueRecord.playoff_teams), 10);
+        if (!isNaN(p) && p > 0) playoffCutoff = p;
+      }
+      if (leagueRecord.games_per_team) {
+        const g = parseInt(String(leagueRecord.games_per_team), 10);
+        if (!isNaN(g) && g > 0) setGamesPerTeam(g);
+      }
     }
+
+    if (!playoffCutoff) {
+      const { data: seasonRecord } = await supabase
+        .from('league_seasons')
+        .select('league_id, playoff_teams, games_per_team, rules_json')
+        .eq('league_id', numericLeagueId)
+        .maybeSingle();
+
+      if (seasonRecord?.playoff_teams) {
+        const p = parseInt(String(seasonRecord.playoff_teams), 10);
+        if (!isNaN(p) && p > 0) playoffCutoff = p;
+      } else if (seasonRecord?.rules_json) {
+        try {
+          const parsed = typeof seasonRecord.rules_json === 'string' ? JSON.parse(seasonRecord.rules_json) : seasonRecord.rules_json;
+          if (parsed?.playoff_teams) {
+            const p = parseInt(String(parsed.playoff_teams), 10);
+            if (!isNaN(p) && p > 0) playoffCutoff = p;
+          }
+        } catch (e) { }
+      }
+    }
+
+    // Fallback check against league_playoffs table if playoff_teams was not configured in leagues table
+    if (!playoffCutoff) {
+      const { data: playoffData } = await supabase
+        .from('league_playoffs')
+        .select('team_id')
+        .eq('season_id', numericLeagueId);
+
+      if (playoffData && playoffData.length > 0) {
+        const uniquePlayoffTeams = new Set(playoffData.map((p: any) => p.team_id));
+        playoffCutoff = uniquePlayoffTeams.size;
+      }
+    }
+
+    setPlayoffCutoffCount(playoffCutoff);
 
     const [schedRes, statsRes, teamsRes, standingsRes] = await Promise.all([
       supabase
@@ -739,20 +806,63 @@ export default function StandingsPage() {
       return teamName.includes(normalizedQuery) || teamAbbr.includes(normalizedQuery);
     });
 
-  // Dynamic Mathematical Elimination Logic Processing Block ($E\#$)
-  const getEliminationNumber = (team: any, currentIndex: number) => {
-    if (isGlobalMode || playoffCutoffCount <= 0 || currentIndex < playoffCutoffCount) return null;
+  // Determine active cutoff count based on current view tab
+  const activeCutoffCount = useMemo(() => {
+    if (isGlobalMode || playoffCutoffCount <= 0) return 0;
+    if (currentTab === 'ALL') return playoffCutoffCount;
+    if (availableConferences.includes(currentTab) && availableConferences.length > 0) {
+      return Math.ceil(playoffCutoffCount / availableConferences.length);
+    }
+    return playoffCutoffCount;
+  }, [isGlobalMode, playoffCutoffCount, currentTab, availableConferences]);
 
-    // Fetch the team right on the edge of the active playoff bubble line
-    const cutoffTeam = processedStandings[playoffCutoffCount - 1];
+  // Max points possible for a team in the current season
+  const getMaxPossiblePoints = (team: any) => {
+    const gp = Number(team.gp) || 0;
+    const pts = Number(team.pts) || 0;
+    return pts + Math.max(0, (gamesPerTeam - gp) * 2);
+  };
+
+  // Dynamic Mathematical Magic Number Logic Processing Block (M#)
+  // For teams currently AT or ABOVE the playoff cutoff line
+  const getMagicNumber = (team: any, currentIndex: number) => {
+    if (isGlobalMode || activeCutoffCount <= 0 || currentIndex >= activeCutoffCount) return null;
+    if (processedStandings.length <= activeCutoffCount) return 0; // Entire pool advances
+
+    // Find the highest maximum possible points among all chasing teams below the playoff line
+    const chasers = processedStandings.slice(activeCutoffCount);
+    if (chasers.length === 0) return 0;
+
+    let maxChaserPoints = 0;
+    chasers.forEach((chaser: any) => {
+      const maxPts = getMaxPossiblePoints(chaser);
+      if (maxPts > maxChaserPoints) {
+        maxChaserPoints = maxPts;
+      }
+    });
+
+    const teamPts = Number(team.pts) || 0;
+    if (team.clinch || teamPts > maxChaserPoints) return 0;
+
+    const magicNumber = maxChaserPoints - teamPts + 1;
+    return magicNumber <= 0 ? 0 : magicNumber;
+  };
+
+  // Dynamic Mathematical Elimination Logic Processing Block (E#)
+  // For teams currently BELOW the playoff cutoff line
+  const getEliminationNumber = (team: any, currentIndex: number) => {
+    if (isGlobalMode || activeCutoffCount <= 0 || currentIndex < activeCutoffCount) return null;
+
+    // Fetch the team right on the edge of the active playoff bubble line (last qualifying spot)
+    const cutoffTeam = processedStandings[activeCutoffCount - 1];
     if (!cutoffTeam) return null;
 
-    const totalAvailablePoints = gamesPerTeam * 2;
-    const teamMaxPossiblePoints = team.pts + ((gamesPerTeam - team.gp) * 2);
+    const teamMaxPts = getMaxPossiblePoints(team);
+    const cutoffPts = Number(cutoffTeam.pts) || 0;
 
-    if (teamMaxPossiblePoints < cutoffTeam.pts) return 0;
+    if (teamMaxPts < cutoffPts) return 0;
 
-    const eliminationValue = totalAvailablePoints - team.pts - ((gamesPerTeam - cutoffTeam.gp) * 2) - cutoffTeam.pts + 1;
+    const eliminationValue = teamMaxPts - cutoffPts + 1;
     return eliminationValue <= 0 ? 0 : eliminationValue;
   };
 
@@ -760,7 +870,7 @@ export default function StandingsPage() {
     if (processedStandings.length === 0) return;
 
     const headers = [
-      "Scope Context", "Seed ID", "Club Name", "Abbr", "Clinch Status", "Elimination Number",
+      "Scope Context", "Seed ID", "Club Name", "Abbr", "Clinch Status", "Magic Number", "Elimination Number",
       "GP", "W", "L", "T", "PTS", "GF", "GA", "+/-", "Home", "Away", "OTW", "OTL", "Streak", "L10"
     ];
 
@@ -769,7 +879,8 @@ export default function StandingsPage() {
       t.seed || "-",
       `"${t.name}"`,
       t.abbr,
-      t.clinch || "-",
+      t.clinch || (getMagicNumber(t, idx) === 0 ? "x" : "-"),
+      getMagicNumber(t, idx) ?? "-",
       getEliminationNumber(t, idx) ?? "-",
       t.gp, t.wins, t.losses, t.ties, t.pts, t.gf, t.ga, t.gd,
       t.homeRecord, t.awayRecord, t.otWins, t.otLosses, t.streak, t.l10
@@ -787,16 +898,42 @@ export default function StandingsPage() {
     document.body.removeChild(link);
   };
 
-  const topFiveClinch = processedStandings.slice(0, 5).map((team) => {
-    const dummyMagicNumber = Math.max(0, 14 - team.wins);
-    return {
-      name: team.name,
-      mn: team.clinch ? `Clinched (${team.clinch})` : (dummyMagicNumber === 0 ? "Clinched (x)" : dummyMagicNumber)
-    };
-  });
+  const topFiveClinch = useMemo(() => {
+    if (processedStandings.length === 0) return [];
+    return processedStandings.slice(0, 5).map((team: any, idx: number) => {
+      const mn = getMagicNumber(team, idx);
+      const targetSeason = isGlobalMode ? team.season_id : (selectedLeagueId || team.season_id);
+      const teamLink = targetSeason ? `/team/${team.id}?season=${targetSeason}` : `/team/${team.id}`;
+
+      let statusText = '-';
+      let isClinched = false;
+
+      if (team.clinch) {
+        statusText = `Clinched (${team.clinch})`;
+        isClinched = true;
+      } else if (mn === 0) {
+        statusText = 'Clinched (x)';
+        isClinched = true;
+      } else if (mn !== null && mn > 0) {
+        statusText = `Magic #: ${mn}`;
+      } else if (isGlobalMode || activeCutoffCount <= 0) {
+        statusText = `${team.pts} PTS`;
+      }
+
+      return {
+        id: team.id,
+        name: team.name,
+        abbr: team.abbr,
+        link: teamLink,
+        statusText,
+        isClinched
+      };
+    });
+  }, [processedStandings, isGlobalMode, activeCutoffCount, selectedLeagueId, gamesPerTeam]);
 
   const hasGroups = availableConferences.length > 0 || availableDivisions.length > 0;
-  const colSpanCount = 13;
+  const colSpanCount = 19;
+
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif overflow-x-hidden">
       <div className={isFullScreen ? 'fixed inset-0 bg-[#f4f1ea] z-50 overflow-y-auto p-4 md:p-8' : 'max-w-[1400px] mx-auto px-4 py-8'}>
@@ -808,7 +945,7 @@ export default function StandingsPage() {
           {isFullScreen && (
             <button
               onClick={() => setIsFullScreen(false)}
-              className="absolute right-2 top-2 sm:top-4 flex items-center gap-1 text-xs border border-black px-2 py-1 font-sans font-bold uppercase hover:bg-black hover:text-white transition-all rounded-xs"
+              className="absolute right-2 top-2 sm:top-4 flex items-center gap-1 text-xs border border-black px-2 py-1 font-sans font-bold uppercase hover:bg-black hover:text-white transition-all rounded-xs cursor-pointer"
             >
               <Minimize2 className="w-3 h-3" /> <span className="hidden sm:inline">Close Full Screen</span>
             </button>
@@ -892,7 +1029,7 @@ export default function StandingsPage() {
             <div className="flex items-center gap-1 border-l border-black/20 pl-3 sm:pl-4 font-sans font-bold text-xs">
               <button
                 onClick={() => setIsCompactView(!isCompactView)}
-                className={`p-1 border rounded-xs mr-1 transition-colors ${isCompactView ? 'bg-black text-white border-black' : 'border-black/20 text-black/60 hover:text-black'}`}
+                className={`p-1 border rounded-xs mr-1 transition-colors cursor-pointer ${isCompactView ? 'bg-black text-white border-black' : 'border-black/20 text-black/60 hover:text-black'}`}
                 title="Toggle Compact Spacing View"
               >
                 {isCompactView ? <Grid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
@@ -902,7 +1039,7 @@ export default function StandingsPage() {
               {!isFullScreen && (
                 <button
                   onClick={() => setIsFullScreen(true)}
-                  className="p-1 border border-black/20 rounded-xs ml-2 sm:ml-3 text-black/60 hover:text-black hover:border-black transition-colors"
+                  className="p-1 border border-black/20 rounded-xs ml-2 sm:ml-3 text-black/60 hover:text-black hover:border-black transition-colors cursor-pointer"
                   title="Maximize to Full Screen Display"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
@@ -926,7 +1063,7 @@ export default function StandingsPage() {
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
               <button
                 onClick={downloadCSV}
-                className="flex items-center gap-1 text-xs border border-black/20 font-sans font-bold uppercase px-2.5 py-1 hover:border-black transition-colors text-black/70 hover:text-black rounded-xs"
+                className="flex items-center gap-1 text-xs border border-black/20 font-sans font-bold uppercase px-2.5 py-1 hover:border-black transition-colors text-black/70 hover:text-black rounded-xs cursor-pointer"
                 title="Export Active Lines to Spreadsheets"
               >
                 <Download className="w-3 h-3" /> <span className="hidden sm:inline">Export</span> CSV
@@ -937,7 +1074,7 @@ export default function StandingsPage() {
                   setIsGlobalMode(!isGlobalMode);
                   if (isGlobalMode) setSortField('pts');
                 }}
-                className={`flex items-center gap-1.5 text-xs font-black uppercase shrink-0 px-2.5 py-1 border transition-all duration-75 ${isGlobalMode ? 'bg-black text-white border-black rounded-xs' : 'border-black/20 hover:border-black rounded-xs text-black/70 hover:text-black'
+                className={`flex items-center gap-1.5 text-xs font-black uppercase shrink-0 px-2.5 py-1 border transition-all duration-75 cursor-pointer ${isGlobalMode ? 'bg-black text-white border-black rounded-xs' : 'border-black/20 hover:border-black rounded-xs text-black/70 hover:text-black'
                   }`}
               >
                 <Globe className="w-3 h-3" />
@@ -960,7 +1097,7 @@ export default function StandingsPage() {
                 <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">League</div>
                 <button
                   onClick={() => setCurrentTab('ALL')}
-                  className={`w-full text-left px-2 py-1 font-black uppercase tracking-tight text-[11px] rounded-xs transition-all ${currentTab === 'ALL' ? 'bg-black text-white shadow-xs' : 'text-black/70 hover:bg-black/5 hover:text-black'
+                  className={`w-full text-left px-2 py-1 font-black uppercase tracking-tight text-[11px] rounded-xs transition-all cursor-pointer ${currentTab === 'ALL' ? 'bg-black text-white shadow-xs' : 'text-black/70 hover:bg-black/5 hover:text-black'
                     }`}
                 >
                   Overall League
@@ -975,7 +1112,7 @@ export default function StandingsPage() {
                       <button
                         key={conf}
                         onClick={() => setCurrentTab(conf)}
-                        className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all ${currentTab === conf ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
+                        className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all cursor-pointer ${currentTab === conf ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
                           }`}
                       >
                         {conf} Conf.
@@ -995,7 +1132,7 @@ export default function StandingsPage() {
                       <button
                         key={div}
                         onClick={() => setCurrentTab(div)}
-                        className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all whitespace-nowrap overflow-hidden text-ellipsis ${currentTab === div ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
+                        className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer ${currentTab === div ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
                           }`}
                         title={`${div} Division`}
                       >
@@ -1028,7 +1165,7 @@ export default function StandingsPage() {
               No matching records found.
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[980px] md:min-w-[1050px] transition-all text-[12px]">
+            <table className="w-full text-left border-collapse min-w-[1020px] md:min-w-[1120px] transition-all text-[12px]">
               <thead>
                 <tr className="border-b-2 border-black uppercase text-[10px] font-sans font-black tracking-wider text-black/70 bg-black/[0.01]">
                   {!isGlobalMode ? (
@@ -1044,8 +1181,15 @@ export default function StandingsPage() {
                   <th className="sticky left-[50px] sm:left-[65px] bg-[#fdfaf5] z-20 w-[180px] sm:w-[260px] text-center py-2 px-1 border-r border-black/10 shadow-[2px_0_4px_rgba(0,0,0,0.04)]">
                     Club Identity
                   </th>
-                  <th className="w-[50px] sm:w-[60px] text-center font-sans font-black tracking-wider text-[9px] text-black/30 select-none py-2 px-1">Clinch</th>
-                  <th className="w-[45px] sm:w-[50px] text-center font-sans font-black tracking-wider text-[9px] text-red-700/40 select-none py-2 px-1">E #</th>
+                  <th className="w-[45px] sm:w-[50px] text-center font-sans font-black tracking-wider text-[9px] text-black/40 select-none py-2 px-1" title="Clinch Status (x = Playoff, y = Division, z = Conference, p = Presidents' Trophy)">
+                    Clinch
+                  </th>
+                  <th className="w-[45px] sm:w-[55px] text-center font-sans font-black tracking-wider text-[9px] text-emerald-800 select-none py-2 px-1" title="Magic Number: Points required to clinch playoff qualification">
+                    M #
+                  </th>
+                  <th className="w-[45px] sm:w-[55px] text-center font-sans font-black tracking-wider text-[9px] text-red-700 select-none py-2 px-1" title="Elimination Number: Points before mathematical elimination">
+                    E #
+                  </th>
 
                   <th className="text-center w-[45px] sm:w-[50px] text-black/40 py-2 px-1">GP</th>
                   <th onClick={() => handleSort('wins')} className="text-center w-[50px] sm:w-[55px] cursor-pointer hover:bg-black/[0.03] transition-colors py-2 px-1">
@@ -1083,8 +1227,11 @@ export default function StandingsPage() {
               </thead>
               <tbody className="font-sans font-bold">
                 {processedStandings.map((team: any, index: number) => {
-                  const isPlayoffBoundaryLine = !isGlobalMode && playoffCutoffCount > 0 && index + 1 === playoffCutoffCount;
+                  const isPlayoffBoundaryLine = !isGlobalMode && activeCutoffCount > 0 && index + 1 === activeCutoffCount;
+                  const mNumber = getMagicNumber(team, index);
                   const eNumber = getEliminationNumber(team, index);
+                  const targetSeason = isGlobalMode ? team.season_id : (selectedLeagueId || team.season_id);
+                  const teamHref = targetSeason ? `/team/${team.id}?season=${targetSeason}` : `/team/${team.id}`;
 
                   return (
                     <React.Fragment key={`${team.id}-${team.season_id}-${index}`}>
@@ -1093,54 +1240,83 @@ export default function StandingsPage() {
                           {isGlobalMode ? team.season_display_name : team.seed}
                         </td>
 
+                        {/* Team Selection Link */}
                         <td className="sticky left-[50px] sm:left-[65px] bg-white group-hover:bg-gray-50 z-10 flex justify-center items-center whitespace-nowrap py-1 px-1 w-[180px] sm:w-[260px] align-middle border-r border-black/5 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
-                          {team.banner_url ? (
-                            <div className="w-full flex justify-center max-h-[28px] items-center relative">
-                              <img
-                                src={team.banner_url}
-                                alt={team.abbr}
-                                className="object-contain block filter contrast-125 saturate-110 drop-shadow-xs mix-blend-multiply max-w-full w-32 sm:w-40 h-6 sm:h-7 transition-transform duration-75 group-hover:scale-102 rounded-xs"
-                                onError={(e) => {
-                                  const target = e.currentTarget;
-                                  const fallbacks: string[] = team.fallback_urls || [];
-                                  const triedList = (target.dataset.tried || '').split('|');
-                                  const nextUrl = fallbacks.find((url: string) => url && !triedList.includes(url) && url !== target.src);
+                          <Link
+                            href={teamHref}
+                            className="w-full flex justify-center items-center group/link cursor-pointer hover:opacity-85 transition-all duration-75"
+                            title={`View ${team.name || team.abbr} Team Page`}
+                          >
+                            {team.banner_url ? (
+                              <div className="w-full flex justify-center max-h-[28px] items-center relative">
+                                <img
+                                  src={team.banner_url}
+                                  alt={team.abbr}
+                                  className="object-contain block filter contrast-125 saturate-110 drop-shadow-xs mix-blend-multiply max-w-full w-32 sm:w-40 h-6 sm:h-7 transition-transform duration-75 group-hover/link:scale-102 rounded-xs"
+                                  onError={(e) => {
+                                    const target = e.currentTarget;
+                                    const fallbacks: string[] = team.fallback_urls || [];
+                                    const triedList = (target.dataset.tried || '').split('|');
+                                    const nextUrl = fallbacks.find((url: string) => url && !triedList.includes(url) && url !== target.src);
 
-                                  if (nextUrl) {
-                                    target.dataset.tried = `${target.dataset.tried || ''}|${nextUrl}`;
-                                    target.src = nextUrl;
-                                  } else {
-                                    target.style.display = 'none';
-                                    const fallbackDiv = target.parentElement?.querySelector('.team-abbr-fallback') as HTMLElement | null;
-                                    if (fallbackDiv) fallbackDiv.style.display = 'flex';
-                                  }
-                                }}
-                              />
-                              <div
-                                style={{ display: 'none' }}
-                                className="team-abbr-fallback bg-black/5 border border-black/20 rounded-xs items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-6 sm:h-7 shadow-inner text-[12px] sm:text-[13px]"
-                              >
+                                    if (nextUrl) {
+                                      target.dataset.tried = `${target.dataset.tried || ''}|${nextUrl}`;
+                                      target.src = nextUrl;
+                                    } else {
+                                      target.style.display = 'none';
+                                      const fallbackDiv = target.parentElement?.querySelector('.team-abbr-fallback') as HTMLElement | null;
+                                      if (fallbackDiv) fallbackDiv.style.display = 'flex';
+                                    }
+                                  }}
+                                />
+                                <div
+                                  style={{ display: 'none' }}
+                                  className="team-abbr-fallback bg-black/5 border border-black/20 rounded-xs items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-6 sm:h-7 shadow-inner text-[12px] sm:text-[13px]"
+                                >
+                                  {team.abbr}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="bg-black/5 border border-black/20 rounded-xs flex items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-6 sm:h-7 shadow-inner text-[12px] sm:text-[13px] group-hover/link:bg-black/10 transition-colors">
                                 {team.abbr}
                               </div>
-                            </div>
-                          ) : (
-                            <div className="bg-black/5 border border-black/20 rounded-xs flex items-center justify-center font-sans font-black text-black/60 tracking-widest w-full h-6 sm:h-7 shadow-inner text-[12px] sm:text-[13px]">
-                              {team.abbr}
-                            </div>
-                          )}
+                            )}
+                          </Link>
                         </td>
 
+                        {/* Clinch Status Cell */}
                         <td className="text-center font-mono select-none py-1 px-1 align-middle">
                           {team.clinch ? (
-                            <span className="inline-block bg-blue-600 text-white font-mono text-[10px] px-2 py-0.5 rounded-sm font-black tracking-wider uppercase shadow-xs">
+                            <span className="inline-block bg-blue-600 text-white font-mono text-[10px] px-1.5 py-0.5 rounded-xs font-black tracking-wider uppercase shadow-xs" title={`Clinched: ${team.clinch}`}>
                               {team.clinch}
                             </span>
+                          ) : mNumber === 0 ? (
+                            <span className="inline-block bg-emerald-600 text-white font-mono text-[10px] px-1.5 py-0.5 rounded-xs font-black tracking-wider uppercase shadow-xs" title="Clinched Playoff Spot">
+                              x
+                            </span>
                           ) : (
-                            <span className="text-gray-200 font-normal font-mono">-</span>
+                            <span className="text-gray-300 font-normal font-mono">-</span>
                           )}
                         </td>
 
-                        {/* Elimination Number Content Cell */}
+                        {/* Magic Number (M #) Content Cell */}
+                        <td className="text-center font-mono select-none py-1 px-1 align-middle">
+                          {mNumber !== null ? (
+                            mNumber === 0 ? (
+                              <span className="inline-block bg-emerald-100 text-emerald-800 font-mono text-[10px] px-1.5 py-0.5 rounded-xs font-black tracking-wide uppercase">
+                                Clinched
+                              </span>
+                            ) : (
+                              <span className="text-emerald-700 font-black font-mono text-[11px] bg-emerald-50 px-1.5 py-0.5 rounded-xs border border-emerald-200/50">
+                                {mNumber}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-gray-300 font-normal font-mono">-</span>
+                          )}
+                        </td>
+
+                        {/* Elimination Number (E #) Content Cell */}
                         <td className="text-center font-mono select-none py-1 px-1 align-middle">
                           {eNumber !== null ? (
                             eNumber === 0 ? (
@@ -1148,10 +1324,12 @@ export default function StandingsPage() {
                                 Elim
                               </span>
                             ) : (
-                              <span className="text-red-600 font-black font-mono text-[11px]">{eNumber}</span>
+                              <span className="text-red-600 font-black font-mono text-[11px] bg-red-50 px-1.5 py-0.5 rounded-xs border border-red-200/50">
+                                {eNumber}
+                              </span>
                             )
                           ) : (
-                            <span className="text-gray-200 font-normal font-mono">-</span>
+                            <span className="text-gray-300 font-normal font-mono">-</span>
                           )}
                         </td>
 
@@ -1177,9 +1355,13 @@ export default function StandingsPage() {
 
                       {/* Clean Solid Dashed Playoff Border Line Injection Point */}
                       {isPlayoffBoundaryLine && (
-                        <tr key={`cutoff-${team.season_id}-${index}`} className="bg-red-50/40 border-b-2 border-dashed border-red-400/70 select-none">
-                          <td colSpan={colSpanCount} className="p-1 text-center font-sans font-black tracking-widest text-[9px] text-red-700/80 uppercase align-middle">
-                            ✂️ Playoff Cutoff Line Above • Postseason Bracket Limit
+                        <tr key={`cutoff-${team.season_id}-${index}`} className="bg-amber-500/10 border-y-2 border-dashed border-amber-600/80 select-none">
+                          <td colSpan={colSpanCount} className="py-1.5 px-3 text-center font-sans font-black tracking-widest text-[9.5px] text-amber-900 uppercase align-middle bg-amber-100/70">
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-amber-700">★</span>
+                              <span>PLAYOFF CUTOFF LINE • TOP {activeCutoffCount} QUALIFY FOR POSTSEASON</span>
+                              <span className="text-amber-700">★</span>
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -1202,7 +1384,8 @@ export default function StandingsPage() {
               <p><strong>PTS</strong> Points (Win = 2, Tie/OTL = 1)</p> <p><strong>+/-</strong> Goal Differential</p>
               <p><strong>HOME / AWAY</strong> Split Venue Records</p> <p><strong>OTW / OTL</strong> Overtime Wins / Losses</p>
               <p><strong>STRK</strong> Active Hot/Cold Streak</p> <p><strong>L10</strong> Record Over Past 10 Matchups</p>
-              <p><strong>E #</strong> Elimination Number (Points needed to mathematically lock out from playoffs)</p>
+              <p><strong>M #</strong> Magic Number (Points to clinch playoff spot)</p>
+              <p><strong>E #</strong> Elimination Number (Points before mathematical lockout)</p>
             </div>
           </div>
 
@@ -1213,9 +1396,17 @@ export default function StandingsPage() {
                 <div className="text-center py-2 opacity-40 uppercase text-[10px] tracking-wider">Evaluating positions...</div>
               ) : topFiveClinch.map((team: any, i: number) => (
                 <div key={i} className="flex justify-between border-b border-gray-100 py-1.5 last:border-0 items-center">
-                  <span className="font-serif font-black text-[13px]">{team.name}</span>
-                  <span className={`text-[11px] font-mono px-1.5 py-0.5 rounded-sm ${team.mn.toString().includes('Clinched') ? 'text-emerald-700 bg-emerald-50 font-black' : 'text-blue-600 bg-blue-50'}`}>
-                    {typeof team.mn === 'number' ? `Magic #: ${team.mn}` : team.mn}
+                  <Link
+                    href={team.link}
+                    className="font-serif font-black text-[13px] hover:underline hover:text-blue-700 transition-colors cursor-pointer"
+                  >
+                    {team.name}
+                  </Link>
+                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded-xs font-bold ${team.isClinched
+                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                      : 'text-blue-700 bg-blue-50 border border-blue-200'
+                    }`}>
+                    {team.statusText}
                   </span>
                 </div>
               ))}
