@@ -21,8 +21,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   V: {
     name: 'Vintage',
@@ -407,31 +407,29 @@ export default function StandingsPage() {
     let playoffCutoff = matchedSeason?.playoff_teams ? Number(matchedSeason.playoff_teams) : 0;
     let customGamesLimit = matchedSeason?.games_per_team ? Number(matchedSeason.games_per_team) : 0;
 
-    // 2. Query leagues / Leagues table with select('*') to safely extract playoff_teams
-    if (!playoffCutoff) {
-      try {
-        let leaguesData = (await supabase.from('leagues').select('*')).data;
-        if (!leaguesData || leaguesData.length === 0) {
-          leaguesData = (await supabase.from('Leagues').select('*')).data;
-        }
-
-        if (leaguesData && leaguesData.length > 0) {
-          const lRow = leaguesData.find((r: any) =>
-            Number(r.league_id) === numericLeagueId ||
-            Number(r.id) === numericLeagueId ||
-            Number(r.season_id) === numericLeagueId ||
-            String(r.league_name || '').includes(String(numericLeagueId))
-          );
-          if (lRow) {
-            const p = extractPlayoffTeams(lRow);
-            if (p > 0) playoffCutoff = p;
-            const g = extractGamesPerTeam(lRow);
-            if (g > 0 && !customGamesLimit) customGamesLimit = g;
-          }
-        }
-      } catch (e) {
-        console.error("Error querying leagues table:", e);
+    // 2. Query leagues / Leagues table with select('*') to safely extract playoff_teams and rules_json game_per_team
+    try {
+      let leaguesData = (await supabase.from('leagues').select('*')).data;
+      if (!leaguesData || leaguesData.length === 0) {
+        leaguesData = (await supabase.from('Leagues').select('*')).data;
       }
+
+      if (leaguesData && leaguesData.length > 0) {
+        const lRow = leaguesData.find((r: any) =>
+          Number(r.league_id) === numericLeagueId ||
+          Number(r.id) === numericLeagueId ||
+          Number(r.season_id) === numericLeagueId ||
+          String(r.league_name || '').includes(String(numericLeagueId))
+        );
+        if (lRow) {
+          const p = extractPlayoffTeams(lRow);
+          if (p > 0) playoffCutoff = p;
+          const g = extractGamesPerTeam(lRow);
+          if (g > 0) customGamesLimit = g;
+        }
+      }
+    } catch (e) {
+      console.error("Error querying leagues table:", e);
     }
 
     // 3. Fallback check against league_seasons table
@@ -913,12 +911,26 @@ export default function StandingsPage() {
     return playoffCutoffCount;
   }, [isGlobalMode, playoffCutoffCount, currentTab, availableConferences]);
 
-  // Max points possible for a team in the current season
+  // Max points possible for a team based on rules_json game_per_team
   const getMaxPossiblePoints = (team: any) => {
     const gp = Number(team.gp) || 0;
     const pts = Number(team.pts) || 0;
-    const gLimit = gamesPerTeam > 0 ? gamesPerTeam : 82;
-    return pts + Math.max(0, (gLimit - gp) * 2);
+
+    // Resolve season-specific game limit (e.g. 56 games for W18 = 112 max points)
+    let seasonLimit = gamesPerTeam;
+    if (team.season_id) {
+      const matched = seasons.find((s: any) =>
+        String(s.league_id) === String(team.season_id) ||
+        String(s.id) === String(team.season_id)
+      );
+      if (matched?.games_per_team) {
+        seasonLimit = matched.games_per_team;
+      }
+    }
+
+    const totalGames = seasonLimit > 0 ? seasonLimit : 82;
+    const remainingGames = Math.max(0, totalGames - gp);
+    return pts + (remainingGames * 2);
   };
 
   // Dynamic Mathematical Magic Number Logic Processing Block (M#)
