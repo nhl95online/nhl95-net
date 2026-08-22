@@ -21,8 +21,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   V: {
     name: 'Vintage',
@@ -108,6 +108,46 @@ export const getTeamBannerUrls = (t: {
   };
 };
 
+export const extractPlayoffTeams = (row: any): number => {
+  if (!row) return 0;
+  const val = row.playoff_teams ?? row.playoffs ?? row.playoff_spots ?? row.playoff_team_count ?? row.playoffteams ?? row.playoff_count ?? row.playoff_teams_count;
+  if (val !== undefined && val !== null) {
+    const parsed = parseInt(String(val), 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (row.rules_json) {
+    try {
+      const rules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
+      const rVal = rules?.playoff_teams ?? rules?.playoffs ?? rules?.playoff_spots ?? rules?.playoff_team_count;
+      if (rVal !== undefined && rVal !== null) {
+        const parsed = parseInt(String(rVal), 10);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch { }
+  }
+  return 0;
+};
+
+export const extractGamesPerTeam = (row: any): number => {
+  if (!row) return 82;
+  const val = row.games_per_team ?? row.games ?? row.schedule_games ?? row.games_count;
+  if (val !== undefined && val !== null) {
+    const parsed = parseInt(String(val), 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  if (row.rules_json) {
+    try {
+      const rules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
+      const rVal = rules?.games_per_team ?? rules?.games ?? rules?.schedule_games;
+      if (rVal !== undefined && rVal !== null) {
+        const parsed = parseInt(String(rVal), 10);
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+    } catch { }
+  }
+  return 82;
+};
+
 export default function StandingsPage() {
   const [seasons, setSeasons] = useState<any[]>([]);
   const [selectedLeagueType, setSelectedLeagueType] = useState<string>('ALL');
@@ -132,8 +172,8 @@ export default function StandingsPage() {
   const [availableConferences, setAvailableConferences] = useState<string[]>([]);
   const [availableDivisions, setAvailableDivisions] = useState<string[]>([]);
 
-  // Playoff Cutoff Count State
-  const [playoffCutoffCount, setPlayoffCutoffCount] = useState<number>(0);
+  // Playoff Cutoff Count State (loaded from Leagues table playoff_teams column)
+  const [playoffCutoffCount, setPlayoffCutoffCount] = useState<number>(8);
 
   // 1. Dynamic Load: Fetch all valid seasons and rules configurations from leagues table
   useEffect(() => {
@@ -166,45 +206,18 @@ export default function StandingsPage() {
       const formattedList = data.map((row: any) => {
         const lId = row.league_id !== undefined ? row.league_id : (row.id || row.season_id);
         const dynamicName = row.league_name || row.name || row.season_name || `Season ${lId}`;
-
-        // Dynamic extraction of schedule lengths from rules JSON definition fields or games_per_team column
-        let customGamesLimit = 82;
-        if (row.games_per_team) {
-          customGamesLimit = parseInt(String(row.games_per_team), 10) || 82;
-        } else if (row.rules_json) {
-          try {
-            const parsedRules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
-            if (parsedRules?.games_per_team) {
-              customGamesLimit = parseInt(String(parsedRules.games_per_team), 10) || 82;
-            }
-          } catch (e) {
-            console.error("Failed parsing rules_json", e);
-          }
-        }
-
-        // Extract playoff_teams from Leagues table
-        let customPlayoffTeams: number | null = null;
-        if (row.playoff_teams !== undefined && row.playoff_teams !== null) {
-          const p = parseInt(String(row.playoff_teams), 10);
-          if (!isNaN(p) && p > 0) customPlayoffTeams = p;
-        } else if (row.rules_json) {
-          try {
-            const parsedRules = typeof row.rules_json === 'string' ? JSON.parse(row.rules_json) : row.rules_json;
-            if (parsedRules?.playoff_teams) {
-              const p = parseInt(String(parsedRules.playoff_teams), 10);
-              if (!isNaN(p) && p > 0) customPlayoffTeams = p;
-            }
-          } catch (e) { }
-        }
+        const customGamesLimit = extractGamesPerTeam(row);
+        const customPlayoffTeams = extractPlayoffTeams(row);
 
         return {
+          id: row.id,
           league_id: String(lId).trim(),
           league_name: String(dynamicName).trim(),
           games_per_team: customGamesLimit,
-          playoff_teams: customPlayoffTeams
+          playoff_teams: customPlayoffTeams > 0 ? customPlayoffTeams : null,
+          raw_data: row
         };
-      })
-        .sort((a, b) => Number(b.league_id) - Number(a.league_id));
+      }).sort((a, b) => Number(b.league_id) - Number(a.league_id));
 
       setSeasons(formattedList);
 
@@ -213,9 +226,8 @@ export default function StandingsPage() {
         setActiveSeasonId(latestSeason.league_id);
         setSelectedLeagueId(latestSeason.league_id);
         setGamesPerTeam(latestSeason.games_per_team || 82);
-        if (latestSeason.playoff_teams) {
-          setPlayoffCutoffCount(latestSeason.playoff_teams);
-        }
+        const pCutoff = latestSeason.playoff_teams || (Number(latestSeason.league_id) === 39 ? 4 : 8);
+        setPlayoffCutoffCount(pCutoff);
       }
     };
 
@@ -271,6 +283,9 @@ export default function StandingsPage() {
       const currentMatchedSeason = seasons.find(s => String(s.league_id) === String(selectedLeagueId));
       if (currentMatchedSeason) {
         setGamesPerTeam(currentMatchedSeason.games_per_team || 82);
+        if (currentMatchedSeason.playoff_teams) {
+          setPlayoffCutoffCount(currentMatchedSeason.playoff_teams);
+        }
       }
 
       loadStandings(selectedLeagueId);
@@ -363,58 +378,86 @@ export default function StandingsPage() {
     const numericLeagueId = parseInt(String(leagueId).replace(/\D/g, '')) || 1;
     const baseTeamMap = await getTeamMetadataMap(numericLeagueId);
 
-    // Fetch playoff_teams from the leagues table for this season
-    let playoffCutoff = 0;
+    // 1. Check in-memory loaded seasons list first
+    const matchedSeason = seasons.find(s =>
+      String(s.league_id) === String(leagueId) ||
+      String(s.league_id) === String(numericLeagueId) ||
+      String(s.id) === String(leagueId) ||
+      String(s.id) === String(numericLeagueId)
+    );
 
-    const { data: leagueRecord } = await supabase
-      .from('leagues')
-      .select('league_id, playoff_teams, games_per_team, rules_json')
-      .eq('league_id', numericLeagueId)
-      .maybeSingle();
+    let playoffCutoff = matchedSeason?.playoff_teams ? Number(matchedSeason.playoff_teams) : 0;
+    let customGamesLimit = matchedSeason?.games_per_team ? Number(matchedSeason.games_per_team) : 0;
 
-    if (leagueRecord) {
-      if (leagueRecord.playoff_teams !== undefined && leagueRecord.playoff_teams !== null) {
-        const p = parseInt(String(leagueRecord.playoff_teams), 10);
-        if (!isNaN(p) && p > 0) playoffCutoff = p;
-      }
-      if (leagueRecord.games_per_team) {
-        const g = parseInt(String(leagueRecord.games_per_team), 10);
-        if (!isNaN(g) && g > 0) setGamesPerTeam(g);
-      }
-    }
-
+    // 2. Query leagues table with select('*') to safely extract playoff_teams
     if (!playoffCutoff) {
-      const { data: seasonRecord } = await supabase
-        .from('league_seasons')
-        .select('league_id, playoff_teams, games_per_team, rules_json')
-        .eq('league_id', numericLeagueId)
-        .maybeSingle();
+      try {
+        const { data: leaguesData } = await supabase
+          .from('leagues')
+          .select('*');
 
-      if (seasonRecord?.playoff_teams) {
-        const p = parseInt(String(seasonRecord.playoff_teams), 10);
-        if (!isNaN(p) && p > 0) playoffCutoff = p;
-      } else if (seasonRecord?.rules_json) {
-        try {
-          const parsed = typeof seasonRecord.rules_json === 'string' ? JSON.parse(seasonRecord.rules_json) : seasonRecord.rules_json;
-          if (parsed?.playoff_teams) {
-            const p = parseInt(String(parsed.playoff_teams), 10);
-            if (!isNaN(p) && p > 0) playoffCutoff = p;
+        if (leaguesData && leaguesData.length > 0) {
+          const lRow = leaguesData.find((r: any) =>
+            Number(r.league_id) === numericLeagueId ||
+            Number(r.id) === numericLeagueId ||
+            Number(r.season_id) === numericLeagueId ||
+            String(r.league_name || '').includes(String(numericLeagueId))
+          );
+          if (lRow) {
+            const p = extractPlayoffTeams(lRow);
+            if (p > 0) playoffCutoff = p;
+            const g = extractGamesPerTeam(lRow);
+            if (g > 0 && !customGamesLimit) customGamesLimit = g;
           }
-        } catch (e) { }
+        }
+      } catch (e) {
+        console.error("Error querying leagues table:", e);
       }
     }
 
-    // Fallback check against league_playoffs table if playoff_teams was not configured in leagues table
+    // 3. Fallback check against league_seasons table
     if (!playoffCutoff) {
-      const { data: playoffData } = await supabase
-        .from('league_playoffs')
-        .select('team_id')
-        .eq('season_id', numericLeagueId);
+      try {
+        const { data: seasonsData } = await supabase
+          .from('league_seasons')
+          .select('*');
 
-      if (playoffData && playoffData.length > 0) {
-        const uniquePlayoffTeams = new Set(playoffData.map((p: any) => p.team_id));
-        playoffCutoff = uniquePlayoffTeams.size;
-      }
+        if (seasonsData && seasonsData.length > 0) {
+          const sRow = seasonsData.find((r: any) =>
+            Number(r.league_id) === numericLeagueId ||
+            Number(r.id) === numericLeagueId ||
+            Number(r.season_id) === numericLeagueId
+          );
+          if (sRow) {
+            const p = extractPlayoffTeams(sRow);
+            if (p > 0) playoffCutoff = p;
+            const g = extractGamesPerTeam(sRow);
+            if (g > 0 && !customGamesLimit) customGamesLimit = g;
+          }
+        }
+      } catch (e) { }
+    }
+
+    // 4. Fallback check against league_playoffs table
+    if (!playoffCutoff) {
+      try {
+        const { data: playoffData } = await supabase
+          .from('league_playoffs')
+          .select('team_id')
+          .eq('season_id', numericLeagueId);
+
+        if (playoffData && playoffData.length > 0) {
+          const uniquePlayoffTeams = new Set(playoffData.map((p: any) => p.team_id));
+          if (uniquePlayoffTeams.size > 0) {
+            playoffCutoff = uniquePlayoffTeams.size;
+          }
+        }
+      } catch { }
+    }
+
+    // 5. Default guarantee: Original 6 = 4 teams, W/Q/Vintage/etc. = 8 teams
+    if (!playoffCutoff || playoffCutoff <= 0) {
+      playoffCutoff = numericLeagueId === 39 ? 4 : 8;
     }
 
     setPlayoffCutoffCount(playoffCutoff);
@@ -754,6 +797,32 @@ export default function StandingsPage() {
     const divs: string[] = Array.from(
       new Set(standardSeededList.map((t) => t.division).filter(Boolean))
     ) as string[];
+
+    // Extract actual schedule length from schedule data or games played
+    let maxSchedGames = 0;
+    if (allScheduleData && allScheduleData.length > 0) {
+      const teamSchedCounts: Record<number, number> = {};
+      allScheduleData.forEach((g: any) => {
+        const h = Number(g.home_team_id);
+        const a = Number(g.away_team_id);
+        if (h && h !== 999 && h !== 0 && h !== 68) {
+          teamSchedCounts[h] = (teamSchedCounts[h] || 0) + 1;
+        }
+        if (a && a !== 999 && a !== 0 && a !== 68) {
+          teamSchedCounts[a] = (teamSchedCounts[a] || 0) + 1;
+        }
+      });
+      const counts = Object.values(teamSchedCounts);
+      if (counts.length > 0) {
+        maxSchedGames = Math.max(...counts);
+      }
+    }
+
+    const maxPlayedInSeason = freshStandings.reduce((max: number, t: any) => Math.max(max, Number(t.gp) || 0), 0);
+    const resolvedGamesPerTeam = Math.max(maxSchedGames, maxPlayedInSeason, customGamesLimit, 14);
+    if (resolvedGamesPerTeam > 0) {
+      setGamesPerTeam(resolvedGamesPerTeam);
+    }
 
     setAvailableConferences(confs.sort());
     setAvailableDivisions(divs.sort());
