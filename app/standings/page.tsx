@@ -21,8 +21,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
   },
   V: {
     name: 'Vintage',
@@ -178,17 +178,31 @@ export default function StandingsPage() {
   // 1. Dynamic Load: Fetch all valid seasons and rules configurations from leagues table
   useEffect(() => {
     const fetchSeasons = async () => {
-      let { data, error } = await supabase
-        .from('leagues')
-        .select('*');
+      let data: any = null;
+      let error: any = null;
 
-      if (error || !data || data.length === 0) {
-        const fallbackQuery = await supabase
-          .from('league_seasons')
-          .select('*');
+      try {
+        const res1 = await supabase.from('leagues').select('*');
+        if (!res1.error && res1.data && res1.data.length > 0) {
+          data = res1.data;
+        }
+      } catch { }
 
-        data = fallbackQuery.data;
-        error = fallbackQuery.error;
+      if (!data || data.length === 0) {
+        try {
+          const res2 = await supabase.from('Leagues').select('*');
+          if (!res2.error && res2.data && res2.data.length > 0) {
+            data = res2.data;
+          }
+        } catch { }
+      }
+
+      if (!data || data.length === 0) {
+        try {
+          const fallbackQuery = await supabase.from('league_seasons').select('*');
+          data = fallbackQuery.data;
+          error = fallbackQuery.error;
+        } catch { }
       }
 
       if (error || !data || data.length === 0) {
@@ -217,7 +231,7 @@ export default function StandingsPage() {
           playoff_teams: customPlayoffTeams > 0 ? customPlayoffTeams : null,
           raw_data: row
         };
-      }).sort((a, b) => Number(b.league_id) - Number(a.league_id));
+      }).sort((a: any, b: any) => Number(b.league_id) - Number(a.league_id));
 
       setSeasons(formattedList);
 
@@ -283,9 +297,6 @@ export default function StandingsPage() {
       const currentMatchedSeason = seasons.find(s => String(s.league_id) === String(selectedLeagueId));
       if (currentMatchedSeason) {
         setGamesPerTeam(currentMatchedSeason.games_per_team || 82);
-        if (currentMatchedSeason.playoff_teams) {
-          setPlayoffCutoffCount(currentMatchedSeason.playoff_teams);
-        }
       }
 
       loadStandings(selectedLeagueId);
@@ -389,12 +400,13 @@ export default function StandingsPage() {
     let playoffCutoff = matchedSeason?.playoff_teams ? Number(matchedSeason.playoff_teams) : 0;
     let customGamesLimit = matchedSeason?.games_per_team ? Number(matchedSeason.games_per_team) : 0;
 
-    // 2. Query leagues table with select('*') to safely extract playoff_teams
+    // 2. Query leagues / Leagues table with select('*') to safely extract playoff_teams
     if (!playoffCutoff) {
       try {
-        const { data: leaguesData } = await supabase
-          .from('leagues')
-          .select('*');
+        let leaguesData = (await supabase.from('leagues').select('*')).data;
+        if (!leaguesData || leaguesData.length === 0) {
+          leaguesData = (await supabase.from('Leagues').select('*')).data;
+        }
 
         if (leaguesData && leaguesData.length > 0) {
           const lRow = leaguesData.find((r: any) =>
@@ -875,6 +887,13 @@ export default function StandingsPage() {
       return teamName.includes(normalizedQuery) || teamAbbr.includes(normalizedQuery);
     });
 
+  // Ranked standings pool for the active tab before search filtering
+  const rankedPool = useMemo(() => {
+    if (isGlobalMode) return standings;
+    if (currentTab === 'ALL') return standings;
+    return standings.filter((team: any) => team.conference === currentTab || team.division === currentTab);
+  }, [standings, isGlobalMode, currentTab]);
+
   // Determine active cutoff count based on current view tab
   const activeCutoffCount = useMemo(() => {
     if (isGlobalMode || playoffCutoffCount <= 0) return 0;
@@ -889,17 +908,24 @@ export default function StandingsPage() {
   const getMaxPossiblePoints = (team: any) => {
     const gp = Number(team.gp) || 0;
     const pts = Number(team.pts) || 0;
-    return pts + Math.max(0, (gamesPerTeam - gp) * 2);
+    const gLimit = gamesPerTeam > 0 ? gamesPerTeam : 82;
+    return pts + Math.max(0, (gLimit - gp) * 2);
   };
 
   // Dynamic Mathematical Magic Number Logic Processing Block (M#)
   // For teams currently AT or ABOVE the playoff cutoff line
-  const getMagicNumber = (team: any, currentIndex: number) => {
-    if (isGlobalMode || activeCutoffCount <= 0 || currentIndex >= activeCutoffCount) return null;
-    if (processedStandings.length <= activeCutoffCount) return 0; // Entire pool advances
+  const getMagicNumber = (team: any, currentIndex?: number) => {
+    if (isGlobalMode || activeCutoffCount <= 0) return null;
+
+    const rankIndex = currentIndex !== undefined && searchQuery.trim() === ''
+      ? currentIndex
+      : rankedPool.findIndex((t: any) => t.id === team.id);
+
+    if (rankIndex === -1 || rankIndex >= activeCutoffCount) return null;
+    if (rankedPool.length <= activeCutoffCount) return 0; // Entire pool advances
 
     // Find the highest maximum possible points among all chasing teams below the playoff line
-    const chasers = processedStandings.slice(activeCutoffCount);
+    const chasers = rankedPool.slice(activeCutoffCount);
     if (chasers.length === 0) return 0;
 
     let maxChaserPoints = 0;
@@ -919,11 +945,17 @@ export default function StandingsPage() {
 
   // Dynamic Mathematical Elimination Logic Processing Block (E#)
   // For teams currently BELOW the playoff cutoff line
-  const getEliminationNumber = (team: any, currentIndex: number) => {
-    if (isGlobalMode || activeCutoffCount <= 0 || currentIndex < activeCutoffCount) return null;
+  const getEliminationNumber = (team: any, currentIndex?: number) => {
+    if (isGlobalMode || activeCutoffCount <= 0) return null;
+
+    const rankIndex = currentIndex !== undefined && searchQuery.trim() === ''
+      ? currentIndex
+      : rankedPool.findIndex((t: any) => t.id === team.id);
+
+    if (rankIndex === -1 || rankIndex < activeCutoffCount) return null;
 
     // Fetch the team right on the edge of the active playoff bubble line (last qualifying spot)
-    const cutoffTeam = processedStandings[activeCutoffCount - 1];
+    const cutoffTeam = rankedPool[activeCutoffCount - 1];
     if (!cutoffTeam) return null;
 
     const teamMaxPts = getMaxPossiblePoints(team);
@@ -968,8 +1000,9 @@ export default function StandingsPage() {
   };
 
   const topFiveClinch = useMemo(() => {
-    if (processedStandings.length === 0) return [];
-    return processedStandings.slice(0, 5).map((team: any, idx: number) => {
+    const pool = rankedPool.length > 0 ? rankedPool : processedStandings;
+    if (pool.length === 0) return [];
+    return pool.slice(0, 5).map((team: any, idx: number) => {
       const mn = getMagicNumber(team, idx);
       const targetSeason = isGlobalMode ? team.season_id : (selectedLeagueId || team.season_id);
       const teamLink = targetSeason ? `/team/${team.id}?season=${targetSeason}` : `/team/${team.id}`;
@@ -987,6 +1020,8 @@ export default function StandingsPage() {
         statusText = `Magic #: ${mn}`;
       } else if (isGlobalMode || activeCutoffCount <= 0) {
         statusText = `${team.pts} PTS`;
+      } else {
+        statusText = `${team.pts} PTS`;
       }
 
       return {
@@ -998,7 +1033,7 @@ export default function StandingsPage() {
         isClinched
       };
     });
-  }, [processedStandings, isGlobalMode, activeCutoffCount, selectedLeagueId, gamesPerTeam]);
+  }, [rankedPool, processedStandings, isGlobalMode, activeCutoffCount, selectedLeagueId, gamesPerTeam]);
 
   const hasGroups = availableConferences.length > 0 || availableDivisions.length > 0;
   const colSpanCount = 19;
@@ -1424,12 +1459,12 @@ export default function StandingsPage() {
 
                       {/* Clean Solid Dashed Playoff Border Line Injection Point */}
                       {isPlayoffBoundaryLine && (
-                        <tr key={`cutoff-${team.season_id}-${index}`} className="bg-amber-500/10 border-y-2 border-dashed border-amber-600/80 select-none">
-                          <td colSpan={colSpanCount} className="py-1.5 px-3 text-center font-sans font-black tracking-widest text-[9.5px] text-amber-900 uppercase align-middle bg-amber-100/70">
+                        <tr key={`cutoff-boundary-${team.season_id}-${index}`} className="bg-amber-100/90 border-y-2 border-dashed border-amber-600 select-none">
+                          <td colSpan={colSpanCount} className="py-2 px-3 text-center font-sans font-black tracking-widest text-[10px] text-amber-950 uppercase align-middle bg-gradient-to-r from-amber-200/60 via-amber-100 to-amber-200/60 shadow-xs">
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-amber-700">★</span>
+                              <span className="text-amber-700 font-bold">★ ★ ★</span>
                               <span>PLAYOFF CUTOFF LINE • TOP {activeCutoffCount} QUALIFY FOR POSTSEASON</span>
-                              <span className="text-amber-700">★</span>
+                              <span className="text-amber-700 font-bold">★ ★ ★</span>
                             </div>
                           </td>
                         </tr>
