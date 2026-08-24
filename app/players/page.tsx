@@ -204,8 +204,18 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
   );
 };
 
-// Career Year-by-Year Breakdown Table (with Green Heat-Map cells)
-const CareerTable = ({ careerRows, isGoaliePlayer }: { careerRows: any[]; isGoaliePlayer: boolean }) => {
+// Career Year-by-Year Breakdown Table (with Green Heat-Map cells & Team Banner Logo)
+const CareerTable = ({
+  careerRows,
+  isGoaliePlayer,
+  showTeam = true,
+  onSelectSeason,
+}: {
+  careerRows: any[];
+  isGoaliePlayer: boolean;
+  showTeam?: boolean;
+  onSelectSeason?: (row: any) => void;
+}) => {
   if (!careerRows || careerRows.length === 0) {
     return (
       <div className="p-4 border-2 border-dashed border-black/50 bg-[#F5F2E6] text-center font-mono text-[9px] uppercase font-bold text-neutral-600">
@@ -222,10 +232,11 @@ const CareerTable = ({ careerRows, isGoaliePlayer }: { careerRows: any[]; isGoal
 
   return (
     <div className="border-2 border-black rounded overflow-x-auto bg-white">
-      <table className="w-full text-center text-[8.5px] font-mono border-collapse uppercase min-w-[580px]">
+      <table className="w-full text-center text-[8.5px] font-mono border-collapse uppercase min-w-[620px]">
         <thead>
           <tr className="bg-black text-white text-[8px] font-black border-b border-black">
             <th className="p-1 border-r border-neutral-700">Year</th>
+            {showTeam && <th className="p-1 border-r border-neutral-700 text-left pl-2">Team</th>}
             <th className="p-1 border-r border-neutral-700">Pos</th>
             <th className="p-1 border-r border-neutral-700">JNo</th>
             <th className="p-1 border-r border-neutral-700">Wgt</th>
@@ -271,6 +282,8 @@ const CareerTable = ({ careerRows, isGoaliePlayer }: { careerRows: any[]; isGoal
             const wgtCalc = calculateWeight(info.weight);
             const ovr = Number(r.Ovr ?? r.OVERALL ?? r.overall ?? row.ovr ?? 0);
             const hand = info.hand || info.shoots || (isGoaliePlayer ? 'R' : 'L');
+            const teamName = info.source_team || row.team_default || 'NHL 95';
+            const teamSlug = teamName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
 
             // Normalized 0-6 values
             const agl = getScaleLevel(r.Agility ?? r.agl);
@@ -315,8 +328,28 @@ const CareerTable = ({ careerRows, isGoaliePlayer }: { careerRows: any[]; isGoal
             };
 
             return (
-              <tr key={idx} className="hover:brightness-95">
+              <tr
+                key={idx}
+                onClick={() => onSelectSeason && onSelectSeason(row)}
+                className={`hover:brightness-95 ${onSelectSeason ? 'cursor-pointer' : ''}`}
+                title={onSelectSeason ? 'Click to inspect this season' : undefined}
+              >
                 <td className="p-1 font-bold border-r border-black/30 bg-slate-100">{yr}</td>
+                {showTeam && (
+                  <td className="p-1 border-r border-black/30 font-bold bg-slate-50 text-left pl-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <img
+                        src={`${SUPABASE_URL}/storage/v1/object/public/${BANNER_BUCKET}/${teamSlug}.png`}
+                        alt={teamName}
+                        className="h-3.5 w-6 object-cover border border-black/60 shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                      <span className="truncate max-w-[85px] text-[8px]">{teamName}</span>
+                    </div>
+                  </td>
+                )}
                 <td className="p-1 font-bold border-r border-black/30">{pos}</td>
                 <td className="p-1 border-r border-black/30">{jNo}</td>
                 <td className="p-1 border-r border-black/30">{wgtCalc.lbs}</td>
@@ -535,11 +568,6 @@ const HockeyCardSpotlight = ({
     ? (careerOvrs.reduce((a, b) => a + b, 0) / careerOvrs.length).toFixed(1)
     : ovr.toFixed(1);
 
-  const teamBannerSlug = (player.player_info?.source_team || player.team_default || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '_')
-    .replace(/_+/g, '_');
-
   const trendData = careerData.map((c) => ({
     year: Number(c.player_info?.source_year || c.year || 0),
     ovr: Number(c.ratings?.Ovr || c.ovr || 0),
@@ -549,7 +577,7 @@ const HockeyCardSpotlight = ({
     <div className="relative w-full bg-[#F5F2E6] text-black p-3 sm:p-4 border-[3px] border-black shadow-[6px_6px_0px_rgba(0,0,0,1)] rounded-xl lg:sticky lg:top-4 font-mono">
 
       {/* 1. Header Banner */}
-      <div className="flex items-center justify-between bg-black text-white px-2.5 py-1.5 rounded-t-md mb-2 border border-black">
+      <div className="flex items-center justify-between bg-black text-white px-2.5 py-1.5 rounded-t-md mb-2.5 border border-black">
         <div className="flex items-center gap-1.5">
           <span className="bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-xs tracking-wider uppercase">
             {player.pos || (isG ? 'G' : 'SKATER')}
@@ -563,23 +591,8 @@ const HockeyCardSpotlight = ({
         </div>
       </div>
 
-      {/* 2. Team Banner Strip */}
-      <div className="bg-slate-200 border-2 border-black h-16 sm:h-20 mb-3 overflow-hidden rounded relative">
-        <img
-          src={`${SUPABASE_URL}/storage/v1/object/public/${BANNER_BUCKET}/${teamBannerSlug}.png`}
-          alt={player.team_default || 'Team'}
-          className="w-full h-full object-cover block"
-          onError={(e) => {
-            (e.target as HTMLElement).style.display = 'none';
-          }}
-        />
-        <div className="absolute bottom-1 right-2 bg-black/80 text-white font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded shadow">
-          {player.team_default || player.player_info?.source_team || 'NHL 95'}
-        </div>
-      </div>
-
-      {/* 3. Player Bio & Quick Meta Grid */}
-      <div className="grid grid-cols-12 gap-2 mb-3 bg-white p-2 border-2 border-black rounded">
+      {/* 2. Player Bio & Quick Meta Grid (Clean layout without separate banner holder) */}
+      <div className="grid grid-cols-12 gap-2 mb-3 bg-white p-2.5 border-2 border-black rounded">
         <div className="col-span-4 flex flex-col items-center justify-center">
           <PlayerPortrait name={player.player_name} url={`${SUPABASE_URL}/storage/v1/object/public/${PORTRAIT_BUCKET}`} />
           <span className="text-[8px] font-black uppercase tracking-wider text-emerald-800 mt-1">
@@ -603,6 +616,12 @@ const HockeyCardSpotlight = ({
             <div>
               <span className="text-neutral-500 block text-[7.5px]">Career Avg</span>
               <span className="font-black text-emerald-700">{ovrAvg} OVR</span>
+            </div>
+            <div className="col-span-2 pt-1 border-t border-neutral-200">
+              <span className="text-neutral-500 block text-[7.5px]">Team</span>
+              <span className="font-black text-slate-900 truncate block">
+                {player.team_default || player.player_info?.source_team || 'NHL 95'}
+              </span>
             </div>
           </div>
 
@@ -629,6 +648,7 @@ const HockeyCardSpotlight = ({
           </div>
         </div>
       </div>
+
 
       {/* 4. Card Section Switcher */}
       <div className="flex items-center gap-1 mb-2 border-b-2 border-black pb-1.5 text-[9px] font-black uppercase">
@@ -1771,16 +1791,41 @@ export default function PlayersPage() {
                         {isExpanded && (
                           <tr className="bg-emerald-50/40 border-y-2 border-emerald-700/60">
                             <td colSpan={7} className="p-2 sm:p-3">
-                              <div className="bg-white border-2 border-black rounded p-2 shadow-xs space-y-1.5">
-                                <div className="flex items-center justify-between border-b border-black/30 pb-1 text-[8.5px] font-black uppercase text-emerald-900">
-                                  <span>
-                                    {group.player_name} &bull; Career Historical Breakdown ({group.seasons.length} Seasons)
-                                  </span>
-                                  <span className="text-[7.5px] text-neutral-500 lowercase">
-                                    click any row to view season card
+                              <div className="bg-white border-2 border-black rounded p-2.5 shadow-xs space-y-2">
+                                {/* Team Banner & Career Meta Header */}
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="h-7 w-20 bg-slate-900 border border-black rounded overflow-hidden flex items-center justify-center shrink-0">
+                                      <img
+                                        src={`${SUPABASE_URL}/storage/v1/object/public/${BANNER_BUCKET}/${(group.primary_team || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')}.png`}
+                                        alt={group.primary_team}
+                                        className="h-full w-full object-cover"
+                                        onError={(e) => {
+                                          (e.target as HTMLElement).style.display = 'none';
+                                        }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] font-black uppercase text-slate-950 flex items-center gap-1.5">
+                                        <span>{group.player_name}</span>
+                                        <span className="text-emerald-700">&bull; {group.primary_team}</span>
+                                      </div>
+                                      <div className="text-[8px] text-neutral-600 uppercase font-bold">
+                                        {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: {group.best_ovr} &bull; Career Avg: {group.avg_ovr}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="text-[7.5px] text-neutral-600 uppercase font-bold bg-slate-100 px-2 py-0.5 rounded border border-black/20">
+                                    Click row to view card
                                   </span>
                                 </div>
-                                <CareerTable careerRows={group.seasons} isGoaliePlayer={isG} />
+
+                                <CareerTable
+                                  careerRows={group.seasons}
+                                  isGoaliePlayer={isG}
+                                  showTeam={true}
+                                  onSelectSeason={(row) => handleSelectSpecificSeason(row, group.seasons)}
+                                />
                               </div>
                             </td>
                           </tr>
