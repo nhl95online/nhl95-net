@@ -75,10 +75,20 @@ export const isGoalie = (pos: any): boolean => {
   return p === 'G' || p.includes('GOAL') || p.includes('GK');
 };
 
+export const parseJson = (val: any) => {
+  if (!val) return {};
+  if (typeof val === 'object') return val;
+  try {
+    return JSON.parse(val);
+  } catch {
+    return {};
+  }
+};
+
 // Extract standardized ratings object
 export const getPlayerRatingAttributes = (player: any) => {
-  const r = player?.ratings || {};
-  const isG = isGoalie(player?.pos);
+  const r = parseJson(player?.ratings);
+  const isG = isGoalie(player?.pos || parseJson(player?.player_info)?.pos);
 
   if (isG) {
     return [
@@ -328,8 +338,8 @@ const CareerTable = ({
         </thead>
         <tbody className="divide-y divide-black/40">
           {sorted.map((row, idx) => {
-            const r = row.ratings || {};
-            const info = row.player_info || {};
+            const r = parseJson(row.ratings);
+            const info = parseJson(row.player_info);
             const yr = info.source_year || row.year || '----';
             const pos = row.pos || info.pos || (isGoaliePlayer ? 'G' : 'F');
             const jNo = info.jersey_num || info.jersey || '??';
@@ -603,23 +613,33 @@ const HockeyCardSpotlight = ({
     );
   }
 
-  const isG = isGoalie(player.pos);
+  const info = parseJson(player.player_info);
+  const rObj = parseJson(player.ratings);
+  const isG = isGoalie(player.pos || info.pos);
   const ratings = getPlayerRatingAttributes(player);
-  const wgt = calculateWeight(player.player_info?.weight);
-  const hand = player.player_info?.hand || player.player_info?.shoots || (isG ? 'R' : 'L');
-  const jersey = player.player_info?.jersey_num || player.player_info?.jersey || '??';
-  const ovr = Number(player.ratings?.Ovr || player.ratings?.OVERALL || 75);
+  const wgt = calculateWeight(info.weight);
+  const hand = info.hand || info.shoots || (isG ? 'R' : 'L');
+  const jersey = info.jersey_num || info.jersey || '??';
+  const ovr = Number(rObj.Ovr || rObj.OVERALL || rObj.overall || 75);
 
   // Career Average OVR
-  const careerOvrs = careerData.map((c) => Number(c.ratings?.Ovr || c.ovr || 0)).filter((n) => n > 0);
+  const careerOvrs = careerData.map((c) => {
+    const cr = parseJson(c.ratings);
+    return Number(cr.Ovr || cr.OVERALL || cr.overall || c.ovr || 0);
+  }).filter((n) => n > 0);
+
   const ovrAvg = careerOvrs.length > 0
     ? (careerOvrs.reduce((a, b) => a + b, 0) / careerOvrs.length).toFixed(1)
     : ovr.toFixed(1);
 
-  const trendData = careerData.map((c) => ({
-    year: Number(c.player_info?.source_year || c.year || 0),
-    ovr: Number(c.ratings?.Ovr || c.ovr || 0),
-  })).filter((c) => c.year > 0 && c.ovr > 0);
+  const trendData = careerData.map((c) => {
+    const ci = parseJson(c.player_info);
+    const cr = parseJson(c.ratings);
+    return {
+      year: Number(ci.source_year || c.year || 0),
+      ovr: Number(cr.Ovr || cr.OVERALL || cr.overall || c.ovr || 0),
+    };
+  }).filter((c) => c.year > 0 && c.ovr > 0);
 
   return (
     <div className="relative w-full bg-[#F5F2E6] text-black p-3 sm:p-4 border-[3px] border-black shadow-[6px_6px_0px_rgba(0,0,0,1)] rounded-xl lg:sticky lg:top-4 font-mono">
@@ -1285,7 +1305,7 @@ export default function PlayersPage() {
         }
 
         if (year) {
-          query = query.or(`year.eq.${year},player_info->>source_year.eq.${year}`);
+          query = query.contains('player_info', { source_year: Number(year) });
         }
 
         if (posFilter !== 'ALL') {
@@ -1294,18 +1314,19 @@ export default function PlayersPage() {
           } else if (posFilter === 'D') {
             query = query.ilike('pos', '%D%');
           } else if (posFilter === 'F') {
-            query = query.or('pos.ilike.%F%,pos.ilike.%C%,pos.ilike.%LW%,pos.ilike.%RW%');
+            query = query.not('pos', 'in', '("D","G")');
           } else {
             query = query.ilike('pos', `%${posFilter}%`);
           }
         }
 
         if (teamFilter !== 'ALL') {
-          query = query.or(`team_default.eq.${teamFilter},player_info->>source_team.eq.${teamFilter}`);
+          query = query.eq('team_default', teamFilter);
         }
 
-        // Fetch up to 2,000 matches live from the database
-        const { data, error } = await query.limit(2000);
+        const { data, error } = await query
+          .order('player_name', { ascending: true })
+          .limit(1000);
         if (error) throw error;
         if (cancelled) return;
 
@@ -1325,29 +1346,38 @@ export default function PlayersPage() {
         const groups: PlayerGroup[] = [];
         map.forEach((records, name) => {
           const sortedSeasons = [...records].sort((a, b) => {
-            const yrA = Number(a.player_info?.source_year || a.year || 0);
-            const yrB = Number(b.player_info?.source_year || b.year || 0);
+            const infoA = parseJson(a.player_info);
+            const infoB = parseJson(b.player_info);
+            const yrA = Number(infoA?.source_year || a.year || 0);
+            const yrB = Number(infoB?.source_year || b.year || 0);
             return yrA - yrB;
           });
 
           const latest = sortedSeasons[sortedSeasons.length - 1];
+          const latestInfo = parseJson(latest?.player_info);
           const yearsList = sortedSeasons
-            .map((s) => Number(s.player_info?.source_year || s.year || 0))
+            .map((s) => {
+              const sInfo = parseJson(s.player_info);
+              return Number(sInfo?.source_year || s.year || 0);
+            })
             .filter((y) => y > 0);
 
           const ovrsList = sortedSeasons
-            .map((s) => Number(s.ratings?.Ovr || s.ovr || 0))
+            .map((s) => {
+              const sRatings = parseJson(s.ratings);
+              return Number(sRatings?.Ovr || sRatings?.OVERALL || sRatings?.overall || s.ovr || 0);
+            })
             .filter((o) => o > 0);
 
-          const bestOvr = ovrsList.length > 0 ? Math.max(...ovrsList) : Number(latest?.ratings?.Ovr || 75);
+          const bestOvr = ovrsList.length > 0 ? Math.max(...ovrsList) : 75;
           const avgOvr = ovrsList.length > 0
             ? Math.round((ovrsList.reduce((a, b) => a + b, 0) / ovrsList.length) * 10) / 10
             : bestOvr;
 
           groups.push({
             player_name: name,
-            pos: latest?.pos || (sortedSeasons.some((s) => isGoalie(s.pos)) ? 'G' : 'F'),
-            primary_team: latest?.team_default || latest?.player_info?.source_team || 'NHL 95',
+            pos: latest?.pos || latestInfo?.pos || (sortedSeasons.some((s) => isGoalie(s.pos || parseJson(s.player_info)?.pos)) ? 'G' : 'F'),
+            primary_team: latest?.team_default || latestInfo?.source_team || 'NHL 95',
             seasons: sortedSeasons,
             start_year: yearsList.length > 0 ? Math.min(...yearsList) : 1995,
             end_year: yearsList.length > 0 ? Math.max(...yearsList) : 1995,
