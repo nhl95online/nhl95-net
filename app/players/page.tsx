@@ -504,6 +504,21 @@ const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
     { start: 2000, end: 2030 }, // Wild
   ],
   MTL: [
+    { start: 1909, end: 1917 },
+    { start: 1917, end: 1924 },
+    { start: 1924, end: 1935 },
+    { start: 1924, end: 1937 },
+    { start: 1924, end: 1938 },
+    { start: 1917, end: 1935 },
+    { start: 1921, end: 1935 },
+    { start: 1925, end: 1935 },
+    { start: 1925, end: 1937 },
+    { start: 1925, end: 1938 },
+    { start: 1927, end: 1938 },
+    { start: 1935, end: 1947 },
+    { start: 1938, end: 1947 },
+    { start: 1947, end: 1956 },
+    { start: 1956, end: 1999 },
     { start: 1909, end: 1955 },
     { start: 1955, end: 2030 },
   ],
@@ -715,78 +730,64 @@ const TeamLogo = ({
       }
     }
 
+    // Helper to generate combinations across buckets and extensions
+    const addVariant = (subpath: string) => {
+      const clean = subpath.replace(/\.[^/.]+$/, '');
+      const exts = ['.png', '.PNG', '.jpg', '.JPG', '.svg', '.webp'];
+      const buckets = ['nhl_logos', 'nhl%20logos', 'logos', 'images%20for%20site'];
+      for (const b of buckets) {
+        for (const ext of exts) {
+          urls.push(`${base}/${b}/${clean}${ext}`);
+        }
+      }
+    };
+
     // 2. Direct explicit range checks
     if (rangeStart && rangeEnd && abbr) {
-      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}_${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}-${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}-${rangeStart}-${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${rangeStart}_${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}_${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}.png`);
+      addVariant(`${abbr}_${rangeStart}_${rangeEnd}`);
+      addVariant(`${abbr}_${rangeStart}-${rangeEnd}`);
+      addVariant(`${abbr}-${rangeStart}-${rangeEnd}`);
+      addVariant(`${abbr.toLowerCase()}_${rangeStart}_${rangeEnd}`);
+      addVariant(`${abbr}_${rangeEnd}`);
+      addVariant(`${abbr}_${rangeStart}`);
     }
 
     // 3. Automated era-range matching based on single year
-    if (parsedYear && abbr && NHL_ERA_RANGES[abbr]) {
+    if (targetYear && abbr && NHL_ERA_RANGES[abbr]) {
       const matchingEras = NHL_ERA_RANGES[abbr].filter(
-        (era) => parsedYear! >= era.start && parsedYear! <= era.end
+        (era) => targetYear >= era.start && targetYear <= era.end
       );
       matchingEras.forEach((era) => {
-        urls.push(`${base}/nhl_logos/${abbr}_${era.start}_${era.end}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}_${era.start}-${era.end}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}-${era.start}-${era.end}.png`);
-        urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${era.start}_${era.end}.png`);
+        addVariant(`${abbr}_${era.start}_${era.end}`);
+        addVariant(`${abbr}_${era.start}-${era.end}`);
+        addVariant(`${abbr}-${era.start}-${era.end}`);
+        addVariant(`${abbr.toLowerCase()}_${era.start}_${era.end}`);
       });
     }
 
-    // 4. Year-specific historical logo in buckets/nhl_logos
+    // 4. Year-specific historical logo
     if (yrStr && yrStr !== '----') {
       if (abbr) {
-        urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}-${yrStr}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}${yrStr}.png`);
-        urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${yrStr}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.jpg`);
-        urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.svg`);
+        addVariant(`${abbr}_${yrStr}`);
+        addVariant(`${abbr}-${yrStr}`);
+        addVariant(`${abbr}${yrStr}`);
+        addVariant(`${abbr.toLowerCase()}_${yrStr}`);
       }
       if (slug) {
-        urls.push(`${base}/nhl_logos/${slug}_${yrStr}.png`);
-        urls.push(`${base}/nhl_logos/${slug}-${yrStr}.png`);
+        addVariant(`${slug}_${yrStr}`);
+        addVariant(`${slug}-${yrStr}`);
       }
-      if (upper) urls.push(`${base}/nhl_logos/${upper}_${yrStr}.png`);
+      if (upper) addVariant(`${upper}_${yrStr}`);
     }
 
-    // 5. Base franchise logos in buckets/nhl_logos (fallback)
+    // 5. Base franchise logos (fallback)
     if (abbr) {
-      urls.push(`${base}/nhl_logos/${abbr}.png`);
-      urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}.jpg`);
-      urls.push(`${base}/nhl_logos/${abbr}.svg`);
-      urls.push(`${base}/nhl_logos/${abbr}.webp`);
+      addVariant(`${abbr}`);
+      addVariant(`${abbr.toLowerCase()}`);
     }
-    if (upper) urls.push(`${base}/nhl_logos/${upper}.png`);
-    if (slug) urls.push(`${base}/nhl_logos/${slug}.png`);
-    if (cleanName) urls.push(`${base}/nhl_logos/${cleanName}.png`);
-
-    // 6. Fallback buckets (nhl logos, logos, images for site)
-    if (abbr) {
-      if (yrStr && yrStr !== '----') {
-        urls.push(`${base}/nhl%20logos/${abbr}_${yrStr}.png`);
-        urls.push(`${base}/logos/${abbr}_${yrStr}.png`);
-      }
-      urls.push(`${base}/nhl%20logos/${abbr}.png`);
-      urls.push(`${base}/logos/${abbr}.png`);
-      urls.push(`${base}/logos/${abbr.toLowerCase()}.png`);
-      urls.push(`${base}/images%20for%20site/${abbr}.png`);
-    }
-    if (slug) {
-      urls.push(`${base}/nhl%20logos/${slug}.png`);
-      urls.push(`${base}/logos/${slug}.png`);
-      urls.push(`${base}/images%20for%20site/${slug}.png`);
-    }
-    if (upper) {
-      urls.push(`${base}/nhl%20logos/${upper}.png`);
-      urls.push(`${base}/logos/${upper}.png`);
-    }
+    if (upper) addVariant(`${upper}`);
+    if (slug) addVariant(`${slug}`);
+    if (cleanName) addVariant(`${cleanName}`);
 
     return Array.from(new Set(urls));
   }, [slug, cleanName, upper, abbr, yrStr, bucketFiles]);
