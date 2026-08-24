@@ -132,8 +132,8 @@ export const getPlayerHandedness = (player: any): string => {
   for (const c of candidates) {
     if (c !== undefined && c !== null && c !== '') {
       const s = String(c).trim().toUpperCase();
-      if (s === 'R' || s.startsWith('RIGHT') || s.startsWith('R-') || s.startsWith('RH')) return 'R';
-      if (s === 'L' || s.startsWith('LEFT') || s.startsWith('L-') || s.startsWith('LH')) return 'L';
+      if (s === '0' || s === 'L' || s.startsWith('LEFT') || s.startsWith('L-') || s.startsWith('LH')) return 'L';
+      if (s === '1' || s === 'R' || s.startsWith('RIGHT') || s.startsWith('R-') || s.startsWith('RH')) return 'R';
       if (s.length > 0 && (s[0] === 'R' || s[0] === 'L')) return s[0];
     }
   }
