@@ -703,44 +703,60 @@ const TeamLogo = ({
     }
 
     const targetYear = parsedYear || rangeStart;
+    const nameVariants = Array.from(new Set([
+      abbr ? abbr.toUpperCase() : null,
+      abbr ? abbr.toLowerCase() : null,
+      slug ? slug.toLowerCase() : null,
+      cleanName,
+    ].filter(Boolean))) as string[];
 
-    // 1. Era range matching
-    if (rangeStart && rangeEnd && abbr) {
-      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}_${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}-${rangeEnd}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}-${rangeStart}-${rangeEnd}.png`);
+    // 1. Year specific in buckets/nhl_logos (highest priority)
+    if (targetYear) {
+      for (const n of nameVariants) {
+        urls.push(`${base}/nhl_logos/${n}_${targetYear}.png`);
+        urls.push(`${base}/nhl_logos/${n}-${targetYear}.png`);
+        urls.push(`${base}/nhl_logos/${n}_${targetYear}.jpg`);
+        urls.push(`${base}/nhl_logos/${n}_${targetYear}.PNG`);
+        urls.push(`${base}/nhl_logos/${n}_${targetYear}.svg`);
+        urls.push(`${base}/nhl%20logos/${n}_${targetYear}.png`);
+        urls.push(`${base}/logos/${n}_${targetYear}.png`);
+      }
     }
 
+    // 2. Explicit range matching
+    if (rangeStart && rangeEnd) {
+      for (const n of nameVariants) {
+        urls.push(`${base}/nhl_logos/${n}_${rangeStart}_${rangeEnd}.png`);
+        urls.push(`${base}/nhl_logos/${n}_${rangeStart}-${rangeEnd}.png`);
+        urls.push(`${base}/nhl_logos/${n}-${rangeStart}-${rangeEnd}.png`);
+        urls.push(`${base}/nhl%20logos/${n}_${rangeStart}_${rangeEnd}.png`);
+      }
+    }
+
+    // 3. Automated era-range matching
     if (targetYear && abbr && NHL_ERA_RANGES[abbr]) {
       const matchingEras = NHL_ERA_RANGES[abbr].filter(
         (era) => targetYear >= era.start && targetYear <= era.end
       );
-      matchingEras.forEach((era) => {
-        urls.push(`${base}/nhl_logos/${abbr}_${era.start}_${era.end}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}_${era.start}-${era.end}.png`);
-        urls.push(`${base}/nhl_logos/${abbr}-${era.start}-${era.end}.png`);
-      });
+      for (const era of matchingEras) {
+        for (const n of nameVariants) {
+          urls.push(`${base}/nhl_logos/${n}_${era.start}_${era.end}.png`);
+          urls.push(`${base}/nhl_logos/${n}_${era.start}-${era.end}.png`);
+          urls.push(`${base}/nhl_logos/${n}-${era.start}-${era.end}.png`);
+          urls.push(`${base}/nhl%20logos/${n}_${era.start}_${era.end}.png`);
+        }
+      }
     }
 
-    // 2. Year specific
-    if (yrStr && yrStr !== '----' && abbr) {
-      urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}-${yrStr}.png`);
-      urls.push(`${base}/nhl_logos/${abbr}${yrStr}.png`);
-    }
-
-    // 3. Base franchise
-    if (abbr) {
-      urls.push(`${base}/nhl_logos/${abbr}.png`);
-      urls.push(`${base}/nhl%20logos/${abbr}.png`);
-      urls.push(`${base}/logos/${abbr}.png`);
-      urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}.png`);
-    }
-    if (slug) {
-      urls.push(`${base}/nhl_logos/${slug}.png`);
-      urls.push(`${base}/nhl%20logos/${slug}.png`);
-      urls.push(`${base}/logos/${slug}.png`);
-      urls.push(`${base}/images%20for%20site/${slug}.png`);
+    // 4. Base franchise fallback
+    for (const n of nameVariants) {
+      urls.push(`${base}/nhl_logos/${n}.png`);
+      urls.push(`${base}/nhl_logos/${n}.jpg`);
+      urls.push(`${base}/nhl_logos/${n}.PNG`);
+      urls.push(`${base}/nhl_logos/${n}.svg`);
+      urls.push(`${base}/nhl%20logos/${n}.png`);
+      urls.push(`${base}/logos/${n}.png`);
+      urls.push(`${base}/images%20for%20site/${n}.png`);
     }
 
     const uniqueUrls = Array.from(new Set(urls));
