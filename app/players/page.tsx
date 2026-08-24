@@ -79,7 +79,13 @@ export const parseJson = (val: any) => {
   if (!val) return {};
   if (typeof val === 'object') return val;
   try {
-    return JSON.parse(val);
+    let parsed = JSON.parse(val);
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch { }
+    }
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
   } catch {
     return {};
   }
@@ -117,24 +123,43 @@ export const getPlayerHandedness = (player: any): string => {
   const r = parseJson(player.ratings);
   const isG = isGoalie(player.pos || info?.pos);
 
-  const candidates = [
-    info?.hand, info?.Hand, info?.HAND,
-    info?.shoots, info?.Shoots, info?.SHOOTS,
-    info?.handedness, info?.Handedness, info?.HANDEDNESS,
-    info?.catch, info?.Catch, info?.CATCH,
-    info?.shot, info?.Shot, info?.SHOT,
-    info?.h, info?.H,
-    info?.handiness, info?.Handiness,
-    player?.hand, player?.shoots, player?.handedness,
-    r?.hand, r?.shoots, r?.handedness, r?.h, r?.H
-  ];
+  // Search through all candidate keys across player_info, player root, and ratings
+  const sources = [info, player, r];
 
-  for (const c of candidates) {
-    if (c !== undefined && c !== null && c !== '') {
-      const s = String(c).trim().toUpperCase();
-      if (s === '0' || s === 'L' || s.startsWith('LEFT') || s.startsWith('L-') || s.startsWith('LH')) return 'L';
-      if (s === '1' || s === 'R' || s.startsWith('RIGHT') || s.startsWith('R-') || s.startsWith('RH')) return 'R';
-      if (s.length > 0 && (s[0] === 'R' || s[0] === 'L')) return s[0];
+  for (const src of sources) {
+    if (!src || typeof src !== 'object') continue;
+
+    for (const [key, val] of Object.entries(src)) {
+      if (val === undefined || val === null || val === '') continue;
+      const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      if (
+        cleanKey === 'hand' ||
+        cleanKey === 'shoots' ||
+        cleanKey === 'handedness' ||
+        cleanKey === 'handiness' ||
+        cleanKey === 'catch' ||
+        cleanKey === 'catches' ||
+        cleanKey === 'shoot' ||
+        cleanKey === 'shot' ||
+        cleanKey === 'h' ||
+        cleanKey === 'shothand' ||
+        cleanKey === 'shootscatches' ||
+        cleanKey === 'handdefault'
+      ) {
+        const strVal = String(val).trim().toUpperCase();
+
+        // 0 = L, 1 = R
+        if (strVal === '0' || strVal === 'L' || strVal.startsWith('LEFT') || strVal.startsWith('L-') || strVal.startsWith('LH')) {
+          return 'L';
+        }
+        if (strVal === '1' || strVal === 'R' || strVal.startsWith('RIGHT') || strVal.startsWith('R-') || strVal.startsWith('RH')) {
+          return 'R';
+        }
+        if (strVal.length > 0 && (strVal[0] === 'R' || strVal[0] === 'L')) {
+          return strVal[0];
+        }
+      }
     }
   }
 
@@ -176,17 +201,106 @@ export const getPlayerRatingAttributes = (player: any) => {
   ];
 };
 
+// Calculate career average rating attributes across all recorded seasons
+export const getCareerAverageRatingAttributes = (careerData: any[], fallbackPlayer: any) => {
+  const records = careerData && careerData.length > 0 ? careerData : fallbackPlayer ? [fallbackPlayer] : [];
+  if (records.length === 0) return [];
+
+  const isG = records.some((p) => isGoalie(p?.pos || parseJson(p?.player_info)?.pos));
+
+  if (isG) {
+    const keys = [
+      { key: 'Agility', label: 'Agility', aliases: ['Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility', 'agil'] },
+      { key: 'Speed', label: 'Speed', aliases: ['Speed', 'Spd', 'spd', 'SPD', 'speed'] },
+      { key: 'Off Aware', label: 'Off Aware', aliases: ['Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense', 'off'] },
+      { key: 'Def Aware', label: 'Def Aware', aliases: ['Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense', 'def'] },
+      { key: 'Puck Control', label: 'Puck Control', aliases: ['Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'puckcontrol', 'control', 'pc'] },
+      { key: 'Stick Right', label: 'Stick Right', aliases: ['Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right', 'stickright', 'sr'] },
+      { key: 'Stick Left', label: 'Stick Left', aliases: ['Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left', 'stickleft', 'sl'] },
+      { key: 'Glove Right', label: 'Glove Right', aliases: ['Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right', 'gloveright', 'gr'] },
+      { key: 'Glove Left', label: 'Glove Left', aliases: ['Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left', 'gloveleft', 'gl'] },
+    ];
+
+    return keys.map(({ key, label, aliases }) => {
+      let rawSum = 0;
+      let validCount = 0;
+      records.forEach((row) => {
+        const r = parseJson(row?.ratings);
+        const info = parseJson(row?.player_info);
+        const combined = { ...info, ...r };
+        const val = getRatingVal(combined, ...aliases);
+        if (val > 0) {
+          rawSum += val;
+          validCount += 1;
+        }
+      });
+
+      const avgRaw = validCount > 0 ? rawSum / validCount : 0;
+      return {
+        key,
+        label,
+        value: getScaleLevel(avgRaw),
+        rawValue: Math.round(avgRaw),
+      };
+    });
+  }
+
+  const keys = [
+    { key: 'Agility', label: 'Agility', aliases: ['Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility', 'agil', 'ag'] },
+    { key: 'Speed', label: 'Speed', aliases: ['Speed', 'Spd', 'spd', 'SPD', 'speed', 'sp'] },
+    { key: 'Off Aware', label: 'Off Aware', aliases: ['Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense', 'off'] },
+    { key: 'Def Aware', label: 'Def Aware', aliases: ['Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense', 'def'] },
+    { key: 'Shot Power', label: 'Shot Power', aliases: ['Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'Shot_Power', 'power', 'pwr', 'sp'] },
+    { key: 'Shot Accuracy', label: 'Shot Accuracy', aliases: ['Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'Shot_Accuracy', 'accuracy', 'acc', 'sa'] },
+    { key: 'Stick Handling', label: 'Stick Handling', aliases: ['Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST'] },
+    { key: 'Passing', label: 'Passing', aliases: ['Passing', 'Pas', 'pas', 'pass', 'Pass', 'PAS', 'PASS', 'passing'] },
+    { key: 'Checking', label: 'Checking', aliases: ['Checking', 'ChK', 'chk', 'CHK', 'check', 'Check', 'checking'] },
+    { key: 'Aggression', label: 'Aggression', aliases: ['Aggression', 'Agr', 'agr', 'AGR', 'agg', 'Agg', 'roughness', 'Roughness', 'rgh', 'aggression'] },
+  ];
+
+  return keys.map(({ key, label, aliases }) => {
+    let rawSum = 0;
+    let validCount = 0;
+    records.forEach((row) => {
+      const r = parseJson(row?.ratings);
+      const info = parseJson(row?.player_info);
+      const combined = { ...info, ...r };
+      const val = getRatingVal(combined, ...aliases);
+      if (val > 0) {
+        rawSum += val;
+        validCount += 1;
+      }
+    });
+
+    const avgRaw = validCount > 0 ? rawSum / validCount : 0;
+    return {
+      key,
+      label,
+      value: getScaleLevel(avgRaw),
+      rawValue: Math.round(avgRaw),
+    };
+  });
+};
+
 // =========================================================================
 // 2. SUBCOMPONENTS
 // =========================================================================
 
 // Visual Rating Matrix (1-6 scale with shaded boxes)
-const RatingMatrix = ({ ratings, showHeader = true }: { ratings: Array<{ key: string; label: string; value: number }>; showHeader?: boolean }) => {
+const RatingMatrix = ({
+  ratings,
+  showHeader = true,
+  title = 'Ratings',
+}: {
+  ratings: Array<{ key: string; label: string; value: number }>;
+  showHeader?: boolean;
+  title?: string;
+}) => {
   return (
     <div className="border-2 border-black bg-white overflow-hidden text-[9px] font-mono">
       {showHeader && (
         <div className="grid grid-cols-12 bg-black text-white font-black py-1 px-1.5 border-b border-black text-center">
-          <span className="col-span-5 text-left uppercase tracking-wider pl-1">Ratings</span>
+          <span className="col-span-5 text-left uppercase tracking-wider pl-1">{title}</span>
           <span className="col-span-1">1</span>
           <span className="col-span-1">2</span>
           <span className="col-span-1">3</span>
@@ -675,7 +789,7 @@ const HockeyCardSpotlight = ({
   const info = parseJson(player.player_info);
   const rObj = parseJson(player.ratings);
   const isG = isGoalie(player.pos || info.pos);
-  const ratings = getPlayerRatingAttributes(player);
+  const ratings = getCareerAverageRatingAttributes(careerData, player);
   const wgt = calculateWeight(info.weight);
   const hand = getPlayerHandedness(player);
   const jersey = info.jersey_num || info.jersey || '??';
@@ -813,7 +927,10 @@ const HockeyCardSpotlight = ({
       {/* 5. Card Body Views */}
       {activeCardTab === 'matrix' && (
         <div className="space-y-2">
-          <RatingMatrix ratings={ratings} />
+          <RatingMatrix
+            ratings={ratings}
+            title={careerData && careerData.length > 1 ? `Ratings (${careerData.length}-Yr Avg)` : 'Ratings'}
+          />
           {/* Scale Legend Box */}
           <div className="bg-black/90 text-white p-2 rounded border border-black text-[8px]">
             <div className="flex justify-between items-center font-bold text-amber-300 border-b border-neutral-700 pb-1 mb-1">
@@ -1169,7 +1286,7 @@ const CompareView = ({
               const info = parseJson(latest.player_info);
               const rObj = parseJson(latest.ratings);
               const isG = isGoalie(latest.pos || info.pos);
-              const ratings = getPlayerRatingAttributes(latest);
+              const ratings = getCareerAverageRatingAttributes(records, latest);
               const wgt = calculateWeight(info.weight);
               const hand = getPlayerHandedness(latest);
               const ovr = Number(rObj.Ovr || rObj.OVERALL || rObj.overall || latest.ovr || 75);
