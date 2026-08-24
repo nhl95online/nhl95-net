@@ -204,7 +204,60 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
   );
 };
 
-// Career Year-by-Year Breakdown Table (with Green Heat-Map cells & Team Banner Logo)
+// Team Logo Component with Multi-Bucket Resilient Fallbacks
+const TeamLogo = ({
+  teamName,
+  className = "w-6 h-6",
+}: {
+  teamName: string;
+  className?: string;
+}) => {
+  const cleanName = (teamName || '').trim();
+  const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+  const [urlIdx, setUrlIdx] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  const candidateUrls = useMemo(() => {
+    if (!slug) return [];
+    return [
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20logos/${slug}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/logos/${slug}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20banners/${slug}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/banners/${slug}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/${slug}.png`,
+    ];
+  }, [slug]);
+
+  useEffect(() => {
+    setUrlIdx(0);
+    setFailed(false);
+  }, [teamName]);
+
+  if (failed || candidateUrls.length === 0 || urlIdx >= candidateUrls.length) {
+    return (
+      <div className={`${className} bg-slate-200 border border-black/40 rounded flex items-center justify-center font-mono font-black text-[8px] text-slate-700 uppercase shrink-0 shadow-xs`}>
+        {cleanName ? cleanName.slice(0, 3).toUpperCase() : 'NHL'}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={candidateUrls[urlIdx]}
+      alt={cleanName}
+      className={`${className} object-contain shrink-0`}
+      onError={() => {
+        if (urlIdx + 1 < candidateUrls.length) {
+          setUrlIdx((prev) => prev + 1);
+        } else {
+          setFailed(true);
+        }
+      }}
+    />
+  );
+};
+
+// Career Year-by-Year Breakdown Table (with Green Heat-Map cells & Team Logo)
 const CareerTable = ({
   careerRows,
   isGoaliePlayer,
@@ -283,7 +336,6 @@ const CareerTable = ({
             const ovr = Number(r.Ovr ?? r.OVERALL ?? r.overall ?? row.ovr ?? 0);
             const hand = info.hand || info.shoots || (isGoaliePlayer ? 'R' : 'L');
             const teamName = info.source_team || row.team_default || 'NHL 95';
-            const teamSlug = teamName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
 
             // Normalized 0-6 values
             const agl = getScaleLevel(r.Agility ?? r.agl);
@@ -338,14 +390,9 @@ const CareerTable = ({
                 {showTeam && (
                   <td className="p-1 border-r border-black/30 font-bold bg-slate-50 text-left pl-1.5">
                     <div className="flex items-center gap-1.5">
-                      <img
-                        src={`${SUPABASE_URL}/storage/v1/object/public/${BANNER_BUCKET}/${teamSlug}.png`}
-                        alt={teamName}
-                        className="h-3.5 w-6 object-cover border border-black/60 shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                      />
+                      <div className="w-5 h-5 flex items-center justify-center bg-white border border-black/30 rounded-xs p-0.5 shrink-0">
+                        <TeamLogo teamName={teamName} className="max-w-full max-h-full" />
+                      </div>
                       <span className="truncate max-w-[85px] text-[8px]">{teamName}</span>
                     </div>
                   </td>
@@ -617,11 +664,16 @@ const HockeyCardSpotlight = ({
               <span className="text-neutral-500 block text-[7.5px]">Career Avg</span>
               <span className="font-black text-emerald-700">{ovrAvg} OVR</span>
             </div>
-            <div className="col-span-2 pt-1 border-t border-neutral-200">
-              <span className="text-neutral-500 block text-[7.5px]">Team</span>
-              <span className="font-black text-slate-900 truncate block">
-                {player.team_default || player.player_info?.source_team || 'NHL 95'}
-              </span>
+            <div className="col-span-2 pt-1 border-t border-neutral-200 flex items-center justify-between">
+              <div>
+                <span className="text-neutral-500 block text-[7.5px]">Team</span>
+                <span className="font-black text-slate-900 truncate block text-[9.5px]">
+                  {player.team_default || player.player_info?.source_team || 'NHL 95'}
+                </span>
+              </div>
+              <div className="w-7 h-7 flex items-center justify-center p-0.5 bg-slate-50 border border-black/30 rounded shrink-0">
+                <TeamLogo teamName={player.team_default || player.player_info?.source_team || 'NHL 95'} className="max-w-full max-h-full" />
+              </div>
             </div>
           </div>
 
@@ -1085,11 +1137,16 @@ const CompareView = ({
                         <span className="text-neutral-500 block text-[7px]">OvrAvg</span>
                         <span className="font-black text-emerald-700">{ovrAvg}</span>
                       </div>
-                      <div className="pt-1 border-t border-neutral-300">
-                        <span className="text-neutral-500 block text-[7px]">Current Team</span>
-                        <span className="font-black truncate block text-slate-900">
-                          {latest.team_default || latest.player_info?.source_team || 'NHL 95'}
-                        </span>
+                      <div className="pt-1 border-t border-neutral-300 flex items-center justify-between">
+                        <div>
+                          <span className="text-neutral-500 block text-[7px]">Current Team</span>
+                          <span className="font-black truncate block text-slate-900 text-[8.5px]">
+                            {latest.team_default || latest.player_info?.source_team || 'NHL 95'}
+                          </span>
+                        </div>
+                        <div className="w-6 h-6 flex items-center justify-center p-0.5 bg-slate-50 border border-black/30 rounded shrink-0 ml-1">
+                          <TeamLogo teamName={latest.team_default || latest.player_info?.source_team || 'NHL 95'} className="max-w-full max-h-full" />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1755,7 +1812,14 @@ export default function PlayersPage() {
                           <td className="p-1.5 font-bold text-emerald-800">{group.pos}</td>
 
                           {/* Primary Team */}
-                          <td className="p-1.5 truncate max-w-[110px] text-neutral-700">{group.primary_team}</td>
+                          <td className="p-1.5 truncate max-w-[130px] text-neutral-700">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                                <TeamLogo teamName={group.primary_team} className="max-w-full max-h-full" />
+                              </div>
+                              <span className="truncate">{group.primary_team}</span>
+                            </div>
+                          </td>
 
                           {/* Career Span */}
                           <td className="p-1.5 font-mono text-neutral-800">
@@ -1791,32 +1855,26 @@ export default function PlayersPage() {
                         {isExpanded && (
                           <tr className="bg-emerald-50/40 border-y-2 border-emerald-700/60">
                             <td colSpan={7} className="p-2 sm:p-3">
-                              <div className="bg-white border-2 border-black rounded p-2.5 shadow-xs space-y-2">
-                                {/* Team Banner & Career Meta Header */}
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2">
-                                  <div className="flex items-center gap-2.5">
-                                    <div className="h-7 w-20 bg-slate-900 border border-black rounded overflow-hidden flex items-center justify-center shrink-0">
-                                      <img
-                                        src={`${SUPABASE_URL}/storage/v1/object/public/${BANNER_BUCKET}/${(group.primary_team || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_')}.png`}
-                                        alt={group.primary_team}
-                                        className="h-full w-full object-cover"
-                                        onError={(e) => {
-                                          (e.target as HTMLElement).style.display = 'none';
-                                        }}
-                                      />
+                              <div className="bg-white border-2 border-black rounded p-3 shadow-xs space-y-2.5">
+                                {/* Team Logo & Career Meta Header */}
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black pb-2.5">
+                                  <div className="flex items-center gap-3">
+                                    {/* Prominent Larger Team Logo Box */}
+                                    <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-50 border-2 border-black rounded-lg p-1.5 flex items-center justify-center shrink-0 shadow-xs">
+                                      <TeamLogo teamName={group.primary_team} className="max-w-full max-h-full" />
                                     </div>
                                     <div>
-                                      <div className="text-[10px] font-black uppercase text-slate-950 flex items-center gap-1.5">
+                                      <div className="text-[12px] sm:text-sm font-black uppercase text-slate-950 flex items-center gap-1.5">
                                         <span>{group.player_name}</span>
-                                        <span className="text-emerald-700">&bull; {group.primary_team}</span>
+                                        <span className="text-emerald-700 font-bold">&bull; {group.primary_team}</span>
                                       </div>
-                                      <div className="text-[8px] text-neutral-600 uppercase font-bold">
-                                        {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: {group.best_ovr} &bull; Career Avg: {group.avg_ovr}
+                                      <div className="text-[9px] text-neutral-700 uppercase font-bold mt-1">
+                                        {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: <span className="text-black font-black bg-amber-300 px-1 py-0.2 rounded-2xs">{group.best_ovr}</span> &bull; Career Avg: <span className="text-emerald-800 font-black">{group.avg_ovr}</span>
                                       </div>
                                     </div>
                                   </div>
-                                  <span className="text-[7.5px] text-neutral-600 uppercase font-bold bg-slate-100 px-2 py-0.5 rounded border border-black/20">
-                                    Click row to view card
+                                  <span className="text-[8px] text-neutral-700 uppercase font-black bg-[#F5F2E6] px-2.5 py-1 rounded border border-black/30 shadow-2xs">
+                                    Click any row to load season card
                                   </span>
                                 </div>
 
