@@ -601,7 +601,7 @@ const HockeyCardSpotlight = ({
 }) => {
   const [activeCardTab, setActiveCardTab] = useState<'matrix' | 'career' | 'trend'>('matrix');
 
-  if (!player) {
+  if (!player || !player.player_name) {
     return (
       <div className="h-[480px] flex flex-col items-center justify-center border-4 border-dashed border-black bg-[#F5F2E6] text-black uppercase rounded-xl p-6 text-center font-mono shadow-[5px_5px_0px_rgba(0,0,0,1)]">
         <Star className="w-12 h-12 text-amber-500 mb-3 animate-pulse" />
@@ -1243,16 +1243,16 @@ export default function PlayersPage() {
   const [sort, setSort] = useState<{ column: 'player_name' | 'pos' | 'team' | 'years' | 'ovr'; asc: boolean }>({ column: 'player_name', asc: true });
   const [totalGroupCount, setTotalGroupCount] = useState(0);
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [showScaleGuide, setShowScaleGuide] = useState(false);
   const [expandedPlayers, setExpandedPlayers] = useState<Set<string>>(new Set());
 
   // Compare Tab State
   const [comparedPlayers, setComparedPlayers] = useState<string[]>([]);
 
-  const years = Array.from({ length: 2026 - 1909 + 1 }, (_, i) => 1909 + i);
   const LOGO_URL = "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/NHL95.net_banner.png";
 
-  // 1. Initial Meta Fetch (Available Teams & League Averages)
+  // 1. Initial Meta Fetch (Available Teams, Available Years & League Averages)
   useEffect(() => {
     async function loadMeta() {
       try {
@@ -1263,20 +1263,30 @@ export default function PlayersPage() {
 
         if (data) {
           const tSet = new Set<string>();
+          const ySet = new Set<string>();
           const avgs: Record<string, { sum: number; count: number }> = {};
 
           data.forEach((p) => {
             if (p.team_default) tSet.add(p.team_default);
-            const yr = p.player_info?.source_year;
-            const ovr = Number(p.ratings?.Ovr || 0);
-            if (yr && ovr > 0) {
-              if (!avgs[yr]) avgs[yr] = { sum: 0, count: 0 };
-              avgs[yr].sum += ovr;
-              avgs[yr].count += 1;
+            const info = parseJson(p.player_info);
+            const r = parseJson(p.ratings);
+            const yr = info?.source_year || (p as any).year;
+            const ovr = Number(r?.Ovr || r?.OVERALL || r?.overall || 0);
+
+            if (yr) {
+              ySet.add(String(yr));
+              if (ovr > 0) {
+                if (!avgs[yr]) avgs[yr] = { sum: 0, count: 0 };
+                avgs[yr].sum += ovr;
+                avgs[yr].count += 1;
+              }
             }
           });
 
           setAvailableTeams(Array.from(tSet).sort());
+          const sortedYears = Array.from(ySet).sort((a, b) => Number(b) - Number(a));
+          setAvailableYears(sortedYears.length > 0 ? sortedYears : ['1995', '1994', '1993', '1992', '1991']);
+
           const finalAvgs: Record<string, number> = {};
           Object.keys(avgs).forEach((y) => (finalAvgs[y] = Math.round(avgs[y].sum / avgs[y].count)));
           setLeagueAverages(finalAvgs);
@@ -1305,7 +1315,7 @@ export default function PlayersPage() {
         }
 
         if (year) {
-          query = query.contains('player_info', { source_year: Number(year) });
+          query = query.filter('player_info->>source_year', 'eq', String(year));
         }
 
         if (posFilter !== 'ALL') {
@@ -1414,8 +1424,19 @@ export default function PlayersPage() {
         setPlayerGroups(paginated);
 
         if (paginated.length > 0) {
-          setSelected((prev: any) => prev || paginated[0].latest_record);
-          setSelectedCareerData((prev: any[]) => prev && prev.length > 0 ? prev : paginated[0].seasons);
+          setSelected((prev: any) => {
+            if (prev && groups.some((g) => g.player_name.toLowerCase() === prev.player_name?.toLowerCase())) {
+              return prev;
+            }
+            return paginated[0].latest_record;
+          });
+          setSelectedCareerData((prev: any[]) => {
+            if (prev && prev.length > 0) return prev;
+            return paginated[0].seasons;
+          });
+        } else {
+          setSelected(null);
+          setSelectedCareerData([]);
         }
       } catch (err) {
         console.error('Error querying players:', err);
@@ -1685,7 +1706,7 @@ return (
                 }}
               >
                 <option value="">ALL YEARS</option>
-                {years.map((y) => (
+                {availableYears.map((y) => (
                   <option key={y} value={y}>
                     {y}
                   </option>
