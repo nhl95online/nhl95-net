@@ -85,36 +85,63 @@ export const parseJson = (val: any) => {
   }
 };
 
+export const getRatingVal = (ratingsObj: any, ...aliases: string[]): number => {
+  if (!ratingsObj) return 0;
+  const r = typeof ratingsObj === 'string' ? parseJson(ratingsObj) : ratingsObj;
+  if (!r || typeof r !== 'object') return 0;
+
+  // 1. Direct check on raw keys
+  for (const a of aliases) {
+    if (r[a] !== undefined && r[a] !== null && r[a] !== '') {
+      const num = Number(r[a]);
+      if (!isNaN(num)) return num;
+    }
+  }
+
+  // 2. Normalized key lookup (ignore case, spaces, underscores, hyphens)
+  const normAliases = aliases.map((a) => a.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  for (const [key, val] of Object.entries(r)) {
+    const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normAliases.includes(cleanKey)) {
+      const num = Number(val);
+      if (!isNaN(num)) return num;
+    }
+  }
+
+  return 0;
+};
+
 // Extract standardized ratings object
 export const getPlayerRatingAttributes = (player: any) => {
   const r = parseJson(player?.ratings);
-  const isG = isGoalie(player?.pos || parseJson(player?.player_info)?.pos);
+  const info = parseJson(player?.player_info);
+  const isG = isGoalie(player?.pos || info?.pos);
 
   if (isG) {
     return [
-      { key: 'Agility', label: 'Agility', value: getScaleLevel(r.Agility ?? r.agl ?? r.Agl ?? 0) },
-      { key: 'Speed', label: 'Speed', value: getScaleLevel(r.Speed ?? r.spd ?? r.Spd ?? 0) },
-      { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(r['Off Aware'] ?? r.ofA ?? r.OfA ?? r.off_aware ?? 0) },
-      { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(r['Def Aware'] ?? r.dfA ?? r.DfA ?? r.def_aware ?? 0) },
-      { key: 'Puck Control', label: 'Puck Control', value: getScaleLevel(r['Puck Control'] ?? r.pkc ?? r.PkC ?? r.puck_control ?? 0) },
-      { key: 'Stick Right', label: 'Stick Right', value: getScaleLevel(r['Stick Right'] ?? r.stR ?? r.StR ?? r.stick_right ?? 0) },
-      { key: 'Stick Left', label: 'Stick Left', value: getScaleLevel(r['Stick Left'] ?? r.stL ?? r.StL ?? r.stick_left ?? 0) },
-      { key: 'Glove Right', label: 'Glove Right', value: getScaleLevel(r['Glove Right'] ?? r.gvR ?? r.GvR ?? r.glove_right ?? 0) },
-      { key: 'Glove Left', label: 'Glove Left', value: getScaleLevel(r['Glove Left'] ?? r.gvL ?? r.GvL ?? r.glove_left ?? 0) },
+      { key: 'Agility', label: 'Agility', value: getScaleLevel(getRatingVal(r, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility')) },
+      { key: 'Speed', label: 'Speed', value: getScaleLevel(getRatingVal(r, 'Speed', 'Spd', 'spd', 'SPD', 'speed')) },
+      { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(getRatingVal(r, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense')) },
+      { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(r, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense')) },
+      { key: 'Puck Control', label: 'Puck Control', value: getScaleLevel(getRatingVal(r, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'puckcontrol', 'control')) },
+      { key: 'Stick Right', label: 'Stick Right', value: getScaleLevel(getRatingVal(r, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right', 'stickright')) },
+      { key: 'Stick Left', label: 'Stick Left', value: getScaleLevel(getRatingVal(r, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left', 'stickleft')) },
+      { key: 'Glove Right', label: 'Glove Right', value: getScaleLevel(getRatingVal(r, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right', 'gloveright')) },
+      { key: 'Glove Left', label: 'Glove Left', value: getScaleLevel(getRatingVal(r, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left', 'gloveleft')) },
     ];
   }
 
   return [
-    { key: 'Agility', label: 'Agility', value: getScaleLevel(r.Agility ?? r.agl ?? r.Agl ?? 0) },
-    { key: 'Speed', label: 'Speed', value: getScaleLevel(r.Speed ?? r.spd ?? r.Spd ?? 0) },
-    { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(r['Off Aware'] ?? r.ofA ?? r.OfA ?? r.off_aware ?? 0) },
-    { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(r['Def Aware'] ?? r.dfA ?? r.DfA ?? r.def_aware ?? 0) },
-    { key: 'Shot Power', label: 'Shot Power', value: getScaleLevel(r['Shot Power'] ?? r.shPW ?? r.ShPW ?? r.power ?? r.pwr ?? 0) },
-    { key: 'Shot Accuracy', label: 'Shot Accuracy', value: getScaleLevel(r['Shot Accuracy'] ?? r.shA ?? r.ShA ?? r.acc ?? 0) },
-    { key: 'Stick Handling', label: 'Stick Handling', value: getScaleLevel(r['Stick Handling'] ?? r.stH ?? r.StH ?? r['Puck Control'] ?? r.pkc ?? 0) },
-    { key: 'Passing', label: 'Passing', value: getScaleLevel(r.Passing ?? r.pas ?? r.Pas ?? r.pass ?? 0) },
-    { key: 'Checking', label: 'Checking', value: getScaleLevel(r.Checking ?? r.chK ?? r.ChK ?? r.chk ?? 0) },
-    { key: 'Aggression', label: 'Aggression', value: getScaleLevel(r.Aggression ?? r.agr ?? r.Agr ?? r.Roughness ?? r.rgh ?? 0) },
+    { key: 'Agility', label: 'Agility', value: getScaleLevel(getRatingVal(r, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility', 'agil')) },
+    { key: 'Speed', label: 'Speed', value: getScaleLevel(getRatingVal(r, 'Speed', 'Spd', 'spd', 'SPD', 'speed')) },
+    { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(getRatingVal(r, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense')) },
+    { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(r, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense')) },
+    { key: 'Shot Power', label: 'Shot Power', value: getScaleLevel(getRatingVal(r, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'Shot_Power', 'power', 'pwr', 'sp')) },
+    { key: 'Shot Accuracy', label: 'Shot Accuracy', value: getScaleLevel(getRatingVal(r, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'Shot_Accuracy', 'accuracy', 'acc', 'sa')) },
+    { key: 'Stick Handling', label: 'Stick Handling', value: getScaleLevel(getRatingVal(r, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'stick_handling', 'Stick_Handling', 'handling', 'puck_control', 'Puck Control', 'pkc', 'PkC', 'PKC')) },
+    { key: 'Passing', label: 'Passing', value: getScaleLevel(getRatingVal(r, 'Passing', 'Pas', 'pas', 'pass', 'Pass', 'PAS', 'passing')) },
+    { key: 'Checking', label: 'Checking', value: getScaleLevel(getRatingVal(r, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'Check', 'checking')) },
+    { key: 'Aggression', label: 'Aggression', value: getScaleLevel(getRatingVal(r, 'Aggression', 'Agr', 'agr', 'AGR', 'agg', 'Agg', 'roughness', 'Roughness', 'rgh', 'aggression')) },
   ];
 };
 
@@ -348,35 +375,35 @@ const CareerTable = ({
             const hand = info.hand || info.shoots || (isGoaliePlayer ? 'R' : 'L');
             const teamName = info.source_team || row.team_default || 'NHL 95';
 
-            // Normalized 0-6 values
-            const agl = getScaleLevel(r.Agility ?? r.agl);
-            const spd = getScaleLevel(r.Speed ?? r.spd);
-            const ofA = getScaleLevel(r['Off Aware'] ?? r.ofA);
-            const dfA = getScaleLevel(r['Def Aware'] ?? r.dfA);
-            const chk = getScaleLevel(r.Checking ?? r.chK);
-            const pas = getScaleLevel(r.Passing ?? r.pas);
-            const agr = getScaleLevel(r.Aggression ?? r.agr);
+            // Normalized 0-6 values with alias resolution
+            const agl = getScaleLevel(getRatingVal(r, 'Agility', 'Agl', 'Agi', 'agl', 'AGL', 'AGI', 'agility'));
+            const spd = getScaleLevel(getRatingVal(r, 'Speed', 'Spd', 'spd', 'SPD', 'speed'));
+            const ofA = getScaleLevel(getRatingVal(r, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense'));
+            const dfA = getScaleLevel(getRatingVal(r, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense'));
+            const chk = getScaleLevel(getRatingVal(r, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'checking'));
+            const pas = getScaleLevel(getRatingVal(r, 'Passing', 'Pas', 'pas', 'pass', 'PAS', 'passing'));
+            const agr = getScaleLevel(getRatingVal(r, 'Aggression', 'Agr', 'agr', 'AGR', 'roughness', 'rgh', 'aggression'));
 
             // Conditional goalie vs skater ratings
             const pkcOrShpw = isGoaliePlayer
-              ? getScaleLevel(r['Puck Control'] ?? r.pkc)
-              : getScaleLevel(r['Shot Power'] ?? r.shPW);
+              ? getScaleLevel(getRatingVal(r, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'control'))
+              : getScaleLevel(getRatingVal(r, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'power', 'pwr', 'sp'));
 
             const sthOrStr = isGoaliePlayer
-              ? getScaleLevel(r['Stick Right'] ?? r.stR)
-              : getScaleLevel(r['Stick Handling'] ?? r.stH);
+              ? getScaleLevel(getRatingVal(r, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right'))
+              : getScaleLevel(getRatingVal(r, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'stick_handling', 'handling', 'puck_control', 'pkc'));
 
             const shaOrStl = isGoaliePlayer
-              ? getScaleLevel(r['Stick Left'] ?? r.stL)
-              : getScaleLevel(r['Shot Accuracy'] ?? r.shA);
+              ? getScaleLevel(getRatingVal(r, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left'))
+              : getScaleLevel(getRatingVal(r, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'accuracy', 'acc', 'sa'));
 
             const endOrGvr = isGoaliePlayer
-              ? getScaleLevel(r['Glove Right'] ?? r.gvR)
-              : getScaleLevel(r.Endurance ?? r.end);
+              ? getScaleLevel(getRatingVal(r, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right'))
+              : getScaleLevel(getRatingVal(r, 'Endurance', 'end', 'End', 'END', 'endurance'));
 
             const rghOrGvl = isGoaliePlayer
-              ? getScaleLevel(r['Glove Left'] ?? r.gvL)
-              : getScaleLevel(r.Roughness ?? r.rgh);
+              ? getScaleLevel(getRatingVal(r, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left'))
+              : getScaleLevel(getRatingVal(r, 'Roughness', 'rgh', 'Rgh', 'RGH', 'Aggression', 'agr', 'roughness'));
 
             const renderHeatCell = (val: number) => {
               const style = getHeatmapColor(val);
@@ -836,49 +863,57 @@ const CompareSlotPicker = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter in-memory + query Supabase for any match across the full database
+  // Instant search across all loaded master players + query fallback
   useEffect(() => {
     if (!isOpen) return;
     const trimmed = query.trim().toLowerCase();
 
-    let cancelled = false;
-    async function searchDB() {
-      setSearching(true);
-      try {
-        let queryBuilder = supabase
-          .from('league_player_database')
-          .select('player_id, player_name, pos, team_default, ratings, player_info')
-          .limit(60);
-
-        if (trimmed) {
-          queryBuilder = queryBuilder.ilike('player_name', `%${trimmed}%`);
+    const map = new Map<string, any>();
+    if (allPlayersList && allPlayersList.length > 0) {
+      const matches = allPlayersList.filter((p) =>
+        !trimmed || p.player_name?.toLowerCase().includes(trimmed)
+      );
+      matches.forEach((p) => {
+        if (p.player_name && !map.has(p.player_name.toLowerCase())) {
+          map.set(p.player_name.toLowerCase(), p);
         }
+      });
+      setSearchResults(Array.from(map.values()).slice(0, 80));
+    } else {
+      let cancelled = false;
+      async function searchDB() {
+        setSearching(true);
+        try {
+          let queryBuilder = supabase
+            .from('league_player_database')
+            .select('player_id, player_name, pos, team_default, ratings, player_info')
+            .limit(60);
 
-        const { data, error } = await queryBuilder;
-        if (error) throw error;
+          if (trimmed) {
+            queryBuilder = queryBuilder.ilike('player_name', `%${trimmed}%`);
+          }
 
-        if (!cancelled && data) {
-          const map = new Map<string, any>();
-          data.forEach((p) => {
-            if (p.player_name && !map.has(p.player_name.toLowerCase())) {
-              map.set(p.player_name.toLowerCase(), p);
-            }
-          });
-          setSearchResults(Array.from(map.values()));
+          const { data, error } = await queryBuilder;
+          if (error) throw error;
+
+          if (!cancelled && data) {
+            data.forEach((p) => {
+              if (p.player_name && !map.has(p.player_name.toLowerCase())) {
+                map.set(p.player_name.toLowerCase(), p);
+              }
+            });
+            setSearchResults(Array.from(map.values()));
+          }
+        } catch (e) {
+          console.error(e);
+        } finally {
+          if (!cancelled) setSearching(false);
         }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        if (!cancelled) setSearching(false);
       }
+      searchDB();
+      return () => { cancelled = true; };
     }
-
-    const timer = setTimeout(searchDB, 120);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [query, isOpen]);
+  }, [query, isOpen, allPlayersList]);
 
   return (
     <div
@@ -981,11 +1016,13 @@ const CompareSlotPicker = ({
 };
 
 const CompareView = ({
+  allPlayersList = [],
   comparedPlayerNames,
   onRemovePlayer,
   onAddPlayerName,
   onClearAll,
 }: {
+  allPlayersList?: any[];
   comparedPlayerNames: string[];
   onRemovePlayer: (name: string) => void;
   onAddPlayerName: (name: string, slotIdx: number) => void;
@@ -993,39 +1030,33 @@ const CompareView = ({
 }) => {
   const [careerRecordsMap, setCareerRecordsMap] = useState<Record<string, any[]>>({});
 
-  // Fetch full career records for all currently compared players across all seasons in DB
+  // Sync full career records for all currently compared players across all seasons in DB
   useEffect(() => {
-    async function fetchCompareHistories() {
-      if (comparedPlayerNames.length === 0) return;
-      try {
-        const { data } = await supabase
-          .from('league_player_database')
-          .select('*')
-          .in('player_name', comparedPlayerNames);
-
-        if (data) {
-          const map: Record<string, any[]> = {};
-          comparedPlayerNames.forEach((name) => {
-            map[name] = data.filter((p) => p.player_name?.toLowerCase() === name.toLowerCase());
-          });
-          setCareerRecordsMap(map);
-        }
-      } catch (err) {
-        console.error('Error loading compare histories:', err);
-      }
-    }
-    fetchCompareHistories();
-  }, [comparedPlayerNames]);
+    if (comparedPlayerNames.length === 0) return;
+    const map: Record<string, any[]> = {};
+    comparedPlayerNames.forEach((name) => {
+      const local = allPlayersList.filter((p) => p.player_name?.toLowerCase() === name.toLowerCase());
+      map[name] = local;
+    });
+    setCareerRecordsMap(map);
+  }, [comparedPlayerNames, allPlayersList]);
 
   // Prepare datasets for multi-player trend chart
   const playerColors = ['#16a34a', '#2563eb', '#d97706'];
   const chartDatasets = useMemo(() => {
     return comparedPlayerNames.map((name, idx) => {
-      const records = careerRecordsMap[name] || [];
-      const trendData = records.map((c) => ({
-        year: Number(c.player_info?.source_year || c.year || 0),
-        ovr: Number(c.ratings?.Ovr || c.ovr || 0),
-      })).filter((c) => c.year > 0 && c.ovr > 0);
+      const records = (careerRecordsMap[name] && careerRecordsMap[name].length > 0)
+        ? careerRecordsMap[name]
+        : allPlayersList.filter((p) => p.player_name?.toLowerCase() === name.toLowerCase());
+
+      const trendData = records.map((c) => {
+        const ci = parseJson(c.player_info);
+        const cr = parseJson(c.ratings);
+        return {
+          year: Number(ci.source_year || c.year || 0),
+          ovr: Number(cr.Ovr || cr.OVERALL || cr.overall || c.ovr || 0),
+        };
+      }).filter((c) => c.year > 0 && c.ovr > 0);
 
       return {
         name,
@@ -1033,7 +1064,7 @@ const CompareView = ({
         data: trendData,
       };
     });
-  }, [comparedPlayerNames, careerRecordsMap]);
+  }, [comparedPlayerNames, careerRecordsMap, allPlayersList]);
 
   return (
     <div className="space-y-6 font-mono text-[10px]">
@@ -1094,19 +1125,28 @@ const CompareView = ({
           {/* 2. Side-by-Side Player Rating Matrix Cards (Top Row of Reference Image) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
             {comparedPlayerNames.map((name, idx) => {
-              const records = careerRecordsMap[name] || allPlayersList.filter((p) => p.player_name === name);
+              const records = (careerRecordsMap[name] && careerRecordsMap[name].length > 0)
+                ? careerRecordsMap[name]
+                : allPlayersList.filter((p) => p.player_name?.toLowerCase() === name.toLowerCase());
+
               const latest = records[records.length - 1] || records[0];
               const slotColor = playerColors[idx % playerColors.length];
 
               if (!latest) return null;
 
-              const isG = isGoalie(latest.pos);
+              const info = parseJson(latest.player_info);
+              const rObj = parseJson(latest.ratings);
+              const isG = isGoalie(latest.pos || info.pos);
               const ratings = getPlayerRatingAttributes(latest);
-              const wgt = calculateWeight(latest.player_info?.weight);
-              const hand = latest.player_info?.hand || latest.player_info?.shoots || (isG ? 'R' : 'L');
-              const ovr = Number(latest.ratings?.Ovr || 75);
+              const wgt = calculateWeight(info.weight);
+              const hand = info.hand || info.shoots || (isG ? 'R' : 'L');
+              const ovr = Number(rObj.Ovr || rObj.OVERALL || rObj.overall || latest.ovr || 75);
 
-              const ovrList = records.map((r) => Number(r.ratings?.Ovr || 0)).filter((n) => n > 0);
+              const ovrList = records.map((r) => {
+                const ro = parseJson(r.ratings);
+                return Number(ro.Ovr || ro.OVERALL || ro.overall || r.ovr || 0);
+              }).filter((n) => n > 0);
+
               const ovrAvg = ovrList.length > 0
                 ? (ovrList.reduce((a, b) => a + b, 0) / ovrList.length).toFixed(2)
                 : ovr.toFixed(2);
@@ -2002,6 +2042,7 @@ export default function PlayersPage() {
       ) : (
         /* Compare Players Tab View */
         <CompareView
+          allPlayersList={allMasterPlayers}
           comparedPlayerNames={comparedPlayers}
           onRemovePlayer={handleRemoveComparePlayer}
           onAddPlayerName={handleAddPlayerName}
