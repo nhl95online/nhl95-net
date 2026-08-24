@@ -21,8 +21,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
   },
   V: {
     name: 'Vintage',
@@ -1528,8 +1528,8 @@ export default function StandingsPage() {
                     {team.name}
                   </Link>
                   <span className={`text-[11px] font-mono px-2 py-0.5 rounded-xs font-bold ${team.isClinched
-                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                      : 'text-blue-700 bg-blue-50 border border-blue-200'
+                    ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                    : 'text-blue-700 bg-blue-50 border border-blue-200'
                     }`}>
                     {team.statusText}
                   </span>
