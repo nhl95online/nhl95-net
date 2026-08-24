@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   Search, Download, Users, Plus, X,
@@ -707,8 +707,190 @@ const HockeyCardSpotlight = ({
 };
 
 // =========================================================================
-// 4. MULTI-PLAYER CAREER COMPARISON VIEW (2 - 3 PLAYERS)
+// 4. SEARCHABLE COMBOPICKER & MULTI-PLAYER CAREER COMPARISON VIEW
 // =========================================================================
+
+// Searchable Autocomplete Picker for Compare Slots
+const CompareSlotPicker = ({
+  slotIdx,
+  currentName,
+  slotColor,
+  allPlayersList,
+  onSelectPlayer,
+  onRemovePlayer,
+}: {
+  slotIdx: number;
+  currentName: string;
+  slotColor: string;
+  allPlayersList: any[];
+  onSelectPlayer: (name: string) => void;
+  onRemovePlayer: (name: string) => void;
+}) => {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter in-memory + query Supabase for any match across the full database
+  useEffect(() => {
+    if (!isOpen) return;
+    const trimmed = query.trim().toLowerCase();
+
+    let cancelled = false;
+    async function searchDB() {
+      setSearching(true);
+      try {
+        let dbResults: any[] = [];
+        if (trimmed) {
+          const { data } = await supabase
+            .from('league_player_database')
+            .select('player_id, player_name, pos, team_default, ratings, player_info')
+            .ilike('player_name', `%${trimmed}%`)
+            .limit(50);
+          dbResults = data || [];
+        }
+
+        // Merge with in-memory filtered list
+        const localMatches = allPlayersList.filter((p) =>
+          !trimmed || p.player_name?.toLowerCase().includes(trimmed)
+        );
+
+        // Deduplicate by unique player_name
+        const map = new Map<string, any>();
+        [...localMatches, ...dbResults].forEach((p) => {
+          if (p.player_name && !map.has(p.player_name.toLowerCase())) {
+            map.set(p.player_name.toLowerCase(), p);
+          }
+        });
+
+        if (!cancelled) {
+          setSearchResults(Array.from(map.values()).slice(0, 100));
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }
+
+    const timer = setTimeout(searchDB, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, isOpen, allPlayersList]);
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="bg-white border-2 border-black p-2.5 rounded relative flex flex-col justify-between shadow-xs"
+      style={{ borderTopWidth: '4px', borderTopColor: slotColor }}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[9px] font-black uppercase" style={{ color: slotColor }}>
+          Player Slot {slotIdx + 1}
+        </span>
+        {currentName && (
+          <button
+            onClick={() => {
+              onRemovePlayer(currentName);
+              setQuery('');
+            }}
+            className="text-neutral-400 hover:text-red-600 font-bold text-[9px] flex items-center gap-0.5"
+            title="Remove player"
+          >
+            <X className="w-3.5 h-3.5" /> Remove
+          </button>
+        )}
+      </div>
+
+      {currentName ? (
+        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-600/60 p-1.5 rounded text-[10px] font-black uppercase text-emerald-950">
+          <span className="truncate">{currentName}</span>
+          <button
+            onClick={() => {
+              setIsOpen(true);
+              setQuery('');
+            }}
+            className="bg-black text-white hover:bg-neutral-800 text-[8px] font-mono px-2 py-0.5 rounded uppercase ml-2 shrink-0"
+          >
+            Change
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="SEARCH ALL PLAYERS IN DB..."
+              value={query}
+              onFocus={() => setIsOpen(true)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setIsOpen(true);
+              }}
+              className="w-full bg-[#F5F2E6] border border-black p-1.5 pl-6 text-[9.5px] uppercase font-bold text-black rounded-xs outline-hidden focus:ring-1 focus:ring-black"
+            />
+            <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-1.5 pointer-events-none" />
+          </div>
+
+          {isOpen && (
+            <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto bg-white border-2 border-black rounded shadow-lg divide-y divide-neutral-200">
+              {searching && (
+                <div className="p-2 text-center text-[9px] font-bold text-neutral-500 uppercase">
+                  Searching database...
+                </div>
+              )}
+              {!searching && searchResults.length === 0 && (
+                <div className="p-3 text-center text-[9px] font-bold text-neutral-500 uppercase">
+                  No players found
+                </div>
+              )}
+              {searchResults.map((p) => {
+                const ovr = p.ratings?.Ovr || p.ratings?.OVERALL || '';
+                return (
+                  <div
+                    key={p.player_id || p.player_name}
+                    onClick={() => {
+                      onSelectPlayer(p.player_name);
+                      setIsOpen(false);
+                      setQuery('');
+                    }}
+                    className="p-1.5 hover:bg-emerald-50 cursor-pointer flex items-center justify-between text-[9px] font-mono transition-colors"
+                  >
+                    <div className="truncate">
+                      <span className="font-black text-black">{p.player_name}</span>
+                      <span className="text-neutral-500 ml-1.5 text-[8px] uppercase">
+                        {p.pos || 'F'} &bull; {p.team_default || 'NHL 95'}
+                      </span>
+                    </div>
+                    {ovr && (
+                      <span className="bg-black text-amber-300 px-1 py-0.2 rounded-2xs text-[8px] font-black shrink-0 ml-1">
+                        {ovr}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const CompareView = ({
   allPlayersList,
@@ -725,7 +907,7 @@ const CompareView = ({
 }) => {
   const [careerRecordsMap, setCareerRecordsMap] = useState<Record<string, any[]>>({});
 
-  // Fetch full career records for all currently compared players
+  // Fetch full career records for all currently compared players across all seasons in DB
   useEffect(() => {
     async function fetchCompareHistories() {
       if (comparedPlayerNames.length === 0) return;
@@ -749,12 +931,6 @@ const CompareView = ({
     fetchCompareHistories();
   }, [comparedPlayerNames]);
 
-  // Unique list of player names for selector dropdowns
-  const playerNamesOptions = useMemo(() => {
-    const names = Array.from(new Set(allPlayersList.map((p) => p.player_name).filter(Boolean))).sort();
-    return names;
-  }, [allPlayersList]);
-
   // Prepare datasets for multi-player trend chart
   const playerColors = ['#16a34a', '#2563eb', '#d97706'];
   const chartDatasets = useMemo(() => {
@@ -776,7 +952,7 @@ const CompareView = ({
   return (
     <div className="space-y-6 font-mono text-[10px]">
 
-      {/* 1. Compare Controls / Slots Bar */}
+      {/* 1. Compare Controls / Searchable Slots Bar */}
       <div className="bg-[#F5F2E6] border-[3px] border-black p-3 sm:p-4 rounded-xl shadow-[5px_5px_0px_rgba(0,0,0,1)]">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3 border-b-2 border-black pb-2">
           <div>
@@ -785,7 +961,7 @@ const CompareView = ({
               Multi-Player Career Comparison (2 - 3 Players)
             </h2>
             <p className="text-[10px] text-neutral-600 mt-0.5 lowercase tracking-normal">
-              Compare ratings matrices, career year-by-year trajectories, and head-to-head advantages side-by-side.
+              Compare ratings matrices, career year-by-year trajectories, and head-to-head advantages side-by-side with full access to all players in the database.
             </p>
           </div>
           {comparedPlayerNames.length > 0 && (
@@ -798,52 +974,22 @@ const CompareView = ({
           )}
         </div>
 
-        {/* 3 Comparison Slots */}
+        {/* 3 Interactive Searchable Comparison Slots */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[0, 1, 2].map((slotIdx) => {
             const currentName = comparedPlayerNames[slotIdx] || '';
             const slotColor = playerColors[slotIdx];
 
             return (
-              <div
+              <CompareSlotPicker
                 key={slotIdx}
-                className="bg-white border-2 border-black p-2.5 rounded relative flex flex-col justify-between shadow-xs"
-                style={{ borderTopWidth: '4px', borderTopColor: slotColor }}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[9px] font-black uppercase" style={{ color: slotColor }}>
-                    Player Slot {slotIdx + 1}
-                  </span>
-                  {currentName && (
-                    <button
-                      onClick={() => onRemovePlayer(currentName)}
-                      className="text-neutral-400 hover:text-red-600"
-                      title="Remove player"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                <select
-                  value={currentName}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      onAddPlayerName(e.target.value, slotIdx);
-                    } else if (currentName) {
-                      onRemovePlayer(currentName);
-                    }
-                  }}
-                  className="bg-[#F5F2E6] border border-black p-1.5 text-[10px] uppercase font-bold text-black w-full rounded-xs"
-                >
-                  <option value="">-- SELECT PLAYER --</option>
-                  {playerNamesOptions.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                slotIdx={slotIdx}
+                currentName={currentName}
+                slotColor={slotColor}
+                allPlayersList={allPlayersList}
+                onSelectPlayer={(name) => onAddPlayerName(name, slotIdx)}
+                onRemovePlayer={(name) => onRemovePlayer(name)}
+              />
             );
           })}
         </div>
@@ -854,7 +1000,7 @@ const CompareView = ({
           <ArrowRightLeft className="w-12 h-12 mx-auto text-emerald-700 mb-3 animate-bounce" />
           <h3 className="text-lg font-black uppercase tracking-tight">No Players Selected For Comparison</h3>
           <p className="text-neutral-600 text-xs mt-2 max-w-md mx-auto lowercase tracking-normal">
-            Choose 2 or 3 players from the selectors above, or click "+ VS" on any player card in the Player Database to begin side-by-side career comparison.
+            Type any player name in the search boxes above, or click "+ VS" on any player card in the Player Database to begin side-by-side career comparison.
           </p>
         </div>
       ) : (
@@ -1000,19 +1146,37 @@ export default function PlayersPage() {
 
   const years = Array.from({ length: 2026 - 1909 + 1 }, (_, i) => 1909 + i);
 
-  // 1. Initial Load & Master List Fetch
+  // 1. Initial Load & Master List Fetch across all database records
   useEffect(() => {
     async function loadMasterList() {
       try {
-        const { data } = await supabase
-          .from('league_player_database')
-          .select('player_id, player_name, pos, team_default, ratings, player_info');
+        let allData: any[] = [];
+        let from = 0;
+        const pageSize = 1000;
+        let hasMore = true;
 
-        if (data) {
-          setAllMasterPlayers(data);
-          // Calculate league averages
+        // Paginate through league_player_database to ensure access to ALL players
+        while (hasMore && from < 15000) {
+          const { data, error } = await supabase
+            .from('league_player_database')
+            .select('player_id, player_name, pos, team_default, ratings, player_info')
+            .range(from, from + pageSize - 1);
+
+          if (error || !data || data.length === 0) {
+            hasMore = false;
+          } else {
+            allData = allData.concat(data);
+            if (data.length < pageSize) hasMore = false;
+            from += pageSize;
+          }
+        }
+
+        if (allData.length > 0) {
+          setAllMasterPlayers(allData);
+
+          // Calculate league averages by year
           const avgs: Record<string, { sum: number; count: number }> = {};
-          data.forEach((p) => {
+          allData.forEach((p) => {
             const yr = p.player_info?.source_year;
             const ovr = Number(p.ratings?.Ovr || 0);
             if (yr && ovr > 0) {
