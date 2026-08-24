@@ -424,18 +424,184 @@ const NHL_TEAM_ABBR_MAP: Record<string, string> = {
   'WPG': 'WPG', 'WINNIPEG': 'WPG', 'WINNIPEG JETS': 'WPG', 'WIN': 'WPG'
 };
 
-// Team Logo Component looking strictly into buckets/nhl_logos
+// Known NHL franchise era boundaries for automated range matching
+const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
+  ANA: [
+    { start: 1993, end: 2006 }, // Mighty Ducks
+    { start: 2006, end: 2014 }, // Wordmark
+    { start: 2014, end: 2024 }, // Webbed D
+    { start: 2024, end: 2030 }, // Orange
+  ],
+  ARI: [
+    { start: 1996, end: 2003 }, // Kachina
+    { start: 2003, end: 2021 }, // Howling Coyote
+    { start: 2021, end: 2024 }, // Kachina Return
+  ],
+  BOS: [
+    { start: 1924, end: 1948 },
+    { start: 1949, end: 1995 },
+    { start: 1995, end: 2007 },
+    { start: 2007, end: 2030 },
+  ],
+  BUF: [
+    { start: 1970, end: 1996 }, // Classic Crossed Sabres
+    { start: 1996, end: 2006 }, // Goathead
+    { start: 2006, end: 2010 }, // Buffaslug
+    { start: 2010, end: 2030 }, // Modern Blue & Gold
+  ],
+  CAR: [
+    { start: 1972, end: 1997 }, // Whalers
+    { start: 1997, end: 2030 }, // Hurricanes
+  ],
+  CBJ: [
+    { start: 2000, end: 2007 },
+    { start: 2007, end: 2030 },
+  ],
+  CGY: [
+    { start: 1972, end: 1980 }, // Atlanta Flames
+    { start: 1980, end: 1994 }, // Classic
+    { start: 1995, end: 2007 }, // Pedestal
+    { start: 2008, end: 2030 }, // Modern
+  ],
+  CHI: [
+    { start: 1926, end: 1955 },
+    { start: 1955, end: 1999 },
+    { start: 1999, end: 2030 },
+  ],
+  COL: [
+    { start: 1972, end: 1995 }, // Nordiques
+    { start: 1995, end: 2030 }, // Avalanche
+  ],
+  DAL: [
+    { start: 1967, end: 1993 }, // North Stars
+    { start: 1993, end: 2013 }, // Dallas Star
+    { start: 2013, end: 2030 }, // Victory Green
+  ],
+  DET: [
+    { start: 1926, end: 1932 },
+    { start: 1932, end: 2030 }, // Winged Wheel
+  ],
+  EDM: [
+    { start: 1972, end: 1996 }, // Classic
+    { start: 1996, end: 2011 }, // Copper & Navy
+    { start: 2011, end: 2030 }, // Royal Blue
+  ],
+  FLA: [
+    { start: 1993, end: 2016 }, // Leaping Panther
+    { start: 2016, end: 2030 }, // Shield
+  ],
+  HFD: [
+    { start: 1979, end: 1997 }, // Whalers
+  ],
+  LAK: [
+    { start: 1967, end: 1988 }, // Forum Blue & Gold Crown
+    { start: 1988, end: 1998 }, // Chevy Silver & Black
+    { start: 1998, end: 2011 }, // Crown Shield
+    { start: 2011, end: 2030 }, // Home Plate
+  ],
+  MIN: [
+    { start: 1967, end: 1993 }, // North Stars
+    { start: 2000, end: 2030 }, // Wild
+  ],
+  MTL: [
+    { start: 1909, end: 1955 },
+    { start: 1955, end: 2030 },
+  ],
+  NJD: [
+    { start: 1982, end: 1992 }, // Red & Green
+    { start: 1992, end: 2030 }, // Red & Black
+  ],
+  NSH: [
+    { start: 1998, end: 2011 },
+    { start: 2011, end: 2030 },
+  ],
+  NYI: [
+    { start: 1972, end: 1995 }, // Classic
+    { start: 1995, end: 1997 }, // Fisherman
+    { start: 1997, end: 2030 }, // Modern
+  ],
+  NYR: [
+    { start: 1926, end: 1976 },
+    { start: 1976, end: 1978 },
+    { start: 1978, end: 2030 },
+  ],
+  OTT: [
+    { start: 1992, end: 2007 }, // 2D Centurion
+    { start: 2007, end: 2020 }, // 3D Centurion
+    { start: 2020, end: 2030 }, // Modern 2D
+  ],
+  PHI: [
+    { start: 1967, end: 2030 },
+  ],
+  PIT: [
+    { start: 1967, end: 1992 }, // Skating Penguin
+    { start: 1992, end: 2002 }, // Robo Penguin
+    { start: 2002, end: 2016 }, // Vegas Gold
+    { start: 2016, end: 2030 }, // Pittsburgh Gold
+  ],
+  QUE: [
+    { start: 1972, end: 1995 }, // Nordiques
+  ],
+  SEA: [
+    { start: 2021, end: 2030 },
+  ],
+  SJS: [
+    { start: 1991, end: 2007 }, // Original Shark
+    { start: 2007, end: 2030 }, // Modern Shark
+  ],
+  STL: [
+    { start: 1967, end: 1984 },
+    { start: 1984, end: 1998 },
+    { start: 1998, end: 2030 },
+  ],
+  TBL: [
+    { start: 1992, end: 2011 }, // Original Bolt
+    { start: 2011, end: 2030 }, // Modern Bolt
+  ],
+  TOR: [
+    { start: 1927, end: 1967 },
+    { start: 1967, end: 2016 }, // Ballard Leaf
+    { start: 2016, end: 2030 }, // Modern Classic
+  ],
+  UTA: [
+    { start: 2024, end: 2030 },
+  ],
+  VAN: [
+    { start: 1970, end: 1978 }, // Stick in Rink
+    { start: 1978, end: 1997 }, // Flying Skate
+    { start: 1997, end: 2007 }, // Orca Navy/Maroon
+    { start: 2007, end: 2030 }, // Orca Blue/Green
+  ],
+  VGK: [
+    { start: 2017, end: 2030 },
+  ],
+  WAS: [
+    { start: 1974, end: 1995 }, // Classic Stars & Script
+    { start: 1995, end: 2007 }, // Screaming Eagle
+    { start: 2007, end: 2030 }, // Modern Red/Navy
+  ],
+  WPG: [
+    { start: 1972, end: 1990 }, // Classic
+    { start: 1990, end: 1996 }, // 90s
+    { start: 2011, end: 2030 }, // RCAF Jet
+  ],
+};
+
+// Team Logo Component looking strictly into buckets/nhl_logos with Year, Era & Range support
 const TeamLogo = ({
   teamName,
+  year,
   className = "w-6 h-6",
 }: {
   teamName: string;
+  year?: number | string;
   className?: string;
 }) => {
   const cleanName = (teamName || '').trim();
   const upper = cleanName.toUpperCase();
   const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
   const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
+  const yrStr = year ? String(year).trim() : '';
   const [urlIdx, setUrlIdx] = useState(0);
   const [failed, setFailed] = useState(false);
 
@@ -444,7 +610,63 @@ const TeamLogo = ({
     const urls: string[] = [];
     const base = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public';
 
-    // 1. buckets/nhl_logos (primary priority)
+    // Parse potential year or range input
+    let parsedYear: number | null = null;
+    let rangeStart: number | null = null;
+    let rangeEnd: number | null = null;
+
+    if (yrStr && yrStr !== '----') {
+      const matchRange = yrStr.match(/(\d{4})\s*[-_–]\s*(\d{4})/);
+      if (matchRange) {
+        rangeStart = parseInt(matchRange[1], 10);
+        rangeEnd = parseInt(matchRange[2], 10);
+      } else {
+        const matchSingle = yrStr.match(/\d{4}/);
+        if (matchSingle) {
+          parsedYear = parseInt(matchSingle[0], 10);
+        }
+      }
+    }
+
+    // 1. Direct explicit range checks (e.g. WAS_1995_2007.png or WAS_1995-2007.png)
+    if (rangeStart && rangeEnd && abbr) {
+      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}_${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}-${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}-${rangeStart}-${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${rangeStart}_${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}_${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}.png`);
+    }
+
+    // 2. Automated era-range matching based on single year (e.g. Year 1998 -> WAS_1995_2007.png)
+    if (parsedYear && abbr && NHL_ERA_RANGES[abbr]) {
+      const matchingEras = NHL_ERA_RANGES[abbr].filter(
+        (era) => parsedYear! >= era.start && parsedYear! <= era.end
+      );
+      matchingEras.forEach((era) => {
+        urls.push(`${base}/nhl_logos/${abbr}_${era.start}_${era.end}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}_${era.start}-${era.end}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}-${era.start}-${era.end}.png`);
+        urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${era.start}_${era.end}.png`);
+      });
+    }
+
+    // 3. Year-specific historical logo in buckets/nhl_logos
+    if (yrStr && yrStr !== '----') {
+      if (abbr) {
+        urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}-${yrStr}.png`);
+        urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${yrStr}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.jpg`);
+      }
+      if (slug) {
+        urls.push(`${base}/nhl_logos/${slug}_${yrStr}.png`);
+        urls.push(`${base}/nhl_logos/${slug}-${yrStr}.png`);
+      }
+      if (upper) urls.push(`${base}/nhl_logos/${upper}_${yrStr}.png`);
+    }
+
+    // 4. Base franchise logos in buckets/nhl_logos (fallback)
     if (abbr) {
       urls.push(`${base}/nhl_logos/${abbr}.png`);
       urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}.png`);
@@ -454,8 +676,9 @@ const TeamLogo = ({
     if (slug) urls.push(`${base}/nhl_logos/${slug}.png`);
     if (cleanName) urls.push(`${base}/nhl_logos/${cleanName}.png`);
 
-    // 2. nhl logos / logos bucket fallbacks
+    // 5. Fallback buckets (nhl logos, logos, images for site)
     if (abbr) {
+      if (yrStr && yrStr !== '----') urls.push(`${base}/nhl%20logos/${abbr}_${yrStr}.png`);
       urls.push(`${base}/nhl%20logos/${abbr}.png`);
       urls.push(`${base}/logos/${abbr}.png`);
     }
@@ -470,12 +693,12 @@ const TeamLogo = ({
     }
 
     return Array.from(new Set(urls));
-  }, [slug, cleanName, upper, abbr]);
+  }, [slug, cleanName, upper, abbr, yrStr]);
 
   useEffect(() => {
     setUrlIdx(0);
     setFailed(false);
-  }, [teamName]);
+  }, [teamName, year]);
 
   if (failed || candidateUrls.length === 0 || urlIdx >= candidateUrls.length) {
     return (
@@ -488,7 +711,7 @@ const TeamLogo = ({
   return (
     <img
       src={candidateUrls[urlIdx]}
-      alt={cleanName}
+      alt={`${cleanName} ${yrStr || ''}`}
       className={`${className} object-contain shrink-0`}
       onError={() => {
         if (urlIdx + 1 < candidateUrls.length) {
@@ -636,7 +859,7 @@ const CareerTable = ({
                   <td className="p-1 border-r border-black/30 font-bold bg-slate-50 text-left pl-1.5">
                     <div className="flex items-center gap-1.5">
                       <div className="w-5 h-5 flex items-center justify-center bg-white border border-black/30 rounded-xs p-0.5 shrink-0">
-                        <TeamLogo teamName={teamName} className="max-w-full max-h-full" />
+                        <TeamLogo teamName={teamName} year={yr} className="max-w-full max-h-full" />
                       </div>
                       <span className="truncate max-w-[85px] text-[8px]">{teamName}</span>
                     </div>
@@ -927,7 +1150,7 @@ const HockeyCardSpotlight = ({
                 </span>
               </div>
               <div className="w-7 h-7 flex items-center justify-center p-0.5 bg-slate-50 border border-black/30 rounded shrink-0">
-                <TeamLogo teamName={player.team_default || player.player_info?.source_team || 'NHL 95'} className="max-w-full max-h-full" />
+                <TeamLogo teamName={player.team_default || player.player_info?.source_team || 'NHL 95'} year={player.player_info?.source_year || player.year} className="max-w-full max-h-full" />
               </div>
             </div>
           </div>
@@ -1409,7 +1632,7 @@ const CompareView = ({
                           </span>
                         </div>
                         <div className="w-6 h-6 flex items-center justify-center p-0.5 bg-slate-50 border border-black/30 rounded shrink-0 ml-1">
-                          <TeamLogo teamName={latest.team_default || latest.player_info?.source_team || 'NHL 95'} className="max-w-full max-h-full" />
+                          <TeamLogo teamName={latest.team_default || latest.player_info?.source_team || 'NHL 95'} year={latest.player_info?.source_year || latest.year} className="max-w-full max-h-full" />
                         </div>
                       </div>
                     </div>
@@ -2140,7 +2363,7 @@ export default function PlayersPage() {
                           <td className="p-1.5 truncate max-w-[130px] text-neutral-700">
                             <div className="flex items-center gap-1.5">
                               <div className="w-4 h-4 flex items-center justify-center shrink-0">
-                                <TeamLogo teamName={group.primary_team} className="max-w-full max-h-full" />
+                                <TeamLogo teamName={group.primary_team} year={group.end_year} className="max-w-full max-h-full" />
                               </div>
                               <span className="truncate">{group.primary_team}</span>
                             </div>
@@ -2186,7 +2409,7 @@ export default function PlayersPage() {
                                   <div className="flex items-center gap-3.5">
                                     {/* Prominent Larger Team Logo Box */}
                                     <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                                      <TeamLogo teamName={group.primary_team} className="w-12 h-12 sm:w-16 sm:h-16" />
+                                      <TeamLogo teamName={group.primary_team} year={group.end_year} className="w-12 h-12 sm:w-16 sm:h-16" />
                                     </div>
                                     <div>
                                       <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex items-center gap-2">
