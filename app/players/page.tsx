@@ -389,7 +389,7 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
 const NHL_TEAM_ABBR_MAP: Record<string, string> = {
   'ANA': 'ANA', 'ANAHEIM': 'ANA', 'MIGHTY DUCKS OF ANAHEIM': 'ANA', 'ANAHEIM DUCKS': 'ANA',
   'ARI': 'ARI', 'ARIZONA': 'ARI', 'ARIZONA COYOTES': 'ARI', 'PHOENIX COYOTES': 'ARI', 'PHX': 'ARI',
-  'BER': 'BER', 'BERLIN'
+  'BER': 'BER', 'BERLIN',
   'BOS': 'BOS', 'BOSTON': 'BOS', 'BOSTON BRUINS': 'BOS',
   'BUF': 'BUF', 'BUFFALO': 'BUF', 'BUFFALO SABRES': 'BUF',
   'CAR': 'CAR', 'CAROLINA': 'CAR', 'CAROLINA HURRICANES': 'CAR',
