@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  ArrowLeftRight, Check, Copy, RotateCcw, AlertTriangle, ShieldCheck, 
-  Sparkles, Scale, History, Flame, Trophy, Clock, Calendar, UserCheck, 
+import {
+  ArrowLeftRight, Check, Copy, RotateCcw, AlertTriangle, ShieldCheck,
+  Sparkles, Scale, History, Flame, Trophy, Clock, Calendar, UserCheck,
   Search, SlidersHorizontal, ArrowUpDown, Layers, Award, ChevronRight, X,
   TrendingUp, TrendingDown, Minus, ArrowUpRight, ArrowRight, ArrowLeft,
   CheckCircle2, Filter, BarChart3, RefreshCw, MessageSquare, Info, Shield, Users,
@@ -49,60 +49,60 @@ const PICK_WEIGHTS: Record<string, number> = {
 
 // Current active leagues metadata configuration with exact official bucket logos
 const CURRENT_LEAGUES_CONFIG = [
-  { 
-    id: 'W', 
-    name: 'W League', 
-    currentSeasonName: 'W18 (2013)', 
-    seasonYear: 2013, 
+  {
+    id: 'W',
+    name: 'W League',
+    currentSeasonName: 'W18 (2013)',
+    seasonYear: 2013,
     ratingSourceYear: 2012, // Prior season ratings baseline
-    seasonId: 38, 
-    prefix: 'W', 
-    futureDraftYears: [2014, 2015, 2016], 
+    seasonId: 38,
+    prefix: 'W',
+    futureDraftYears: [2014, 2015, 2016],
     draftRounds: ['1st', '2nd'],
     accentColor: 'emerald',
     badgeText: 'Active Season',
     logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/WN95HL.png',
     fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/WN95HL.png'
   },
-  { 
-    id: 'O', 
-    name: 'Original 6', 
-    currentSeasonName: 'O01 (1927)', 
-    seasonYear: 1927, 
+  {
+    id: 'O',
+    name: 'Original 6',
+    currentSeasonName: 'O01 (1927)',
+    seasonYear: 1927,
     ratingSourceYear: 1926, // Prior season ratings baseline
-    seasonId: 'O01', 
-    prefix: 'O', 
-    futureDraftYears: [1928, 1929, 1930], 
+    seasonId: 'O01',
+    prefix: 'O',
+    futureDraftYears: [1928, 1929, 1930],
     draftRounds: ['1st', '2nd', '3rd'],
     accentColor: 'amber',
     badgeText: 'Classic Era',
     logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
     fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
-  { 
-    id: 'Q', 
-    name: 'The Q', 
-    currentSeasonName: 'Q19 (1998)', 
-    seasonYear: 1998, 
+  {
+    id: 'Q',
+    name: 'The Q',
+    currentSeasonName: 'Q19 (1998)',
+    seasonYear: 1998,
     ratingSourceYear: 1997, // Prior season ratings baseline
-    seasonId: 36, 
-    prefix: 'Q', 
-    futureDraftYears: [1999, 2000, 2001], 
+    seasonId: 36,
+    prefix: 'Q',
+    futureDraftYears: [1999, 2000, 2001],
     draftRounds: ['1st', '2nd'],
     accentColor: 'blue',
     badgeText: '90s Classic',
     logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/TheQ.png',
     fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/TheQ.png'
   },
-  { 
-    id: 'V', 
-    name: 'Vintage', 
-    currentSeasonName: 'V01 (1917)', 
-    seasonYear: 1917, 
+  {
+    id: 'V',
+    name: 'Vintage',
+    currentSeasonName: 'V01 (1917)',
+    seasonYear: 1917,
     ratingSourceYear: 1916, // Prior season ratings baseline
-    seasonId: 20, 
-    prefix: 'V', 
-    futureDraftYears: [1918, 1919, 1920], 
+    seasonId: 20,
+    prefix: 'V',
+    futureDraftYears: [1918, 1919, 1920],
     draftRounds: ['1st', '2nd'],
     accentColor: 'purple',
     badgeText: 'Pioneer Era',
@@ -628,7 +628,7 @@ export default function TradesPage() {
     const items = rawList.map((item) => {
       const lower = item.toLowerCase();
       const isPick = lower.includes('1st') || lower.includes('2nd') || lower.includes('3rd') || lower.includes('4th') || lower.includes('5th') || lower.includes('round') || lower.includes('pick');
-      
+
       let itemVal = 75;
       let pickRound = '';
       let pickYear = '';
@@ -768,7 +768,7 @@ export default function TradesPage() {
       // Franchise specific filter
       if (selectedFranchiseFilter !== 'ALL') {
         const teamMatch = String(t.team || '').toUpperCase() === selectedFranchiseFilter.toUpperCase() ||
-                          String(t.team_1 || '').toUpperCase() === selectedFranchiseFilter.toUpperCase();
+          String(t.team_1 || '').toUpperCase() === selectedFranchiseFilter.toUpperCase();
         if (!teamMatch) return false;
       }
 
@@ -843,11 +843,10 @@ export default function TradesPage() {
           <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-full pb-1">
             <button
               onClick={() => setActiveTab('simulator')}
-              className={`px-3 sm:px-4 py-1.5 font-bold uppercase text-xs transition border border-black flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                activeTab === 'simulator'
+              className={`px-3 sm:px-4 py-1.5 font-bold uppercase text-xs transition border border-black flex items-center gap-1.5 cursor-pointer shrink-0 ${activeTab === 'simulator'
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+                }`}
             >
               <ArrowLeftRight className="w-3.5 h-3.5" />
               <span>Simulator</span>
@@ -855,55 +854,50 @@ export default function TradesPage() {
 
             <button
               onClick={() => { setActiveTab('W'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
-              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${
-                activeTab === 'W'
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'W'
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+                }`}
             >
               W League
             </button>
 
             <button
               onClick={() => { setActiveTab('O'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
-              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${
-                activeTab === 'O'
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'O'
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+                }`}
             >
               Original 6
             </button>
 
             <button
               onClick={() => { setActiveTab('Q'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
-              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${
-                activeTab === 'Q'
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'Q'
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+                }`}
             >
               The Q
             </button>
 
             <button
               onClick={() => { setActiveTab('V'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
-              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${
-                activeTab === 'V'
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'V'
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+                }`}
             >
               Vintage
             </button>
 
             <button
               onClick={() => { setActiveTab('ALL'); setSelectedSeasonFilter('ALL'); setSelectedFranchiseFilter('ALL'); }}
-              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${
-                activeTab === 'ALL'
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'ALL'
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+                }`}
             >
               All Trades
             </button>
@@ -938,11 +932,10 @@ export default function TradesPage() {
                     <button
                       key={cfg.id}
                       onClick={() => setSimLeague(cfg.id as any)}
-                      className={`p-2.5 border text-left flex items-center gap-3 transition-all cursor-pointer rounded-xs ${
-                        isSelected
+                      className={`p-2.5 border text-left flex items-center gap-3 transition-all cursor-pointer rounded-xs ${isSelected
                           ? 'bg-black text-white border-black shadow-sm'
                           : 'bg-white/80 text-black border-black/20 hover:border-black hover:bg-white'
-                      }`}
+                        }`}
                     >
                       <img
                         src={cfg.logoUrl}
@@ -953,9 +946,8 @@ export default function TradesPage() {
                             target.src = cfg.fallbackLogoUrl;
                           }
                         }}
-                        className={`w-12 h-12 object-contain p-0.5 border shrink-0 ${
-                          isSelected ? 'bg-white border-white/20' : 'bg-[#f4f1ea] border-black/10'
-                        }`}
+                        className={`w-12 h-12 object-contain p-0.5 border shrink-0 ${isSelected ? 'bg-white border-white/20' : 'bg-[#f4f1ea] border-black/10'
+                          }`}
                       />
                       <div className="min-w-0 flex-1">
                         <div className="font-black text-xs uppercase truncate leading-tight">{cfg.name}</div>
@@ -971,12 +963,12 @@ export default function TradesPage() {
 
             {/* DEAL ASSESSMENT VISUALIZER (MATCHING USER MOCKUP EXACTLY) */}
             <div className="bg-white border border-black p-4 md:p-5 shadow-sm space-y-4">
-              
+
               {/* Header: Status Verdict & Controls (Clean Gazette Outline Style) */}
               <div className="flex flex-col md:flex-row items-center justify-between gap-3 border-b border-black pb-3">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <span className="text-xs font-bold uppercase tracking-wider text-black">ASSESSMENT STATUS:</span>
-                  
+
                   {/* Verdict Badge in Clean Bordered Box */}
                   <div className="border border-black bg-white px-3 py-1 text-xs font-black uppercase flex items-center gap-1.5 shadow-2xs">
                     <verdictBadge.icon className="w-3.5 h-3.5" />
@@ -1015,7 +1007,7 @@ export default function TradesPage() {
               {/* FIVE-SECTION HORIZONTAL DECK (AS SHOWN IN USER MOCKUP) */}
               <div className="border border-black bg-[#f4f1ea] p-3 md:p-4">
                 <div className="flex flex-col lg:flex-row items-stretch gap-3">
-                  
+
                   {/* 1. TEAM A SUMMARY CARD (LEFT) */}
                   <div className="w-full lg:w-[28%] bg-white border border-black p-3.5 flex flex-col justify-between shadow-2xs">
                     <div>
@@ -1028,7 +1020,7 @@ export default function TradesPage() {
                             className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shrink-0"
                           />
                         ) : (
-                          <div 
+                          <div
                             style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
                             className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-xl shrink-0"
                           >
@@ -1182,7 +1174,7 @@ export default function TradesPage() {
                             className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shrink-0"
                           />
                         ) : (
-                          <div 
+                          <div
                             style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
                             className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-xl shrink-0"
                           >
@@ -1247,7 +1239,7 @@ export default function TradesPage() {
                         className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shadow-2xs"
                       />
                     ) : (
-                      <div 
+                      <div
                         style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
                         className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg shrink-0"
                       >
@@ -1290,11 +1282,10 @@ export default function TradesPage() {
                             <button
                               key={pos}
                               onClick={() => setPosFilterA(pos)}
-                              className={`px-1.5 py-0.5 border transition cursor-pointer ${
-                                posFilterA === pos
+                              className={`px-1.5 py-0.5 border transition cursor-pointer ${posFilterA === pos
                                   ? 'bg-black text-white border-black font-black'
                                   : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
-                              }`}
+                                }`}
                             >
                               {pos}
                             </button>
@@ -1330,9 +1321,8 @@ export default function TradesPage() {
                               <div
                                 key={p.id}
                                 onClick={() => togglePlayerA(p)}
-                                className={`flex items-center justify-between p-1.5 cursor-pointer transition ${
-                                  isSelected ? 'bg-neutral-200 font-black' : 'hover:bg-neutral-50'
-                                }`}
+                                className={`flex items-center justify-between p-1.5 cursor-pointer transition ${isSelected ? 'bg-neutral-200 font-black' : 'hover:bg-neutral-50'
+                                  }`}
                               >
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <span className="w-4 text-[10px] font-mono text-neutral-500 uppercase font-bold shrink-0">{p.pos}</span>
@@ -1378,11 +1368,10 @@ export default function TradesPage() {
                                   <button
                                     key={pk.id}
                                     onClick={() => togglePickA(pk)}
-                                    className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${
-                                      isSelected
+                                    className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${isSelected
                                         ? 'bg-black text-white border-black'
                                         : 'bg-white border-neutral-300 hover:border-black'
-                                    }`}
+                                      }`}
                                   >
                                     <span>{pk.round} Rd</span>
                                     <span className="opacity-75 font-mono">+{pk.value}</span>
@@ -1409,7 +1398,7 @@ export default function TradesPage() {
                         className="w-[100px] h-[100px] object-contain shrink-0 p-1 border border-black bg-white shadow-2xs"
                       />
                     ) : (
-                      <div 
+                      <div
                         style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
                         className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg shrink-0"
                       >
@@ -1452,11 +1441,10 @@ export default function TradesPage() {
                             <button
                               key={pos}
                               onClick={() => setPosFilterB(pos)}
-                              className={`px-1.5 py-0.5 border transition cursor-pointer ${
-                                posFilterB === pos
+                              className={`px-1.5 py-0.5 border transition cursor-pointer ${posFilterB === pos
                                   ? 'bg-black text-white border-black font-black'
                                   : 'bg-neutral-100 border-neutral-300 hover:bg-neutral-200'
-                              }`}
+                                }`}
                             >
                               {pos}
                             </button>
@@ -1492,9 +1480,8 @@ export default function TradesPage() {
                               <div
                                 key={p.id}
                                 onClick={() => togglePlayerB(p)}
-                                className={`flex items-center justify-between p-1.5 cursor-pointer transition ${
-                                  isSelected ? 'bg-neutral-200 font-black' : 'hover:bg-neutral-50'
-                                }`}
+                                className={`flex items-center justify-between p-1.5 cursor-pointer transition ${isSelected ? 'bg-neutral-200 font-black' : 'hover:bg-neutral-50'
+                                  }`}
                               >
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <span className="w-4 text-[10px] font-mono text-neutral-500 uppercase font-bold shrink-0">{p.pos}</span>
@@ -1540,11 +1527,10 @@ export default function TradesPage() {
                                   <button
                                     key={pk.id}
                                     onClick={() => togglePickB(pk)}
-                                    className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${
-                                      isSelected
+                                    className={`p-1 text-left border text-[10px] font-bold transition flex justify-between items-center cursor-pointer ${isSelected
                                         ? 'bg-black text-white border-black'
                                         : 'bg-white border-neutral-300 hover:border-black'
-                                    }`}
+                                      }`}
                                   >
                                     <span>{pk.round} Rd</span>
                                     <span className="opacity-75 font-mono">+{pk.value}</span>
@@ -1572,7 +1558,7 @@ export default function TradesPage() {
 
             {/* SORT & FILTER CONTROLLER BAR (STANDINGS STYLE) */}
             <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
-              
+
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-black uppercase bg-black text-white px-2.5 py-1">
                   {activeTab === 'ALL' ? 'All Leagues' : `${activeTab} League Ledger`}
@@ -1673,8 +1659,8 @@ export default function TradesPage() {
                   const t2AcquiredText = outcome.receivedByT2.items.map(item => item.raw).join(', ') || 'No assets';
 
                   return (
-                    <div 
-                      key={i} 
+                    <div
+                      key={i}
                       className="bg-white text-black border border-black shadow-sm overflow-hidden"
                     >
                       {/* Top Header Bar */}
@@ -1717,7 +1703,7 @@ export default function TradesPage() {
 
                       {/* Dual Team Exchange Cards with 100x100 Logos */}
                       <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-black">
-                        
+
                         {/* ================= TEAM 1 COLUMN ================= */}
                         <div className="p-3 bg-white flex flex-col justify-between">
                           <div>
@@ -1725,16 +1711,16 @@ export default function TradesPage() {
                             <div className="flex items-center justify-between gap-3 pb-2.5 mb-2.5 border-b border-black/10">
                               <div className="flex items-center gap-2.5 min-w-0">
                                 {m1?.logo ? (
-                                  <img 
-                                    src={m1.logo} 
-                                    alt={team1Name} 
+                                  <img
+                                    src={m1.logo}
+                                    alt={team1Name}
                                     style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                                    className="w-[100px] h-[100px] object-contain p-1 border border-black bg-[#fdfaf5] shrink-0" 
+                                    className="w-[100px] h-[100px] object-contain p-1 border border-black bg-[#fdfaf5] shrink-0"
                                   />
                                 ) : (
-                                  <div 
+                                  <div
                                     style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                                    className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg text-neutral-700 shrink-0" 
+                                    className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg text-neutral-700 shrink-0"
                                   >
                                     {m1?.abbr || t.team}
                                   </div>
@@ -1748,11 +1734,10 @@ export default function TradesPage() {
                               <div className="text-right shrink-0 space-y-0.5">
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[9px] uppercase font-mono text-neutral-600 font-bold">NET:</span>
-                                  <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${
-                                    outcome.netImpactT1 >= 0 
-                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600' 
+                                  <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${outcome.netImpactT1 >= 0
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
                                       : 'bg-red-100 text-red-950 border-red-600'
-                                  }`}>
+                                    }`}>
                                     {outcome.netImpactT1 >= 0 ? `+${outcome.netImpactT1} PTS` : `${outcome.netImpactT1} PTS`}
                                   </span>
                                 </div>
@@ -1773,8 +1758,8 @@ export default function TradesPage() {
                                 </div>
                               ) : (
                                 outcome.receivedByT1.items.map((item, idx) => (
-                                  <div 
-                                    key={idx} 
+                                  <div
+                                    key={idx}
                                     className="bg-[#fbf9f5] border border-black/20 hover:border-black p-2 flex items-center justify-between gap-2"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
@@ -1813,16 +1798,16 @@ export default function TradesPage() {
                             <div className="flex items-center justify-between gap-3 pb-2.5 mb-2.5 border-b border-black/10">
                               <div className="flex items-center gap-2.5 min-w-0">
                                 {m2?.logo ? (
-                                  <img 
-                                    src={m2.logo} 
-                                    alt={team2Name} 
+                                  <img
+                                    src={m2.logo}
+                                    alt={team2Name}
                                     style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                                    className="w-[100px] h-[100px] object-contain p-1 border border-black bg-[#fdfaf5] shrink-0" 
+                                    className="w-[100px] h-[100px] object-contain p-1 border border-black bg-[#fdfaf5] shrink-0"
                                   />
                                 ) : (
-                                  <div 
+                                  <div
                                     style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                                    className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg text-neutral-700 shrink-0" 
+                                    className="w-[100px] h-[100px] bg-neutral-100 border border-black flex items-center justify-center font-black text-lg text-neutral-700 shrink-0"
                                   >
                                     {m2?.abbr || t.team_1}
                                   </div>
@@ -1836,11 +1821,10 @@ export default function TradesPage() {
                               <div className="text-right shrink-0 space-y-0.5">
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[9px] uppercase font-mono text-neutral-600 font-bold">NET:</span>
-                                  <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${
-                                    outcome.netImpactT2 >= 0 
-                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600' 
+                                  <span className={`px-1.5 py-0.2 text-[11px] font-mono font-black border ${outcome.netImpactT2 >= 0
+                                      ? 'bg-emerald-100 text-emerald-950 border-emerald-600'
                                       : 'bg-red-100 text-red-950 border-red-600'
-                                  }`}>
+                                    }`}>
                                     {outcome.netImpactT2 >= 0 ? `+${outcome.netImpactT2} PTS` : `${outcome.netImpactT2} PTS`}
                                   </span>
                                 </div>
@@ -1861,8 +1845,8 @@ export default function TradesPage() {
                                 </div>
                               ) : (
                                 outcome.receivedByT2.items.map((item, idx) => (
-                                  <div 
-                                    key={idx} 
+                                  <div
+                                    key={idx}
                                     className="bg-[#fbf9f5] border border-black/20 hover:border-black p-2 flex items-center justify-between gap-2"
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
