@@ -386,7 +386,45 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
   );
 };
 
-// Team Logo Component with Exclusively Logo Storage Buckets (No Banners)
+const NHL_TEAM_ABBR_MAP: Record<string, string> = {
+  'ANA': 'ANA', 'ANAHEIM': 'ANA', 'MIGHTY DUCKS OF ANAHEIM': 'ANA', 'ANAHEIM DUCKS': 'ANA',
+  'ARI': 'ARI', 'ARIZONA': 'ARI', 'ARIZONA COYOTES': 'ARI', 'PHOENIX COYOTES': 'ARI', 'PHX': 'ARI',
+  'BOS': 'BOS', 'BOSTON': 'BOS', 'BOSTON BRUINS': 'BOS',
+  'BUF': 'BUF', 'BUFFALO': 'BUF', 'BUFFALO SABRES': 'BUF',
+  'CAR': 'CAR', 'CAROLINA': 'CAR', 'CAROLINA HURRICANES': 'CAR',
+  'CBJ': 'CBJ', 'COLUMBUS': 'CBJ', 'COLUMBUS BLUE JACKETS': 'CBJ', 'CLB': 'CBJ',
+  'CGY': 'CGY', 'CALGARY': 'CGY', 'CALGARY FLAMES': 'CGY',
+  'CHI': 'CHI', 'CHICAGO': 'CHI', 'CHICAGO BLACKHAWKS': 'CHI',
+  'COL': 'COL', 'COLORADO': 'COL', 'COLORADO AVALANCHE': 'COL',
+  'DAL': 'DAL', 'DALLAS': 'DAL', 'DALLAS STARS': 'DAL',
+  'DET': 'DET', 'DETROIT': 'DET', 'DETROIT RED WINGS': 'DET', 'DTC': 'DET',
+  'EDM': 'EDM', 'EDMONTON': 'EDM', 'EDMONTON OILERS': 'EDM',
+  'FLA': 'FLA', 'FLORIDA': 'FLA', 'FLORIDA PANTHERS': 'FLA',
+  'HFD': 'HFD', 'HARTFORD': 'HFD', 'HARTFORD WHALERS': 'HFD',
+  'LA': 'LAK', 'LAK': 'LAK', 'LOS ANGELES': 'LAK', 'LOS ANGELES KINGS': 'LAK', 'LOS_ANGELES_KINGS': 'LAK',
+  'MIN': 'MIN', 'MINNESOTA': 'MIN', 'MINNESOTA WILD': 'MIN', 'MINNESOTA NORTH STARS': 'MIN', 'MNS': 'MIN',
+  'MTL': 'MTL', 'MONTREAL': 'MTL', 'CANADIENS': 'MTL', 'MONTREAL CANADIENS': 'MTL', 'MON': 'MTL',
+  'NJD': 'NJD', 'NEW JERSEY': 'NJD', 'NEW JERSEY DEVILS': 'NJD', 'NJ': 'NJD',
+  'NSH': 'NSH', 'NASHVILLE': 'NSH', 'NASHVILLE PREDATORS': 'NSH',
+  'NYI': 'NYI', 'NEW YORK ISLANDERS': 'NYI', 'ISLANDERS': 'NYI',
+  'NYR': 'NYR', 'NEW YORK RANGERS': 'NYR', 'RANGERS': 'NYR', 'NY': 'NYR',
+  'OTT': 'OTT', 'OTTAWA': 'OTT', 'OTTAWA SENATORS': 'OTT',
+  'PHI': 'PHI', 'PHILADELPHIA': 'PHI', 'PHILADELPHIA FLYERS': 'PHI',
+  'PIT': 'PIT', 'PITTSBURGH': 'PIT', 'PITTSBURGH PENGUINS': 'PIT',
+  'QUE': 'QUE', 'QUEBEC': 'QUE', 'QUEBEC NORDIQUES': 'QUE',
+  'SEA': 'SEA', 'SEATTLE': 'SEA', 'SEATTLE KRAKEN': 'SEA',
+  'SJ': 'SJS', 'SJS': 'SJS', 'SAN JOSE': 'SJS', 'SAN JOSE SHARKS': 'SJS', 'SAN_JOSE_SHARKS': 'SJS',
+  'STL': 'STL', 'ST. LOUIS': 'STL', 'ST LOUIS': 'STL', 'ST. LOUIS BLUES': 'STL', 'ST LOUIS BLUES': 'STL',
+  'TB': 'TBL', 'TBL': 'TBL', 'TAMPA': 'TBL', 'TAMPA BAY': 'TBL', 'TAMPA BAY LIGHTNING': 'TBL',
+  'TOR': 'TOR', 'TORONTO': 'TOR', 'TORONTO MAPLE LEAFS': 'TOR',
+  'UTA': 'UTA', 'UTAH': 'UTA', 'UTAH HOCKEY CLUB': 'UTA',
+  'VAN': 'VAN', 'VANCOUVER': 'VAN', 'VANCOUVER CANUCKS': 'VAN',
+  'VGK': 'VGK', 'VEGAS': 'VGK', 'VEGAS GOLDEN KNIGHTS': 'VGK',
+  'WAS': 'WAS', 'WASHINGTON': 'WAS', 'WASHINGTON CAPITALS': 'WAS', 'WSH': 'WAS',
+  'WPG': 'WPG', 'WINNIPEG': 'WPG', 'WINNIPEG JETS': 'WPG', 'WIN': 'WPG'
+};
+
+// Team Logo Component looking strictly into buckets/nhl_logos
 const TeamLogo = ({
   teamName,
   className = "w-6 h-6",
@@ -395,21 +433,44 @@ const TeamLogo = ({
   className?: string;
 }) => {
   const cleanName = (teamName || '').trim();
+  const upper = cleanName.toUpperCase();
   const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+  const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
   const [urlIdx, setUrlIdx] = useState(0);
   const [failed, setFailed] = useState(false);
 
   const candidateUrls = useMemo(() => {
-    if (!slug) return [];
-    return [
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20logos/${slug}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/logos/${slug}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/${slug}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl_logos/${slug}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20logos/${cleanName.toUpperCase()}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/logos/${cleanName.toUpperCase()}.png`,
-    ];
-  }, [slug, cleanName]);
+    if (!cleanName) return [];
+    const urls: string[] = [];
+    const base = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public';
+
+    // 1. buckets/nhl_logos (primary priority)
+    if (abbr) {
+      urls.push(`${base}/nhl_logos/${abbr}.png`);
+      urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}.jpg`);
+    }
+    if (upper) urls.push(`${base}/nhl_logos/${upper}.png`);
+    if (slug) urls.push(`${base}/nhl_logos/${slug}.png`);
+    if (cleanName) urls.push(`${base}/nhl_logos/${cleanName}.png`);
+
+    // 2. nhl logos / logos bucket fallbacks
+    if (abbr) {
+      urls.push(`${base}/nhl%20logos/${abbr}.png`);
+      urls.push(`${base}/logos/${abbr}.png`);
+    }
+    if (slug) {
+      urls.push(`${base}/nhl%20logos/${slug}.png`);
+      urls.push(`${base}/logos/${slug}.png`);
+      urls.push(`${base}/images%20for%20site/${slug}.png`);
+    }
+    if (upper) {
+      urls.push(`${base}/nhl%20logos/${upper}.png`);
+      urls.push(`${base}/logos/${upper}.png`);
+    }
+
+    return Array.from(new Set(urls));
+  }, [slug, cleanName, upper, abbr]);
 
   useEffect(() => {
     setUrlIdx(0);
@@ -419,7 +480,7 @@ const TeamLogo = ({
   if (failed || candidateUrls.length === 0 || urlIdx >= candidateUrls.length) {
     return (
       <div className={`${className} bg-slate-100 border border-black/40 rounded flex items-center justify-center font-mono font-black text-[8px] text-slate-700 uppercase shrink-0 shadow-xs`}>
-        {cleanName ? cleanName.slice(0, 3).toUpperCase() : 'NHL'}
+        {abbr || cleanName.slice(0, 3).toUpperCase() || 'NHL'}
       </div>
     );
   }
