@@ -111,37 +111,68 @@ export const getRatingVal = (ratingsObj: any, ...aliases: string[]): number => {
   return 0;
 };
 
-// Extract standardized ratings object
+export const getPlayerHandedness = (player: any): string => {
+  if (!player) return 'L';
+  const info = parseJson(player.player_info);
+  const r = parseJson(player.ratings);
+  const isG = isGoalie(player.pos || info?.pos);
+
+  const candidates = [
+    info?.hand, info?.Hand, info?.HAND,
+    info?.shoots, info?.Shoots, info?.SHOOTS,
+    info?.handedness, info?.Handedness, info?.HANDEDNESS,
+    info?.catch, info?.Catch, info?.CATCH,
+    info?.shot, info?.Shot, info?.SHOT,
+    info?.h, info?.H,
+    info?.handiness, info?.Handiness,
+    player?.hand, player?.shoots, player?.handedness,
+    r?.hand, r?.shoots, r?.handedness, r?.h, r?.H
+  ];
+
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && c !== '') {
+      const s = String(c).trim().toUpperCase();
+      if (s === 'R' || s.startsWith('RIGHT') || s.startsWith('R-') || s.startsWith('RH')) return 'R';
+      if (s === 'L' || s.startsWith('LEFT') || s.startsWith('L-') || s.startsWith('LH')) return 'L';
+      if (s.length > 0 && (s[0] === 'R' || s[0] === 'L')) return s[0];
+    }
+  }
+
+  return isG ? 'R' : 'L';
+};
+
+// Extract standardized ratings object with fallback across ratings and player_info
 export const getPlayerRatingAttributes = (player: any) => {
   const r = parseJson(player?.ratings);
   const info = parseJson(player?.player_info);
   const isG = isGoalie(player?.pos || info?.pos);
+  const combined = { ...info, ...r };
 
   if (isG) {
     return [
-      { key: 'Agility', label: 'Agility', value: getScaleLevel(getRatingVal(r, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility')) },
-      { key: 'Speed', label: 'Speed', value: getScaleLevel(getRatingVal(r, 'Speed', 'Spd', 'spd', 'SPD', 'speed')) },
-      { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(getRatingVal(r, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense')) },
-      { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(r, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense')) },
-      { key: 'Puck Control', label: 'Puck Control', value: getScaleLevel(getRatingVal(r, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'puckcontrol', 'control')) },
-      { key: 'Stick Right', label: 'Stick Right', value: getScaleLevel(getRatingVal(r, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right', 'stickright')) },
-      { key: 'Stick Left', label: 'Stick Left', value: getScaleLevel(getRatingVal(r, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left', 'stickleft')) },
-      { key: 'Glove Right', label: 'Glove Right', value: getScaleLevel(getRatingVal(r, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right', 'gloveright')) },
-      { key: 'Glove Left', label: 'Glove Left', value: getScaleLevel(getRatingVal(r, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left', 'gloveleft')) },
+      { key: 'Agility', label: 'Agility', value: getScaleLevel(getRatingVal(combined, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility', 'agil')) },
+      { key: 'Speed', label: 'Speed', value: getScaleLevel(getRatingVal(combined, 'Speed', 'Spd', 'spd', 'SPD', 'speed')) },
+      { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(getRatingVal(combined, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense', 'off')) },
+      { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(combined, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense', 'def')) },
+      { key: 'Puck Control', label: 'Puck Control', value: getScaleLevel(getRatingVal(combined, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'puckcontrol', 'control', 'pc')) },
+      { key: 'Stick Right', label: 'Stick Right', value: getScaleLevel(getRatingVal(combined, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right', 'stickright', 'sr')) },
+      { key: 'Stick Left', label: 'Stick Left', value: getScaleLevel(getRatingVal(combined, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left', 'stickleft', 'sl')) },
+      { key: 'Glove Right', label: 'Glove Right', value: getScaleLevel(getRatingVal(combined, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right', 'gloveright', 'gr')) },
+      { key: 'Glove Left', label: 'Glove Left', value: getScaleLevel(getRatingVal(combined, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left', 'gloveleft', 'gl')) },
     ];
   }
 
   return [
-    { key: 'Agility', label: 'Agility', value: getScaleLevel(getRatingVal(r, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility', 'agil')) },
-    { key: 'Speed', label: 'Speed', value: getScaleLevel(getRatingVal(r, 'Speed', 'Spd', 'spd', 'SPD', 'speed')) },
-    { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(getRatingVal(r, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense')) },
-    { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(r, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense')) },
-    { key: 'Shot Power', label: 'Shot Power', value: getScaleLevel(getRatingVal(r, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'Shot_Power', 'power', 'pwr', 'sp')) },
-    { key: 'Shot Accuracy', label: 'Shot Accuracy', value: getScaleLevel(getRatingVal(r, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'Shot_Accuracy', 'accuracy', 'acc', 'sa')) },
-    { key: 'Stick Handling', label: 'Stick Handling', value: getScaleLevel(getRatingVal(r, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'stick_handling', 'Stick_Handling', 'handling', 'puck_control', 'Puck Control', 'pkc', 'PkC', 'PKC')) },
-    { key: 'Passing', label: 'Passing', value: getScaleLevel(getRatingVal(r, 'Passing', 'Pas', 'pas', 'pass', 'Pass', 'PAS', 'passing')) },
-    { key: 'Checking', label: 'Checking', value: getScaleLevel(getRatingVal(r, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'Check', 'checking')) },
-    { key: 'Aggression', label: 'Aggression', value: getScaleLevel(getRatingVal(r, 'Aggression', 'Agr', 'agr', 'AGR', 'agg', 'Agg', 'roughness', 'Roughness', 'rgh', 'aggression')) },
+    { key: 'Agility', label: 'Agility', value: getScaleLevel(getRatingVal(combined, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI', 'agility', 'agil', 'ag')) },
+    { key: 'Speed', label: 'Speed', value: getScaleLevel(getRatingVal(combined, 'Speed', 'Spd', 'spd', 'SPD', 'speed', 'sp')) },
+    { key: 'Off Aware', label: 'Off Aware', value: getScaleLevel(getRatingVal(combined, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense', 'off')) },
+    { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(combined, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense', 'def')) },
+    { key: 'Shot Power', label: 'Shot Power', value: getScaleLevel(getRatingVal(combined, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'Shot_Power', 'power', 'pwr', 'sp')) },
+    { key: 'Shot Accuracy', label: 'Shot Accuracy', value: getScaleLevel(getRatingVal(combined, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'Shot_Accuracy', 'accuracy', 'acc', 'sa')) },
+    { key: 'Stick Handling', label: 'Stick Handling', value: getScaleLevel(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST')) },
+    { key: 'Passing', label: 'Passing', value: getScaleLevel(getRatingVal(combined, 'Passing', 'Pas', 'pas', 'pass', 'Pass', 'PAS', 'PASS', 'passing')) },
+    { key: 'Checking', label: 'Checking', value: getScaleLevel(getRatingVal(combined, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'Check', 'checking')) },
+    { key: 'Aggression', label: 'Aggression', value: getScaleLevel(getRatingVal(combined, 'Aggression', 'Agr', 'agr', 'AGR', 'agg', 'Agg', 'roughness', 'Roughness', 'rgh', 'aggression')) },
   ];
 };
 
@@ -372,38 +403,39 @@ const CareerTable = ({
             const jNo = info.jersey_num || info.jersey || '??';
             const wgtCalc = calculateWeight(info.weight);
             const ovr = Number(r.Ovr ?? r.OVERALL ?? r.overall ?? row.ovr ?? 0);
-            const hand = info.hand || info.shoots || (isGoaliePlayer ? 'R' : 'L');
+            const hand = getPlayerHandedness(row);
             const teamName = info.source_team || row.team_default || 'NHL 95';
+            const combined = { ...info, ...r };
 
             // Normalized 0-6 values with alias resolution
-            const agl = getScaleLevel(getRatingVal(r, 'Agility', 'Agl', 'Agi', 'agl', 'AGL', 'AGI', 'agility'));
-            const spd = getScaleLevel(getRatingVal(r, 'Speed', 'Spd', 'spd', 'SPD', 'speed'));
-            const ofA = getScaleLevel(getRatingVal(r, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense'));
-            const dfA = getScaleLevel(getRatingVal(r, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense'));
-            const chk = getScaleLevel(getRatingVal(r, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'checking'));
-            const pas = getScaleLevel(getRatingVal(r, 'Passing', 'Pas', 'pas', 'pass', 'PAS', 'passing'));
-            const agr = getScaleLevel(getRatingVal(r, 'Aggression', 'Agr', 'agr', 'AGR', 'roughness', 'rgh', 'aggression'));
+            const agl = getScaleLevel(getRatingVal(combined, 'Agility', 'Agl', 'Agi', 'agl', 'AGL', 'AGI', 'agility'));
+            const spd = getScaleLevel(getRatingVal(combined, 'Speed', 'Spd', 'spd', 'SPD', 'speed'));
+            const ofA = getScaleLevel(getRatingVal(combined, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'Off_Aware', 'offaware', 'OFA', 'offense'));
+            const dfA = getScaleLevel(getRatingVal(combined, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense'));
+            const chk = getScaleLevel(getRatingVal(combined, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'checking'));
+            const pas = getScaleLevel(getRatingVal(combined, 'Passing', 'Pas', 'pas', 'pass', 'PAS', 'passing'));
+            const agr = getScaleLevel(getRatingVal(combined, 'Aggression', 'Agr', 'agr', 'AGR', 'roughness', 'rgh', 'aggression'));
 
             // Conditional goalie vs skater ratings
             const pkcOrShpw = isGoaliePlayer
-              ? getScaleLevel(getRatingVal(r, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'control'))
-              : getScaleLevel(getRatingVal(r, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'power', 'pwr', 'sp'));
+              ? getScaleLevel(getRatingVal(combined, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'control'))
+              : getScaleLevel(getRatingVal(combined, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'power', 'pwr', 'sp'));
 
             const sthOrStr = isGoaliePlayer
-              ? getScaleLevel(getRatingVal(r, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right'))
-              : getScaleLevel(getRatingVal(r, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'stick_handling', 'handling', 'puck_control', 'pkc'));
+              ? getScaleLevel(getRatingVal(combined, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right', 'sr'))
+              : getScaleLevel(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST'));
 
             const shaOrStl = isGoaliePlayer
-              ? getScaleLevel(getRatingVal(r, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left'))
-              : getScaleLevel(getRatingVal(r, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'accuracy', 'acc', 'sa'));
+              ? getScaleLevel(getRatingVal(combined, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left', 'sl'))
+              : getScaleLevel(getRatingVal(combined, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'accuracy', 'acc', 'sa'));
 
             const endOrGvr = isGoaliePlayer
-              ? getScaleLevel(getRatingVal(r, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right'))
-              : getScaleLevel(getRatingVal(r, 'Endurance', 'end', 'End', 'END', 'endurance'));
+              ? getScaleLevel(getRatingVal(combined, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right', 'gr'))
+              : getScaleLevel(getRatingVal(combined, 'Endurance', 'end', 'End', 'END', 'endurance'));
 
             const rghOrGvl = isGoaliePlayer
-              ? getScaleLevel(getRatingVal(r, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left'))
-              : getScaleLevel(getRatingVal(r, 'Roughness', 'rgh', 'Rgh', 'RGH', 'Aggression', 'agr', 'roughness'));
+              ? getScaleLevel(getRatingVal(combined, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left', 'gl'))
+              : getScaleLevel(getRatingVal(combined, 'Roughness', 'rgh', 'Rgh', 'RGH', 'Aggression', 'agr', 'roughness'));
 
             const renderHeatCell = (val: number) => {
               const style = getHeatmapColor(val);
@@ -645,7 +677,7 @@ const HockeyCardSpotlight = ({
   const isG = isGoalie(player.pos || info.pos);
   const ratings = getPlayerRatingAttributes(player);
   const wgt = calculateWeight(info.weight);
-  const hand = info.hand || info.shoots || (isG ? 'R' : 'L');
+  const hand = getPlayerHandedness(player);
   const jersey = info.jersey_num || info.jersey || '??';
   const ovr = Number(rObj.Ovr || rObj.OVERALL || rObj.overall || 75);
 
@@ -1139,7 +1171,7 @@ const CompareView = ({
               const isG = isGoalie(latest.pos || info.pos);
               const ratings = getPlayerRatingAttributes(latest);
               const wgt = calculateWeight(info.weight);
-              const hand = info.hand || info.shoots || (isG ? 'R' : 'L');
+              const hand = getPlayerHandedness(latest);
               const ovr = Number(rObj.Ovr || rObj.OVERALL || rObj.overall || latest.ovr || 75);
 
               const ovrList = records.map((r) => {
