@@ -587,6 +587,42 @@ const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
   ],
 };
 
+// Global in-memory cache of storage logo files
+let cachedStorageFiles: { bucket: string; name: string }[] | null = null;
+let storageFetchPromise: Promise<{ bucket: string; name: string }[]> | null = null;
+
+const fetchAllStorageLogos = async (): Promise<{ bucket: string; name: string }[]> => {
+  if (cachedStorageFiles) return cachedStorageFiles;
+  if (storageFetchPromise) return storageFetchPromise;
+
+  storageFetchPromise = (async () => {
+    const buckets = ['nhl_logos', 'nhl logos', 'logos', 'images for site'];
+    const results: { bucket: string; name: string }[] = [];
+
+    await Promise.allSettled(
+      buckets.map(async (b) => {
+        try {
+          const { data, error } = await supabase.storage.from(b).list('', { limit: 1000 });
+          if (data && !error) {
+            data.forEach((item) => {
+              if (item.name && item.name !== '.emptyFolderPlaceholder') {
+                results.push({ bucket: b, name: item.name });
+              }
+            });
+          }
+        } catch (e) {
+          // ignore bucket errors
+        }
+      })
+    );
+
+    cachedStorageFiles = results;
+    return results;
+  })();
+
+  return storageFetchPromise;
+};
+
 // Team Logo Component looking strictly into buckets/nhl_logos with Year, Era & Range support
 const TeamLogo = ({
   teamName,
@@ -602,8 +638,19 @@ const TeamLogo = ({
   const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
   const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
   const yrStr = year ? String(year).trim() : '';
+  const [bucketFiles, setBucketFiles] = useState<{ bucket: string; name: string }[]>(cachedStorageFiles || []);
   const [urlIdx, setUrlIdx] = useState(0);
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!cachedStorageFiles) {
+      fetchAllStorageLogos().then((files) => {
+        if (files && files.length > 0) {
+          setBucketFiles([...files]);
+        }
+      });
+    }
+  }, []);
 
   const candidateUrls = useMemo(() => {
     if (!cleanName) return [];
@@ -628,7 +675,47 @@ const TeamLogo = ({
       }
     }
 
-    // 1. Direct explicit range checks (e.g. WAS_1995_2007.png or WAS_1995-2007.png)
+    const targetYear = parsedYear || rangeStart;
+    const targetAbbrs = Array.from(new Set([abbr, upper, slug, cleanName].filter(Boolean)));
+
+    // 1. Check dynamically fetched storage bucket files for ANY matching range or file in Supabase
+    if (bucketFiles.length > 0) {
+      for (const file of bucketFiles) {
+        const fileName = file.name;
+        const lowerName = fileName.toLowerCase();
+        const baseName = fileName.replace(/\.[^/.]+$/, ''); // remove extension
+
+        for (const t of targetAbbrs) {
+          const tLower = t.toLowerCase();
+          if (!lowerName.startsWith(tLower)) continue;
+
+          // Check for range pattern in filename: e.g. MTL_1924_1935 or MTL_1924-1935 or MTL-1924-1935
+          const rangeMatch = baseName.match(new RegExp(`^${t}[_ -]?(\\d{4})[_ –-](\\d{4})$`, 'i'));
+          if (rangeMatch && targetYear) {
+            const start = parseInt(rangeMatch[1], 10);
+            const end = parseInt(rangeMatch[2], 10);
+            if (targetYear >= start && targetYear <= end) {
+              urls.push(`${base}/${encodeURIComponent(file.bucket)}/${encodeURIComponent(fileName)}`);
+            }
+          }
+
+          // Check for single year match in filename: e.g. MTL_1927 or MTL-1927 or MTL1927
+          if (targetYear) {
+            const yearMatch = baseName.match(new RegExp(`^${t}[_ -]?${targetYear}$`, 'i'));
+            if (yearMatch) {
+              urls.push(`${base}/${encodeURIComponent(file.bucket)}/${encodeURIComponent(fileName)}`);
+            }
+          }
+
+          // Check for base franchise file: e.g. MTL.png
+          if (baseName.toLowerCase() === tLower) {
+            urls.push(`${base}/${encodeURIComponent(file.bucket)}/${encodeURIComponent(fileName)}`);
+          }
+        }
+      }
+    }
+
+    // 2. Direct explicit range checks
     if (rangeStart && rangeEnd && abbr) {
       urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}_${rangeEnd}.png`);
       urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}-${rangeEnd}.png`);
@@ -638,7 +725,7 @@ const TeamLogo = ({
       urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}.png`);
     }
 
-    // 2. Automated era-range matching based on single year (e.g. Year 1998 -> WAS_1995_2007.png)
+    // 3. Automated era-range matching based on single year
     if (parsedYear && abbr && NHL_ERA_RANGES[abbr]) {
       const matchingEras = NHL_ERA_RANGES[abbr].filter(
         (era) => parsedYear! >= era.start && parsedYear! <= era.end
@@ -651,13 +738,15 @@ const TeamLogo = ({
       });
     }
 
-    // 3. Year-specific historical logo in buckets/nhl_logos
+    // 4. Year-specific historical logo in buckets/nhl_logos
     if (yrStr && yrStr !== '----') {
       if (abbr) {
         urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.png`);
         urls.push(`${base}/nhl_logos/${abbr}-${yrStr}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}${yrStr}.png`);
         urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}_${yrStr}.png`);
         urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.jpg`);
+        urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.svg`);
       }
       if (slug) {
         urls.push(`${base}/nhl_logos/${slug}_${yrStr}.png`);
@@ -666,21 +755,28 @@ const TeamLogo = ({
       if (upper) urls.push(`${base}/nhl_logos/${upper}_${yrStr}.png`);
     }
 
-    // 4. Base franchise logos in buckets/nhl_logos (fallback)
+    // 5. Base franchise logos in buckets/nhl_logos (fallback)
     if (abbr) {
       urls.push(`${base}/nhl_logos/${abbr}.png`);
       urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}.png`);
       urls.push(`${base}/nhl_logos/${abbr}.jpg`);
+      urls.push(`${base}/nhl_logos/${abbr}.svg`);
+      urls.push(`${base}/nhl_logos/${abbr}.webp`);
     }
     if (upper) urls.push(`${base}/nhl_logos/${upper}.png`);
     if (slug) urls.push(`${base}/nhl_logos/${slug}.png`);
     if (cleanName) urls.push(`${base}/nhl_logos/${cleanName}.png`);
 
-    // 5. Fallback buckets (nhl logos, logos, images for site)
+    // 6. Fallback buckets (nhl logos, logos, images for site)
     if (abbr) {
-      if (yrStr && yrStr !== '----') urls.push(`${base}/nhl%20logos/${abbr}_${yrStr}.png`);
+      if (yrStr && yrStr !== '----') {
+        urls.push(`${base}/nhl%20logos/${abbr}_${yrStr}.png`);
+        urls.push(`${base}/logos/${abbr}_${yrStr}.png`);
+      }
       urls.push(`${base}/nhl%20logos/${abbr}.png`);
       urls.push(`${base}/logos/${abbr}.png`);
+      urls.push(`${base}/logos/${abbr.toLowerCase()}.png`);
+      urls.push(`${base}/images%20for%20site/${abbr}.png`);
     }
     if (slug) {
       urls.push(`${base}/nhl%20logos/${slug}.png`);
@@ -693,12 +789,12 @@ const TeamLogo = ({
     }
 
     return Array.from(new Set(urls));
-  }, [slug, cleanName, upper, abbr, yrStr]);
+  }, [slug, cleanName, upper, abbr, yrStr, bucketFiles]);
 
   useEffect(() => {
     setUrlIdx(0);
     setFailed(false);
-  }, [teamName, year]);
+  }, [teamName, year, bucketFiles]);
 
   if (failed || candidateUrls.length === 0 || urlIdx >= candidateUrls.length) {
     return (
