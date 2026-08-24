@@ -389,6 +389,7 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
 const NHL_TEAM_ABBR_MAP: Record<string, string> = {
   'ANA': 'ANA', 'ANAHEIM': 'ANA', 'MIGHTY DUCKS OF ANAHEIM': 'ANA', 'ANAHEIM DUCKS': 'ANA',
   'ARI': 'ARI', 'ARIZONA': 'ARI', 'ARIZONA COYOTES': 'ARI', 'PHOENIX COYOTES': 'ARI', 'PHX': 'ARI',
+  'BER': 'BER', 'BERLIN'
   'BOS': 'BOS', 'BOSTON': 'BOS', 'BOSTON BRUINS': 'BOS',
   'BUF': 'BUF', 'BUFFALO': 'BUF', 'BUFFALO SABRES': 'BUF',
   'CAR': 'CAR', 'CAROLINA': 'CAR', 'CAROLINA HURRICANES': 'CAR',
@@ -436,6 +437,9 @@ const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
     { start: 1996, end: 2003 }, // Kachina
     { start: 2003, end: 2021 }, // Howling Coyote
     { start: 2021, end: 2024 }, // Kachina Return
+  ],
+  BER: [
+    { start: 1909, end: 1911 },
   ],
   BOS: [
     { start: 1924, end: 1948 },
@@ -1257,8 +1261,8 @@ const HockeyCardSpotlight = ({
               <button
                 onClick={() => onAddToCompare(player)}
                 className={`flex-1 py-1 px-2 text-[9px] font-black uppercase border-2 border-black flex items-center justify-center gap-1 transition-all ${isCompared
-                    ? 'bg-amber-400 text-black shadow-xs'
-                    : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                  ? 'bg-amber-400 text-black shadow-xs'
+                  : 'bg-emerald-700 text-white hover:bg-emerald-800'
                   }`}
               >
                 {isCompared ? (
@@ -2174,8 +2178,8 @@ export default function PlayersPage() {
           <button
             onClick={() => setActiveTab('database')}
             className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'database'
-                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                : 'bg-white hover:bg-slate-100 text-black'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-white hover:bg-slate-100 text-black'
               }`}
           >
             <Table className="w-4 h-4 text-emerald-400" />
@@ -2185,8 +2189,8 @@ export default function PlayersPage() {
           <button
             onClick={() => setActiveTab('compare')}
             className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'compare'
-                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                : 'bg-white hover:bg-slate-100 text-black'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-white hover:bg-slate-100 text-black'
               }`}
           >
             <Users className="w-4 h-4 text-amber-400" />
@@ -2434,8 +2438,8 @@ export default function PlayersPage() {
                             <button
                               type="button"
                               className={`p-1 px-1.5 text-[8.5px] font-black rounded border border-black flex items-center justify-center transition-all ${isExpanded
-                                  ? 'bg-emerald-700 text-white shadow-xs'
-                                  : 'bg-white hover:bg-emerald-100 text-black'
+                                ? 'bg-emerald-700 text-white shadow-xs'
+                                : 'bg-white hover:bg-emerald-100 text-black'
                                 }`}
                               title={isExpanded ? 'Collapse career breakdown' : 'Expand career breakdown'}
                             >
@@ -2486,8 +2490,8 @@ export default function PlayersPage() {
                             <button
                               onClick={() => toggleComparePlayer(group.player_name)}
                               className={`p-1 px-1.5 text-[8px] font-black uppercase rounded border border-black ${isComp
-                                  ? 'bg-amber-400 text-black shadow-xs'
-                                  : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
+                                ? 'bg-amber-400 text-black shadow-xs'
+                                : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
                                 }`}
                               title={isComp ? 'Remove from compare' : 'Add to compare'}
                             >
