@@ -389,7 +389,6 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
 const NHL_TEAM_ABBR_MAP: Record<string, string> = {
   'ANA': 'ANA', 'ANAHEIM': 'ANA', 'MIGHTY DUCKS OF ANAHEIM': 'ANA', 'ANAHEIM DUCKS': 'ANA',
   'ARI': 'ARI', 'ARIZONA': 'ARI', 'ARIZONA COYOTES': 'ARI', 'PHOENIX COYOTES': 'ARI', 'PHX': 'ARI',
-  'BER': 'BER', 'BERLIN': 'BER', 'BERLIN DUTCHMEN': 'BER',
   'BOS': 'BOS', 'BOSTON': 'BOS', 'BOSTON BRUINS': 'BOS',
   'BUF': 'BUF', 'BUFFALO': 'BUF', 'BUFFALO SABRES': 'BUF',
   'CAR': 'CAR', 'CAROLINA': 'CAR', 'CAROLINA HURRICANES': 'CAR',
@@ -437,9 +436,6 @@ const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
     { start: 1996, end: 2003 }, // Kachina
     { start: 2003, end: 2021 }, // Howling Coyote
     { start: 2021, end: 2024 }, // Kachina Return
-  ],
-  BER: [
-    { start: 1909, end: 1911 },
   ],
   BOS: [
     { start: 1924, end: 1948 },
@@ -606,43 +602,56 @@ const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
   ],
 };
 
-// Global in-memory cache of storage logo files
-let cachedStorageFiles: { bucket: string; name: string }[] | null = null;
-let storageFetchPromise: Promise<{ bucket: string; name: string }[]> | null = null;
+// Global in-memory cache of verified working logo URLs (or null for confirmed 404s)
+const LOGO_CACHE = new Map<string, string | null>();
+const LOGO_PENDING = new Map<string, Promise<string | null>>();
 
-const fetchAllStorageLogos = async (): Promise<{ bucket: string; name: string }[]> => {
-  if (cachedStorageFiles) return cachedStorageFiles;
-  if (storageFetchPromise) return storageFetchPromise;
+// Background probe function that tests candidate URLs sequentially with an offscreen image
+const resolveLogoUrl = async (cacheKey: string, candidateUrls: string[]): Promise<string | null> => {
+  if (LOGO_CACHE.has(cacheKey)) {
+    return LOGO_CACHE.get(cacheKey)!;
+  }
+  if (LOGO_PENDING.has(cacheKey)) {
+    return LOGO_PENDING.get(cacheKey)!;
+  }
 
-  storageFetchPromise = (async () => {
-    const buckets = ['nhl_logos', 'nhl logos', 'logos', 'images for site'];
-    const results: { bucket: string; name: string }[] = [];
+  const promise = new Promise<string | null>((resolve) => {
+    if (candidateUrls.length === 0) {
+      LOGO_CACHE.set(cacheKey, null);
+      LOGO_PENDING.delete(cacheKey);
+      resolve(null);
+      return;
+    }
 
-    await Promise.allSettled(
-      buckets.map(async (b) => {
-        try {
-          const { data, error } = await supabase.storage.from(b).list('', { limit: 1000 });
-          if (data && !error) {
-            data.forEach((item) => {
-              if (item.name && item.name !== '.emptyFolderPlaceholder') {
-                results.push({ bucket: b, name: item.name });
-              }
-            });
-          }
-        } catch (e) {
-          // ignore bucket errors
-        }
-      })
-    );
+    let idx = 0;
+    const tryNext = () => {
+      if (idx >= candidateUrls.length) {
+        LOGO_CACHE.set(cacheKey, null);
+        LOGO_PENDING.delete(cacheKey);
+        resolve(null);
+        return;
+      }
+      const url = candidateUrls[idx];
+      const img = new window.Image();
+      img.onload = () => {
+        LOGO_CACHE.set(cacheKey, url);
+        LOGO_PENDING.delete(cacheKey);
+        resolve(url);
+      };
+      img.onerror = () => {
+        idx++;
+        tryNext();
+      };
+      img.src = url;
+    };
+    tryNext();
+  });
 
-    cachedStorageFiles = results;
-    return results;
-  })();
-
-  return storageFetchPromise;
+  LOGO_PENDING.set(cacheKey, promise);
+  return promise;
 };
 
-// Team Logo Component looking strictly into buckets/nhl_logos with Year, Era & Range support
+// Team Logo Component with Zero-Flashing Offscreen Resolution
 const TeamLogo = ({
   teamName,
   year,
@@ -657,26 +666,25 @@ const TeamLogo = ({
   const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
   const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
   const yrStr = year ? String(year).trim() : '';
-  const [bucketFiles, setBucketFiles] = useState<{ bucket: string; name: string }[]>(cachedStorageFiles || []);
-  const [urlIdx, setUrlIdx] = useState(0);
-  const [failed, setFailed] = useState(false);
+  const cacheKey = `${abbr || cleanName}_${yrStr || 'base'}`;
+
+  const [logoUrl, setLogoUrl] = useState<string | null>(() => LOGO_CACHE.get(cacheKey) || null);
 
   useEffect(() => {
-    if (!cachedStorageFiles) {
-      fetchAllStorageLogos().then((files) => {
-        if (files && files.length > 0) {
-          setBucketFiles([...files]);
-        }
-      });
+    if (LOGO_CACHE.has(cacheKey)) {
+      setLogoUrl(LOGO_CACHE.get(cacheKey)!);
+      return;
     }
-  }, []);
 
-  const candidateUrls = useMemo(() => {
-    if (!cleanName) return [];
+    if (!cleanName) {
+      setLogoUrl(null);
+      return;
+    }
+
+    // Build focused list of candidate URLs
     const urls: string[] = [];
     const base = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public';
 
-    // Parse potential year or range input
     let parsedYear: number | null = null;
     let rangeStart: number | null = null;
     let rangeEnd: number | null = null;
@@ -695,133 +703,74 @@ const TeamLogo = ({
     }
 
     const targetYear = parsedYear || rangeStart;
-    const targetAbbrs = Array.from(new Set([abbr, upper, slug, cleanName].filter(Boolean)));
 
-    // 1. Check dynamically fetched storage bucket files for ANY matching range or file in Supabase
-    if (bucketFiles.length > 0) {
-      for (const file of bucketFiles) {
-        const fileName = file.name;
-        const lowerName = fileName.toLowerCase();
-        const baseName = fileName.replace(/\.[^/.]+$/, ''); // remove extension
-
-        for (const t of targetAbbrs) {
-          const tLower = t.toLowerCase();
-          if (!lowerName.startsWith(tLower)) continue;
-
-          // Check for range pattern in filename: e.g. MTL_1924_1935 or MTL_1924-1935 or MTL-1924-1935
-          const rangeMatch = baseName.match(new RegExp(`^${t}[_ -]?(\\d{4})[_ –-](\\d{4})$`, 'i'));
-          if (rangeMatch && targetYear) {
-            const start = parseInt(rangeMatch[1], 10);
-            const end = parseInt(rangeMatch[2], 10);
-            if (targetYear >= start && targetYear <= end) {
-              urls.push(`${base}/${encodeURIComponent(file.bucket)}/${encodeURIComponent(fileName)}`);
-            }
-          }
-
-          // Check for single year match in filename: e.g. MTL_1927 or MTL-1927 or MTL1927
-          if (targetYear) {
-            const yearMatch = baseName.match(new RegExp(`^${t}[_ -]?${targetYear}$`, 'i'));
-            if (yearMatch) {
-              urls.push(`${base}/${encodeURIComponent(file.bucket)}/${encodeURIComponent(fileName)}`);
-            }
-          }
-
-          // Check for base franchise file: e.g. MTL.png
-          if (baseName.toLowerCase() === tLower) {
-            urls.push(`${base}/${encodeURIComponent(file.bucket)}/${encodeURIComponent(fileName)}`);
-          }
-        }
-      }
-    }
-
-    // Helper to generate combinations across buckets and extensions
-    const addVariant = (subpath: string) => {
-      const clean = subpath.replace(/\.[^/.]+$/, '');
-      const exts = ['.png', '.PNG', '.jpg', '.JPG', '.svg', '.webp'];
-      const buckets = ['nhl_logos', 'nhl%20logos', 'logos', 'images%20for%20site'];
-      for (const b of buckets) {
-        for (const ext of exts) {
-          urls.push(`${base}/${b}/${clean}${ext}`);
-        }
-      }
-    };
-
-    // 2. Direct explicit range checks
+    // 1. Era range matching
     if (rangeStart && rangeEnd && abbr) {
-      addVariant(`${abbr}_${rangeStart}_${rangeEnd}`);
-      addVariant(`${abbr}_${rangeStart}-${rangeEnd}`);
-      addVariant(`${abbr}-${rangeStart}-${rangeEnd}`);
-      addVariant(`${abbr.toLowerCase()}_${rangeStart}_${rangeEnd}`);
-      addVariant(`${abbr}_${rangeEnd}`);
-      addVariant(`${abbr}_${rangeStart}`);
+      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}_${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}_${rangeStart}-${rangeEnd}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}-${rangeStart}-${rangeEnd}.png`);
     }
 
-    // 3. Automated era-range matching based on single year
     if (targetYear && abbr && NHL_ERA_RANGES[abbr]) {
       const matchingEras = NHL_ERA_RANGES[abbr].filter(
         (era) => targetYear >= era.start && targetYear <= era.end
       );
       matchingEras.forEach((era) => {
-        addVariant(`${abbr}_${era.start}_${era.end}`);
-        addVariant(`${abbr}_${era.start}-${era.end}`);
-        addVariant(`${abbr}-${era.start}-${era.end}`);
-        addVariant(`${abbr.toLowerCase()}_${era.start}_${era.end}`);
+        urls.push(`${base}/nhl_logos/${abbr}_${era.start}_${era.end}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}_${era.start}-${era.end}.png`);
+        urls.push(`${base}/nhl_logos/${abbr}-${era.start}-${era.end}.png`);
       });
     }
 
-    // 4. Year-specific historical logo
-    if (yrStr && yrStr !== '----') {
-      if (abbr) {
-        addVariant(`${abbr}_${yrStr}`);
-        addVariant(`${abbr}-${yrStr}`);
-        addVariant(`${abbr}${yrStr}`);
-        addVariant(`${abbr.toLowerCase()}_${yrStr}`);
-      }
-      if (slug) {
-        addVariant(`${slug}_${yrStr}`);
-        addVariant(`${slug}-${yrStr}`);
-      }
-      if (upper) addVariant(`${upper}_${yrStr}`);
+    // 2. Year specific
+    if (yrStr && yrStr !== '----' && abbr) {
+      urls.push(`${base}/nhl_logos/${abbr}_${yrStr}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}-${yrStr}.png`);
+      urls.push(`${base}/nhl_logos/${abbr}${yrStr}.png`);
     }
 
-    // 5. Base franchise logos (fallback)
+    // 3. Base franchise
     if (abbr) {
-      addVariant(`${abbr}`);
-      addVariant(`${abbr.toLowerCase()}`);
+      urls.push(`${base}/nhl_logos/${abbr}.png`);
+      urls.push(`${base}/nhl%20logos/${abbr}.png`);
+      urls.push(`${base}/logos/${abbr}.png`);
+      urls.push(`${base}/nhl_logos/${abbr.toLowerCase()}.png`);
     }
-    if (upper) addVariant(`${upper}`);
-    if (slug) addVariant(`${slug}`);
-    if (cleanName) addVariant(`${cleanName}`);
+    if (slug) {
+      urls.push(`${base}/nhl_logos/${slug}.png`);
+      urls.push(`${base}/nhl%20logos/${slug}.png`);
+      urls.push(`${base}/logos/${slug}.png`);
+      urls.push(`${base}/images%20for%20site/${slug}.png`);
+    }
 
-    return Array.from(new Set(urls));
-  }, [slug, cleanName, upper, abbr, yrStr, bucketFiles]);
+    const uniqueUrls = Array.from(new Set(urls));
+    let isCancelled = false;
 
-  useEffect(() => {
-    setUrlIdx(0);
-    setFailed(false);
-  }, [teamName, year, bucketFiles]);
+    resolveLogoUrl(cacheKey, uniqueUrls).then((res) => {
+      if (!isCancelled) {
+        setLogoUrl(res);
+      }
+    });
 
-  if (failed || candidateUrls.length === 0 || urlIdx >= candidateUrls.length) {
+    return () => {
+      isCancelled = true;
+    };
+  }, [cacheKey, cleanName, abbr, slug, yrStr]);
+
+  if (logoUrl) {
     return (
-      <div className={`${className} bg-slate-100 border border-black/40 rounded flex items-center justify-center font-mono font-black text-[8px] text-slate-700 uppercase shrink-0 shadow-xs`}>
-        {abbr || cleanName.slice(0, 3).toUpperCase() || 'NHL'}
-      </div>
+      <img
+        src={logoUrl}
+        alt={`${cleanName} ${yrStr || ''}`}
+        className={`${className} object-contain shrink-0`}
+      />
     );
   }
 
   return (
-    <img
-      src={candidateUrls[urlIdx]}
-      alt={`${cleanName} ${yrStr || ''}`}
-      className={`${className} object-contain shrink-0`}
-      onError={() => {
-        if (urlIdx + 1 < candidateUrls.length) {
-          setUrlIdx((prev) => prev + 1);
-        } else {
-          setFailed(true);
-        }
-      }}
-    />
+    <div className={`${className} bg-slate-100 border border-black/40 rounded flex items-center justify-center font-mono font-black text-[8px] text-slate-700 uppercase shrink-0 shadow-xs`}>
+      {abbr || cleanName.slice(0, 3).toUpperCase() || 'NHL'}
+    </div>
   );
 };
 
@@ -1261,8 +1210,8 @@ const HockeyCardSpotlight = ({
               <button
                 onClick={() => onAddToCompare(player)}
                 className={`flex-1 py-1 px-2 text-[9px] font-black uppercase border-2 border-black flex items-center justify-center gap-1 transition-all ${isCompared
-                  ? 'bg-amber-400 text-black shadow-xs'
-                  : 'bg-emerald-700 text-white hover:bg-emerald-800'
+                    ? 'bg-amber-400 text-black shadow-xs'
+                    : 'bg-emerald-700 text-white hover:bg-emerald-800'
                   }`}
               >
                 {isCompared ? (
@@ -2178,8 +2127,8 @@ export default function PlayersPage() {
           <button
             onClick={() => setActiveTab('database')}
             className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'database'
-              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-              : 'bg-white hover:bg-slate-100 text-black'
+                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                : 'bg-white hover:bg-slate-100 text-black'
               }`}
           >
             <Table className="w-4 h-4 text-emerald-400" />
@@ -2189,8 +2138,8 @@ export default function PlayersPage() {
           <button
             onClick={() => setActiveTab('compare')}
             className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'compare'
-              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-              : 'bg-white hover:bg-slate-100 text-black'
+                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                : 'bg-white hover:bg-slate-100 text-black'
               }`}
           >
             <Users className="w-4 h-4 text-amber-400" />
@@ -2438,8 +2387,8 @@ export default function PlayersPage() {
                             <button
                               type="button"
                               className={`p-1 px-1.5 text-[8.5px] font-black rounded border border-black flex items-center justify-center transition-all ${isExpanded
-                                ? 'bg-emerald-700 text-white shadow-xs'
-                                : 'bg-white hover:bg-emerald-100 text-black'
+                                  ? 'bg-emerald-700 text-white shadow-xs'
+                                  : 'bg-white hover:bg-emerald-100 text-black'
                                 }`}
                               title={isExpanded ? 'Collapse career breakdown' : 'Expand career breakdown'}
                             >
@@ -2490,8 +2439,8 @@ export default function PlayersPage() {
                             <button
                               onClick={() => toggleComparePlayer(group.player_name)}
                               className={`p-1 px-1.5 text-[8px] font-black uppercase rounded border border-black ${isComp
-                                ? 'bg-amber-400 text-black shadow-xs'
-                                : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
+                                  ? 'bg-amber-400 text-black shadow-xs'
+                                  : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
                                 }`}
                               title={isComp ? 'Remove from compare' : 'Add to compare'}
                             >
