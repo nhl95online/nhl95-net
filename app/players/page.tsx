@@ -1242,6 +1242,8 @@ export default function PlayersPage() {
   const [leagueAverages, setLeagueAverages] = useState<Record<string, number>>({});
   const [sort, setSort] = useState<{ column: 'player_name' | 'pos' | 'team' | 'years' | 'ovr'; asc: boolean }>({ column: 'player_name', asc: true });
   const [totalGroupCount, setTotalGroupCount] = useState(0);
+  const [allMasterPlayers, setAllMasterPlayers] = useState<any[]>([]);
+  const [loadedCount, setLoadedCount] = useState(0);
   const [availableTeams, setAvailableTeams] = useState<string[]>([]);
   const [availableYears, setAvailableYears] = useState<string[]>([]);
   const [showScaleGuide, setShowScaleGuide] = useState(false);
@@ -1252,205 +1254,222 @@ export default function PlayersPage() {
 
   const LOGO_URL = "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/NHL95.net_banner.png";
 
-  // 1. Initial Meta Fetch (Available Teams, Available Years & League Averages)
+  // 1. Parallel Batch Ingestion of ALL Database Records (Pulling 100% of 9500+ rows)
   useEffect(() => {
-    async function loadMeta() {
-      try {
-        const { data } = await supabase
-          .from('league_player_database')
-          .select('team_default, ratings, player_info')
-          .limit(3000);
-
-        if (data) {
-          const tSet = new Set<string>();
-          const ySet = new Set<string>();
-          const avgs: Record<string, { sum: number; count: number }> = {};
-
-          data.forEach((p) => {
-            if (p.team_default) tSet.add(p.team_default);
-            const info = parseJson(p.player_info);
-            const r = parseJson(p.ratings);
-            const yr = info?.source_year || (p as any).year;
-            const ovr = Number(r?.Ovr || r?.OVERALL || r?.overall || 0);
-
-            if (yr) {
-              ySet.add(String(yr));
-              if (ovr > 0) {
-                if (!avgs[yr]) avgs[yr] = { sum: 0, count: 0 };
-                avgs[yr].sum += ovr;
-                avgs[yr].count += 1;
-              }
-            }
-          });
-
-          setAvailableTeams(Array.from(tSet).sort());
-          const sortedYears = Array.from(ySet).sort((a, b) => Number(b) - Number(a));
-          setAvailableYears(sortedYears.length > 0 ? sortedYears : ['1995', '1994', '1993', '1992', '1991']);
-
-          const finalAvgs: Record<string, number> = {};
-          Object.keys(avgs).forEach((y) => (finalAvgs[y] = Math.round(avgs[y].sum / avgs[y].count)));
-          setLeagueAverages(finalAvgs);
-        }
-      } catch (err) {
-        console.error('Error fetching meta:', err);
-      }
-    }
-    loadMeta();
-  }, []);
-
-  // 2. Live Supabase Search & Grouping across EVERY player in the database
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchPlayers() {
+    async function loadAllDatabaseRecords() {
       setLoading(true);
       try {
-        let query = supabase
+        // Query exact row count from Supabase
+        const { count } = await supabase
           .from('league_player_database')
-          .select('*');
+          .select('player_id', { count: 'exact', head: true });
 
-        const s = search.trim();
-        if (s) {
-          query = query.ilike('player_name', `%${s}%`);
+        const totalCount = count && count > 0 ? count : 12000;
+        const pageSize = 1000;
+        const chunkRanges: { from: number; to: number }[] = [];
+
+        // Build chunks up to totalCount + safety margin
+        for (let from = 0; from < totalCount + pageSize; from += pageSize) {
+          chunkRanges.push({ from, to: from + pageSize - 1 });
         }
 
-        if (year) {
-          query = query.filter('player_info->>source_year', 'eq', String(year));
-        }
+        // Fetch all chunks in parallel without stopping early
+        const responses = await Promise.all(
+          chunkRanges.map((range) =>
+            supabase
+              .from('league_player_database')
+              .select('player_id, player_name, pos, team_default, ratings, player_info')
+              .range(range.from, range.to)
+          )
+        );
 
-        if (posFilter !== 'ALL') {
-          if (posFilter === 'G') {
-            query = query.ilike('pos', '%G%');
-          } else if (posFilter === 'D') {
-            query = query.ilike('pos', '%D%');
-          } else if (posFilter === 'F') {
-            query = query.not('pos', 'in', '("D","G")');
-          } else {
-            query = query.ilike('pos', `%${posFilter}%`);
+        let all: any[] = [];
+        responses.forEach(({ data, error }) => {
+          if (data && !error && data.length > 0) {
+            all = all.concat(data);
           }
-        }
-
-        if (teamFilter !== 'ALL') {
-          query = query.eq('team_default', teamFilter);
-        }
-
-        const { data, error } = await query
-          .order('player_name', { ascending: true })
-          .limit(1000);
-        if (error) throw error;
-        if (cancelled) return;
-
-        const rawRecords = data || [];
-
-        // Group filtered records by Player Name
-        const map = new Map<string, any[]>();
-        rawRecords.forEach((rec) => {
-          const name = rec.player_name || 'Unknown Player';
-          if (!map.has(name)) {
-            map.set(name, []);
-          }
-          map.get(name)!.push(rec);
         });
 
-        // Build PlayerGroup structures
-        const groups: PlayerGroup[] = [];
-        map.forEach((records, name) => {
-          const sortedSeasons = [...records].sort((a, b) => {
-            const infoA = parseJson(a.player_info);
-            const infoB = parseJson(b.player_info);
-            const yrA = Number(infoA?.source_year || a.year || 0);
-            const yrB = Number(infoB?.source_year || b.year || 0);
-            return yrA - yrB;
-          });
+        setAllMasterPlayers(all);
+        setLoadedCount(all.length);
 
-          const latest = sortedSeasons[sortedSeasons.length - 1];
-          const latestInfo = parseJson(latest?.player_info);
-          const yearsList = sortedSeasons
-            .map((s) => {
-              const sInfo = parseJson(s.player_info);
-              return Number(sInfo?.source_year || s.year || 0);
-            })
-            .filter((y) => y > 0);
+        // Calculate available teams, years, and league averages across all records
+        const tSet = new Set<string>();
+        const ySet = new Set<string>();
+        const avgs: Record<string, { sum: number; count: number }> = {};
 
-          const ovrsList = sortedSeasons
-            .map((s) => {
-              const sRatings = parseJson(s.ratings);
-              return Number(sRatings?.Ovr || sRatings?.OVERALL || sRatings?.overall || s.ovr || 0);
-            })
-            .filter((o) => o > 0);
+        all.forEach((p) => {
+          if (p.team_default) tSet.add(p.team_default);
+          const info = parseJson(p.player_info);
+          const r = parseJson(p.ratings);
+          const yr = info?.source_year || (p as any).year;
+          const ovr = Number(r?.Ovr || r?.OVERALL || r?.overall || 0);
 
-          const bestOvr = ovrsList.length > 0 ? Math.max(...ovrsList) : 75;
-          const avgOvr = ovrsList.length > 0
-            ? Math.round((ovrsList.reduce((a, b) => a + b, 0) / ovrsList.length) * 10) / 10
-            : bestOvr;
-
-          groups.push({
-            player_name: name,
-            pos: latest?.pos || latestInfo?.pos || (sortedSeasons.some((s) => isGoalie(s.pos || parseJson(s.player_info)?.pos)) ? 'G' : 'F'),
-            primary_team: latest?.team_default || latestInfo?.source_team || 'NHL 95',
-            seasons: sortedSeasons,
-            start_year: yearsList.length > 0 ? Math.min(...yearsList) : 1995,
-            end_year: yearsList.length > 0 ? Math.max(...yearsList) : 1995,
-            best_ovr: bestOvr,
-            avg_ovr: avgOvr,
-            latest_record: latest,
-          });
-        });
-
-        // Sort player groups
-        groups.sort((a, b) => {
-          if (sort.column === 'player_name') {
-            return sort.asc ? a.player_name.localeCompare(b.player_name) : b.player_name.localeCompare(a.player_name);
-          }
-          if (sort.column === 'pos') {
-            return sort.asc ? a.pos.localeCompare(b.pos) : b.pos.localeCompare(a.pos);
-          }
-          if (sort.column === 'team') {
-            return sort.asc ? a.primary_team.localeCompare(b.primary_team) : b.primary_team.localeCompare(a.primary_team);
-          }
-          if (sort.column === 'years') {
-            const spanA = a.seasons.length;
-            const spanB = b.seasons.length;
-            return sort.asc ? spanA - spanB : spanB - spanA;
-          }
-          if (sort.column === 'ovr') {
-            return sort.asc ? a.best_ovr - b.best_ovr : b.best_ovr - a.best_ovr;
-          }
-          return 0;
-        });
-
-        setTotalGroupCount(groups.length);
-        const paginated = groups.slice(page * 30, page * 30 + 30);
-        setPlayerGroups(paginated);
-
-        if (paginated.length > 0) {
-          setSelected((prev: any) => {
-            if (prev && groups.some((g) => g.player_name.toLowerCase() === prev.player_name?.toLowerCase())) {
-              return prev;
+          if (yr) {
+            ySet.add(String(yr));
+            if (ovr > 0) {
+              if (!avgs[yr]) avgs[yr] = { sum: 0, count: 0 };
+              avgs[yr].sum += ovr;
+              avgs[yr].count += 1;
             }
-            return paginated[0].latest_record;
-          });
-          setSelectedCareerData((prev: any[]) => {
-            if (prev && prev.length > 0) return prev;
-            return paginated[0].seasons;
-          });
-        } else {
-          setSelected(null);
-          setSelectedCareerData([]);
-        }
+          }
+        });
+
+        setAvailableTeams(Array.from(tSet).sort());
+        const sortedYears = Array.from(ySet).sort((a, b) => Number(b) - Number(a));
+        setAvailableYears(sortedYears.length > 0 ? sortedYears : ['1995', '1994', '1993', '1992', '1991']);
+
+        const finalAvgs: Record<string, number> = {};
+        Object.keys(avgs).forEach((y) => (finalAvgs[y] = Math.round(avgs[y].sum / avgs[y].count)));
+        setLeagueAverages(finalAvgs);
       } catch (err) {
-        console.error('Error querying players:', err);
+        console.error('Error loading full database:', err);
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     }
+    loadAllDatabaseRecords();
+  }, []);
 
-    const timer = setTimeout(fetchPlayers, 200);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [search, year, posFilter, teamFilter, sort, page]);
+  // 2. Instant Filtering & Career Grouping across ALL 9,500+ Players
+  useEffect(() => {
+    if (allMasterPlayers.length === 0) return;
+
+    const s = search.trim().toLowerCase();
+
+    const filtered = allMasterPlayers.filter((p) => {
+      // 1. Name search
+      if (s && !p.player_name?.toLowerCase().includes(s)) {
+        return false;
+      }
+
+      // 2. Year filter
+      if (year) {
+        const info = parseJson(p.player_info);
+        const pYear = String(info?.source_year || (p as any).year || '');
+        if (pYear !== String(year)) return false;
+      }
+
+      // 3. Team filter
+      if (teamFilter !== 'ALL') {
+        const info = parseJson(p.player_info);
+        const team = p.team_default || info?.source_team;
+        if (team !== teamFilter) return false;
+      }
+
+      // 4. Position filter
+      if (posFilter !== 'ALL') {
+        const info = parseJson(p.player_info);
+        const pos = String(p.pos || info?.pos || '').toUpperCase();
+        if (posFilter === 'G' && !pos.includes('G')) return false;
+        if (posFilter === 'D' && !pos.includes('D')) return false;
+        if (posFilter === 'F') {
+          if (pos.includes('D') || pos.includes('G')) return false;
+        } else if (['C', 'LW', 'RW'].includes(posFilter)) {
+          if (!pos.includes(posFilter)) return false;
+        }
+      }
+
+      return true;
+    });
+
+    // Group filtered records by Player Name
+    const map = new Map<string, any[]>();
+    filtered.forEach((rec) => {
+      const name = rec.player_name || 'Unknown Player';
+      if (!map.has(name)) {
+        map.set(name, []);
+      }
+      map.get(name)!.push(rec);
+    });
+
+    // Build PlayerGroup structures
+    const groups: PlayerGroup[] = [];
+    map.forEach((records, name) => {
+      const sortedSeasons = [...records].sort((a, b) => {
+        const infoA = parseJson(a.player_info);
+        const infoB = parseJson(b.player_info);
+        const yrA = Number(infoA?.source_year || a.year || 0);
+        const yrB = Number(infoB?.source_year || b.year || 0);
+        return yrA - yrB;
+      });
+
+      const latest = sortedSeasons[sortedSeasons.length - 1];
+      const latestInfo = parseJson(latest?.player_info);
+      const yearsList = sortedSeasons
+        .map((s) => {
+          const sInfo = parseJson(s.player_info);
+          return Number(sInfo?.source_year || s.year || 0);
+        })
+        .filter((y) => y > 0);
+
+      const ovrsList = sortedSeasons
+        .map((s) => {
+          const sRatings = parseJson(s.ratings);
+          return Number(sRatings?.Ovr || sRatings?.OVERALL || sRatings?.overall || s.ovr || 0);
+        })
+        .filter((o) => o > 0);
+
+      const bestOvr = ovrsList.length > 0 ? Math.max(...ovrsList) : 75;
+      const avgOvr = ovrsList.length > 0
+        ? Math.round((ovrsList.reduce((a, b) => a + b, 0) / ovrsList.length) * 10) / 10
+        : bestOvr;
+
+      groups.push({
+        player_name: name,
+        pos: latest?.pos || latestInfo?.pos || (sortedSeasons.some((s) => isGoalie(s.pos || parseJson(s.player_info)?.pos)) ? 'G' : 'F'),
+        primary_team: latest?.team_default || latestInfo?.source_team || 'NHL 95',
+        seasons: sortedSeasons,
+        start_year: yearsList.length > 0 ? Math.min(...yearsList) : 1995,
+        end_year: yearsList.length > 0 ? Math.max(...yearsList) : 1995,
+        best_ovr: bestOvr,
+        avg_ovr: avgOvr,
+        latest_record: latest,
+      });
+    });
+
+    // Sort player groups
+    groups.sort((a, b) => {
+      if (sort.column === 'player_name') {
+        return sort.asc ? a.player_name.localeCompare(b.player_name) : b.player_name.localeCompare(a.player_name);
+      }
+      if (sort.column === 'pos') {
+        return sort.asc ? a.pos.localeCompare(b.pos) : b.pos.localeCompare(a.pos);
+      }
+      if (sort.column === 'team') {
+        return sort.asc ? a.primary_team.localeCompare(b.primary_team) : b.primary_team.localeCompare(a.primary_team);
+      }
+      if (sort.column === 'years') {
+        const spanA = a.seasons.length;
+        const spanB = b.seasons.length;
+        return sort.asc ? spanA - spanB : spanB - spanA;
+      }
+      if (sort.column === 'ovr') {
+        return sort.asc ? a.best_ovr - b.best_ovr : b.best_ovr - a.best_ovr;
+      }
+      return 0;
+    });
+
+    setTotalGroupCount(groups.length);
+    const paginated = groups.slice(page * 30, page * 30 + 30);
+    setPlayerGroups(paginated);
+
+    if (paginated.length > 0) {
+      setSelected((prev: any) => {
+        if (prev && groups.some((g) => g.player_name.toLowerCase() === prev.player_name?.toLowerCase())) {
+          return prev;
+        }
+        return paginated[0].latest_record;
+      });
+      setSelectedCareerData((prev: any[]) => {
+        if (prev && prev.length > 0) return prev;
+        return paginated[0].seasons;
+      });
+    } else {
+      setSelected(null);
+      setSelectedCareerData([]);
+    }
+  }, [allMasterPlayers, search, year, posFilter, teamFilter, sort, page]);
 
   // 3. Select Player Group & Fetch Complete Career
   const handleSelectGroup = async (group: PlayerGroup) => {
@@ -1753,7 +1772,7 @@ return (
 
               <div className="flex items-center gap-2">
                 <span className="font-bold text-neutral-600">
-                  {totalGroupCount} Players Grouped
+                  {totalGroupCount} Players Grouped {loadedCount > 0 ? `(${loadedCount.toLocaleString()} Total DB Records)` : ''}
                 </span>
                 <button
                   onClick={downloadCSV}
