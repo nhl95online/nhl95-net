@@ -204,7 +204,7 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
   );
 };
 
-// Team Logo Component with Multi-Bucket Resilient Fallbacks
+// Team Logo Component with Exclusively Logo Storage Buckets (No Banners)
 const TeamLogo = ({
   teamName,
   className = "w-6 h-6",
@@ -222,11 +222,12 @@ const TeamLogo = ({
     return [
       `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20logos/${slug}.png`,
       `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/logos/${slug}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20banners/${slug}.png`,
-      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/banners/${slug}.png`,
       `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/${slug}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl_logos/${slug}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20logos/${cleanName.toUpperCase()}.png`,
+      `https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/logos/${cleanName.toUpperCase()}.png`,
     ];
-  }, [slug]);
+  }, [slug, cleanName]);
 
   useEffect(() => {
     setUrlIdx(0);
@@ -235,7 +236,7 @@ const TeamLogo = ({
 
   if (failed || candidateUrls.length === 0 || urlIdx >= candidateUrls.length) {
     return (
-      <div className={`${className} bg-slate-200 border border-black/40 rounded flex items-center justify-center font-mono font-black text-[8px] text-slate-700 uppercase shrink-0 shadow-xs`}>
+      <div className={`${className} bg-slate-100 border border-black/40 rounded flex items-center justify-center font-mono font-black text-[8px] text-slate-700 uppercase shrink-0 shadow-xs`}>
         {cleanName ? cleanName.slice(0, 3).toUpperCase() : 'NHL'}
       </div>
     );
@@ -1858,18 +1859,18 @@ export default function PlayersPage() {
                               <div className="bg-white border-2 border-black rounded p-3 shadow-xs space-y-2.5">
                                 {/* Team Logo & Career Meta Header */}
                                 <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black pb-2.5">
-                                  <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-3.5">
                                     {/* Prominent Larger Team Logo Box */}
-                                    <div className="w-14 h-14 sm:w-16 sm:h-16 bg-slate-50 border-2 border-black rounded-lg p-1.5 flex items-center justify-center shrink-0 shadow-xs">
-                                      <TeamLogo teamName={group.primary_team} className="max-w-full max-h-full" />
+                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                                      <TeamLogo teamName={group.primary_team} className="w-12 h-12 sm:w-16 sm:h-16" />
                                     </div>
                                     <div>
-                                      <div className="text-[12px] sm:text-sm font-black uppercase text-slate-950 flex items-center gap-1.5">
+                                      <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex items-center gap-2">
                                         <span>{group.player_name}</span>
                                         <span className="text-emerald-700 font-bold">&bull; {group.primary_team}</span>
                                       </div>
-                                      <div className="text-[9px] text-neutral-700 uppercase font-bold mt-1">
-                                        {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: <span className="text-black font-black bg-amber-300 px-1 py-0.2 rounded-2xs">{group.best_ovr}</span> &bull; Career Avg: <span className="text-emerald-800 font-black">{group.avg_ovr}</span>
+                                      <div className="text-[9.5px] text-neutral-700 uppercase font-bold mt-1">
+                                        {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: <span className="text-black font-black bg-amber-300 px-1.5 py-0.5 rounded-2xs">{group.best_ovr}</span> &bull; Career Avg: <span className="text-emerald-800 font-black">{group.avg_ovr}</span>
                                       </div>
                                     </div>
                                   </div>
