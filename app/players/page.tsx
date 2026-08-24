@@ -825,31 +825,26 @@ const CompareSlotPicker = ({
     async function searchDB() {
       setSearching(true);
       try {
-        let dbResults: any[] = [];
+        let queryBuilder = supabase
+          .from('league_player_database')
+          .select('player_id, player_name, pos, team_default, ratings, player_info')
+          .limit(60);
+
         if (trimmed) {
-          const { data } = await supabase
-            .from('league_player_database')
-            .select('player_id, player_name, pos, team_default, ratings, player_info')
-            .ilike('player_name', `%${trimmed}%`)
-            .limit(50);
-          dbResults = data || [];
+          queryBuilder = queryBuilder.ilike('player_name', `%${trimmed}%`);
         }
 
-        // Merge with in-memory filtered list
-        const localMatches = allPlayersList.filter((p) =>
-          !trimmed || p.player_name?.toLowerCase().includes(trimmed)
-        );
+        const { data, error } = await queryBuilder;
+        if (error) throw error;
 
-        // Deduplicate by unique player_name
-        const map = new Map<string, any>();
-        [...localMatches, ...dbResults].forEach((p) => {
-          if (p.player_name && !map.has(p.player_name.toLowerCase())) {
-            map.set(p.player_name.toLowerCase(), p);
-          }
-        });
-
-        if (!cancelled) {
-          setSearchResults(Array.from(map.values()).slice(0, 100));
+        if (!cancelled && data) {
+          const map = new Map<string, any>();
+          data.forEach((p) => {
+            if (p.player_name && !map.has(p.player_name.toLowerCase())) {
+              map.set(p.player_name.toLowerCase(), p);
+            }
+          });
+          setSearchResults(Array.from(map.values()));
         }
       } catch (e) {
         console.error(e);
@@ -858,12 +853,12 @@ const CompareSlotPicker = ({
       }
     }
 
-    const timer = setTimeout(searchDB, 150);
+    const timer = setTimeout(searchDB, 120);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, isOpen, allPlayersList]);
+  }, [query, isOpen]);
 
   return (
     <div
@@ -966,13 +961,11 @@ const CompareSlotPicker = ({
 };
 
 const CompareView = ({
-  allPlayersList,
   comparedPlayerNames,
   onRemovePlayer,
   onAddPlayerName,
   onClearAll,
 }: {
-  allPlayersList: any[];
   comparedPlayerNames: string[];
   onRemovePlayer: (name: string) => void;
   onAddPlayerName: (name: string, slotIdx: number) => void;
@@ -1008,7 +1001,7 @@ const CompareView = ({
   const playerColors = ['#16a34a', '#2563eb', '#d97706'];
   const chartDatasets = useMemo(() => {
     return comparedPlayerNames.map((name, idx) => {
-      const records = careerRecordsMap[name] || allPlayersList.filter((p) => p.player_name === name);
+      const records = careerRecordsMap[name] || [];
       const trendData = records.map((c) => ({
         year: Number(c.player_info?.source_year || c.year || 0),
         ovr: Number(c.ratings?.Ovr || c.ovr || 0),
@@ -1020,7 +1013,7 @@ const CompareView = ({
         data: trendData,
       };
     });
-  }, [comparedPlayerNames, careerRecordsMap, allPlayersList]);
+  }, [comparedPlayerNames, careerRecordsMap]);
 
   return (
     <div className="space-y-6 font-mono text-[10px]">
@@ -1225,10 +1218,11 @@ export default function PlayersPage() {
   const [posFilter, setPosFilter] = useState('ALL');
   const [teamFilter, setTeamFilter] = useState('ALL');
   const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [leagueAverages, setLeagueAverages] = useState<Record<string, number>>({});
   const [sort, setSort] = useState<{ column: 'player_name' | 'pos' | 'team' | 'years' | 'ovr'; asc: boolean }>({ column: 'player_name', asc: true });
   const [totalGroupCount, setTotalGroupCount] = useState(0);
-  const [allMasterPlayers, setAllMasterPlayers] = useState<any[]>([]);
+  const [availableTeams, setAvailableTeams] = useState<string[]>([]);
   const [showScaleGuide, setShowScaleGuide] = useState(false);
   const [expandedPlayers, setExpandedPlayers] = useState<Set<string>>(new Set());
 
@@ -1238,37 +1232,21 @@ export default function PlayersPage() {
   const years = Array.from({ length: 2026 - 1909 + 1 }, (_, i) => 1909 + i);
   const LOGO_URL = "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/NHL95.net_banner.png";
 
-  // 1. Initial Load & Master List Fetch across all database records
+  // 1. Initial Meta Fetch (Available Teams & League Averages)
   useEffect(() => {
-    async function loadMasterList() {
+    async function loadMeta() {
       try {
-        let allData: any[] = [];
-        let from = 0;
-        const pageSize = 1000;
-        let hasMore = true;
+        const { data } = await supabase
+          .from('league_player_database')
+          .select('team_default, ratings, player_info')
+          .limit(3000);
 
-        // Paginate through league_player_database to ensure access to ALL players
-        while (hasMore && from < 15000) {
-          const { data, error } = await supabase
-            .from('league_player_database')
-            .select('player_id, player_name, pos, team_default, ratings, player_info')
-            .range(from, from + pageSize - 1);
-
-          if (error || !data || data.length === 0) {
-            hasMore = false;
-          } else {
-            allData = allData.concat(data);
-            if (data.length < pageSize) hasMore = false;
-            from += pageSize;
-          }
-        }
-
-        if (allData.length > 0) {
-          setAllMasterPlayers(allData);
-
-          // Calculate league averages by year
+        if (data) {
+          const tSet = new Set<string>();
           const avgs: Record<string, { sum: number; count: number }> = {};
-          allData.forEach((p) => {
+
+          data.forEach((p) => {
+            if (p.team_default) tSet.add(p.team_default);
             const yr = p.player_info?.source_year;
             const ovr = Number(p.ratings?.Ovr || 0);
             if (yr && ovr > 0) {
@@ -1277,127 +1255,157 @@ export default function PlayersPage() {
               avgs[yr].count += 1;
             }
           });
+
+          setAvailableTeams(Array.from(tSet).sort());
           const finalAvgs: Record<string, number> = {};
           Object.keys(avgs).forEach((y) => (finalAvgs[y] = Math.round(avgs[y].sum / avgs[y].count)));
           setLeagueAverages(finalAvgs);
         }
       } catch (err) {
-        console.error('Error fetching master players:', err);
+        console.error('Error fetching meta:', err);
       }
     }
-    loadMasterList();
+    loadMeta();
   }, []);
 
-  // 2. Group players by name and apply search, filter, and sort
+  // 2. Live Supabase Search & Grouping across EVERY player in the database
   useEffect(() => {
-    fetchAndGroupPlayers();
-  }, [allMasterPlayers, search, year, posFilter, teamFilter, sort, page]);
+    let cancelled = false;
 
-  const fetchAndGroupPlayers = () => {
-    if (!allMasterPlayers || allMasterPlayers.length === 0) return;
+    async function fetchPlayers() {
+      setLoading(true);
+      try {
+        let query = supabase
+          .from('league_player_database')
+          .select('*');
 
-    // Filter raw data first
-    const s = search.trim().toLowerCase();
-    let filtered = allMasterPlayers.filter((p) => {
-      if (s && !p.player_name?.toLowerCase().includes(s)) return false;
-      if (year && String(p.player_info?.source_year) !== String(year)) return false;
-      if (teamFilter !== 'ALL' && p.team_default !== teamFilter && p.player_info?.source_team !== teamFilter) return false;
+        const s = search.trim();
+        if (s) {
+          query = query.ilike('player_name', `%${s}%`);
+        }
 
-      if (posFilter !== 'ALL') {
-        const pPos = (p.pos || '').toUpperCase();
-        if (posFilter === 'G' && !pPos.includes('G')) return false;
-        if (posFilter === 'D' && !pPos.includes('D')) return false;
-        if (posFilter === 'F' && !['F', 'C', 'LW', 'RW'].some((x) => pPos.includes(x))) return false;
-        if (['C', 'LW', 'RW'].includes(posFilter) && !pPos.includes(posFilter)) return false;
+        if (year) {
+          query = query.or(`year.eq.${year},player_info->>source_year.eq.${year}`);
+        }
+
+        if (posFilter !== 'ALL') {
+          if (posFilter === 'G') {
+            query = query.ilike('pos', '%G%');
+          } else if (posFilter === 'D') {
+            query = query.ilike('pos', '%D%');
+          } else if (posFilter === 'F') {
+            query = query.or('pos.ilike.%F%,pos.ilike.%C%,pos.ilike.%LW%,pos.ilike.%RW%');
+          } else {
+            query = query.ilike('pos', `%${posFilter}%`);
+          }
+        }
+
+        if (teamFilter !== 'ALL') {
+          query = query.or(`team_default.eq.${teamFilter},player_info->>source_team.eq.${teamFilter}`);
+        }
+
+        // Fetch up to 2,000 matches live from the database
+        const { data, error } = await query.limit(2000);
+        if (error) throw error;
+        if (cancelled) return;
+
+        const rawRecords = data || [];
+
+        // Group filtered records by Player Name
+        const map = new Map<string, any[]>();
+        rawRecords.forEach((rec) => {
+          const name = rec.player_name || 'Unknown Player';
+          if (!map.has(name)) {
+            map.set(name, []);
+          }
+          map.get(name)!.push(rec);
+        });
+
+        // Build PlayerGroup structures
+        const groups: PlayerGroup[] = [];
+        map.forEach((records, name) => {
+          const sortedSeasons = [...records].sort((a, b) => {
+            const yrA = Number(a.player_info?.source_year || a.year || 0);
+            const yrB = Number(b.player_info?.source_year || b.year || 0);
+            return yrA - yrB;
+          });
+
+          const latest = sortedSeasons[sortedSeasons.length - 1];
+          const yearsList = sortedSeasons
+            .map((s) => Number(s.player_info?.source_year || s.year || 0))
+            .filter((y) => y > 0);
+
+          const ovrsList = sortedSeasons
+            .map((s) => Number(s.ratings?.Ovr || s.ovr || 0))
+            .filter((o) => o > 0);
+
+          const bestOvr = ovrsList.length > 0 ? Math.max(...ovrsList) : Number(latest?.ratings?.Ovr || 75);
+          const avgOvr = ovrsList.length > 0
+            ? Math.round((ovrsList.reduce((a, b) => a + b, 0) / ovrsList.length) * 10) / 10
+            : bestOvr;
+
+          groups.push({
+            player_name: name,
+            pos: latest?.pos || (sortedSeasons.some((s) => isGoalie(s.pos)) ? 'G' : 'F'),
+            primary_team: latest?.team_default || latest?.player_info?.source_team || 'NHL 95',
+            seasons: sortedSeasons,
+            start_year: yearsList.length > 0 ? Math.min(...yearsList) : 1995,
+            end_year: yearsList.length > 0 ? Math.max(...yearsList) : 1995,
+            best_ovr: bestOvr,
+            avg_ovr: avgOvr,
+            latest_record: latest,
+          });
+        });
+
+        // Sort player groups
+        groups.sort((a, b) => {
+          if (sort.column === 'player_name') {
+            return sort.asc ? a.player_name.localeCompare(b.player_name) : b.player_name.localeCompare(a.player_name);
+          }
+          if (sort.column === 'pos') {
+            return sort.asc ? a.pos.localeCompare(b.pos) : b.pos.localeCompare(a.pos);
+          }
+          if (sort.column === 'team') {
+            return sort.asc ? a.primary_team.localeCompare(b.primary_team) : b.primary_team.localeCompare(a.primary_team);
+          }
+          if (sort.column === 'years') {
+            const spanA = a.seasons.length;
+            const spanB = b.seasons.length;
+            return sort.asc ? spanA - spanB : spanB - spanA;
+          }
+          if (sort.column === 'ovr') {
+            return sort.asc ? a.best_ovr - b.best_ovr : b.best_ovr - a.best_ovr;
+          }
+          return 0;
+        });
+
+        setTotalGroupCount(groups.length);
+        const paginated = groups.slice(page * 30, page * 30 + 30);
+        setPlayerGroups(paginated);
+
+        if (paginated.length > 0) {
+          setSelected((prev: any) => prev || paginated[0].latest_record);
+          setSelectedCareerData((prev: any[]) => prev && prev.length > 0 ? prev : paginated[0].seasons);
+        }
+      } catch (err) {
+        console.error('Error querying players:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      return true;
-    });
-
-    // Group filtered records by Player Name
-    const map = new Map<string, any[]>();
-    filtered.forEach((rec) => {
-      const name = rec.player_name || 'Unknown Player';
-      if (!map.has(name)) {
-        map.set(name, []);
-      }
-      map.get(name)!.push(rec);
-    });
-
-    // Build PlayerGroup structures
-    const groups: PlayerGroup[] = [];
-    map.forEach((records, name) => {
-      // Sort seasons chronologically
-      const sortedSeasons = [...records].sort((a, b) => {
-        const yrA = Number(a.player_info?.source_year || a.year || 0);
-        const yrB = Number(b.player_info?.source_year || b.year || 0);
-        return yrA - yrB;
-      });
-
-      const latest = sortedSeasons[sortedSeasons.length - 1];
-      const yearsList = sortedSeasons
-        .map((s) => Number(s.player_info?.source_year || s.year || 0))
-        .filter((y) => y > 0);
-
-      const ovrsList = sortedSeasons
-        .map((s) => Number(s.ratings?.Ovr || s.ovr || 0))
-        .filter((o) => o > 0);
-
-      const bestOvr = ovrsList.length > 0 ? Math.max(...ovrsList) : Number(latest?.ratings?.Ovr || 75);
-      const avgOvr = ovrsList.length > 0
-        ? Math.round((ovrsList.reduce((a, b) => a + b, 0) / ovrsList.length) * 10) / 10
-        : bestOvr;
-
-      groups.push({
-        player_name: name,
-        pos: latest?.pos || (sortedSeasons.some((s) => isGoalie(s.pos)) ? 'G' : 'F'),
-        primary_team: latest?.team_default || latest?.player_info?.source_team || 'NHL 95',
-        seasons: sortedSeasons,
-        start_year: yearsList.length > 0 ? Math.min(...yearsList) : 1995,
-        end_year: yearsList.length > 0 ? Math.max(...yearsList) : 1995,
-        best_ovr: bestOvr,
-        avg_ovr: avgOvr,
-        latest_record: latest,
-      });
-    });
-
-    // Sort player groups
-    groups.sort((a, b) => {
-      if (sort.column === 'player_name') {
-        return sort.asc ? a.player_name.localeCompare(b.player_name) : b.player_name.localeCompare(a.player_name);
-      }
-      if (sort.column === 'pos') {
-        return sort.asc ? a.pos.localeCompare(b.pos) : b.pos.localeCompare(a.pos);
-      }
-      if (sort.column === 'team') {
-        return sort.asc ? a.primary_team.localeCompare(b.primary_team) : b.primary_team.localeCompare(a.primary_team);
-      }
-      if (sort.column === 'years') {
-        const spanA = a.seasons.length;
-        const spanB = b.seasons.length;
-        return sort.asc ? spanA - spanB : spanB - spanA;
-      }
-      if (sort.column === 'ovr') {
-        return sort.asc ? a.best_ovr - b.best_ovr : b.best_ovr - a.best_ovr;
-      }
-      return 0;
-    });
-
-    setTotalGroupCount(groups.length);
-    const paginated = groups.slice(page * 30, page * 30 + 30);
-    setPlayerGroups(paginated);
-
-    // Auto-select first if none selected
-    if (!selected && paginated.length > 0) {
-      handleSelectGroup(paginated[0]);
     }
-  };
+
+    const timer = setTimeout(fetchPlayers, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [search, year, posFilter, teamFilter, sort, page]);
 
   // 3. Select Player Group & Fetch Complete Career
   const handleSelectGroup = async (group: PlayerGroup) => {
     setSelected(group.latest_record);
     setSelectedCareerData(group.seasons);
 
-    // Also verify if there are any further career records in DB
     try {
       const { data } = await supabase
         .from('league_player_database')
@@ -1405,7 +1413,12 @@ export default function PlayersPage() {
         .ilike('player_name', group.player_name);
 
       if (data && data.length > 0) {
-        setSelectedCareerData(data);
+        const sorted = data.sort((a, b) => {
+          const yrA = Number(a.player_info?.source_year || a.year || 0);
+          const yrB = Number(b.player_info?.source_year || b.year || 0);
+          return yrA - yrB;
+        });
+        setSelectedCareerData(sorted);
       }
     } catch (e) {
       console.error(e);
@@ -1487,448 +1500,448 @@ export default function PlayersPage() {
   const handleRemoveComparePlayer = (name: string) => {
     setComparedPlayers((prev) => prev.filter((p) => p !== name));
   };
-
-  // Unique Teams List for Filter
-  const availableTeams = useMemo(() => {
-    const tSet = new Set<string>();
-    allMasterPlayers.forEach((p) => {
-      if (p.team_default) tSet.add(p.team_default);
-    });
-    return Array.from(tSet).sort();
+});
+return Array.from(tSet).sort();
   }, [allMasterPlayers]);
 
-  return (
-    <div className="p-2 sm:p-4 max-w-7xl mx-auto space-y-4 font-mono bg-[#E5E0D5] min-h-screen text-[10px]">
+return (
+  <div className="p-2 sm:p-4 max-w-7xl mx-auto space-y-4 font-mono bg-[#E5E0D5] min-h-screen text-[10px]">
 
-      {/* Top Header Banner with Official NHL95 Logo & Navigation Tabs */}
-      <div className="bg-[#F5F2E6] border-[3px] border-black p-3 sm:p-4 rounded-xl shadow-[5px_5px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-4">
+    {/* Top Header Banner with Official NHL95 Logo & Navigation Tabs */}
+    <div className="bg-[#F5F2E6] border-[3px] border-black p-3 sm:p-4 rounded-xl shadow-[5px_5px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-4">
 
-        {/* Left: NHL95 Official Logo + Title */}
-        <div className="flex items-center gap-3.5 w-full md:w-auto">
-          <div className="bg-black p-1.5 rounded-md border border-black shadow-xs shrink-0">
-            <img
-              src={LOGO_URL}
-              alt="NHL 95 Logo"
-              className="h-10 sm:h-12 md:h-14 object-contain block"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-slate-950 flex items-center gap-2">
-              NHL 95 Player Database
-            </h1>
-            <p className="text-[10px] text-neutral-600 uppercase font-bold tracking-wider">
-              Grouped Career Records & Interactive Spotlight Suite
-            </p>
-          </div>
+      {/* Left: NHL95 Official Logo + Title */}
+      <div className="flex items-center gap-3.5 w-full md:w-auto">
+        <div className="bg-black p-1.5 rounded-md border border-black shadow-xs shrink-0">
+          <img
+            src={LOGO_URL}
+            alt="NHL 95 Logo"
+            className="h-10 sm:h-12 md:h-14 object-contain block"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
         </div>
-
-        {/* Right: View Switcher Tabs */}
-        <div className="flex items-center gap-2 font-black uppercase text-xs w-full md:w-auto justify-end">
-          <button
-            onClick={() => setActiveTab('database')}
-            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'database'
-                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                : 'bg-white hover:bg-slate-100 text-black'
-              }`}
-          >
-            <Table className="w-4 h-4 text-emerald-400" />
-            Player Database
-          </button>
-
-          <button
-            onClick={() => setActiveTab('compare')}
-            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'compare'
-                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                : 'bg-white hover:bg-slate-100 text-black'
-              }`}
-          >
-            <Users className="w-4 h-4 text-amber-400" />
-            Compare
-            {comparedPlayers.length > 0 && (
-              <span className="bg-amber-400 text-black font-black text-[9px] px-1.5 py-0.2 rounded-full ml-1">
-                {comparedPlayers.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setShowScaleGuide(!showScaleGuide)}
-            className="p-2 border-2 border-black rounded bg-white hover:bg-slate-100"
-            title="Rating Scale Guide"
-          >
-            <HelpCircle className="w-4 h-4 text-neutral-700" />
-          </button>
+        <div>
+          <h1 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-slate-950 flex items-center gap-2">
+            NHL 95 Player Database
+          </h1>
+          <p className="text-[10px] text-neutral-600 uppercase font-bold tracking-wider">
+            Grouped Career Records & Interactive Spotlight Suite
+          </p>
         </div>
       </div>
 
-      {/* Rating Scale Guide Dropdown Modal / Drawer */}
-      {showScaleGuide && (
-        <div className="bg-white border-2 border-black p-3 rounded-lg shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-2">
-          <div className="flex items-center justify-between border-b border-black pb-1.5">
-            <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1.5 text-emerald-800">
-              <Sparkles className="w-3.5 h-3.5" />
-              Sega Genesis NHL 95 Attribute Conversion Scale
-            </h3>
-            <button onClick={() => setShowScaleGuide(false)} className="text-neutral-500 hover:text-black">
-              <X className="w-4 h-4" />
-            </button>
+      {/* Right: View Switcher Tabs */}
+      <div className="flex items-center gap-2 font-black uppercase text-xs w-full md:w-auto justify-end">
+        <button
+          onClick={() => setActiveTab('database')}
+          className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'database'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-white hover:bg-slate-100 text-black'
+            }`}
+        >
+          <Table className="w-4 h-4 text-emerald-400" />
+          Player Database
+        </button>
+
+        <button
+          onClick={() => setActiveTab('compare')}
+          className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'compare'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-white hover:bg-slate-100 text-black'
+            }`}
+        >
+          <Users className="w-4 h-4 text-amber-400" />
+          Compare
+          {comparedPlayers.length > 0 && (
+            <span className="bg-amber-400 text-black font-black text-[9px] px-1.5 py-0.2 rounded-full ml-1">
+              {comparedPlayers.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setShowScaleGuide(!showScaleGuide)}
+          className="p-2 border-2 border-black rounded bg-white hover:bg-slate-100"
+          title="Rating Scale Guide"
+        >
+          <HelpCircle className="w-4 h-4 text-neutral-700" />
+        </button>
+      </div>
+    </div>
+
+    {/* Rating Scale Guide Dropdown Modal / Drawer */}
+    {showScaleGuide && (
+      <div className="bg-white border-2 border-black p-3 rounded-lg shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-2">
+        <div className="flex items-center justify-between border-b border-black pb-1.5">
+          <h3 className="font-black text-xs uppercase tracking-wider flex items-center gap-1.5 text-emerald-800">
+            <Sparkles className="w-3.5 h-3.5" />
+            Sega Genesis NHL 95 Attribute Conversion Scale
+          </h3>
+          <button onClick={() => setShowScaleGuide(false)} className="text-neutral-500 hover:text-black">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-7 gap-2 text-center text-[9px]">
+          <div className="p-1.5 border border-black bg-slate-50 rounded">
+            <span className="font-black block text-slate-900">Scale 0</span>
+            <span className="text-neutral-600 block">Rating: 0 - 29</span>
+            <span className="text-neutral-500 block text-[8px]">StH: 0</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-7 gap-2 text-center text-[9px]">
-            <div className="p-1.5 border border-black bg-slate-50 rounded">
-              <span className="font-black block text-slate-900">Scale 0</span>
-              <span className="text-neutral-600 block">Rating: 0 - 29</span>
-              <span className="text-neutral-500 block text-[8px]">StH: 0</span>
-            </div>
-            <div className="p-1.5 border border-black bg-emerald-50 rounded">
-              <span className="font-black block text-emerald-800">Scale 1</span>
-              <span className="text-neutral-600 block">Rating: 29 - 38</span>
-              <span className="text-neutral-500 block text-[8px]">StH: 1 - 2</span>
-            </div>
-            <div className="p-1.5 border border-black bg-emerald-100 rounded">
-              <span className="font-black block text-emerald-800">Scale 2</span>
-              <span className="text-neutral-600 block">Rating: 39 - 47</span>
-              <span className="text-neutral-500 block text-[8px]">StH: 3 - 5</span>
-            </div>
-            <div className="p-1.5 border border-black bg-emerald-200 rounded">
-              <span className="font-black block text-emerald-900">Scale 3</span>
-              <span className="text-neutral-600 block">Rating: 48 - 62</span>
-              <span className="text-neutral-500 block text-[8px]">StH: 6 - 8</span>
-            </div>
-            <div className="p-1.5 border border-black bg-emerald-300 rounded">
-              <span className="font-black block text-emerald-950">Scale 4</span>
-              <span className="text-neutral-700 block">Rating: 63 - 80</span>
-              <span className="text-neutral-600 block text-[8px]">StH: 9 - 11</span>
-            </div>
-            <div className="p-1.5 border border-black bg-emerald-400 rounded">
-              <span className="font-black block text-white">Scale 5</span>
-              <span className="text-neutral-900 block font-bold">Rating: 81 - 98</span>
-              <span className="text-neutral-800 block text-[8px]">StH: 12 - 14</span>
-            </div>
-            <div className="p-1.5 border border-black bg-emerald-600 text-white rounded">
-              <span className="font-black block">Scale 6</span>
-              <span className="block font-bold">Rating: 99</span>
-              <span className="block text-[8px] opacity-90">StH: 15</span>
-            </div>
+          <div className="p-1.5 border border-black bg-emerald-50 rounded">
+            <span className="font-black block text-emerald-800">Scale 1</span>
+            <span className="text-neutral-600 block">Rating: 29 - 38</span>
+            <span className="text-neutral-500 block text-[8px]">StH: 1 - 2</span>
+          </div>
+          <div className="p-1.5 border border-black bg-emerald-100 rounded">
+            <span className="font-black block text-emerald-800">Scale 2</span>
+            <span className="text-neutral-600 block">Rating: 39 - 47</span>
+            <span className="text-neutral-500 block text-[8px]">StH: 3 - 5</span>
+          </div>
+          <div className="p-1.5 border border-black bg-emerald-200 rounded">
+            <span className="font-black block text-emerald-900">Scale 3</span>
+            <span className="text-neutral-600 block">Rating: 48 - 62</span>
+            <span className="text-neutral-500 block text-[8px]">StH: 6 - 8</span>
+          </div>
+          <div className="p-1.5 border border-black bg-emerald-300 rounded">
+            <span className="font-black block text-emerald-950">Scale 4</span>
+            <span className="text-neutral-700 block">Rating: 63 - 80</span>
+            <span className="text-neutral-600 block text-[8px]">StH: 9 - 11</span>
+          </div>
+          <div className="p-1.5 border border-black bg-emerald-400 rounded">
+            <span className="font-black block text-white">Scale 5</span>
+            <span className="text-neutral-900 block font-bold">Rating: 81 - 98</span>
+            <span className="text-neutral-800 block text-[8px]">StH: 12 - 14</span>
+          </div>
+          <div className="p-1.5 border border-black bg-emerald-600 text-white rounded">
+            <span className="font-black block">Scale 6</span>
+            <span className="block font-bold">Rating: 99</span>
+            <span className="block text-[8px] opacity-90">StH: 15</span>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
-      {/* Active Tab View */}
-      {activeTab === 'database' ? (
-        <div className="grid grid-cols-12 gap-4">
+    {/* Active Tab View */}
+    {activeTab === 'database' ? (
+      <div className="grid grid-cols-12 gap-4">
 
-          {/* Left Column: Search, Filters & Grouped Players Table */}
-          <div className="col-span-12 lg:col-span-7 space-y-2.5">
+        {/* Left Column: Search, Filters & Grouped Players Table */}
+        <div className="col-span-12 lg:col-span-7 space-y-2.5">
 
-            {/* Filter Bar */}
-            <div className="bg-[#F5F2E6] border-2 border-black p-2.5 rounded-lg shadow-xs space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5">
-                <div className="sm:col-span-6 relative">
-                  <input
-                    className="w-full bg-white border-2 border-black p-1.5 pl-7 text-[10px] uppercase text-black rounded-xs focus:ring-1 focus:ring-black outline-hidden"
-                    placeholder="SEARCH PLAYER NAME..."
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(0);
-                    }}
-                  />
-                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2.5 pointer-events-none" />
-                </div>
-
-                <select
-                  className="sm:col-span-3 bg-white border-2 border-black p-1.5 text-[10px] uppercase text-black rounded-xs"
-                  value={year}
+          {/* Filter Bar */}
+          <div className="bg-[#F5F2E6] border-2 border-black p-2.5 rounded-lg shadow-xs space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5">
+              <div className="sm:col-span-6 relative">
+                <input
+                  className="w-full bg-white border-2 border-black p-1.5 pl-7 text-[10px] uppercase text-black rounded-xs focus:ring-1 focus:ring-black outline-hidden"
+                  placeholder="SEARCH PLAYER NAME..."
+                  value={search}
                   onChange={(e) => {
-                    setYear(e.target.value);
+                    setSearch(e.target.value);
+                    setPage(0);
+                  }}
+                />
+                <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2.5 pointer-events-none" />
+              </div>
+
+              <select
+                className="sm:col-span-3 bg-white border-2 border-black p-1.5 text-[10px] uppercase text-black rounded-xs"
+                value={year}
+                onChange={(e) => {
+                  setYear(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="">ALL YEARS</option>
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="sm:col-span-3 bg-white border-2 border-black p-1.5 text-[10px] uppercase text-black rounded-xs"
+                value={posFilter}
+                onChange={(e) => {
+                  setPosFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="ALL">ALL POSITIONS</option>
+                <option value="F">FORWARDS (F)</option>
+                <option value="D">DEFENSE (D)</option>
+                <option value="G">GOALIES (G)</option>
+                <option value="C">CENTERS (C)</option>
+                <option value="LW">LEFT WING (LW)</option>
+                <option value="RW">RIGHT WING (RW)</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-black/20 text-[9px]">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-neutral-600">Team:</span>
+                <select
+                  className="bg-white border border-black p-1 text-[9px] uppercase text-black rounded-xs max-w-[140px]"
+                  value={teamFilter}
+                  onChange={(e) => {
+                    setTeamFilter(e.target.value);
                     setPage(0);
                   }}
                 >
-                  <option value="">ALL YEARS</option>
-                  {years.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
+                  <option value="ALL">ALL TEAMS</option>
+                  {availableTeams.map((tm) => (
+                    <option key={tm} value={tm}>
+                      {tm}
                     </option>
                   ))}
                 </select>
-
-                <select
-                  className="sm:col-span-3 bg-white border-2 border-black p-1.5 text-[10px] uppercase text-black rounded-xs"
-                  value={posFilter}
-                  onChange={(e) => {
-                    setPosFilter(e.target.value);
-                    setPage(0);
-                  }}
-                >
-                  <option value="ALL">ALL POSITIONS</option>
-                  <option value="F">FORWARDS (F)</option>
-                  <option value="D">DEFENSE (D)</option>
-                  <option value="G">GOALIES (G)</option>
-                  <option value="C">CENTERS (C)</option>
-                  <option value="LW">LEFT WING (LW)</option>
-                  <option value="RW">RIGHT WING (RW)</option>
-                </select>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-black/20 text-[9px]">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-neutral-600">Team:</span>
-                  <select
-                    className="bg-white border border-black p-1 text-[9px] uppercase text-black rounded-xs max-w-[140px]"
-                    value={teamFilter}
-                    onChange={(e) => {
-                      setTeamFilter(e.target.value);
-                      setPage(0);
-                    }}
-                  >
-                    <option value="ALL">ALL TEAMS</option>
-                    {availableTeams.map((tm) => (
-                      <option key={tm} value={tm}>
-                        {tm}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-neutral-600">
-                    {totalGroupCount} Players Grouped
-                  </span>
-                  <button
-                    onClick={downloadCSV}
-                    className="bg-black text-white hover:bg-emerald-700 px-2.5 py-1 uppercase font-black text-[9px] rounded-xs flex items-center gap-1 transition-colors"
-                  >
-                    <Download className="w-3 h-3" /> CSV
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Pagination & Group Expand/Collapse Controls */}
-            <div className="flex flex-wrap justify-between items-center text-xs text-black border-y-2 border-black py-1.5 bg-[#F5F2E6] px-2 rounded gap-2">
               <div className="flex items-center gap-2">
-                <button
-                  disabled={page === 0}
-                  onClick={() => setPage(page - 1)}
-                  className="hover:text-emerald-700 font-black cursor-pointer disabled:opacity-30 flex items-center gap-0.5 text-[9px] uppercase"
-                >
-                  ◀ PREV
-                </button>
-                <span className="font-black text-[9.5px]">
-                  PAGE {page + 1} OF {Math.max(1, Math.ceil(totalGroupCount / 30))}
+                <span className="font-bold text-neutral-600">
+                  {totalGroupCount} Players Grouped
                 </span>
                 <button
-                  disabled={(page + 1) * 30 >= totalGroupCount}
-                  onClick={() => setPage(page + 1)}
-                  className="hover:text-emerald-700 font-black cursor-pointer disabled:opacity-30 flex items-center gap-0.5 text-[9px] uppercase"
+                  onClick={downloadCSV}
+                  className="bg-black text-white hover:bg-emerald-700 px-2.5 py-1 uppercase font-black text-[9px] rounded-xs flex items-center gap-1 transition-colors"
                 >
-                  NEXT ▶
-                </button>
-              </div>
-
-              {/* Expand / Collapse All */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleExpandAll}
-                  className="bg-white border border-black hover:bg-emerald-50 px-2 py-0.5 rounded text-[8px] font-black uppercase"
-                >
-                  Expand All Careers
-                </button>
-                <button
-                  onClick={handleCollapseAll}
-                  className="bg-white border border-black hover:bg-slate-100 px-2 py-0.5 rounded text-[8px] font-black uppercase"
-                >
-                  Collapse All
+                  <Download className="w-3 h-3" /> CSV
                 </button>
               </div>
             </div>
-
-            {/* Grouped Players Table */}
-            <div className="bg-[#F5F2E6] border-2 border-black rounded overflow-x-auto shadow-xs">
-              <table className="w-full text-left text-[9px] uppercase text-black min-w-[440px]">
-                <thead className="bg-black text-white text-[8.5px] font-black">
-                  <tr>
-                    <th className="p-1.5 w-8 text-center">CAREER</th>
-                    <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('player_name')}>
-                      PLAYER {sort.column === 'player_name' ? (sort.asc ? '▲' : '▼') : '↕'}
-                    </th>
-                    <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('pos')}>
-                      POS {sort.column === 'pos' ? (sort.asc ? '▲' : '▼') : '↕'}
-                    </th>
-                    <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('team')}>
-                      TEAM {sort.column === 'team' ? (sort.asc ? '▲' : '▼') : '↕'}
-                    </th>
-                    <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('years')}>
-                      CAREER SPAN {sort.column === 'years' ? (sort.asc ? '▲' : '▼') : '↕'}
-                    </th>
-                    <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('ovr')}>
-                      OVR (PEAK / AVG) {sort.column === 'ovr' ? (sort.asc ? '▲' : '▼') : '↕'}
-                    </th>
-                    <th className="p-1.5 text-center">COMPARE</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/30 bg-white font-mono">
-                  {playerGroups.map((group) => {
-                    const isSelected = selected && selected.player_name === group.player_name;
-                    const isExpanded = expandedPlayers.has(group.player_name);
-                    const isComp = comparedPlayers.includes(group.player_name);
-                    const isG = isGoalie(group.pos);
-
-                    return (
-                      <React.Fragment key={group.player_name}>
-                        {/* Main Group Header Row */}
-                        <tr
-                          onClick={() => handleSelectGroup(group)}
-                          className={`cursor-pointer transition-colors ${isSelected ? 'bg-amber-100 font-black' : 'hover:bg-slate-100'
-                            }`}
-                        >
-                          {/* Expand/Collapse Button */}
-                          <td className="p-1.5 text-center" onClick={(e) => { e.stopPropagation(); toggleExpand(group.player_name); }}>
-                            <button
-                              type="button"
-                              className={`p-1 px-1.5 text-[8.5px] font-black rounded border border-black flex items-center justify-center transition-all ${isExpanded
-                                  ? 'bg-emerald-700 text-white shadow-xs'
-                                  : 'bg-white hover:bg-emerald-100 text-black'
-                                }`}
-                              title={isExpanded ? 'Collapse career breakdown' : 'Expand career breakdown'}
-                            >
-                              {isExpanded ? '▼' : '▶'}
-                            </button>
-                          </td>
-
-                          {/* Player Name */}
-                          <td className="p-1.5 font-bold text-slate-900 truncate max-w-[140px]">
-                            <div className="flex items-center gap-1.5">
-                              <span>{group.player_name}</span>
-                              <span className="text-[7.5px] bg-slate-200 px-1 py-0.2 rounded text-neutral-700 font-mono font-bold">
-                                {group.seasons.length} yr{group.seasons.length > 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Pos */}
-                          <td className="p-1.5 font-bold text-emerald-800">{group.pos}</td>
-
-                          {/* Primary Team */}
-                          <td className="p-1.5 truncate max-w-[130px] text-neutral-700">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-4 h-4 flex items-center justify-center shrink-0">
-                                <TeamLogo teamName={group.primary_team} className="max-w-full max-h-full" />
-                              </div>
-                              <span className="truncate">{group.primary_team}</span>
-                            </div>
-                          </td>
-
-                          {/* Career Span */}
-                          <td className="p-1.5 font-mono text-neutral-800">
-                            {group.start_year === group.end_year ? group.start_year : `${group.start_year} - ${group.end_year}`}
-                          </td>
-
-                          {/* Peak / Avg OVR */}
-                          <td className="p-1.5 font-black text-slate-950">
-                            <span className="bg-slate-900 text-amber-300 px-1.5 py-0.5 rounded-2xs text-[9px] mr-1">
-                              {group.best_ovr}
-                            </span>
-                            <span className="text-neutral-500 text-[8px] font-normal">
-                              (Avg: {group.avg_ovr})
-                            </span>
-                          </td>
-
-                          {/* Compare Button */}
-                          <td className="p-1.5 text-center" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => toggleComparePlayer(group.player_name)}
-                              className={`p-1 px-1.5 text-[8px] font-black uppercase rounded border border-black ${isComp
-                                  ? 'bg-amber-400 text-black shadow-xs'
-                                  : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
-                                }`}
-                              title={isComp ? 'Remove from compare' : 'Add to compare'}
-                            >
-                              {isComp ? <Check className="w-2.5 h-2.5" /> : '+ VS'}
-                            </button>
-                          </td>
-                        </tr>
-
-                        {/* Collapsible Nested Career Table for this Player */}
-                        {isExpanded && (
-                          <tr className="bg-emerald-50/40 border-y-2 border-emerald-700/60">
-                            <td colSpan={7} className="p-2 sm:p-3">
-                              <div className="bg-white border-2 border-black rounded p-3 shadow-xs space-y-2.5">
-                                {/* Team Logo & Career Meta Header */}
-                                <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black pb-2.5">
-                                  <div className="flex items-center gap-3.5">
-                                    {/* Prominent Larger Team Logo Box */}
-                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                                      <TeamLogo teamName={group.primary_team} className="w-12 h-12 sm:w-16 sm:h-16" />
-                                    </div>
-                                    <div>
-                                      <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex items-center gap-2">
-                                        <span>{group.player_name}</span>
-                                        <span className="text-emerald-700 font-bold">&bull; {group.primary_team}</span>
-                                      </div>
-                                      <div className="text-[9.5px] text-neutral-700 uppercase font-bold mt-1">
-                                        {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: <span className="text-black font-black bg-amber-300 px-1.5 py-0.5 rounded-2xs">{group.best_ovr}</span> &bull; Career Avg: <span className="text-emerald-800 font-black">{group.avg_ovr}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <span className="text-[8px] text-neutral-700 uppercase font-black bg-[#F5F2E6] px-2.5 py-1 rounded border border-black/30 shadow-2xs">
-                                    Click any row to load season card
-                                  </span>
-                                </div>
-
-                                <CareerTable
-                                  careerRows={group.seasons}
-                                  isGoaliePlayer={isG}
-                                  showTeam={true}
-                                  onSelectSeason={(row) => handleSelectSpecificSeason(row, group.seasons)}
-                                />
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-
-                  {playerGroups.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="p-8 text-center text-neutral-500 font-bold uppercase">
-                        No players found matching current filters
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
           </div>
 
-          {/* Right Column: Retro Hockey Card Spotlight */}
-          <div className="col-span-12 lg:col-span-5">
-            <HockeyCardSpotlight
-              player={selected}
-              careerData={selectedCareerData}
-              leagueAverages={leagueAverages}
-              onAddToCompare={toggleComparePlayer}
-              isCompared={selected && comparedPlayers.includes(selected.player_name)}
-            />
+          {/* Pagination & Group Expand/Collapse Controls */}
+          <div className="flex flex-wrap justify-between items-center text-xs text-black border-y-2 border-black py-1.5 bg-[#F5F2E6] px-2 rounded gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                disabled={page === 0}
+                onClick={() => setPage(page - 1)}
+                className="hover:text-emerald-700 font-black cursor-pointer disabled:opacity-30 flex items-center gap-0.5 text-[9px] uppercase"
+              >
+                ◀ PREV
+              </button>
+              <span className="font-black text-[9.5px]">
+                PAGE {page + 1} OF {Math.max(1, Math.ceil(totalGroupCount / 30))}
+              </span>
+              <button
+                disabled={(page + 1) * 30 >= totalGroupCount}
+                onClick={() => setPage(page + 1)}
+                className="hover:text-emerald-700 font-black cursor-pointer disabled:opacity-30 flex items-center gap-0.5 text-[9px] uppercase"
+              >
+                NEXT ▶
+              </button>
+            </div>
+
+            {/* Expand / Collapse All */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleExpandAll}
+                className="bg-white border border-black hover:bg-emerald-50 px-2 py-0.5 rounded text-[8px] font-black uppercase"
+              >
+                Expand All Careers
+              </button>
+              <button
+                onClick={handleCollapseAll}
+                className="bg-white border border-black hover:bg-slate-100 px-2 py-0.5 rounded text-[8px] font-black uppercase"
+              >
+                Collapse All
+              </button>
+            </div>
+          </div>
+
+          {/* Grouped Players Table */}
+          <div className="bg-[#F5F2E6] border-2 border-black rounded overflow-x-auto shadow-xs">
+            <table className="w-full text-left text-[9px] uppercase text-black min-w-[440px]">
+              <thead className="bg-black text-white text-[8.5px] font-black">
+                <tr>
+                  <th className="p-1.5 w-8 text-center">CAREER</th>
+                  <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('player_name')}>
+                    PLAYER {sort.column === 'player_name' ? (sort.asc ? '▲' : '▼') : '↕'}
+                  </th>
+                  <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('pos')}>
+                    POS {sort.column === 'pos' ? (sort.asc ? '▲' : '▼') : '↕'}
+                  </th>
+                  <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('team')}>
+                    TEAM {sort.column === 'team' ? (sort.asc ? '▲' : '▼') : '↕'}
+                  </th>
+                  <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('years')}>
+                    CAREER SPAN {sort.column === 'years' ? (sort.asc ? '▲' : '▼') : '↕'}
+                  </th>
+                  <th className="p-1.5 cursor-pointer hover:bg-neutral-800" onClick={() => handleSort('ovr')}>
+                    OVR (PEAK / AVG) {sort.column === 'ovr' ? (sort.asc ? '▲' : '▼') : '↕'}
+                  </th>
+                  <th className="p-1.5 text-center">COMPARE</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/30 bg-white font-mono">
+                {playerGroups.map((group) => {
+                  const isSelected = selected && selected.player_name === group.player_name;
+                  const isExpanded = expandedPlayers.has(group.player_name);
+                  const isComp = comparedPlayers.includes(group.player_name);
+                  const isG = isGoalie(group.pos);
+
+                  return (
+                    <React.Fragment key={group.player_name}>
+                      {/* Main Group Header Row */}
+                      <tr
+                        onClick={() => handleSelectGroup(group)}
+                        className={`cursor-pointer transition-colors ${isSelected ? 'bg-amber-100 font-black' : 'hover:bg-slate-100'
+                          }`}
+                      >
+                        {/* Expand/Collapse Button */}
+                        <td className="p-1.5 text-center" onClick={(e) => { e.stopPropagation(); toggleExpand(group.player_name); }}>
+                          <button
+                            type="button"
+                            className={`p-1 px-1.5 text-[8.5px] font-black rounded border border-black flex items-center justify-center transition-all ${isExpanded
+                                ? 'bg-emerald-700 text-white shadow-xs'
+                                : 'bg-white hover:bg-emerald-100 text-black'
+                              }`}
+                            title={isExpanded ? 'Collapse career breakdown' : 'Expand career breakdown'}
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </button>
+                        </td>
+
+                        {/* Player Name */}
+                        <td className="p-1.5 font-bold text-slate-900 truncate max-w-[140px]">
+                          <div className="flex items-center gap-1.5">
+                            <span>{group.player_name}</span>
+                            <span className="text-[7.5px] bg-slate-200 px-1 py-0.2 rounded text-neutral-700 font-mono font-bold">
+                              {group.seasons.length} yr{group.seasons.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Pos */}
+                        <td className="p-1.5 font-bold text-emerald-800">{group.pos}</td>
+
+                        {/* Primary Team */}
+                        <td className="p-1.5 truncate max-w-[130px] text-neutral-700">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-4 h-4 flex items-center justify-center shrink-0">
+                              <TeamLogo teamName={group.primary_team} className="max-w-full max-h-full" />
+                            </div>
+                            <span className="truncate">{group.primary_team}</span>
+                          </div>
+                        </td>
+
+                        {/* Career Span */}
+                        <td className="p-1.5 font-mono text-neutral-800">
+                          {group.start_year === group.end_year ? group.start_year : `${group.start_year} - ${group.end_year}`}
+                        </td>
+
+                        {/* Peak / Avg OVR */}
+                        <td className="p-1.5 font-black text-slate-950">
+                          <span className="bg-slate-900 text-amber-300 px-1.5 py-0.5 rounded-2xs text-[9px] mr-1">
+                            {group.best_ovr}
+                          </span>
+                          <span className="text-neutral-500 text-[8px] font-normal">
+                            (Avg: {group.avg_ovr})
+                          </span>
+                        </td>
+
+                        {/* Compare Button */}
+                        <td className="p-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => toggleComparePlayer(group.player_name)}
+                            className={`p-1 px-1.5 text-[8px] font-black uppercase rounded border border-black ${isComp
+                                ? 'bg-amber-400 text-black shadow-xs'
+                                : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
+                              }`}
+                            title={isComp ? 'Remove from compare' : 'Add to compare'}
+                          >
+                            {isComp ? <Check className="w-2.5 h-2.5" /> : '+ VS'}
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Collapsible Nested Career Table for this Player */}
+                      {isExpanded && (
+                        <tr className="bg-emerald-50/40 border-y-2 border-emerald-700/60">
+                          <td colSpan={7} className="p-2 sm:p-3">
+                            <div className="bg-white border-2 border-black rounded p-3 shadow-xs space-y-2.5">
+                              {/* Team Logo & Career Meta Header */}
+                              <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black pb-2.5">
+                                <div className="flex items-center gap-3.5">
+                                  {/* Prominent Larger Team Logo Box */}
+                                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                                    <TeamLogo teamName={group.primary_team} className="w-12 h-12 sm:w-16 sm:h-16" />
+                                  </div>
+                                  <div>
+                                    <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex items-center gap-2">
+                                      <span>{group.player_name}</span>
+                                      <span className="text-emerald-700 font-bold">&bull; {group.primary_team}</span>
+                                    </div>
+                                    <div className="text-[9.5px] text-neutral-700 uppercase font-bold mt-1">
+                                      {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: <span className="text-black font-black bg-amber-300 px-1.5 py-0.5 rounded-2xs">{group.best_ovr}</span> &bull; Career Avg: <span className="text-emerald-800 font-black">{group.avg_ovr}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <span className="text-[8px] text-neutral-700 uppercase font-black bg-[#F5F2E6] px-2.5 py-1 rounded border border-black/30 shadow-2xs">
+                                  Click any row to load season card
+                                </span>
+                              </div>
+
+                              <CareerTable
+                                careerRows={group.seasons}
+                                isGoaliePlayer={isG}
+                                showTeam={true}
+                                onSelectSeason={(row) => handleSelectSpecificSeason(row, group.seasons)}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="p-10 text-center text-neutral-700 font-black uppercase text-xs animate-pulse">
+                      <span className="inline-block animate-bounce mr-2">🏒</span>
+                      Searching NHL95 Database...
+                    </td>
+                  </tr>
+                ) : playerGroups.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-neutral-500 font-bold uppercase">
+                      No players found matching current filters
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
 
         </div>
-      ) : (
-        /* Compare Players Tab View */
-        <CompareView
-          allPlayersList={allMasterPlayers}
-          comparedPlayerNames={comparedPlayers}
-          onRemovePlayer={handleRemoveComparePlayer}
-          onAddPlayerName={handleAddPlayerName}
-          onClearAll={() => setComparedPlayers([])}
-        />
-      )}
 
-    </div>
-  );
+        {/* Right Column: Retro Hockey Card Spotlight */}
+        <div className="col-span-12 lg:col-span-5">
+          <HockeyCardSpotlight
+            player={selected}
+            careerData={selectedCareerData}
+            leagueAverages={leagueAverages}
+            onAddToCompare={toggleComparePlayer}
+            isCompared={selected && comparedPlayers.includes(selected.player_name)}
+          />
+        </div>
+
+      </div>
+    ) : (
+      /* Compare Players Tab View */
+      <CompareView
+        comparedPlayerNames={comparedPlayers}
+        onRemovePlayer={handleRemoveComparePlayer}
+        onAddPlayerName={handleAddPlayerName}
+        onClearAll={() => setComparedPlayers([])}
+      />
+    )}
+
+  </div>
+);
 }
