@@ -58,37 +58,76 @@ export default function AwardsPage() {
     async function fetchData() {
       if (selectedSeason === 0) return;
       setLoading(true);
-      const { data } = await supabase
-        .from('league_awards')
-        .select(`
-          description, nhl_comparable, player_id, team_id, coach_id,
-          awards!inner (award_names, award_url),
-          league_player_database (player_name),
-          league_teams (team_name, logo_url),
-          league_coaches (coach_name)
-        `)
-        .eq('league_id', selectedSeason);
+      try {
+        const { data, error } = await supabase
+          .from('league_awards')
+          .select(`
+            description, nhl_comparable, player_id, team_id, coach_id,
+            awards (award_names, award_url),
+            league_player_database (player_name),
+            league_teams (team_name, logo_url),
+            league_coaches (coach_name)
+          `)
+          .eq('league_id', selectedSeason);
 
-      const formatted = (data || []).map(item => {
-        const playerName = item.league_player_database?.player_name;
-        const coachName = item.league_coaches?.coach_name;
-        const getWinner = () => {
-          if (playerName && playerName !== "N/A" && playerName !== "--") return playerName;
-          if (coachName && coachName !== "N/A" && coachName !== "--") return coachName;
-          return "";
-        };
-        return {
-          award_name: item.awards?.award_names || "Unknown",
-          trophy_image_url: item.awards?.award_url,
-          description: item.description,
-          nhl_comparable: item.nhl_comparable,
-          winner_name: getWinner(),
-          team_name: item.league_teams?.team_name || "N/A",
-          team_logo: item.league_teams?.logo_url
-        };
-      });
-      setAwards(formatted);
-      setLoading(false);
+        if (!error && data && data.length > 0) {
+          const formatted = data.map(item => {
+            const playerName = item.league_player_database?.player_name;
+            const coachName = item.league_coaches?.coach_name;
+            const getWinner = () => {
+              if (playerName && playerName !== "N/A" && playerName !== "--") return playerName;
+              if (coachName && coachName !== "N/A" && coachName !== "--") return coachName;
+              return "";
+            };
+            return {
+              award_name: item.awards?.award_names || "Unknown",
+              trophy_image_url: item.awards?.award_url,
+              description: item.description,
+              nhl_comparable: item.nhl_comparable,
+              winner_name: getWinner(),
+              team_name: item.league_teams?.team_name || "N/A",
+              team_logo: item.league_teams?.logo_url
+            };
+          });
+          setAwards(formatted);
+        } else {
+          // Fallback: direct parallel table queries
+          const [rawAwardsRes, awardsListRes, playerDbRes, teamsRes, coachesRes] = await Promise.all([
+            supabase.from('league_awards').select('*').eq('league_id', selectedSeason),
+            supabase.from('awards').select('*'),
+            supabase.from('league_player_database').select('player_id, player_name'),
+            supabase.from('league_teams').select('team_id, team_name, logo_url'),
+            supabase.from('league_coaches').select('coach_id, coach_name')
+          ]);
+
+          const awardMetaMap = new Map((awardsListRes.data || []).map((a: any) => [String(a.award_id || a.id), a]));
+          const playerMap = new Map((playerDbRes.data || []).map((p: any) => [String(p.player_id), p.player_name]));
+          const teamMap = new Map((teamsRes.data || []).map((t: any) => [String(t.team_id), t]));
+          const coachMap = new Map((coachesRes.data || []).map((c: any) => [String(c.coach_id), c.coach_name]));
+
+          const formatted = (rawAwardsRes.data || []).map((item: any) => {
+            const aMeta = awardMetaMap.get(String(item.award_id));
+            const pName = item.player_id ? playerMap.get(String(item.player_id)) : '';
+            const cName = item.coach_id ? coachMap.get(String(item.coach_id)) : '';
+            const tObj = item.team_id ? teamMap.get(String(item.team_id)) : null;
+
+            return {
+              award_name: aMeta?.award_names || item.award_name || "Unknown",
+              trophy_image_url: aMeta?.award_url,
+              description: item.description,
+              nhl_comparable: item.nhl_comparable,
+              winner_name: pName || cName || "",
+              team_name: tObj?.team_name || "N/A",
+              team_logo: tObj?.logo_url
+            };
+          });
+          setAwards(formatted);
+        }
+      } catch (err) {
+        console.error("Error fetching awards:", err);
+      } finally {
+        setLoading(false);
+      }
     }
     fetchData();
   }, [selectedSeason]);

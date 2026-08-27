@@ -1385,7 +1385,7 @@ const CompareSlotPicker = ({
         try {
           let queryBuilder = supabase
             .from('league_player_database')
-            .select('player_id, player_name, pos, team_default, ratings, player_info')
+            .select('*')
             .limit(60);
 
           if (trimmed) {
@@ -1817,7 +1817,7 @@ export default function PlayersPage() {
           chunkRanges.map((range) =>
             supabase
               .from('league_player_database')
-              .select('player_id, player_name, pos, team_default, ratings, player_info')
+              .select('*')
               .range(range.from, range.to)
           )
         );

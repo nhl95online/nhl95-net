@@ -463,239 +463,243 @@ export default function NewspaperPage() {
       }
     } catch { }
 
-    // Fetch stats, master player game stats, rosters, database, and teams in parallel
-    const [statsRes, masterRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
-      supabase.from('api_stats_with_names').select('*').eq('league_id', sId),
-      supabase.from('league_player_stats_master').select('*').eq('league_id', sId),
-      supabase.from('league_rosters').select('*').eq('league_id', sId),
-      supabase.from('league_player_database').select('player_id, player_name, pos, team_default, is_rookie'),
-      supabase.from('league_teams').select('team_id, team_name, logo_url, abbreviation, league_id')
-    ]);
+    try {
+      // Fetch stats, master player game stats, rosters, database, and teams in parallel
+      const [statsRes, masterRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
+        supabase.from('api_stats_with_names').select('*').eq('league_id', sId),
+        supabase.from('league_player_stats_master').select('*').eq('league_id', sId),
+        supabase.from('league_rosters').select('*').eq('league_id', sId),
+        supabase.from('league_player_database').select('*'),
+        supabase.from('league_teams').select('*')
+      ]);
 
-    // Build team lookup map
-    const teamMap = new Map<string, { name: string; logo: string; abbr: string }>();
-    (teamsRes.data || []).forEach((t: any) => {
-      const tId = String(t.team_id);
-      const abbr = String(t.abbreviation || '').trim().toUpperCase();
-      const name = String(t.team_name || '').trim();
-      const obj = { name, logo: t.logo_url || '', abbr };
-      if (tId) teamMap.set(tId, obj);
-      if (abbr) teamMap.set(abbr, obj);
-      if (name) teamMap.set(name.toLowerCase(), obj);
-    });
-
-    // Build player / roster lookup map
-    const newPosMap = new Map<string, string>();
-    const playerMetaMap = new Map<string, any>();
-
-    if (playerDbRes.data) {
-      playerDbRes.data.forEach((p: any) => {
-        const pos = String(p.pos || '').trim().toUpperCase();
-        const pName = String(p.player_name || '').trim();
-        const norm = normalizeName(pName);
-        const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
-        if (pos) {
-          if (pId) newPosMap.set(pId, pos);
-          if (pName) newPosMap.set(pName.toLowerCase(), pos);
-          if (norm) newPosMap.set(norm, pos);
-        }
-        if (pId) playerMetaMap.set(pId, p);
-        if (pName) playerMetaMap.set(pName.toLowerCase(), p);
-        if (norm) playerMetaMap.set(norm, p);
+      // Build team lookup map
+      const teamMap = new Map<string, { name: string; logo: string; abbr: string }>();
+      (teamsRes.data || []).forEach((t: any) => {
+        const tId = String(t.team_id);
+        const abbr = String(t.abbreviation || '').trim().toUpperCase();
+        const name = String(t.team_name || '').trim();
+        const obj = { name, logo: t.logo_url || '', abbr };
+        if (tId) teamMap.set(tId, obj);
+        if (abbr) teamMap.set(abbr, obj);
+        if (name) teamMap.set(name.toLowerCase(), obj);
       });
-    }
 
-    if (rosterRes.data) {
-      rosterRes.data.forEach((p: any) => {
-        const pos = String(p.pos || p.position || '').trim().toUpperCase();
-        const pName = String(p.player_name || '').trim();
-        const norm = normalizeName(pName);
-        const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
-        if (pos) {
-          if (pId) newPosMap.set(pId, pos);
-          if (pName) newPosMap.set(pName.toLowerCase(), pos);
-          if (norm) newPosMap.set(norm, pos);
-        }
-        if (pId) playerMetaMap.set(pId, { ...(playerMetaMap.get(pId) || {}), ...p });
-        if (pName) playerMetaMap.set(pName.toLowerCase(), { ...(playerMetaMap.get(pName.toLowerCase()) || {}), ...p });
-        if (norm) playerMetaMap.set(norm, { ...(playerMetaMap.get(norm) || {}), ...p });
-      });
-    }
+      // Build player / roster lookup map
+      const newPosMap = new Map<string, string>();
+      const playerMetaMap = new Map<string, any>();
 
-    setPosMap(newPosMap);
-
-    // Aggregate stats from league_player_stats_master if available
-    const masterAggregatedMap = new Map<string, any>();
-    if (masterRes.data && masterRes.data.length > 0) {
-      masterRes.data.forEach((row: any) => {
-        const directPos = String(row.pos_played || '').toUpperCase();
-        const pId = row.player_id && String(row.player_id) !== '1' && String(row.player_id) !== '0' ? String(row.player_id) : '';
-        const rawPName = String(row.player_name || '').trim();
-        const norm = normalizeName(rawPName);
-        const meta = (pId ? playerMetaMap.get(pId) : null) || (rawPName ? playerMetaMap.get(rawPName.toLowerCase()) : null) || (norm ? playerMetaMap.get(norm) : null);
-        const resolvedName = meta?.player_name || rawPName || (pId ? `Player #${pId}` : (directPos === 'G' ? 'Goalie' : 'Skater'));
-
-        const isG = directPos === 'G' || KNOWN_GOALIES_SET.has(normalizeName(resolvedName)) || (Number(row.shots_against || 0) > 0 || Number(row.saves || 0) > 0);
-        const key = (isG ? 'G_' : 'S_') + (pId ? pId : (normalizeName(resolvedName) + '_' + String(row.team_id || '')));
-
-        const tInfo = teamMap.get(String(row.team_id)) || (meta?.team_default ? teamMap.get(meta.team_default) : null);
-        const teamName = tInfo?.name || row.team_name || 'Team';
-        const logoUrl = tInfo?.logo || row.logo_url || '';
-        const isRookie = meta?.is_rookie === true || meta?.is_rookie === 'true' || meta?.is_rookie === 1 || row.is_rookie === true;
-
-        if (!masterAggregatedMap.has(key)) {
-          masterAggregatedMap.set(key, {
-            player_id: row.player_id,
-            player_name: resolvedName,
-            team_id: row.team_id,
-            team_name: teamName,
-            logo_url: logoUrl,
-            is_rookie: isRookie,
-            pos_played: isG ? 'G' : (row.pos_played || 'F'),
-            gp: 0,
-            total_goals: 0,
-            total_assists: 0,
-            total_points: 0,
-            total_sog: 0,
-            total_chks: 0,
-            total_pim: 0,
-            pp_points: 0,
-            sh_points: 0,
-            ppg: 0,
-            shg: 0,
-            evg: 0,
-            gwg: 0,
-            otg: 0,
-            toi_seconds: 0,
-            shots_against: 0,
-            saves: 0,
-            goals_against: 0,
-            wins: 0,
-            losses: 0,
-            ties: 0,
-            otl: 0,
-            shutouts: 0
-          });
-        }
-
-        const cur = masterAggregatedMap.get(key);
-        cur.gp += 1;
-        cur.toi_seconds += Number(row.toi || 0);
-
-        if (isG) {
-          cur.shots_against += Number(row.shots_against || 0);
-          cur.saves += Number(row.saves || 0);
-          cur.goals_against += Number(row.goals_against || 0);
-          if (row.is_win) cur.wins += 1;
-          if (row.is_loss) cur.losses += 1;
-          if (row.is_tie) cur.ties += 1;
-          if (row.is_otl) cur.otl += 1;
-          if (Number(row.goals_against || 0) === 0 && (Number(row.shots_against || 0) > 0 || row.is_win)) {
-            cur.shutouts += 1;
+      if (playerDbRes.data) {
+        playerDbRes.data.forEach((p: any) => {
+          const pos = String(p.pos || '').trim().toUpperCase();
+          const pName = String(p.player_name || '').trim();
+          const norm = normalizeName(pName);
+          const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
+          if (pos) {
+            if (pId) newPosMap.set(pId, pos);
+            if (pName) newPosMap.set(pName.toLowerCase(), pos);
+            if (norm) newPosMap.set(norm, pos);
           }
-          cur.total_goals += Number(row.goals || 0);
-          cur.total_assists += Number(row.assists || 0);
-          cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
-        } else {
-          cur.total_goals += Number(row.goals || 0);
-          cur.total_assists += Number(row.assists || 0);
-          cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
-          cur.total_sog += Number(row.shots || 0);
-          cur.total_chks += Number(row.checks || 0);
-          cur.total_pim += Number(row.pim || 0);
-          cur.pp_points += Number(row.pp_points || 0);
-          cur.sh_points += Number(row.sh_points || 0);
-          cur.evg += Number(row.evg || 0);
-          cur.gwg += Number(row.gwg || 0);
-          cur.otg += Number(row.otg || 0);
-        }
+          if (pId) playerMetaMap.set(pId, p);
+          if (pName) playerMetaMap.set(pName.toLowerCase(), p);
+          if (norm) playerMetaMap.set(norm, p);
+        });
+      }
+
+      if (rosterRes.data) {
+        rosterRes.data.forEach((p: any) => {
+          const pos = String(p.pos || p.position || '').trim().toUpperCase();
+          const pName = String(p.player_name || '').trim();
+          const norm = normalizeName(pName);
+          const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
+          if (pos) {
+            if (pId) newPosMap.set(pId, pos);
+            if (pName) newPosMap.set(pName.toLowerCase(), pos);
+            if (norm) newPosMap.set(norm, pos);
+          }
+          if (pId) playerMetaMap.set(pId, { ...(playerMetaMap.get(pId) || {}), ...p });
+          if (pName) playerMetaMap.set(pName.toLowerCase(), { ...(playerMetaMap.get(pName.toLowerCase()) || {}), ...p });
+          if (norm) playerMetaMap.set(norm, { ...(playerMetaMap.get(norm) || {}), ...p });
+        });
+      }
+
+      setPosMap(newPosMap);
+
+      // Aggregate stats from league_player_stats_master if available
+      const masterAggregatedMap = new Map<string, any>();
+      if (masterRes.data && masterRes.data.length > 0) {
+        masterRes.data.forEach((row: any) => {
+          const directPos = String(row.pos_played || '').toUpperCase();
+          const pId = row.player_id && String(row.player_id) !== '1' && String(row.player_id) !== '0' ? String(row.player_id) : '';
+          const rawPName = String(row.player_name || '').trim();
+          const norm = normalizeName(rawPName);
+          const meta = (pId ? playerMetaMap.get(pId) : null) || (rawPName ? playerMetaMap.get(rawPName.toLowerCase()) : null) || (norm ? playerMetaMap.get(norm) : null);
+          const resolvedName = meta?.player_name || rawPName || (pId ? `Player #${pId}` : (directPos === 'G' ? 'Goalie' : 'Skater'));
+
+          const isG = directPos === 'G' || KNOWN_GOALIES_SET.has(normalizeName(resolvedName)) || (Number(row.shots_against || 0) > 0 || Number(row.saves || 0) > 0);
+          const key = (isG ? 'G_' : 'S_') + (pId ? pId : (normalizeName(resolvedName) + '_' + String(row.team_id || '')));
+
+          const tInfo = teamMap.get(String(row.team_id)) || (meta?.team_default ? teamMap.get(meta.team_default) : null);
+          const teamName = tInfo?.name || row.team_name || 'Team';
+          const logoUrl = tInfo?.logo || row.logo_url || '';
+          const isRookie = meta?.is_rookie === true || meta?.is_rookie === 'true' || meta?.is_rookie === 1 || row.is_rookie === true;
+
+          if (!masterAggregatedMap.has(key)) {
+            masterAggregatedMap.set(key, {
+              player_id: row.player_id,
+              player_name: resolvedName,
+              team_id: row.team_id,
+              team_name: teamName,
+              logo_url: logoUrl,
+              is_rookie: isRookie,
+              pos_played: isG ? 'G' : (row.pos_played || 'F'),
+              gp: 0,
+              total_goals: 0,
+              total_assists: 0,
+              total_points: 0,
+              total_sog: 0,
+              total_chks: 0,
+              total_pim: 0,
+              pp_points: 0,
+              sh_points: 0,
+              ppg: 0,
+              shg: 0,
+              evg: 0,
+              gwg: 0,
+              otg: 0,
+              toi_seconds: 0,
+              shots_against: 0,
+              saves: 0,
+              goals_against: 0,
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              otl: 0,
+              shutouts: 0
+            });
+          }
+
+          const cur = masterAggregatedMap.get(key);
+          cur.gp += 1;
+          cur.toi_seconds += Number(row.toi || 0);
+
+          if (isG) {
+            cur.shots_against += Number(row.shots_against || 0);
+            cur.saves += Number(row.saves || 0);
+            cur.goals_against += Number(row.goals_against || 0);
+            if (row.is_win) cur.wins += 1;
+            if (row.is_loss) cur.losses += 1;
+            if (row.is_tie) cur.ties += 1;
+            if (row.is_otl) cur.otl += 1;
+            if (Number(row.goals_against || 0) === 0 && (Number(row.shots_against || 0) > 0 || row.is_win)) {
+              cur.shutouts += 1;
+            }
+            cur.total_goals += Number(row.goals || 0);
+            cur.total_assists += Number(row.assists || 0);
+            cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
+          } else {
+            cur.total_goals += Number(row.goals || 0);
+            cur.total_assists += Number(row.assists || 0);
+            cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
+            cur.total_sog += Number(row.shots || 0);
+            cur.total_chks += Number(row.checks || 0);
+            cur.total_pim += Number(row.pim || 0);
+            cur.pp_points += Number(row.pp_points || 0);
+            cur.sh_points += Number(row.sh_points || 0);
+            cur.evg += Number(row.evg || 0);
+            cur.gwg += Number(row.gwg || 0);
+            cur.otg += Number(row.otg || 0);
+          }
+        });
+      }
+
+      // Format master rows with calculated fields
+      const masterList: any[] = [];
+      masterAggregatedMap.forEach((p: any) => {
+        const sa = p.shots_against || 0;
+        const sv = p.saves || 0;
+        const ga = p.goals_against || 0;
+        const gp = p.gp || 0;
+
+        masterList.push({
+          ...p,
+          toi_minutes: formatSecondsToMMSS(p.toi_seconds),
+          sv_pct: sa > 0 ? Number((sv / sa).toFixed(3)) : 0,
+          gaa: gp > 0 ? Number((ga / gp).toFixed(2)) : 0,
+          pts_per_game: gp > 0 ? Number((p.total_points / gp).toFixed(2)) : 0
+        });
       });
+
+      // Merge api_stats_with_names with master stats
+      const combinedMap = new Map<string, any>();
+
+      // 1. Add aggregated master stats
+      masterList.forEach((m: any) => {
+        const isG = m.pos_played === 'G';
+        const norm = normalizeName(m.player_name);
+        const pId = m.player_id && String(m.player_id) !== '1' && String(m.player_id) !== '0' ? String(m.player_id) : '';
+        const key = (isG ? 'G_' : 'S_') + (pId ? pId : `${norm}_${m.team_id || m.team_name || ''}`);
+        combinedMap.set(key, m);
+      });
+
+      // 2. Merge / add api_stats_with_names
+      if (statsRes.data && statsRes.data.length > 0) {
+        statsRes.data.forEach((s: any) => {
+          const sName = String(s.player_name || '').trim();
+          const norm = normalizeName(sName);
+          const resolvedPPos = resolvePlayerPosition(s, newPosMap);
+          const isG = resolvedPPos === 'G';
+          const pId = s.player_id && String(s.player_id) !== '1' && String(s.player_id) !== '0' ? String(s.player_id) : '';
+          const key = (isG ? 'G_' : 'S_') + (pId ? pId : `${norm}_${s.team_id || s.team_name || ''}`);
+
+          const sa = Number(s.shots_against ?? s.total_shots_against ?? s.total_sa ?? s.sa ?? 0);
+          const sv = Number(s.saves ?? s.total_saves ?? s.sv ?? 0);
+          const ga = Number(s.goals_against ?? s.total_goals_against ?? s.total_ga ?? s.ga ?? 0);
+          const gp = Number(s.gp ?? s.games_played ?? 0);
+          const svPct = isG ? (s.sv_pct != null && !isNaN(Number(s.sv_pct)) ? Number(s.sv_pct) : (sa > 0 ? Number((sv / sa).toFixed(3)) : 0)) : null;
+          const gaa = isG ? (s.gaa != null && !isNaN(Number(s.gaa)) ? Number(s.gaa) : (gp > 0 ? Number((ga / gp).toFixed(2)) : 0)) : null;
+
+          if (combinedMap.has(key)) {
+            const existing = combinedMap.get(key);
+            combinedMap.set(key, {
+              ...existing,
+              ...s,
+              pos_played: isG ? 'G' : (s.pos_played || s.pos || resolvedPPos || existing.pos_played),
+              gp: Math.max(Number(existing.gp || 0), gp),
+              wins: isG ? Math.max(Number(s.wins ?? 0), Number(existing.wins ?? 0)) : 0,
+              losses: isG ? Math.max(Number(s.losses ?? 0), Number(existing.losses ?? 0)) : 0,
+              ties: isG ? Math.max(Number(s.ties ?? 0), Number(existing.ties ?? 0)) : 0,
+              otl: isG ? Math.max(Number(s.otl ?? 0), Number(existing.otl ?? 0)) : 0,
+              saves: isG ? Math.max(sv, Number(existing.saves ?? 0)) : 0,
+              shots_against: isG ? Math.max(sa, Number(existing.shots_against ?? 0)) : 0,
+              goals_against: isG ? Math.max(ga, Number(existing.goals_against ?? 0)) : 0,
+              shutouts: isG ? Math.max(Number(s.shutouts ?? 0), Number(existing.shutouts ?? 0)) : 0,
+              sv_pct: isG ? (svPct ?? existing.sv_pct) : null,
+              gaa: isG ? (gaa ?? existing.gaa) : null
+            });
+          } else {
+            const tInfo = teamMap.get(String(s.team_id)) || (s.team_name ? teamMap.get(s.team_name.toLowerCase()) : null);
+            combinedMap.set(key, {
+              ...s,
+              pos_played: isG ? 'G' : (s.pos_played || s.pos || resolvedPPos),
+              team_name: tInfo?.name || s.team_name || 'Team',
+              logo_url: tInfo?.logo || s.logo_url || '',
+              shots_against: sa,
+              saves: sv,
+              goals_against: ga,
+              sv_pct: svPct,
+              gaa: gaa,
+              gp: gp
+            });
+          }
+        });
+      }
+
+      const finalList = Array.from(combinedMap.values());
+      setData(finalList);
+    } catch (err) {
+      console.error('Error loading stats data:', err);
     }
-
-    // Format master rows with calculated fields
-    const masterList: any[] = [];
-    masterAggregatedMap.forEach((p: any) => {
-      const sa = p.shots_against || 0;
-      const sv = p.saves || 0;
-      const ga = p.goals_against || 0;
-      const gp = p.gp || 0;
-
-      masterList.push({
-        ...p,
-        toi_minutes: formatSecondsToMMSS(p.toi_seconds),
-        sv_pct: sa > 0 ? Number((sv / sa).toFixed(3)) : 0,
-        gaa: gp > 0 ? Number((ga / gp).toFixed(2)) : 0,
-        pts_per_game: gp > 0 ? Number((p.total_points / gp).toFixed(2)) : 0
-      });
-    });
-
-    // Merge api_stats_with_names with master stats
-    const combinedMap = new Map<string, any>();
-
-    // 1. Add aggregated master stats
-    masterList.forEach((m: any) => {
-      const isG = m.pos_played === 'G';
-      const norm = normalizeName(m.player_name);
-      const pId = m.player_id && String(m.player_id) !== '1' && String(m.player_id) !== '0' ? String(m.player_id) : '';
-      const key = (isG ? 'G_' : 'S_') + (pId ? pId : `${norm}_${m.team_id || m.team_name || ''}`);
-      combinedMap.set(key, m);
-    });
-
-    // 2. Merge / add api_stats_with_names
-    if (statsRes.data && statsRes.data.length > 0) {
-      statsRes.data.forEach((s: any) => {
-        const sName = String(s.player_name || '').trim();
-        const norm = normalizeName(sName);
-        const resolvedPPos = resolvePlayerPosition(s, newPosMap);
-        const isG = resolvedPPos === 'G';
-        const pId = s.player_id && String(s.player_id) !== '1' && String(s.player_id) !== '0' ? String(s.player_id) : '';
-        const key = (isG ? 'G_' : 'S_') + (pId ? pId : `${norm}_${s.team_id || s.team_name || ''}`);
-
-        const sa = Number(s.shots_against ?? s.total_shots_against ?? s.total_sa ?? s.sa ?? 0);
-        const sv = Number(s.saves ?? s.total_saves ?? s.sv ?? 0);
-        const ga = Number(s.goals_against ?? s.total_goals_against ?? s.total_ga ?? s.ga ?? 0);
-        const gp = Number(s.gp ?? s.games_played ?? 0);
-        const svPct = isG ? (s.sv_pct != null && !isNaN(Number(s.sv_pct)) ? Number(s.sv_pct) : (sa > 0 ? Number((sv / sa).toFixed(3)) : 0)) : null;
-        const gaa = isG ? (s.gaa != null && !isNaN(Number(s.gaa)) ? Number(s.gaa) : (gp > 0 ? Number((ga / gp).toFixed(2)) : 0)) : null;
-
-        if (combinedMap.has(key)) {
-          const existing = combinedMap.get(key);
-          combinedMap.set(key, {
-            ...existing,
-            ...s,
-            pos_played: isG ? 'G' : (s.pos_played || s.pos || resolvedPPos || existing.pos_played),
-            gp: Math.max(Number(existing.gp || 0), gp),
-            wins: isG ? Math.max(Number(s.wins ?? 0), Number(existing.wins ?? 0)) : 0,
-            losses: isG ? Math.max(Number(s.losses ?? 0), Number(existing.losses ?? 0)) : 0,
-            ties: isG ? Math.max(Number(s.ties ?? 0), Number(existing.ties ?? 0)) : 0,
-            otl: isG ? Math.max(Number(s.otl ?? 0), Number(existing.otl ?? 0)) : 0,
-            saves: isG ? Math.max(sv, Number(existing.saves ?? 0)) : 0,
-            shots_against: isG ? Math.max(sa, Number(existing.shots_against ?? 0)) : 0,
-            goals_against: isG ? Math.max(ga, Number(existing.goals_against ?? 0)) : 0,
-            shutouts: isG ? Math.max(Number(s.shutouts ?? 0), Number(existing.shutouts ?? 0)) : 0,
-            sv_pct: isG ? (svPct ?? existing.sv_pct) : null,
-            gaa: isG ? (gaa ?? existing.gaa) : null
-          });
-        } else {
-          const tInfo = teamMap.get(String(s.team_id)) || (s.team_name ? teamMap.get(s.team_name.toLowerCase()) : null);
-          combinedMap.set(key, {
-            ...s,
-            pos_played: isG ? 'G' : (s.pos_played || s.pos || resolvedPPos),
-            team_name: tInfo?.name || s.team_name || 'Team',
-            logo_url: tInfo?.logo || s.logo_url || '',
-            shots_against: sa,
-            saves: sv,
-            goals_against: ga,
-            sv_pct: svPct,
-            gaa: gaa,
-            gp: gp
-          });
-        }
-      });
-    }
-
-    const finalList = Array.from(combinedMap.values());
-    setData(finalList);
   }
 
   const uniqueData = useMemo(() => {
@@ -1053,9 +1057,9 @@ export default function NewspaperPage() {
         return Number(p.ev_points ?? p.total_ev_points ?? p.ev_pts ?? Math.max(0, pts - ppp - shp));
       }
       if (key === 'ppg') return Number(p.ppg ?? p.total_ppg ?? p.pp_goals ?? p.total_pp_goals ?? 0);
-      if (key === 'pp_points') return Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? a.pp_pts ?? 0);
+      if (key === 'pp_points') return Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? p.pp_pts ?? 0);
       if (key === 'shg') return Number(p.shg ?? p.total_shg ?? p.sh_goals ?? p.total_sh_goals ?? 0);
-      if (key === 'sh_points') return Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? a.sh_pts ?? 0);
+      if (key === 'sh_points') return Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? p.sh_pts ?? 0);
       if (key === 'gwg') return Number(p.gwg ?? p.total_gwg ?? 0);
       if (key === 'otg') return Number(p.otg ?? p.total_otg ?? 0);
       if (key === 'total_sog') return Number(p.total_sog ?? p.sog ?? p.shots ?? 0);

@@ -452,7 +452,7 @@ export default function TradesPage() {
           // Real-time query to league_player_database for these exact players
           const { data: dbPlayers } = await supabase
             .from('league_player_database')
-            .select('player_id, player_name, pos, team_default, player_info, ratings')
+            .select('*')
             .in('player_name', playerNames);
 
           const finalRoster: PlayerAsset[] = rosterRows.map((r: any) => {
@@ -971,150 +971,165 @@ export default function TradesPage() {
                   : 'bg-white text-black hover:bg-neutral-100'
                 }`}
             >
-              <Scale className="w-3.5 h-3.5" />
-              <span>Trade Simulator</span>
+              <ArrowLeftRight className="w-3.5 h-3.5" />
+              <span>Simulator</span>
             </button>
 
-            {/* League Tabs */}
-            {(['W', 'O', 'Q', 'V', 'ALL'] as const).map((tabKey) => {
-              const conf = CURRENT_LEAGUES_CONFIG.find(c => c.id === tabKey);
-              const label = tabKey === 'ALL' ? 'All Leagues' : conf?.name || tabKey;
-              const isSelected = activeTab === tabKey;
+            <button
+              onClick={() => { setActiveTab('W'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'W'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+            >
+              W League
+            </button>
 
-              return (
-                <button
-                  key={tabKey}
-                  onClick={() => {
-                    setActiveTab(tabKey);
-                    if (tabKey !== 'ALL') setSimLeague(tabKey);
-                  }}
-                  className={`px-2.5 sm:px-3 py-1 font-bold uppercase text-xs transition border flex items-center gap-1.5 cursor-pointer shrink-0 ${isSelected
-                      ? 'bg-black text-white border-black shadow-xs'
-                      : 'bg-white text-neutral-700 border-neutral-300 hover:border-black'
-                    }`}
-                >
-                  {conf?.logoUrl && (
-                    <img
-                      src={conf.logoUrl}
-                      alt=""
-                      className="h-3.5 w-auto max-w-[28px] object-contain"
-                      onError={(e) => {
-                        if (conf.fallbackLogoUrl && e.currentTarget.src !== conf.fallbackLogoUrl) {
-                          e.currentTarget.src = conf.fallbackLogoUrl;
-                        }
-                      }}
-                    />
-                  )}
-                  <span>{label}</span>
-                </button>
-              );
-            })}
+            <button
+              onClick={() => { setActiveTab('O'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'O'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+            >
+              Original 6
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('Q'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'Q'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+            >
+              The Q
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('V'); setSelectedSeasonFilter('CURRENT'); setSelectedFranchiseFilter('ALL'); }}
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'V'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+            >
+              Vintage
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('ALL'); setSelectedSeasonFilter('ALL'); setSelectedFranchiseFilter('ALL'); }}
+              className={`px-3.5 py-1.5 font-bold uppercase text-xs transition border border-black cursor-pointer ${activeTab === 'ALL'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+            >
+              All Trades
+            </button>
           </div>
 
-          {/* Right: Quick Context Pill */}
-          <div className="flex items-center gap-2 self-end lg:self-auto text-xs font-mono">
-            {activeTab === 'simulator' ? (
-              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border border-black text-neutral-800">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Active Scope: <strong>{activeSimConfig.name} ({activeSimConfig.currentSeasonName})</strong></span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border border-black text-neutral-800">
-                <History className="w-3.5 h-3.5 text-neutral-600" />
-                <span>Historical Trade Ledger</span>
-              </div>
-            )}
+          {/* Right: Quick Scope Indicator */}
+          <div className="flex items-center gap-2 text-xs font-sans font-bold uppercase text-black/70">
+            <span>Active Horizon:</span>
+            <span className="bg-black text-white px-2 py-0.5 font-mono text-[11px]">
+              {activeSimConfig.currentSeasonName} (Draft {activeSimConfig.futureDraftYears.join(', ')})
+            </span>
           </div>
         </div>
 
-        {/* 3. VIEW 1: TRADE SIMULATOR WORKBENCH */}
+        {/* ========================================================================= */}
+        {/* TAB 1: INTERACTIVE TRADE SIMULATOR                                        */}
+        {/* ========================================================================= */}
         {activeTab === 'simulator' && (
           <div className="space-y-4">
 
-            {/* League Scope Selector Toolbar */}
-            <div className="bg-white border border-black p-3 flex flex-wrap items-center justify-between gap-3 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase font-mono tracking-wider">Select Simulator League Scope:</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {(['W', 'O', 'Q', 'V'] as const).map((leagueKey) => {
-                    const cfg = CURRENT_LEAGUES_CONFIG.find(c => c.id === leagueKey);
-                    const isActive = simLeague === leagueKey;
-
-                    return (
-                      <button
-                        key={leagueKey}
-                        onClick={() => setSimLeague(leagueKey)}
-                        className={`px-3 py-1 text-xs font-bold uppercase border transition flex items-center gap-1.5 cursor-pointer ${isActive
-                            ? 'bg-black text-white border-black'
-                            : 'bg-[#f4f1ea] border-neutral-300 hover:border-black text-neutral-800'
-                          }`}
-                      >
-                        {cfg?.logoUrl && (
-                          <img
-                            src={cfg.logoUrl}
-                            alt=""
-                            className="h-3.5 w-auto max-w-[28px] object-contain"
-                            onError={(e) => {
-                              if (cfg.fallbackLogoUrl && e.currentTarget.src !== cfg.fallbackLogoUrl) {
-                                e.currentTarget.src = cfg.fallbackLogoUrl;
-                              }
-                            }}
-                          />
-                        )}
-                        <span>{cfg?.name}</span>
-                        <span className="text-[10px] font-mono opacity-80">({cfg?.currentSeasonName})</span>
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* LEAGUE SELECTOR 4 CARDS (STANDINGS STYLE DECK) */}
+            <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 font-sans select-none text-xs">
+              <div className="font-sans font-black text-[10px] tracking-widest text-black/60 uppercase mb-2 flex items-center justify-between">
+                <span>Select League Scope (Blended Ratings: 2012 for W18, 1926 for O01, 1997 for Q19, 1916 for V01)</span>
+                <span className="font-mono text-neutral-600">4 Active Leagues</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleResetTrade}
-                  className="px-3 py-1 text-xs font-bold uppercase bg-neutral-100 hover:bg-neutral-200 border border-black flex items-center gap-1 cursor-pointer transition"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset Trade</span>
-                </button>
-                <button
-                  onClick={copyTradeForDiscord}
-                  className="px-3 py-1 text-xs font-bold uppercase bg-black text-white hover:bg-neutral-800 border border-black flex items-center gap-1 cursor-pointer transition shadow-2xs"
-                >
-                  {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copied ? 'Copied to Clipboard!' : 'Copy Proposal'}</span>
-                </button>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                {CURRENT_LEAGUES_CONFIG.map(cfg => {
+                  const isSelected = simLeague === cfg.id;
+                  return (
+                    <button
+                      key={cfg.id}
+                      onClick={() => setSimLeague(cfg.id as any)}
+                      className={`p-2.5 border text-left flex items-center gap-3 transition-all cursor-pointer rounded-xs ${isSelected
+                          ? 'bg-black text-white border-black shadow-sm'
+                          : 'bg-white/80 text-black border-black/20 hover:border-black hover:bg-white'
+                        }`}
+                    >
+                      <img
+                        src={cfg.logoUrl}
+                        alt={cfg.name}
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          if (cfg.fallbackLogoUrl && target.src !== cfg.fallbackLogoUrl) {
+                            target.src = cfg.fallbackLogoUrl;
+                          }
+                        }}
+                        className={`w-12 h-12 object-contain p-0.5 border shrink-0 ${isSelected ? 'bg-white border-white/20' : 'bg-[#f4f1ea] border-black/10'
+                          }`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-black text-xs uppercase truncate leading-tight">{cfg.name}</div>
+                        <div className={`text-[10px] font-mono uppercase mt-0.5 truncate ${isSelected ? 'text-emerald-300' : 'text-neutral-600'}`}>
+                          {cfg.currentSeasonName}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* LIVE TRADE STATUS / PROPOSAL SUMMARY CARD */}
-            <div className="border border-black bg-white p-3.5 shadow-sm space-y-3">
+            {/* DEAL ASSESSMENT VISUALIZER (MATCHING USER MOCKUP EXACTLY) */}
+            <div className="bg-white border border-black p-4 md:p-5 shadow-sm space-y-4">
 
-              {/* TOP HEADER: TEAMS SENDER / RECEIVER + VERDICT STATUS */}
-              <div className="border-b border-black pb-2.5 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-black text-base md:text-lg uppercase tracking-tight flex items-center gap-1.5">
-                    <ArrowLeftRight className="w-4 h-4" />
-                    <span>{teamA?.team_name || 'Team A'}</span>
-                    <span className="text-neutral-400">↔</span>
-                    <span>{teamB?.team_name || 'Team B'}</span>
-                  </span>
-                  <span className="text-[10px] font-mono bg-neutral-100 px-2 py-0.5 border border-neutral-300 font-bold">
-                    {activeSimConfig.currentSeasonName}
-                  </span>
-                </div>
+              {/* Header: Status Verdict & Controls (Clean Gazette Outline Style) */}
+              <div className="flex flex-col md:flex-row items-center justify-between gap-3 border-b border-black pb-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-black">ASSESSMENT STATUS:</span>
 
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-black uppercase border ${verdictBadge.color} shadow-2xs`}>
+                  {/* Verdict Badge in Clean Bordered Box */}
+                  <div className="border border-black bg-white px-3 py-1 text-xs font-black uppercase flex items-center gap-1.5 shadow-2xs">
                     <verdictBadge.icon className="w-3.5 h-3.5" />
                     <span>{verdictBadge.text}</span>
-                  </span>
+                  </div>
+
+                  {/* Margin Differential Box */}
+                  {valDifference > 0 && (teamATotalVal > 0 || teamBTotalVal > 0) && (
+                    <div className="border border-black bg-white px-2.5 py-1 text-xs font-mono font-bold text-black shadow-2xs">
+                      (Margin: ±{valDifference} pts / {marginPercent}%)
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Action Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={copyTradeForDiscord}
+                    className="flex items-center gap-1.5 bg-black text-white border border-black text-xs font-bold uppercase px-3.5 py-1.5 hover:bg-neutral-800 transition cursor-pointer"
+                    title="Copy formatted proposal for Discord"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? "COPIED!" : "COPY FOR DISCORD"}</span>
+                  </button>
+                  <button
+                    onClick={handleResetTrade}
+                    className="flex items-center gap-1 bg-white text-black border border-black text-xs font-bold uppercase px-3 py-1.5 hover:bg-black hover:text-white transition cursor-pointer"
+                    title="Clear all selected assets"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>RESET</span>
+                  </button>
                 </div>
               </div>
 
-              {/* DUAL ASSET TRANSFER SUMMARY (SOLID RETRO GAZETTE BOXES) */}
-              <div className="bg-[#f5f2eb] border border-black p-3">
-                <div className="flex flex-col lg:flex-row items-stretch justify-between gap-3">
+              {/* FIVE-SECTION HORIZONTAL DECK (AS SHOWN IN USER MOCKUP) */}
+              <div className="border border-black bg-[#f4f1ea] p-3 md:p-4">
+                <div className="flex flex-col lg:flex-row items-stretch gap-3">
 
                   {/* 1. TEAM A SUMMARY CARD (LEFT) */}
                   <div className="w-full lg:w-[28%] bg-white border border-black p-3.5 flex flex-col justify-between shadow-2xs">
@@ -1503,7 +1518,7 @@ export default function TradesPage() {
                         src={teamB.logo_url}
                         alt={teamB.team_name}
                         style={{ width: '100px', height: '100px', minWidth: '100px', minHeight: '100px' }}
-                        className="w-[100px] h-[100px] object-contain p-1 border border-black bg-white shadow-2xs"
+                        className="w-[100px] h-[100px] object-contain shrink-0 p-1 border border-black bg-white shadow-2xs"
                       />
                     ) : (
                       <div
@@ -1515,7 +1530,7 @@ export default function TradesPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-black/70 block">
-                        Team B (Partner)
+                        Team B (Sender)
                       </label>
                       <select
                         value={teamBId}
@@ -1658,41 +1673,38 @@ export default function TradesPage() {
           </div>
         )}
 
-        {/* 4. VIEW 2: HISTORICAL TRADE LEDGER (W, O, Q, V, ALL) */}
+        {/* ========================================================================= */}
+        {/* TABS 2-6: LEAGUE-SPECIFIC HISTORICAL TRADE LEDGER (GAZETTE STYLE)         */}
+        {/* ========================================================================= */}
         {activeTab !== 'simulator' && (
           <div className="space-y-4">
 
-            {/* Filter & Options Toolbar */}
-            <div className="bg-[#f5f2eb] border border-black p-3 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-sm">
-              <div className="flex items-center gap-2 flex-wrap">
+            {/* SORT & FILTER CONTROLLER BAR (STANDINGS STYLE) */}
+            <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-black uppercase bg-black text-white px-2.5 py-1">
+                  {activeTab === 'ALL' ? 'All Leagues' : `${activeTab} League Ledger`}
+                </span>
+
                 {/* Season Filter Dropdown */}
                 <select
                   value={selectedSeasonFilter}
                   onChange={(e) => setSelectedSeasonFilter(e.target.value)}
-                  className="bg-white border border-black px-2.5 py-1 text-xs font-bold uppercase focus:outline-none cursor-pointer"
+                  className="bg-white border border-black text-xs font-bold uppercase px-2 py-1 cursor-pointer focus:outline-none font-sans"
                 >
-                  <option value="CURRENT">⚡ Active Season Trades Only</option>
-                  <option value="ALL">📜 All Historical Seasons</option>
+                  <option value="CURRENT">⚡ Current Season Only</option>
+                  <option value="ALL">📚 All Historical Seasons</option>
                   {seasons
-                    .filter(s => {
-                      if (activeTab === 'W') return String(s.season_name || '').startsWith('W') || s.league_id >= 38;
-                      if (activeTab === 'O') return String(s.season_name || '').startsWith('O') || s.league_id === 1;
-                      if (activeTab === 'Q') return String(s.season_name || '').startsWith('Q') || s.league_id === 36;
-                      if (activeTab === 'V') return String(s.season_name || '').startsWith('V') || s.league_id === 20;
-                      return true;
-                    })
-                    .map((s) => (
-                      <option key={s.league_id} value={s.season_name || s.league_id}>
-                        {s.season_name || `Season ${s.league_id}`}
-                      </option>
-                    ))}
+                    .filter(s => activeTab === 'ALL' || String(s.season_name || '').startsWith(activeTab))
+                    .map(s => <option key={s.league_id} value={s.season_name}>{s.season_name}</option>)}
                 </select>
 
-                {/* Franchise Filter Dropdown */}
+                {/* Team / Franchise Filter Dropdown */}
                 <select
                   value={selectedFranchiseFilter}
                   onChange={(e) => setSelectedFranchiseFilter(e.target.value)}
-                  className="bg-white border border-black px-2.5 py-1 text-xs font-bold uppercase focus:outline-none cursor-pointer"
+                  className="bg-white border border-black text-xs font-bold uppercase px-2 py-1 cursor-pointer focus:outline-none font-sans"
                 >
                   <option value="ALL">🏢 All Franchises</option>
                   {Array.from(new Set(trades.flatMap(t => [t.team, t.team_1]).filter(Boolean)))

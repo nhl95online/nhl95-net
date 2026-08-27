@@ -9,6 +9,8 @@ import {
   Flame, ExternalLink, RefreshCw, Send, PlusCircle, HelpCircle, Eye,
   SlidersHorizontal, Check, Award, Calendar, Star
 } from 'lucide-react';
+import { useCoachAuth } from '@/lib/coach-auth';
+import CoachLockOverlay from '@/components/CoachLockOverlay';
 
 interface SeasonOption {
   leagueId: string;
@@ -388,6 +390,7 @@ function CardAttribute({ label, value }: { label: string; value: any }) {
 // MAIN DRAFT PAGE (Single Draft Viewport Engine)
 // =========================================================================
 export default function DraftPage() {
+  const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
   // Top-Level Mode: 'floor' (Draft Central), 'past' (Past Drafts Archive), 'capital' (Draft Capital)
   const [activeTab, setActiveTab] = useState<'floor' | 'past' | 'capital'>('floor');
 
@@ -591,7 +594,7 @@ export default function DraftPage() {
         // Fetch Player Database for Coach Pick Auto-complete
         const { data: rawPlayers } = await supabase
           .from('league_player_database')
-          .select('player_id, player_name, pos, team_default, ratings, player_info')
+          .select('*')
           .limit(350);
 
         if (rawPlayers) {
@@ -807,6 +810,10 @@ export default function DraftPage() {
   // Handle Coach Pick Submission for the active single draft
   const handleSubmitPick = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLoggedIn) {
+      openLoginModal('Draft Submissions');
+      return;
+    }
     if (!coachSelectedPlayer && !coachSearch.trim()) {
       alert("Please select or enter a player name to submit.");
       return;
@@ -965,14 +972,29 @@ export default function DraftPage() {
             <div className="grid grid-cols-12 gap-5 items-start">
 
               {/* TOP LEFT: COACH SELECTION DESK ("ON THE CLOCK") */}
-              <div className="col-span-12 lg:col-span-8 bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+              <div className="col-span-12 lg:col-span-8 bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+                {!isLoggedIn && (
+                  <CoachLockOverlay
+                    title="COACH SIGN-IN REQUIRED"
+                    description="Official draft selections and roster additions require coach verification. Spectators may freely view the draft board, capital picks, and trading cards below."
+                    buttonText="Sign In to Submit Picks"
+                    loginContext="Draft Submissions"
+                  />
+                )}
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-3 mb-4 gap-2">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="w-3 h-3 bg-red-600 rounded-full animate-ping"></span>
                     <h2 className="text-base sm:text-lg font-black uppercase tracking-tight flex items-center gap-2">
                       <Clock className="w-4 h-4 text-red-700" />
                       Coach War Room &bull; Next Selection Slot
                     </h2>
+                    {isLoggedIn && currentCoach && (
+                      <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 border border-emerald-600 uppercase flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Coach: {currentCoach.coach_name}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1.5 font-mono text-xs font-bold bg-yellow-100 px-2.5 py-1 border border-black">
