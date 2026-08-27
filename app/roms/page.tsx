@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Download, HardDrive, ShieldCheck, FileArchive, Sparkles } from 'lucide-react';
+import { Download, HardDrive, ShieldCheck, Check, Copy, ExternalLink, FileArchive, Music, Cpu, Sparkles } from 'lucide-react';
 
 interface RomItem {
   id: string;

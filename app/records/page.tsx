@@ -165,13 +165,31 @@ export default function RecordsPage() {
           viewData = [];
         }
 
-        // B. Fetch detailed player stats from api_stats_with_names as source / fallback
-        let statsQuery = supabase.from('api_stats_with_names').select('*');
-        if (selectedLeague !== 'ALL') {
-          statsQuery = statsQuery.in('league_id', targetSeasonIds);
+        // B. Fetch detailed player stats from api_stats_with_names or league_player_stats_master as fallback
+        let allSeasonStats: any[] = [];
+        try {
+          let statsQuery = supabase.from('api_stats_with_names').select('*');
+          if (selectedLeague !== 'ALL') {
+            statsQuery = statsQuery.in('league_id', targetSeasonIds);
+          }
+          const { data: rawStats } = await statsQuery;
+          if (rawStats && rawStats.length > 0) {
+            allSeasonStats = rawStats;
+          }
+        } catch {}
+
+        if (allSeasonStats.length === 0) {
+          try {
+            let masterQuery = supabase.from('league_player_stats_master').select('*');
+            if (selectedLeague !== 'ALL') {
+              masterQuery = masterQuery.in('league_id', targetSeasonIds);
+            }
+            const { data: mStats } = await masterQuery;
+            if (mStats && mStats.length > 0) {
+              allSeasonStats = mStats;
+            }
+          } catch {}
         }
-        const { data: rawStats } = await statsQuery;
-        const allSeasonStats = rawStats || [];
 
         // Also fetch game single-game records from league_player_stats_master if possible
         let gameStatsMaster: any[] = [];

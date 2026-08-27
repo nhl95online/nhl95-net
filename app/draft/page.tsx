@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import {
-  Trophy, Clock, CheckCircle2, Search, Filter, Sparkles, UserCheck,
-  AlertCircle, ChevronDown, ChevronRight, Layers, ArrowRight, Shield,
+import { 
+  Trophy, Clock, CheckCircle2, Search, Filter, Sparkles, UserCheck, 
+  AlertCircle, ChevronDown, ChevronRight, Layers, ArrowRight, Shield, 
   Flame, ExternalLink, RefreshCw, Send, PlusCircle, HelpCircle, Eye,
   SlidersHorizontal, Check, Award, Calendar, Star
 } from 'lucide-react';
@@ -255,7 +255,7 @@ function HockeyCardSpotlight({ draftItem, title = "OFFICIAL DRAFT CARD" }: { dra
     <div className="w-full max-w-[340px] mx-auto relative group">
       {/* 3D Trading Card Frame */}
       <div className="relative bg-gradient-to-b from-[#181a20] via-[#222630] to-[#0f1116] text-white p-3 sm:p-3.5 border-[3px] border-black rounded-xl shadow-[8px_8px_0px_rgba(0,0,0,1)] ring-1 ring-amber-400/60 overflow-hidden transition-all duration-200 hover:shadow-[10px_10px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5">
-
+        
         {/* Holographic Header Foil Bar */}
         <div className="flex items-center justify-between border-b border-amber-400/40 pb-1.5 mb-2 font-mono text-[9px] uppercase tracking-wider">
           <div className="flex items-center gap-1.5 text-amber-300 font-black truncate">
@@ -269,7 +269,7 @@ function HockeyCardSpotlight({ draftItem, title = "OFFICIAL DRAFT CARD" }: { dra
 
         {/* Main Framed Photo Box */}
         <div className="relative bg-gradient-to-t from-black via-neutral-900 to-neutral-800 border-2 border-amber-400/70 rounded-md p-1 mb-2.5 overflow-hidden shadow-inner">
-
+          
           {/* Top Left Foil Badge: Draft Round & Overall Pick */}
           <div className="absolute top-2 left-2 z-20 bg-black/85 backdrop-blur-xs border border-amber-400/90 px-2 py-0.5 rounded-xs text-[9px] font-mono font-black uppercase text-amber-300 shadow-md flex items-center gap-1">
             <span>RD {draftItem.rd}</span>
@@ -288,7 +288,7 @@ function HockeyCardSpotlight({ draftItem, title = "OFFICIAL DRAFT CARD" }: { dra
           {/* Player Portrait */}
           <div className="relative w-full h-44 sm:h-48 flex items-center justify-center overflow-hidden rounded bg-neutral-950">
             <PlayerPortrait name={draftItem.player} className="w-full h-full object-cover" />
-
+            
             {/* Vignette Shadow Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/25 pointer-events-none" />
 
@@ -518,11 +518,11 @@ export default function DraftPage() {
 
             // Connect strictly by League ID
             let resolvedLeagueId = String(d.league_id || t?.league_id || "");
-
+            
             if (!resolvedLeagueId || resolvedLeagueId === "0" || !combinedSeasonMap.has(resolvedLeagueId)) {
               const teamAbbr = String(t?.abbreviation || "").toUpperCase();
               const isO6 = ['BOS', 'CHI', 'DET', 'DTC', 'MTL', 'NYR', 'TOR'].includes(teamAbbr) || rawYear === 1927;
-
+              
               if (isO6 || rawYear === 1927) {
                 resolvedLeagueId = "39";
               } else if (rawYear === 1917) {
@@ -688,12 +688,12 @@ export default function DraftPage() {
       const isCapitalRow = (!d.player || d.player === "N/A");
       const viewMatch = showCapital ? isCapitalRow : !isCapitalRow;
       if (!viewMatch) return false;
-
+      
       // Search inside this single draft
       if (searchQuery.trim()) {
         const search = searchQuery.toLowerCase().trim();
-        const matchSearch =
-          d.team.toLowerCase().includes(search) ||
+        const matchSearch = 
+          d.team.toLowerCase().includes(search) || 
           d.player.toLowerCase().includes(search) ||
           (d.pos && d.pos.toLowerCase().includes(search)) ||
           d.pk.toString().includes(search);
@@ -713,7 +713,7 @@ export default function DraftPage() {
   // Identify Current "On The Clock" Pick Slot in the Active Single Draft
   const nextEmptyPickSlot = useMemo(() => {
     if (overridePickSlot && overridePickSlot.leagueId === floorLeagueId) return overridePickSlot;
-
+    
     // Find the first unfilled slot in the currently selected single draft
     const singleDraftRows = data.filter(d => d.leagueId === floorLeagueId);
     const emptySlot = singleDraftRows.find(d => !d.player || d.player === "N/A" || d.player.trim() === "");
@@ -753,7 +753,7 @@ export default function DraftPage() {
       // Search
       if (pastSearchQuery.trim()) {
         const q = pastSearchQuery.toLowerCase().trim();
-        const matches =
+        const matches = 
           d.player.toLowerCase().includes(q) ||
           d.team.toLowerCase().includes(q) ||
           (d.pos && d.pos.toLowerCase().includes(q)) ||
@@ -771,8 +771,8 @@ export default function DraftPage() {
       return { count: 0, avgOvr: 0, topPick: null, topPosition: 'N/A' };
     }
     const withOvr = pastDraftsData.filter(d => d.ovr !== null && d.ovr > 0);
-    const avg = withOvr.length > 0
-      ? Math.round(withOvr.reduce((acc, d) => acc + (d.ovr || 0), 0) / withOvr.length)
+    const avg = withOvr.length > 0 
+      ? Math.round(withOvr.reduce((acc, d) => acc + (d.ovr || 0), 0) / withOvr.length) 
       : 0;
 
     const topPick = [...pastDraftsData].sort((a, b) => (b.ovr || 0) - (a.ovr || 0))[0];
@@ -913,10 +913,11 @@ export default function DraftPage() {
           <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
             <button
               onClick={() => { setActiveTab('floor'); setShowCapital(false); }}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'floor' && !showCapital
+              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'floor' && !showCapital
                   ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                   : 'bg-white text-black hover:bg-neutral-100'
-                }`}
+              }`}
             >
               <Trophy className="w-3.5 h-3.5" />
               Draft Floor (Live Central)
@@ -924,10 +925,11 @@ export default function DraftPage() {
 
             <button
               onClick={() => setActiveTab('past')}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'past'
+              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'past'
                   ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                   : 'bg-white text-black hover:bg-neutral-100'
-                }`}
+              }`}
             >
               <Award className="w-3.5 h-3.5" />
               Past Drafts Archive
@@ -935,10 +937,11 @@ export default function DraftPage() {
 
             <button
               onClick={() => { setActiveTab('floor'); setShowCapital(true); }}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${activeTab === 'floor' && showCapital
+              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'floor' && showCapital
                   ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                   : 'bg-white text-black hover:bg-neutral-100'
-                }`}
+              }`}
             >
               <Layers className="w-3.5 h-3.5" />
               Draft Capital & Empty Picks
@@ -967,10 +970,10 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         {activeTab === 'floor' && (
           <div className="space-y-6">
-
+            
             {/* TOP HERO SECTION: Coach Desk on Left, Hockey Card Spotlight on Top Right */}
             <div className="grid grid-cols-12 gap-5 items-start">
-
+              
               {/* TOP LEFT: COACH SELECTION DESK ("ON THE CLOCK") */}
               <div className="col-span-12 lg:col-span-8 bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
                 {!isLoggedIn && (
@@ -1171,14 +1174,14 @@ export default function DraftPage() {
 
             {/* SINGLE DRAFT BOARD (STRICTLY 1 DRAFT AT A TIME) */}
             <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-4">
-
+              
               {/* Single Draft Selector Toolbar */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b-2 border-black pb-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-xs font-black uppercase text-slate-800">
                     Draft Scope:
                   </span>
-
+                  
                   {/* League Tier selector */}
                   <select
                     value={floorLeague}
@@ -1228,10 +1231,11 @@ export default function DraftPage() {
                     <button
                       key={rd}
                       onClick={() => setSelectedRoundFilter(rd)}
-                      className={`px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition-colors ${selectedRoundFilter === rd
+                      className={`px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition-colors ${
+                        selectedRoundFilter === rd
                           ? 'bg-black text-white shadow-xs'
                           : 'bg-white text-black hover:bg-neutral-100'
-                        }`}
+                      }`}
                     >
                       {rd === 'ALL' ? 'All Rounds' : `Rd ${rd}`}
                     </button>
@@ -1296,8 +1300,9 @@ export default function DraftPage() {
                               setPodium(d);
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className={`cursor-pointer hover:bg-yellow-50 transition-colors ${isPodiumActive ? 'bg-yellow-100 font-bold ring-2 ring-inset ring-black' : ''
-                              }`}
+                            className={`cursor-pointer hover:bg-yellow-50 transition-colors ${
+                              isPodiumActive ? 'bg-yellow-100 font-bold ring-2 ring-inset ring-black' : ''
+                            }`}
                           >
                             <td className="py-2.5 px-3 whitespace-nowrap">
                               <span className="font-mono font-bold bg-neutral-100 text-black px-1.5 py-0.5 border border-black text-[10px] uppercase">
@@ -1379,13 +1384,13 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         {activeTab === 'past' && (
           <div className="space-y-6">
-
+            
             {/* TOP HERO: Past Selector & Metrics on Left, Legend Hockey Card on Top Right */}
             <div className="grid grid-cols-12 gap-5 items-start">
-
+              
               {/* LEFT: Toolbar & Class Metrics */}
               <div className="col-span-12 lg:col-span-8 space-y-4">
-
+                
                 {/* League & Season Selector Toolbar */}
                 <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-4">
                   <div>
@@ -1397,10 +1402,11 @@ export default function DraftPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={() => handlePastLeagueChange('ALL')}
-                        className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer ${pastLeagueType === 'ALL'
+                        className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer ${
+                          pastLeagueType === 'ALL'
                             ? 'bg-black text-white shadow-xs'
                             : 'bg-white text-black hover:bg-neutral-100'
-                          }`}
+                        }`}
                       >
                         All Leagues
                       </button>
@@ -1413,10 +1419,11 @@ export default function DraftPage() {
                           <button
                             key={type}
                             onClick={() => handlePastLeagueChange(type)}
-                            className={`px-3 py-1 text-xs font-black uppercase border-2 flex items-center gap-1.5 transition-all h-9 cursor-pointer ${isSelected
+                            className={`px-3 py-1 text-xs font-black uppercase border-2 flex items-center gap-1.5 transition-all h-9 cursor-pointer ${
+                              isSelected
                                 ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black text-black'
                                 : 'bg-white border-black/40 opacity-75 hover:opacity-100 hover:border-black text-slate-800'
-                              }`}
+                            }`}
                             title={conf.name}
                           >
                             {conf.logoUrl ? (
@@ -1558,8 +1565,9 @@ export default function DraftPage() {
                               setPodium(d);
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className={`cursor-pointer hover:bg-yellow-50 transition-colors ${isPodiumActive ? 'bg-yellow-100 font-bold ring-2 ring-inset ring-black' : ''
-                              }`}
+                            className={`cursor-pointer hover:bg-yellow-50 transition-colors ${
+                              isPodiumActive ? 'bg-yellow-100 font-bold ring-2 ring-inset ring-black' : ''
+                            }`}
                           >
                             <td className="py-2.5 px-3 whitespace-nowrap">
                               <span className="font-mono font-bold bg-neutral-100 text-black px-1.5 py-0.5 border border-black text-[10px] uppercase">

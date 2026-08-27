@@ -421,12 +421,12 @@ export default function HomePage() {
               try {
                 const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
                 isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
-                  meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+                       meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
                 isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
               } catch {
                 const lowStr = String(gameMeta || '').toLowerCase();
                 isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
-                  lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+                       lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
                 isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
               }
             }
@@ -436,10 +436,10 @@ export default function HomePage() {
                 const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
                 const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
                 if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-                  Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+                    Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
                   isOT = true;
                 }
-              } catch { }
+              } catch {}
             }
 
             if (homeScore === awayScore && !isOT) {
@@ -863,10 +863,11 @@ export default function HomePage() {
                 key={league}
                 type="button"
                 onClick={() => handleLeagueChange(league)}
-                className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors shrink-0 ${selectedLeague === league
-                  ? 'bg-black text-white'
-                  : 'bg-white text-black hover:bg-neutral-200'
-                  }`}
+                className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors shrink-0 ${
+                  selectedLeague === league
+                    ? 'bg-black text-white'
+                    : 'bg-white text-black hover:bg-neutral-200'
+                }`}
               >
                 {league}
               </button>

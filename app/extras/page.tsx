@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { HardDrive, Users, Clapperboard } from 'lucide-react';
+import { HardDrive, Users, Clapperboard, Download, ExternalLink, ShieldCheck } from 'lucide-react';
 
 export default function ExtrasPage() {
   return (

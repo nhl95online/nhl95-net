@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown, Lock, ShieldCheck, LogIn, LogOut } from 'lucide-react';
+import { useCoachAuth } from '@/lib/coach-auth';
 
 export default function Navbar() {
   const [isRostersOpen, setIsRostersOpen] = useState(false);
@@ -15,6 +16,7 @@ export default function Navbar() {
   const [isMobileExtrasOpen, setIsMobileExtrasOpen] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
+  const { isLoggedIn, currentCoach, openLoginModal, logout } = useCoachAuth();
 
   const LOGO_URL = "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/NHL95.net_banner.png";
   const DISCORD_URL = "https://discord.gg/Rp3An7Hx2f";
@@ -36,20 +38,65 @@ export default function Navbar() {
 
   return (
     <nav className="bg-[#f4f1ea] text-black font-serif border-b-2 border-black sticky top-0 z-50 shadow-xs">
-      {/* Top Banner with Search & Discord */}
+      {/* Top Banner with Search, Coach Auth & Discord */}
       <div className="bg-black text-white px-3 sm:px-6 py-1.5 flex flex-col sm:flex-row justify-between items-center gap-1.5 text-[11px] sm:text-xs uppercase tracking-widest">
-        <div className="flex items-center gap-3">
-          <a
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex items-center gap-3 flex-wrap justify-center">
+          <a 
+            href={DISCORD_URL} 
+            target="_blank" 
+            rel="noopener noreferrer" 
             className="hover:text-cyan-400 text-center transition-colors truncate max-w-full"
           >
             Join the NHL95 Digital Hockey World!
           </a>
+
+          {/* Coach Status Pill in Top Bar */}
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="text-neutral-600">|</span>
+            {isLoggedIn && currentCoach ? (
+              <div className="flex items-center gap-1.5 bg-emerald-950 border border-emerald-500/80 px-2 py-0.5 text-[10px] text-emerald-300 font-bold font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="truncate max-w-[140px]">Coach: {currentCoach.coach_name}</span>
+                <button
+                  onClick={logout}
+                  className="text-neutral-400 hover:text-white underline ml-1 cursor-pointer text-[9px]"
+                  title="Sign Out"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => openLoginModal()}
+                className="flex items-center gap-1 bg-yellow-400/10 hover:bg-yellow-400/25 text-yellow-300 border border-yellow-400/40 px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase transition cursor-pointer font-sans"
+              >
+                <Lock className="w-2.5 h-2.5 text-yellow-400" />
+                <span>Coach Login</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap justify-center w-full sm:w-auto">
+          {/* Mobile-visible Coach Status */}
+          <div className="sm:hidden flex items-center">
+            {isLoggedIn && currentCoach ? (
+              <div className="flex items-center gap-1 bg-emerald-950 border border-emerald-500/80 px-2 py-0.5 text-[9px] text-emerald-300 font-bold font-sans">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{currentCoach.coach_name}</span>
+                <button onClick={logout} className="text-neutral-400 underline ml-1 text-[9px]">Exit</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => openLoginModal()}
+                className="flex items-center gap-1 bg-yellow-400/10 text-yellow-300 border border-yellow-400/40 px-2 py-0.5 text-[9px] font-bold uppercase font-sans"
+              >
+                <Lock className="w-2.5 h-2.5" />
+                <span>Coach Sign In</span>
+              </button>
+            )}
+          </div>
+
           <form onSubmit={handleSearch} className="flex gap-1.5 items-center w-full sm:w-auto justify-center">
             <div className="relative flex-1 sm:w-44">
               <input
@@ -59,8 +106,8 @@ export default function Navbar() {
                 className="text-black bg-white px-2 py-0.5 text-xs outline-none w-full border border-black/20 font-sans"
               />
             </div>
-            <button
-              type="submit"
+            <button 
+              type="submit" 
               className="hover:text-cyan-400 bg-neutral-800 sm:bg-transparent px-2 py-0.5 rounded-none font-bold text-xs uppercase cursor-pointer"
             >
               Search
@@ -72,10 +119,10 @@ export default function Navbar() {
       {/* Primary Header Row - Logo & Mobile Hamburger */}
       <div className="py-3 sm:py-5 px-4 flex justify-between sm:justify-center items-center border-b border-black relative">
         <Link href="/" onClick={closeMobileMenu} className="flex items-center justify-center">
-          <img
-            src={LOGO_URL}
-            alt="NHL95 Online League"
-            className="h-10 sm:h-14 md:h-16 max-w-[220px] sm:max-w-none object-contain"
+          <img 
+            src={LOGO_URL} 
+            alt="NHL95 Online League" 
+            className="h-10 sm:h-14 md:h-16 max-w-[220px] sm:max-w-none object-contain" 
           />
         </Link>
 
@@ -97,9 +144,9 @@ export default function Navbar() {
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
         {/* Desktop Dropdown for Rosters & Teams */}
-        <div
-          className="relative"
-          onMouseEnter={() => setIsRostersOpen(true)}
+        <div 
+          className="relative" 
+          onMouseEnter={() => setIsRostersOpen(true)} 
           onMouseLeave={() => setIsRostersOpen(false)}
         >
           <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
@@ -116,9 +163,9 @@ export default function Navbar() {
         </div>
 
         {/* Desktop Dropdown for Stats */}
-        <div
-          className="relative"
-          onMouseEnter={() => setIsStatsOpen(true)}
+        <div 
+          className="relative" 
+          onMouseEnter={() => setIsStatsOpen(true)} 
           onMouseLeave={() => setIsStatsOpen(false)}
         >
           <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
@@ -141,9 +188,9 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop Dropdown for Extras (3 subgroups: ROMs, Managers, Stream Overlays) */}
-        <div
-          className="relative"
-          onMouseEnter={() => setIsExtrasOpen(true)}
+        <div 
+          className="relative" 
+          onMouseEnter={() => setIsExtrasOpen(true)} 
           onMouseLeave={() => setIsExtrasOpen(false)}
         >
           <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
@@ -165,8 +212,8 @@ export default function Navbar() {
         </div>
 
         {/* Upload Action Button */}
-        <Link
-          href="/upload"
+        <Link 
+          href="/upload" 
           className="hover:underline transition px-2.5 py-1 text-xs font-bold rounded-xs shadow-2xs flex items-center gap-1.5 bg-black text-white hover:bg-neutral-800"
           title="Upload Game Stats"
         >
@@ -178,22 +225,22 @@ export default function Navbar() {
       {isMobileMenuOpen && (
         <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
 
-          <Link
-            href="/standings"
+          <Link 
+            href="/standings" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Standings <span>→</span>
           </Link>
-          <Link
-            href="/playoffs"
+          <Link 
+            href="/playoffs" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Playoffs <span>→</span>
           </Link>
-          <Link
-            href="/schedule"
+          <Link 
+            href="/schedule" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
@@ -211,29 +258,29 @@ export default function Navbar() {
             </button>
             {isMobileRostersOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
-                <Link
-                  href="/team"
+                <Link 
+                  href="/team" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-red-800"
                 >
                   • Teams
                 </Link>
-                <Link
-                  href="/trades"
+                <Link 
+                  href="/trades" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • Trade Machine
                 </Link>
-                <Link
-                  href="/draft"
+                <Link 
+                  href="/draft" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • Draft Central
                 </Link>
-                <Link
-                  href="/players"
+                <Link 
+                  href="/players" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
@@ -254,15 +301,15 @@ export default function Navbar() {
             </button>
             {isMobileStatsOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
-                <Link
-                  href="/stats"
+                <Link 
+                  href="/stats" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • Players
                 </Link>
-                <Link
-                  href="/stats/team"
+                <Link 
+                  href="/stats/team" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
@@ -272,23 +319,23 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link
-            href="/awards"
+          <Link 
+            href="/awards" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Awards <span>→</span>
           </Link>
-          <Link
-            href="/records"
+          <Link 
+            href="/records" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             League Records <span>→</span>
           </Link>
 
-          <Link
-            href="/setup-guide"
+          <Link 
+            href="/setup-guide" 
             onClick={closeMobileMenu}
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between text-amber-900 font-black"
           >
@@ -306,22 +353,22 @@ export default function Navbar() {
             </button>
             {isMobileExtrasOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
-                <Link
-                  href="/roms"
+                <Link 
+                  href="/roms" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • ROMs & Files
                 </Link>
-                <Link
-                  href="/managers"
+                <Link 
+                  href="/managers" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
                   • Managers Directory
                 </Link>
-                <Link
-                  href="/setup-guide?tab=overlays"
+                <Link 
+                  href="/setup-guide?tab=overlays" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
@@ -331,8 +378,8 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link
-            href="/upload"
+          <Link 
+            href="/upload" 
             onClick={closeMobileMenu}
             className="py-2.5 px-3 bg-black text-white text-center rounded-xs font-black hover:bg-red-700 transition-colors mt-2 flex items-center justify-center gap-2"
           >

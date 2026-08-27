@@ -88,16 +88,16 @@ export async function POST(req: NextRequest) {
       : (knownAway?.coach_id || awayTeamId);
 
     const homeCoachName = (homeTeam as any)?.league_coaches?.coach_name ||
-      (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
-      knownHome?.coach_name ||
-      homeTeam?.team_name ||
-      homeTeamCode;
+                          (homeTeam as any)?.league_coaches?.[0]?.coach_name ||
+                          knownHome?.coach_name ||
+                          homeTeam?.team_name ||
+                          homeTeamCode;
 
     const awayCoachName = (awayTeam as any)?.league_coaches?.coach_name ||
-      (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
-      knownAway?.coach_name ||
-      awayTeam?.team_name ||
-      awayTeamCode;
+                          (awayTeam as any)?.league_coaches?.[0]?.coach_name ||
+                          knownAway?.coach_name ||
+                          awayTeam?.team_name ||
+                          awayTeamCode;
 
     // 2. Fetch ALL Rosters for this active season (league_id: sId)
     const { data: seasonRosters } = await supabase
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       // 3. ANY team in the active season roster (handles player trades / line switches)
       const anySeasonRoster = seasonRosters?.find(
         r => r.player_name?.trim().toLowerCase() === clean ||
-          (lastName.length > 2 && r.player_name?.trim().toLowerCase().includes(lastName))
+             (lastName.length > 2 && r.player_name?.trim().toLowerCase().includes(lastName))
       );
       if (anySeasonRoster?.player_id) return Number(anySeasonRoster.player_id);
 
@@ -833,14 +833,14 @@ async function recalculateAndSaveSeasonStandings(sId: number): Promise<{ success
       if (!num || num === 999 || num === 0 || num === 68) return null;
       if (teamMap[num]) return num;
 
-      const matchTeam = (teamsRes.data || []).find((t: any) =>
-        Number(t.team_id) === num ||
+      const matchTeam = (teamsRes.data || []).find((t: any) => 
+        Number(t.team_id) === num || 
         Number(t.coach_id) === num
       );
 
       if (matchTeam) {
-        const seasonMatch = (teamsRes.data || []).find((t: any) =>
-          Number(t.league_id) === sId &&
+        const seasonMatch = (teamsRes.data || []).find((t: any) => 
+          Number(t.league_id) === sId && 
           (
             (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
             (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
@@ -1333,9 +1333,9 @@ async function sendDiscordBoxscore(params: {
   const threeStars = calculateThreeStars(game, awayCode, homeCode);
   const threeStarsBlock = threeStars.length > 0
     ? threeStars.map((s, idx) => {
-      const starPrefix = idx === 0 ? '⭐ **1st Star:**' : idx === 1 ? '⭐⭐ **2nd Star:**' : '⭐⭐⭐ **3rd Star:**';
-      return `${starPrefix} **${s.name}** (${s.team}) — \`${s.summary}\``;
-    }).join('\n')
+        const starPrefix = idx === 0 ? '⭐ **1st Star:**' : idx === 1 ? '⭐⭐ **2nd Star:**' : '⭐⭐⭐ **3rd Star:**';
+        return `${starPrefix} **${s.name}** (${s.team}) — \`${s.summary}\``;
+      }).join('\n')
     : null;
 
   // Build Rich Discord Embed

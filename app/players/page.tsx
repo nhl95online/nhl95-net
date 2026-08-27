@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import {
-  Search, Download, Users, Plus, X,
-  Star, Table, Sparkles, UserCheck,
+import { 
+  Search, Download, Users, Plus, X, 
+  Star, Table, Sparkles, UserCheck, 
   Check, HelpCircle, Layers, TrendingUp, ArrowRightLeft,
   BarChart2
 } from 'lucide-react';
@@ -24,7 +24,7 @@ export const calculateWeight = (idx: any): { lbs: number | string; indexText: st
   if (idx === undefined || idx === null || idx === '') return { lbs: 'N/A', indexText: '' };
   const numericIdx = Number(idx);
   if (isNaN(numericIdx)) return { lbs: String(idx), indexText: '' };
-
+  
   // If value is already in lbs (> 50)
   if (numericIdx > 50) {
     let closestIdx = 0;
@@ -83,7 +83,7 @@ export const parseJson = (val: any) => {
     if (typeof parsed === 'string') {
       try {
         parsed = JSON.parse(parsed);
-      } catch { }
+      } catch {}
     }
     return typeof parsed === 'object' && parsed !== null ? parsed : {};
   } catch {
@@ -125,7 +125,7 @@ export const getPlayerHandedness = (player: any): string => {
 
   // Search through all candidate keys across player_info, player root, and ratings
   const sources = [info, player, r];
-
+  
   for (const src of sources) {
     if (!src || typeof src !== 'object') continue;
 
@@ -324,8 +324,9 @@ const RatingMatrix = ({
                 return (
                   <div key={num} className="col-span-1 flex items-center justify-center p-0.5">
                     <div
-                      className={`w-3.5 h-3.5 border border-black/80 flex items-center justify-center text-[7px] font-black ${filled ? '' : 'bg-transparent'
-                        }`}
+                      className={`w-3.5 h-3.5 border border-black/80 flex items-center justify-center text-[7px] font-black ${
+                        filled ? '' : 'bg-transparent'
+                      }`}
                       style={{
                         backgroundColor: filled ? color.bg : 'transparent',
                         borderColor: filled ? '#15803d' : '#000000',
@@ -1166,7 +1167,7 @@ const HockeyCardSpotlight = ({
 
   return (
     <div className="relative w-full bg-[#F5F2E6] text-black p-3 sm:p-4 border-[3px] border-black shadow-[6px_6px_0px_rgba(0,0,0,1)] rounded-xl lg:sticky lg:top-4 font-mono">
-
+      
       {/* 1. Header Banner */}
       <div className="flex items-center justify-between bg-black text-white px-2.5 py-1.5 rounded-t-md mb-2.5 border border-black">
         <div className="flex items-center gap-1.5">
@@ -1220,15 +1221,16 @@ const HockeyCardSpotlight = ({
               </div>
             </div>
           </div>
-
+          
           <div className="flex items-center gap-1.5 mt-1.5">
             {onAddToCompare && (
               <button
                 onClick={() => onAddToCompare(player)}
-                className={`flex-1 py-1 px-2 text-[9px] font-black uppercase border-2 border-black flex items-center justify-center gap-1 transition-all ${isCompared
+                className={`flex-1 py-1 px-2 text-[9px] font-black uppercase border-2 border-black flex items-center justify-center gap-1 transition-all ${
+                  isCompared
                     ? 'bg-amber-400 text-black shadow-xs'
                     : 'bg-emerald-700 text-white hover:bg-emerald-800'
-                  }`}
+                }`}
               >
                 {isCompared ? (
                   <>
@@ -1250,24 +1252,27 @@ const HockeyCardSpotlight = ({
       <div className="flex items-center gap-1 mb-2 border-b-2 border-black pb-1.5 text-[9px] font-black uppercase">
         <button
           onClick={() => setActiveCardTab('matrix')}
-          className={`flex-1 py-1 border border-black rounded-xs flex items-center justify-center gap-1 ${activeCardTab === 'matrix' ? 'bg-black text-white' : 'bg-white hover:bg-slate-100 text-black'
-            }`}
+          className={`flex-1 py-1 border border-black rounded-xs flex items-center justify-center gap-1 ${
+            activeCardTab === 'matrix' ? 'bg-black text-white' : 'bg-white hover:bg-slate-100 text-black'
+          }`}
         >
           <Sparkles className="w-3 h-3 text-amber-400" />
           Ratings Matrix
         </button>
         <button
           onClick={() => setActiveCardTab('career')}
-          className={`flex-1 py-1 border border-black rounded-xs flex items-center justify-center gap-1 ${activeCardTab === 'career' ? 'bg-black text-white' : 'bg-white hover:bg-slate-100 text-black'
-            }`}
+          className={`flex-1 py-1 border border-black rounded-xs flex items-center justify-center gap-1 ${
+            activeCardTab === 'career' ? 'bg-black text-white' : 'bg-white hover:bg-slate-100 text-black'
+          }`}
         >
           <Table className="w-3 h-3" />
           Career Table
         </button>
         <button
           onClick={() => setActiveCardTab('trend')}
-          className={`flex-1 py-1 border border-black rounded-xs flex items-center justify-center gap-1 ${activeCardTab === 'trend' ? 'bg-black text-white' : 'bg-white hover:bg-slate-100 text-black'
-            }`}
+          className={`flex-1 py-1 border border-black rounded-xs flex items-center justify-center gap-1 ${
+            activeCardTab === 'trend' ? 'bg-black text-white' : 'bg-white hover:bg-slate-100 text-black'
+          }`}
         >
           <BarChart2 className="w-3 h-3" />
           OVR Chart
@@ -1567,7 +1572,7 @@ const CompareView = ({
 
   return (
     <div className="space-y-6 font-mono text-[10px]">
-
+      
       {/* 1. Compare Controls / Searchable Slots Bar */}
       <div className="bg-[#F5F2E6] border-[3px] border-black p-3 sm:p-4 rounded-xl shadow-[5px_5px_0px_rgba(0,0,0,1)]">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3 border-b-2 border-black pb-2">
@@ -1720,7 +1725,7 @@ const CompareView = ({
               <Table className="w-4 h-4 text-emerald-700" />
               Career Year-by-Year Ratings Breakdown
             </h3>
-
+            
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {comparedPlayerNames.map((name, idx) => {
                 const records = careerRecordsMap[name] || allPlayersList.filter((p) => p.player_name === name);
@@ -2112,16 +2117,16 @@ export default function PlayersPage() {
 
   return (
     <div className="p-2 sm:p-4 max-w-7xl mx-auto space-y-4 font-mono bg-[#E5E0D5] min-h-screen text-[10px]">
-
+      
       {/* Top Header Banner with Official NHL95 Logo & Navigation Tabs */}
       <div className="bg-[#F5F2E6] border-[3px] border-black p-3 sm:p-4 rounded-xl shadow-[5px_5px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-4">
-
+        
         {/* Left: NHL95 Official Logo + Title */}
         <div className="flex items-center gap-3.5 w-full md:w-auto">
           <div className="bg-black p-1.5 rounded-md border border-black shadow-xs shrink-0">
-            <img
-              src={LOGO_URL}
-              alt="NHL 95 Logo"
+            <img 
+              src={LOGO_URL} 
+              alt="NHL 95 Logo" 
               className="h-10 sm:h-12 md:h-14 object-contain block"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';
@@ -2142,10 +2147,11 @@ export default function PlayersPage() {
         <div className="flex items-center gap-2 font-black uppercase text-xs w-full md:w-auto justify-end">
           <button
             onClick={() => setActiveTab('database')}
-            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'database'
+            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${
+              activeTab === 'database'
                 ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                 : 'bg-white hover:bg-slate-100 text-black'
-              }`}
+            }`}
           >
             <Table className="w-4 h-4 text-emerald-400" />
             Player Database
@@ -2153,10 +2159,11 @@ export default function PlayersPage() {
 
           <button
             onClick={() => setActiveTab('compare')}
-            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${activeTab === 'compare'
+            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${
+              activeTab === 'compare'
                 ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                 : 'bg-white hover:bg-slate-100 text-black'
-              }`}
+            }`}
           >
             <Users className="w-4 h-4 text-amber-400" />
             Compare
@@ -2232,10 +2239,10 @@ export default function PlayersPage() {
       {/* Active Tab View */}
       {activeTab === 'database' ? (
         <div className="grid grid-cols-12 gap-4">
-
+          
           {/* Left Column: Search, Filters & Grouped Players Table */}
           <div className="col-span-12 lg:col-span-7 space-y-2.5">
-
+            
             {/* Filter Bar */}
             <div className="bg-[#F5F2E6] border-2 border-black p-2.5 rounded-lg shadow-xs space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5">
@@ -2395,17 +2402,19 @@ export default function PlayersPage() {
                         {/* Main Group Header Row */}
                         <tr
                           onClick={() => handleSelectGroup(group)}
-                          className={`cursor-pointer transition-colors ${isSelected ? 'bg-amber-100 font-black' : 'hover:bg-slate-100'
-                            }`}
+                          className={`cursor-pointer transition-colors ${
+                            isSelected ? 'bg-amber-100 font-black' : 'hover:bg-slate-100'
+                          }`}
                         >
                           {/* Expand/Collapse Button */}
                           <td className="p-1.5 text-center" onClick={(e) => { e.stopPropagation(); toggleExpand(group.player_name); }}>
                             <button
                               type="button"
-                              className={`p-1 px-1.5 text-[8.5px] font-black rounded border border-black flex items-center justify-center transition-all ${isExpanded
+                              className={`p-1 px-1.5 text-[8.5px] font-black rounded border border-black flex items-center justify-center transition-all ${
+                                isExpanded
                                   ? 'bg-emerald-700 text-white shadow-xs'
                                   : 'bg-white hover:bg-emerald-100 text-black'
-                                }`}
+                              }`}
                               title={isExpanded ? 'Collapse career breakdown' : 'Expand career breakdown'}
                             >
                               {isExpanded ? '▼' : '▶'}
@@ -2454,10 +2463,11 @@ export default function PlayersPage() {
                           <td className="p-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => toggleComparePlayer(group.player_name)}
-                              className={`p-1 px-1.5 text-[8px] font-black uppercase rounded border border-black ${isComp
+                              className={`p-1 px-1.5 text-[8px] font-black uppercase rounded border border-black ${
+                                isComp
                                   ? 'bg-amber-400 text-black shadow-xs'
                                   : 'bg-slate-100 hover:bg-emerald-600 hover:text-white'
-                                }`}
+                              }`}
                               title={isComp ? 'Remove from compare' : 'Add to compare'}
                             >
                               {isComp ? <Check className="w-2.5 h-2.5" /> : '+ VS'}

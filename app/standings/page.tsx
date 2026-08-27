@@ -21,8 +21,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
   },
   V: {
     name: 'Vintage',
@@ -123,7 +123,7 @@ export const extractPlayoffTeams = (row: any): number => {
         const parsed = parseInt(String(rVal), 10);
         if (!isNaN(parsed) && parsed > 0) return parsed;
       }
-    } catch { }
+    } catch {}
   }
   return 0;
 };
@@ -193,7 +193,7 @@ export default function StandingsPage() {
         if (!res1.error && res1.data && res1.data.length > 0) {
           data = res1.data;
         }
-      } catch { }
+      } catch {}
 
       if (!data || data.length === 0) {
         try {
@@ -201,7 +201,7 @@ export default function StandingsPage() {
           if (!res2.error && res2.data && res2.data.length > 0) {
             data = res2.data;
           }
-        } catch { }
+        } catch {}
       }
 
       if (!data || data.length === 0) {
@@ -209,7 +209,7 @@ export default function StandingsPage() {
           const fallbackQuery = await supabase.from('league_seasons').select('*');
           data = fallbackQuery.data;
           error = fallbackQuery.error;
-        } catch { }
+        } catch {}
       }
 
       if (error || !data || data.length === 0) {
@@ -397,8 +397,8 @@ export default function StandingsPage() {
     const baseTeamMap = await getTeamMetadataMap(numericLeagueId);
 
     // 1. Check in-memory loaded seasons list first
-    const matchedSeason = seasons.find(s =>
-      String(s.league_id) === String(leagueId) ||
+    const matchedSeason = seasons.find(s => 
+      String(s.league_id) === String(leagueId) || 
       String(s.league_id) === String(numericLeagueId) ||
       String(s.id) === String(leagueId) ||
       String(s.id) === String(numericLeagueId)
@@ -415,9 +415,9 @@ export default function StandingsPage() {
       }
 
       if (leaguesData && leaguesData.length > 0) {
-        const lRow = leaguesData.find((r: any) =>
-          Number(r.league_id) === numericLeagueId ||
-          Number(r.id) === numericLeagueId ||
+        const lRow = leaguesData.find((r: any) => 
+          Number(r.league_id) === numericLeagueId || 
+          Number(r.id) === numericLeagueId || 
           Number(r.season_id) === numericLeagueId ||
           String(r.league_name || '').includes(String(numericLeagueId))
         );
@@ -440,9 +440,9 @@ export default function StandingsPage() {
           .select('*');
 
         if (seasonsData && seasonsData.length > 0) {
-          const sRow = seasonsData.find((r: any) =>
-            Number(r.league_id) === numericLeagueId ||
-            Number(r.id) === numericLeagueId ||
+          const sRow = seasonsData.find((r: any) => 
+            Number(r.league_id) === numericLeagueId || 
+            Number(r.id) === numericLeagueId || 
             Number(r.season_id) === numericLeagueId
           );
           if (sRow) {
@@ -452,7 +452,7 @@ export default function StandingsPage() {
             if (g > 0 && !customGamesLimit) customGamesLimit = g;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
     }
 
     // 4. Fallback check against league_playoffs table
@@ -469,7 +469,7 @@ export default function StandingsPage() {
             playoffCutoff = uniquePlayoffTeams.size;
           }
         }
-      } catch { }
+      } catch {}
     }
 
     // 5. Default guarantee: Original 6 = 4 teams, W/Q/Vintage/etc. = 8 teams
@@ -538,10 +538,10 @@ export default function StandingsPage() {
         }, numericLeagueId);
 
         teamMap[tId] = {
-          ...(baseTeamMap[tId] || {
-            id: tId,
-            name: tInfo?.team_name || `Retro Club #${tId}`,
-            abbr: tInfo?.abbreviation || `TM${tId}`,
+          ...(baseTeamMap[tId] || { 
+            id: tId, 
+            name: tInfo?.team_name || `Retro Club #${tId}`, 
+            abbr: tInfo?.abbreviation || `TM${tId}`, 
             banner_url: bannerInfo.primaryUrl,
             fallback_urls: bannerInfo.fallbackUrls
           }),
@@ -564,15 +564,15 @@ export default function StandingsPage() {
         if (teamMap[num]) return num;
 
         // Try finding by coach_id or team_id in allTeamsData
-        const matchTeam = allTeamsData.find((t: any) =>
-          Number(t.team_id) === num ||
+        const matchTeam = allTeamsData.find((t: any) => 
+          Number(t.team_id) === num || 
           Number(t.coach_id) === num
         );
 
         if (matchTeam) {
           // Look for this team in active season teamMap
-          const seasonMatch = allTeamsData.find((t: any) =>
-            Number(t.league_id) === numericLeagueId &&
+          const seasonMatch = allTeamsData.find((t: any) => 
+            Number(t.league_id) === numericLeagueId && 
             (
               (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
               (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
@@ -621,12 +621,12 @@ export default function StandingsPage() {
           try {
             const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
             isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
-              meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+                   meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
             isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
           } catch {
             const lowStr = String(gameMeta || '').toLowerCase();
             isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
-              lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+                   lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
             isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
           }
         }
@@ -636,10 +636,10 @@ export default function StandingsPage() {
             const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
             const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
             if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-              Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+                Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
               isOT = true;
             }
-          } catch { }
+          } catch {}
         }
 
         if (homeScore === awayScore && !isOT) {
@@ -919,8 +919,8 @@ export default function StandingsPage() {
     // Resolve season-specific game limit (e.g. 56 games for W18 = 112 max points)
     let seasonLimit = gamesPerTeam;
     if (team.season_id) {
-      const matched = seasons.find((s: any) =>
-        String(s.league_id) === String(team.season_id) ||
+      const matched = seasons.find((s: any) => 
+        String(s.league_id) === String(team.season_id) || 
         String(s.id) === String(team.season_id)
       );
       if (matched?.games_per_team) {
@@ -1527,10 +1527,11 @@ export default function StandingsPage() {
                   >
                     {team.name}
                   </Link>
-                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded-xs font-bold ${team.isClinched
-                    ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                    : 'text-blue-700 bg-blue-50 border border-blue-200'
-                    }`}>
+                  <span className={`text-[11px] font-mono px-2 py-0.5 rounded-xs font-bold ${
+                    team.isClinched
+                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                      : 'text-blue-700 bg-blue-50 border border-blue-200'
+                  }`}>
                     {team.statusText}
                   </span>
                 </div>

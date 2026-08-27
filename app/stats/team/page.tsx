@@ -6,30 +6,30 @@ import { FileSpreadsheet, Trophy, Shield, Flame, Activity } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?: string }> = {
-  W: {
-    name: 'W League',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/WN95HL.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/WN95HL.png'
+  W: { 
+    name: 'W League', 
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/WN95HL.png', 
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/WN95HL.png' 
   },
-  Q: {
-    name: 'The Q',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/TheQ.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/TheQ.png'
+  Q: { 
+    name: 'The Q', 
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/TheQ.png', 
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/TheQ.png' 
   },
-  O: {
-    name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png'
+  O: { 
+    name: 'Original 6', 
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png', 
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original6.png' 
   },
-  V: {
-    name: 'Vintage',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Vintage.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Vintage.png'
+  V: { 
+    name: 'Vintage', 
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Vintage.png', 
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Vintage.png' 
   },
-  G: {
-    name: 'Golden Era',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Golden%20Era.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png'
+  G: { 
+    name: 'Golden Era', 
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Golden%20Era.png', 
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png' 
   }
 };
 
@@ -303,8 +303,9 @@ const TeamStatCard: React.FC<TeamLeaderCardProps> = ({
               return (
                 <div
                   key={t.team_id || i}
-                  className={`flex justify-between items-center text-[11px] py-1 border-b border-gray-50 cursor-pointer px-1.5 transition-colors ${isHovered ? 'bg-yellow-100 font-bold' : 'hover:bg-gray-50'
-                    }`}
+                  className={`flex justify-between items-center text-[11px] py-1 border-b border-gray-50 cursor-pointer px-1.5 transition-colors ${
+                    isHovered ? 'bg-yellow-100 font-bold' : 'hover:bg-gray-50'
+                  }`}
                   onMouseEnter={() => setHoveredTeam(t)}
                   onMouseLeave={() => setHoveredTeam(null)}
                 >
@@ -429,7 +430,7 @@ export default function TeamStatsPage() {
         supabase.from('league_schedule').select('*').eq('league_id', numericLeagueId).order('game_id', { ascending: true }),
         supabase.from('league_gamestats').select('*').eq('league_id', numericLeagueId),
         supabase.from('league_player_stats_master').select('*').eq('league_id', numericLeagueId),
-        supabase.from('api_stats_with_names').select('*').eq('league_id', numericLeagueId),
+        supabase.from('api_stats_with_names').select('*').eq('league_id', numericLeagueId).then(r => r, () => ({ data: null, error: null })),
         supabase.from('league_coaches').select('coach_id, coach_name')
       ]);
 
@@ -463,7 +464,7 @@ export default function TeamStatsPage() {
 
       activeTeamIds.forEach((tId: number) => {
         const tInfo = allTeamsData.find((t: any) => Number(t.team_id) === tId) ||
-          effectiveTeams.find((t: any) => Number(t.team_id) === tId);
+                      effectiveTeams.find((t: any) => Number(t.team_id) === tId);
         const cName = (tInfo?.coach_id && coachMap.get(Number(tInfo.coach_id))) || tInfo?.coach_name || 'TBA';
 
         teamMap[tId] = {
@@ -512,7 +513,7 @@ export default function TeamStatsPage() {
         const num = Number(id);
         if (num && teamMap[num]) return num;
 
-        const matchTeam = allTeamsData.find((t: any) =>
+        const matchTeam = allTeamsData.find((t: any) => 
           (num && (Number(t.team_id) === num || Number(t.coach_id) === num)) ||
           (coachId && Number(t.coach_id) === Number(coachId)) ||
           (teamName && t.team_name && t.team_name.trim().toLowerCase() === teamName.trim().toLowerCase()) ||
@@ -520,8 +521,8 @@ export default function TeamStatsPage() {
         );
 
         if (matchTeam) {
-          const seasonMatch = allTeamsData.find((t: any) =>
-            Number(t.league_id) === numericLeagueId &&
+          const seasonMatch = allTeamsData.find((t: any) => 
+            Number(t.league_id) === numericLeagueId && 
             (
               (t.abbreviation && matchTeam.abbreviation && t.abbreviation.trim().toUpperCase() === matchTeam.abbreviation.trim().toUpperCase()) ||
               (t.team_name && matchTeam.team_name && t.team_name.trim().toUpperCase() === matchTeam.team_name.trim().toUpperCase()) ||
@@ -578,12 +579,12 @@ export default function TeamStatsPage() {
           try {
             const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
             isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
-              meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+                   meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
             isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
           } catch {
             const lowStr = String(gameMeta || '').toLowerCase();
             isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
-              lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+                   lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
             isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
           }
         }
@@ -593,10 +594,10 @@ export default function TeamStatsPage() {
             const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
             const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
             if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-              Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+                Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
               isOT = true;
             }
-          } catch { }
+          } catch {}
         }
 
         if (homeScore === awayScore && !isOT) {
@@ -691,7 +692,7 @@ export default function TeamStatsPage() {
               teamMap[aId].ppg += aPpg;
               teamMap[aId].shg += aShg;
             }
-          } catch { }
+          } catch {}
         }
       };
 
@@ -1037,10 +1038,11 @@ export default function TeamStatsPage() {
             <button
               type="button"
               onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL'
+              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
+                selectedLeagueType === 'ALL'
                   ? 'bg-black text-white shadow-xs'
                   : 'text-black hover:bg-neutral-100'
-                }`}
+              }`}
               title="All Leagues"
             >
               ALL
@@ -1053,10 +1055,11 @@ export default function TeamStatsPage() {
                   key={type}
                   type="button"
                   onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
+                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
+                    isSelected
                       ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
                       : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                    }`}
+                  }`}
                   title={config?.name || `${type} League`}
                 >
                   {config?.logoUrl ? (
@@ -1142,10 +1145,11 @@ export default function TeamStatsPage() {
               setActiveTab(tab.id as any);
               setSortConfig(null);
             }}
-            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors cursor-pointer ${activeTab === tab.id
+            className={`py-1 px-3 rounded-xs uppercase font-bold text-xs transition-colors cursor-pointer ${
+              activeTab === tab.id
                 ? 'bg-black text-white shadow-xs'
                 : 'text-gray-600 hover:text-black hover:bg-black/5'
-              }`}
+            }`}
           >
             {tab.label}
           </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import {
+import { 
   Trophy, ChevronDown, CheckCircle2, X, ZoomIn, ZoomOut, RotateCcw, Info, Sparkles, Flame, Award
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -80,7 +80,7 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
 
   const isComplete = homeWins >= winsNeeded || awayWins >= winsNeeded;
   const winner: 'home' | 'away' | null = homeWins >= winsNeeded ? 'home' : (awayWins >= winsNeeded ? 'away' : null);
-
+  
   let leader: 'home' | 'away' | 'tied' | null = null;
   if (homeWins > awayWins) leader = 'home';
   else if (awayWins > homeWins) leader = 'away';
@@ -89,8 +89,8 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
   let statusPill = `BO${seriesLength}`;
 
   if (isComplete) {
-    const winnerName = winner === 'home'
-      ? (match.home_team?.abbreviation || 'HOM')
+    const winnerName = winner === 'home' 
+      ? (match.home_team?.abbreviation || 'HOM') 
       : (match.away_team?.abbreviation || 'AWY');
     const winningScore = Math.max(homeWins, awayWins);
     const losingScore = Math.min(homeWins, awayWins);
@@ -99,8 +99,8 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
     if (homeWins === awayWins) {
       statusPill = `TIED ${homeWins}-${awayWins}`;
     } else {
-      const leaderName = leader === 'home'
-        ? (match.home_team?.abbreviation || 'HOM')
+      const leaderName = leader === 'home' 
+        ? (match.home_team?.abbreviation || 'HOM') 
         : (match.away_team?.abbreviation || 'AWY');
       const leaderScore = Math.max(homeWins, awayWins);
       const trailerScore = Math.min(homeWins, awayWins);
@@ -161,39 +161,43 @@ const MatchupCard = ({
   const isAwaySeriesWinner = series.isComplete && series.winner === 'away';
 
   return (
-    <div
+    <div 
       onClick={() => onSelect && onSelect(match, label)}
-      className={`group relative p-1.5 w-[164px] select-none shrink-0 mx-auto transition-all cursor-pointer ${isChampionship
-          ? 'bg-[#fff9e6] border-[3px] border-black shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] hover:shadow-[5px_5px_0px_#b45309,5px_5px_0px_1px_#000] hover:-translate-y-0.5'
+      className={`group relative p-1.5 w-[164px] select-none shrink-0 mx-auto transition-all cursor-pointer ${
+        isChampionship 
+          ? 'bg-[#fff9e6] border-[3px] border-black shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] hover:shadow-[5px_5px_0px_#b45309,5px_5px_0px_1px_#000] hover:-translate-y-0.5' 
           : 'bg-[#fdfbf7] border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-[4px_4px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 active:translate-y-0'
-        }`}
+      }`}
     >
-      {/* Retro Corner Accent for Championship */}
+      {/* Retro 90s Corner Accent for Championship */}
       {isChampionship && (
         <div className="absolute -top-2 -right-2 bg-amber-400 text-black border-2 border-black px-1 py-0.2 text-[6.5px] font-black uppercase font-mono tracking-tighter shadow-[1px_1px_0px_#000] z-20 flex items-center gap-0.5">
           <Sparkles className="w-2 h-2 text-black" /> FINALS
         </div>
       )}
 
-      {/* Match Label Header Strip */}
-      <div className={`text-[8px] font-black border border-black mb-1 text-center uppercase tracking-wider flex justify-between px-1.5 items-center py-0.5 ${isChampionship ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-black' : 'bg-black text-white'
-        }`}>
+      {/* Match Label Header Strip (Retro 90s Arcade Header) */}
+      <div className={`text-[8px] font-black border border-black mb-1 text-center uppercase tracking-wider flex justify-between px-1.5 items-center py-0.5 ${
+        isChampionship ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-black' : 'bg-black text-white'
+      }`}>
         <span className="truncate max-w-[100px] font-sans">{label}</span>
-        <span className={`text-[7px] font-mono font-black px-1 py-0.2 border ${isChampionship
-            ? 'bg-black text-amber-300 border-black'
-            : series.isComplete
-              ? 'bg-emerald-600 text-white border-emerald-400 [text-shadow:0_0_4px_#fff]'
+        <span className={`text-[7px] font-mono font-black px-1 py-0.2 border ${
+          isChampionship 
+            ? 'bg-black text-amber-300 border-black' 
+            : series.isComplete 
+              ? 'bg-emerald-600 text-white border-emerald-400 [text-shadow:0_0_4px_#fff]' 
               : 'bg-neutral-800 text-neutral-200 border-neutral-600'
-          }`}>
+        }`}>
           {series.isComplete ? series.statusPill : `BO${series.seriesLength}`}
         </span>
       </div>
 
       <div className="flex flex-col items-center w-full">
-
+        
         {/* 1. HOME TEAM LINE (TOP) */}
-        <div className={`w-full flex items-center justify-between min-h-[22px] mb-0.5 px-1 border border-black/20 ${isHomeSeriesWinner ? 'bg-emerald-50/80 border-emerald-600' : 'bg-white/70'
-          }`}>
+        <div className={`w-full flex items-center justify-between min-h-[22px] mb-0.5 px-1 border border-black/20 ${
+          isHomeSeriesWinner ? 'bg-emerald-50/80 border-emerald-600' : 'bg-white/70'
+        }`}>
           <div className="flex items-center gap-1 w-full justify-start overflow-hidden">
             {homeSeed && (
               <span className="bg-black text-white text-[7px] font-mono font-black px-0.5 py-0 shrink-0 border border-black">
@@ -235,7 +239,7 @@ const MatchupCard = ({
 
         {/* 2. RETRO SCOREBOARD MATRIX (GREEN BOX + GLOWING WHITE TEXT FOR WINNERS) */}
         <div className="flex flex-col gap-0.5 border-2 border-black p-0.5 w-full bg-[#1e232a] shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
-
+          
           {/* Top Team Row */}
           <div className="flex items-center w-full px-0.5">
             <span className="text-[8.5px] font-mono font-black tracking-wider w-[32px] text-left shrink-0 uppercase text-amber-300">
@@ -248,8 +252,8 @@ const MatchupCard = ({
 
                 if (!gameResult) {
                   return (
-                    <div
-                      key={`home-g-${index}`}
+                    <div 
+                      key={`home-g-${index}`} 
                       className="text-[8px] font-mono font-bold w-[14px] h-[14px] flex items-center justify-center border border-neutral-700 bg-neutral-900/90 text-neutral-600 rounded-none"
                     >
                       -
@@ -266,10 +270,11 @@ const MatchupCard = ({
                 return (
                   <div
                     key={`home-g-${index}`}
-                    className={`text-[8.5px] font-mono font-black w-[14px] h-[14px] flex items-center justify-center border rounded-none transition-all ${isWinner
-                        ? 'bg-[#16a34a] border-emerald-300 text-white shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff,0_0_9px_rgba(255,255,255,0.9)] drop-shadow-[0_0_4px_#ffffff]'
+                    className={`text-[8.5px] font-mono font-black w-[14px] h-[14px] flex items-center justify-center border rounded-none transition-all ${
+                      isWinner 
+                        ? 'bg-[#16a34a] border-emerald-300 text-white shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff,0_0_9px_rgba(255,255,255,0.9)] drop-shadow-[0_0_4px_#ffffff]' 
                         : 'bg-[#2b323d] border-neutral-700 text-neutral-300'
-                      }`}
+                    }`}
                   >
                     {hasScore ? topTeamScore : '-'}
                   </div>
@@ -290,8 +295,8 @@ const MatchupCard = ({
 
                 if (!gameResult) {
                   return (
-                    <div
-                      key={`away-g-${index}`}
+                    <div 
+                      key={`away-g-${index}`} 
                       className="text-[8px] font-mono font-bold w-[14px] h-[14px] flex items-center justify-center border border-neutral-700 bg-neutral-900/90 text-neutral-600 rounded-none"
                     >
                       -
@@ -308,10 +313,11 @@ const MatchupCard = ({
                 return (
                   <div
                     key={`away-g-${index}`}
-                    className={`text-[8.5px] font-mono font-black w-[14px] h-[14px] flex items-center justify-center border rounded-none transition-all ${isWinner
-                        ? 'bg-[#16a34a] border-emerald-300 text-white shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff,0_0_9px_rgba(255,255,255,0.9)] drop-shadow-[0_0_4px_#ffffff]'
+                    className={`text-[8.5px] font-mono font-black w-[14px] h-[14px] flex items-center justify-center border rounded-none transition-all ${
+                      isWinner 
+                        ? 'bg-[#16a34a] border-emerald-300 text-white shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff,0_0_9px_rgba(255,255,255,0.9)] drop-shadow-[0_0_4px_#ffffff]' 
                         : 'bg-[#2b323d] border-neutral-700 text-neutral-300'
-                      }`}
+                    }`}
                   >
                     {hasScore ? bottomTeamScore : '-'}
                   </div>
@@ -323,8 +329,9 @@ const MatchupCard = ({
         </div>
 
         {/* 3. AWAY TEAM LINE (BOTTOM) */}
-        <div className={`w-full flex items-center justify-between min-h-[22px] mt-0.5 px-1 border border-black/20 ${isAwaySeriesWinner ? 'bg-emerald-50/80 border-emerald-600' : 'bg-white/70'
-          }`}>
+        <div className={`w-full flex items-center justify-between min-h-[22px] mt-0.5 px-1 border border-black/20 ${
+          isAwaySeriesWinner ? 'bg-emerald-50/80 border-emerald-600' : 'bg-white/70'
+        }`}>
           <div className="flex items-center gap-1 w-full justify-start overflow-hidden">
             {awaySeed && (
               <span className="bg-black text-white text-[7px] font-mono font-black px-0.5 py-0 shrink-0 border border-black">
@@ -394,8 +401,8 @@ const SeriesModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-lg bg-[#fbf8f2] border-4 border-black text-black font-serif shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] overflow-hidden">
-
-        {/* Retro Header Bar */}
+        
+        {/* Retro 90s Arcade Header Bar */}
         <div className="bg-black text-white p-3 border-b-4 border-black flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-red-600 border border-white animate-pulse" />
@@ -416,36 +423,38 @@ const SeriesModal = ({
           </button>
         </div>
 
-        {/* Versus Matchup Clipping */}
+        {/* Versus Matchup Arcade Clipping */}
         <div className="p-4 border-b-4 border-black bg-[#f2eee3]">
           <div className="grid grid-cols-5 items-center gap-3 text-center">
-
+            
             {/* Home Team Card */}
-            <div className={`col-span-2 flex flex-col items-center p-3 border-2 border-black transition-all ${homeWonSeries
-                ? 'bg-emerald-100/90 shadow-[4px_4px_0px_0px_#059669,4px_4px_0px_1px_#000]'
+            <div className={`col-span-2 flex flex-col items-center p-3 border-2 border-black transition-all ${
+              homeWonSeries 
+                ? 'bg-emerald-100/90 shadow-[4px_4px_0px_0px_#059669,4px_4px_0px_1px_#000]' 
                 : 'bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]'
-              }`}>
+            }`}>
               {match.home_team_seed && (
                 <span className="text-[8px] font-mono font-black uppercase text-black/70 mb-0.5 bg-neutral-200 px-1 border border-black/30">
                   SEED #{match.home_team_seed}
                 </span>
               )}
               {home?.banner_url ? (
-                <img
-                  src={home.banner_url}
-                  alt={home.team_name}
-                  className="h-[24px] max-w-[110px] w-auto object-contain my-1"
+                <img 
+                  src={home.banner_url} 
+                  alt={home.team_name} 
+                  className="h-[24px] max-w-[110px] w-auto object-contain my-1" 
                   style={{ maxHeight: '24px', maxWidth: '110px', height: '24px', width: 'auto', objectFit: 'contain' }}
                 />
               ) : (
                 <span className="text-xs font-black uppercase tracking-tight my-1 font-sans">{home?.team_name || 'Home Team'}</span>
               )}
-
+              
               {/* Home Series Score Box */}
-              <div className={`mt-1.5 px-3 py-0.5 border-2 border-black font-mono font-black text-2xl ${homeWonSeries
-                  ? 'bg-[#16a34a] text-white border-emerald-950 shadow-[0_0_8px_rgba(34,197,94,0.9)] [text-shadow:0_0_6px_#ffffff,0_0_10px_#ffffff] drop-shadow-[0_0_4px_#ffffff]'
+              <div className={`mt-1.5 px-3 py-0.5 border-2 border-black font-mono font-black text-2xl ${
+                homeWonSeries 
+                  ? 'bg-[#16a34a] text-white border-emerald-950 shadow-[0_0_8px_rgba(34,197,94,0.9)] [text-shadow:0_0_6px_#ffffff,0_0_10px_#ffffff] drop-shadow-[0_0_4px_#ffffff]' 
                   : 'bg-neutral-900 text-neutral-100'
-                }`}>
+              }`}>
                 {series.homeWins}
               </div>
 
@@ -470,31 +479,33 @@ const SeriesModal = ({
             </div>
 
             {/* Away Team Card */}
-            <div className={`col-span-2 flex flex-col items-center p-3 border-2 border-black transition-all ${awayWonSeries
-                ? 'bg-emerald-100/90 shadow-[4px_4px_0px_0px_#059669,4px_4px_0px_1px_#000]'
+            <div className={`col-span-2 flex flex-col items-center p-3 border-2 border-black transition-all ${
+              awayWonSeries 
+                ? 'bg-emerald-100/90 shadow-[4px_4px_0px_0px_#059669,4px_4px_0px_1px_#000]' 
                 : 'bg-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]'
-              }`}>
+            }`}>
               {match.away_team_seed && (
                 <span className="text-[8px] font-mono font-black uppercase text-black/70 mb-0.5 bg-neutral-200 px-1 border border-black/30">
                   SEED #{match.away_team_seed}
                 </span>
               )}
               {away?.banner_url ? (
-                <img
-                  src={away.banner_url}
-                  alt={away.team_name}
-                  className="h-[24px] max-w-[110px] w-auto object-contain my-1"
+                <img 
+                  src={away.banner_url} 
+                  alt={away.team_name} 
+                  className="h-[24px] max-w-[110px] w-auto object-contain my-1" 
                   style={{ maxHeight: '24px', maxWidth: '110px', height: '24px', width: 'auto', objectFit: 'contain' }}
                 />
               ) : (
                 <span className="text-xs font-black uppercase tracking-tight my-1 font-sans">{away?.team_name || 'Away Team'}</span>
               )}
-
+              
               {/* Away Series Score Box */}
-              <div className={`mt-1.5 px-3 py-0.5 border-2 border-black font-mono font-black text-2xl ${awayWonSeries
-                  ? 'bg-[#16a34a] text-white border-emerald-950 shadow-[0_0_8px_rgba(34,197,94,0.9)] [text-shadow:0_0_6px_#ffffff,0_0_10px_#ffffff] drop-shadow-[0_0_4px_#ffffff]'
+              <div className={`mt-1.5 px-3 py-0.5 border-2 border-black font-mono font-black text-2xl ${
+                awayWonSeries 
+                  ? 'bg-[#16a34a] text-white border-emerald-950 shadow-[0_0_8px_rgba(34,197,94,0.9)] [text-shadow:0_0_6px_#ffffff,0_0_10px_#ffffff] drop-shadow-[0_0_4px_#ffffff]' 
                   : 'bg-neutral-900 text-neutral-100'
-                }`}>
+              }`}>
                 {series.awayWins}
               </div>
 
@@ -547,12 +558,13 @@ const SeriesModal = ({
 
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-1.5">
-
+                        
                         {/* Home Game Score Box */}
-                        <div className={`flex items-center gap-1 px-1.5 py-0.5 border ${homeWon
-                            ? 'bg-[#16a34a] border-emerald-950 text-white font-black shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff] drop-shadow-[0_0_3px_#ffffff]'
+                        <div className={`flex items-center gap-1 px-1.5 py-0.5 border ${
+                          homeWon 
+                            ? 'bg-[#16a34a] border-emerald-950 text-white font-black shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff] drop-shadow-[0_0_3px_#ffffff]' 
                             : 'bg-neutral-100 border-neutral-400 text-neutral-800 font-bold'
-                          }`}>
+                        }`}>
                           <span className="text-[10px] font-mono uppercase">{home?.abbreviation || 'HOM'}</span>
                           <span className="text-xs font-black">{homeScore}</span>
                         </div>
@@ -560,10 +572,11 @@ const SeriesModal = ({
                         <span className="text-black/40 font-bold">-</span>
 
                         {/* Away Game Score Box */}
-                        <div className={`flex items-center gap-1 px-1.5 py-0.5 border ${!homeWon
-                            ? 'bg-[#16a34a] border-emerald-950 text-white font-black shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff] drop-shadow-[0_0_3px_#ffffff]'
+                        <div className={`flex items-center gap-1 px-1.5 py-0.5 border ${
+                          !homeWon 
+                            ? 'bg-[#16a34a] border-emerald-950 text-white font-black shadow-[0_0_6px_rgba(34,197,94,0.9)] [text-shadow:0_0_5px_#ffffff] drop-shadow-[0_0_3px_#ffffff]' 
                             : 'bg-neutral-100 border-neutral-400 text-neutral-800 font-bold'
-                          }`}>
+                        }`}>
                           <span className="text-xs font-black">{awayScore}</span>
                           <span className="text-[10px] font-mono uppercase">{away?.abbreviation || 'AWY'}</span>
                         </div>
@@ -609,7 +622,7 @@ export default function PlayoffBracket() {
   const [matches, setMatches] = useState<PlayoffMatch[]>([]);
   const [seasons, setSeasons] = useState<any[]>([]);
   const [selectedLeagueId, setSelectedLeagueId] = useState<number | string>('');
-
+  
   // Selected series for modal breakdown
   const [selectedSeries, setSelectedSeries] = useState<{ match: PlayoffMatch; label: string } | null>(null);
 
@@ -721,7 +734,7 @@ export default function PlayoffBracket() {
     }
   };
 
-  const getMatch = (label: string): PlayoffMatch =>
+  const getMatch = (label: string): PlayoffMatch => 
     matches.find(m => m.match_label === label) || { match_label: label, results: [] };
 
   // Helper function to extract and calculate champion details
@@ -786,12 +799,12 @@ export default function PlayoffBracket() {
 
   return (
     <div className="min-h-screen w-full bg-[#f4f1ea] text-black font-serif pb-12 overflow-x-hidden">
-
+      
       {/* ==========================================
           1. RETRO 90S SEGA GENESIS MASTHEAD HEADER
       ========================================== */}
       <header className="border-b-4 border-black pb-4 mb-5 text-center max-w-[1440px] mx-auto px-4">
-
+        
         {/* Retro Header Top Badge */}
         <div className="inline-flex items-center gap-2 bg-black text-amber-300 font-mono text-[9px] sm:text-[10px] font-black uppercase px-3 py-1 border-2 border-black shadow-[2px_2px_0px_#d97706] mb-2 tracking-widest">
           <Flame className="w-3.5 h-3.5 text-red-500 animate-pulse" />
@@ -802,7 +815,7 @@ export default function PlayoffBracket() {
         <h1 className="text-3xl md:text-5xl lg:text-6xl font-black uppercase italic tracking-tighter text-black drop-shadow-[2px_2px_0px_rgba(0,0,0,0.15)]">
           The Playoff Bracket
         </h1>
-
+        
         <div className="flex items-center justify-center gap-2 mt-1.5">
           <span className="h-[2px] w-8 sm:w-16 bg-black" />
           <p className="text-[10px] sm:text-xs uppercase tracking-widest font-mono font-black text-neutral-800">
@@ -825,7 +838,7 @@ export default function PlayoffBracket() {
 
         {/* Retro Controls & Season Selector Toolbar */}
         <div className="w-full max-w-[1440px] mx-auto flex flex-wrap items-center justify-between mb-4 gap-2 px-1">
-
+          
           {/* Season / Edition Selector */}
           {seasons.length > 0 && (
             <div className="flex items-center gap-2">
@@ -851,7 +864,7 @@ export default function PlayoffBracket() {
 
           {/* Retro Zoom & Legend Quick Bar */}
           <div className="flex items-center gap-2">
-
+            
             {/* Desktop Zoom Controls */}
             <div className="flex items-center bg-[#fdfaf5] border-2 border-black shadow-[3px_3px_0px_#000] text-xs">
               <button
@@ -885,11 +898,11 @@ export default function PlayoffBracket() {
         {/* ==========================================
             2. UNIFORM 7-COLUMN RETRO BRACKET CANVAS
         ========================================== */}
-        <div
+        <div 
           style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
           className="min-w-[1260px] max-w-[1440px] mx-auto transition-transform duration-200"
         >
-
+          
           {/* Column Header Titles (Retro Segmented Plates) */}
           <div className="grid grid-cols-7 gap-2 mb-2 px-1 text-center font-mono font-black text-[9px] uppercase tracking-widest">
             <div className="bg-black text-neutral-200 py-1 border-2 border-black shadow-[2px_2px_0px_#000]">Quarter Finals</div>
@@ -905,7 +918,7 @@ export default function PlayoffBracket() {
 
           {/* Canvas Row Layout */}
           <div className="grid grid-cols-7 bg-[#f6f2e8] py-6 px-2 border-4 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)] items-stretch">
-
+            
             {/* ==================== LEFT BRACKET SIDE ==================== */}
 
             {/* 1. LEFT QUARTER FINALS (4 Matches) */}
@@ -952,12 +965,12 @@ export default function PlayoffBracket() {
 
             {/* 4. CHAMPIONSHIP TITLE MATCH & DYNAMIC SUPABASE TROPHY */}
             <div className="relative flex flex-col justify-center items-center h-[650px] bg-black/[0.025] px-1 text-center border-x-2 border-black/20">
-
+              
               {/* Retro Trophy Showcase Pedestal */}
               <div className="absolute top-2 left-0 right-0 flex flex-col items-center pointer-events-none">
                 {championData ? (
                   <div className="flex flex-col items-center animate-in fade-in duration-300 max-w-[160px] pointer-events-auto bg-amber-50/90 border-2 border-black p-2 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000]">
-
+                    
                     {/* Trophy Image with retro shimmer */}
                     {cupMeta.trophyUrl && (
                       <div className="relative overflow-hidden mb-1 group">
@@ -986,7 +999,7 @@ export default function PlayoffBracket() {
                     ) : (
                       <span className="text-[11px] font-black uppercase tracking-tight font-sans">{championData.team?.team_name}</span>
                     )}
-
+                    
                     <span className="text-[7.5px] font-mono font-black uppercase bg-emerald-600 text-white px-1.5 py-0.2 mt-1 border border-emerald-900 shadow-[0_0_4px_#22c55e] [text-shadow:0_0_3px_#fff]">
                       SERIES VICTORY ({championData.score})
                     </span>

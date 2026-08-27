@@ -11,11 +11,13 @@ import {
   Radio,
   Clapperboard,
   CheckCircle2,
+  AlertTriangle,
   Download,
   ExternalLink,
   Copy,
   Check,
   Monitor,
+  Cpu,
   Wifi,
   ShieldCheck,
   Tv
@@ -85,10 +87,11 @@ function SetupGuideContent() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-mono font-black uppercase tracking-wider transition-all whitespace-nowrap shrink-0 cursor-pointer rounded-none border-b-2 ${isActive
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm font-mono font-black uppercase tracking-wider transition-all whitespace-nowrap shrink-0 cursor-pointer rounded-none border-b-2 ${
+                    isActive
                       ? 'text-amber-400 bg-amber-500/15 border-amber-400 shadow-[inset_0_-2px_0_rgba(245,158,11,1)]'
                       : 'text-slate-400 border-transparent hover:text-slate-100 hover:bg-white/5'
-                    }`}
+                  }`}
                 >
                   <span className="text-base leading-none select-none">{tab.icon}</span>
                   <span>{tab.label}</span>
@@ -101,8 +104,10 @@ function SetupGuideContent() {
 
       {/* Content Container */}
       <div className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
-
+        
+        {/* ======================================================== */}
         {/* TAB 1: OVERVIEW */}
+        {/* ======================================================== */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <div className="border-4 border-black bg-white p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -189,7 +194,9 @@ function SetupGuideContent() {
           </div>
         )}
 
+        {/* ======================================================== */}
         {/* TAB 2: RETROARCH SETUP */}
+        {/* ======================================================== */}
         {activeTab === 'retroarch' && (
           <div className="space-y-6">
             <div className="border-4 border-black bg-white p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -198,6 +205,7 @@ function SetupGuideContent() {
               </h2>
 
               <div className="space-y-8">
+                {/* Step 1 */}
                 <div className="border-l-4 border-amber-500 pl-4">
                   <span className="font-mono text-xs font-black text-amber-700 uppercase tracking-widest">
                     STEP 1: INSTALL RETROARCH
@@ -216,6 +224,7 @@ function SetupGuideContent() {
                   </a>
                 </div>
 
+                {/* Step 2 */}
                 <div className="border-l-4 border-amber-500 pl-4">
                   <span className="font-mono text-xs font-black text-amber-700 uppercase tracking-widest">
                     STEP 2: INSTALL THE CORE
@@ -232,6 +241,7 @@ function SetupGuideContent() {
                   </p>
                 </div>
 
+                {/* Step 3 */}
                 <div className="border-l-4 border-amber-500 pl-4">
                   <span className="font-mono text-xs font-black text-amber-700 uppercase tracking-widest">
                     STEP 3: 6-BUTTON CONTROLLER BINDINGS
@@ -281,6 +291,7 @@ function SetupGuideContent() {
                   </div>
                 </div>
 
+                {/* Step 4 */}
                 <div className="border-l-4 border-amber-500 pl-4">
                   <span className="font-mono text-xs font-black text-amber-700 uppercase tracking-widest">
                     STEP 4: LOW LATENCY TUNING
@@ -297,7 +308,9 @@ function SetupGuideContent() {
           </div>
         )}
 
+        {/* ======================================================== */}
         {/* TAB 3: NETPLAY & FIREWALL */}
+        {/* ======================================================== */}
         {activeTab === 'netplay' && (
           <div className="space-y-6">
             <div className="border-4 border-black bg-white p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -306,6 +319,7 @@ function SetupGuideContent() {
               </h2>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                {/* Host Guide */}
                 <div className="border-2 border-black p-4 bg-[#fdfaf5]">
                   <div className="flex items-center gap-2 font-mono font-black text-sm uppercase text-red-900 border-b border-black/20 pb-2 mb-3">
                     <Radio className="w-4 h-4" /> HOSTING A GAME
@@ -319,6 +333,7 @@ function SetupGuideContent() {
                   </ol>
                 </div>
 
+                {/* Client Guide */}
                 <div className="border-2 border-black p-4 bg-[#fdfaf5]">
                   <div className="flex items-center gap-2 font-mono font-black text-sm uppercase text-blue-900 border-b border-black/20 pb-2 mb-3">
                     <Globe className="w-4 h-4" /> JOINING A HOST
@@ -345,7 +360,7 @@ function SetupGuideContent() {
                   <span>Port: 55435 | Protocol: UDP | App: retroarch.exe</span>
                   <button
                     onClick={() => copyToClipboard("55435", "port")}
-                    className="flex items-center gap-1 text-[11px] bg-amber-500 text-black px-2 py-0.5 font-bold hover:bg-amber-400 cursor-pointer"
+                    className="flex items-center gap-1 text-[11px] bg-amber-500 text-black px-2 py-0.5 font-bold hover:bg-amber-400"
                   >
                     {copiedText === 'port' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                     {copiedText === 'port' ? 'COPIED' : 'COPY'}
@@ -365,7 +380,9 @@ function SetupGuideContent() {
           </div>
         )}
 
+        {/* ======================================================== */}
         {/* TAB 4: ROM & TESTING */}
+        {/* ======================================================== */}
         {activeTab === 'rom' && (
           <div className="space-y-6">
             <div className="border-4 border-black bg-white p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -433,7 +450,9 @@ function SetupGuideContent() {
           </div>
         )}
 
+        {/* ======================================================== */}
         {/* TAB 5: STREAMING (TWITCH) */}
+        {/* ======================================================== */}
         {activeTab === 'streaming' && (
           <div className="space-y-6">
             <div className="border-4 border-black bg-white p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
@@ -486,7 +505,9 @@ function SetupGuideContent() {
           </div>
         )}
 
+        {/* ======================================================== */}
         {/* TAB 6: STREAM OVERLAYS */}
+        {/* ======================================================== */}
         {activeTab === 'overlays' && (
           <div className="space-y-6">
             <div className="border-4 border-black bg-white p-4 sm:p-8 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
