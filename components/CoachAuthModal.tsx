@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useCoachAuth } from '@/lib/coach-auth';
-import { Lock, ShieldCheck, UserCheck, X, KeyRound, Eye, EyeOff, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { 
+  Lock, ShieldCheck, UserCheck, X, KeyRound, Eye, EyeOff, 
+  AlertCircle, CheckCircle2, RotateCcw, User, Search
+} from 'lucide-react';
 
 export default function CoachAuthModal() {
   const {
@@ -18,11 +21,12 @@ export default function CoachAuthModal() {
   } = useCoachAuth();
 
   const [mode, setMode] = useState<'login' | 'reset'>('login');
-  const [selectedCoachId, setSelectedCoachId] = useState<string>('');
+  const [coachName, setCoachName] = useState<string>('');
   const [passkey, setPasskey] = useState<string>('');
   const [showPasskey, setShowPasskey] = useState<boolean>(false);
 
   // Reset PIN form states
+  const [resetCoachName, setResetCoachName] = useState<string>('');
   const [authKey, setAuthKey] = useState<string>(''); // Current PIN or master passkey
   const [newPin, setNewPin] = useState<string>('');
   const [confirmPin, setConfirmPin] = useState<string>('');
@@ -44,19 +48,41 @@ export default function CoachAuthModal() {
       setMode('login');
 
       if (currentCoach) {
-        setSelectedCoachId(String(currentCoach.coach_id));
-      } else if (coachesList.length > 0) {
-        setSelectedCoachId(String(coachesList[0].coach_id));
+        setCoachName(currentCoach.coach_name);
+        setResetCoachName(currentCoach.coach_name);
+      } else {
+        setCoachName('');
+        setResetCoachName('');
       }
     }
-  }, [isLoginModalOpen, currentCoach, coachesList]);
+  }, [isLoginModalOpen, currentCoach]);
+
+  // Real-time match against coachesList for visual verification
+  const matchedLoginCoach = useMemo(() => {
+    const clean = coachName.trim().toLowerCase();
+    if (!clean) return null;
+    return coachesList.find(c => 
+      c.coach_name.trim().toLowerCase() === clean || 
+      String(c.coach_id) === clean
+    );
+  }, [coachName, coachesList]);
+
+  const matchedResetCoach = useMemo(() => {
+    const clean = resetCoachName.trim().toLowerCase();
+    if (!clean) return null;
+    return coachesList.find(c => 
+      c.coach_name.trim().toLowerCase() === clean || 
+      String(c.coach_id) === clean
+    );
+  }, [resetCoachName, coachesList]);
 
   if (!isLoginModalOpen) return null;
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCoachId) {
-      setError("Please select your coach name.");
+    const cleanName = coachName.trim();
+    if (!cleanName) {
+      setError("Please type your coach name as stored in the league_coaches table.");
       return;
     }
     if (!passkey.trim()) {
@@ -67,18 +93,19 @@ export default function CoachAuthModal() {
     setIsSubmitting(true);
     setError(null);
 
-    const result = await login(selectedCoachId, passkey);
+    const result = await login(cleanName, passkey);
     setIsSubmitting(false);
 
     if (!result.success) {
-      setError(result.error || "Authentication failed. Check your passkey.");
+      setError(result.error || "Authentication failed. Please check your coach name and passkey.");
     }
   };
 
   const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCoachId) {
-      setError("Please select your coach profile.");
+    const cleanName = resetCoachName.trim();
+    if (!cleanName) {
+      setError("Please enter your coach name.");
       return;
     }
     if (!authKey.trim()) {
@@ -98,7 +125,7 @@ export default function CoachAuthModal() {
     setError(null);
     setSuccessMessage(null);
 
-    const result = await updatePin(Number(selectedCoachId), authKey.trim(), newPin.trim());
+    const result = await updatePin(cleanName, authKey.trim(), newPin.trim());
     setIsSubmitting(false);
 
     if (!result.success) {
@@ -106,6 +133,7 @@ export default function CoachAuthModal() {
     } else {
       setSuccessMessage("✅ PIN successfully updated! You can now log in with your new PIN.");
       setPasskey(newPin.trim());
+      setCoachName(cleanName);
       setTimeout(() => {
         setMode('login');
         setSuccessMessage(null);
@@ -148,6 +176,15 @@ export default function CoachAuthModal() {
           </p>
         </div>
 
+        {/* Datalist for coach name suggestions from league_coaches */}
+        <datalist id="coach-names-list">
+          {coachesList.map((c) => (
+            <option key={c.coach_id} value={c.coach_name}>
+              Coach #{c.coach_id}
+            </option>
+          ))}
+        </datalist>
+
         {/* Already Logged In Prompt */}
         {isLoggedIn && currentCoach && mode === 'login' ? (
           <div className="space-y-4">
@@ -178,6 +215,7 @@ export default function CoachAuthModal() {
                   onClick={() => {
                     logout();
                     setError(null);
+                    setCoachName('');
                   }}
                   className="bg-red-100 text-red-900 py-2 px-4 text-xs font-bold uppercase border-2 border-red-800 hover:bg-red-800 hover:text-white transition cursor-pointer"
                 >
@@ -189,7 +227,7 @@ export default function CoachAuthModal() {
                 type="button"
                 onClick={() => {
                   setMode('reset');
-                  setSelectedCoachId(String(currentCoach.coach_id));
+                  setResetCoachName(currentCoach.coach_name);
                   setError(null);
                 }}
                 className="w-full text-center text-xs font-bold uppercase py-1.5 border border-black/30 hover:bg-neutral-100 transition text-slate-700"
@@ -215,21 +253,41 @@ export default function CoachAuthModal() {
               </div>
             )}
 
+            {/* Coach Name Input */}
             <div>
               <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-900">
-                1. Select Coach:
+                1. Coach Name (league_coaches table):
               </label>
-              <select
-                value={selectedCoachId}
-                onChange={(e) => setSelectedCoachId(e.target.value)}
-                className="w-full bg-white border-2 border-black p-2 text-xs font-bold font-sans cursor-pointer focus:outline-none focus:bg-yellow-50"
-              >
-                {coachesList.map((c) => (
-                  <option key={c.coach_id} value={c.coach_id}>
-                    {c.coach_name} (Coach #{c.coach_id})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  list="coach-names-list"
+                  value={resetCoachName}
+                  onChange={(e) => setResetCoachName(e.target.value)}
+                  placeholder="Type your coach name..."
+                  autoComplete="off"
+                  className="w-full bg-white border-2 border-black py-2 pl-3 pr-8 text-xs font-bold font-sans focus:outline-none focus:bg-yellow-50"
+                />
+                {resetCoachName && (
+                  <button
+                    type="button"
+                    onClick={() => setResetCoachName('')}
+                    className="absolute right-2 top-2 text-slate-500 hover:text-black text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              {matchedResetCoach ? (
+                <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-800 font-mono font-bold">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Found: {matchedResetCoach.coach_name} (ID #{matchedResetCoach.coach_id})</span>
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-500 mt-1 font-serif">
+                  Type your exact coach name from the league_coaches table.
+                </p>
+              )}
             </div>
 
             <div>
@@ -315,25 +373,54 @@ export default function CoachAuthModal() {
               </div>
             )}
 
+            {/* Coach Name Input Field */}
             <div>
-              <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-900">
-                1. Select Coach Profile:
-              </label>
-              <select
-                value={selectedCoachId}
-                onChange={(e) => setSelectedCoachId(e.target.value)}
-                className="w-full bg-white border-2 border-black p-2 text-xs font-bold font-sans cursor-pointer focus:outline-none focus:bg-yellow-50"
-              >
-                {coachesList.length === 0 ? (
-                  <option value="">Loading coaches from database...</option>
-                ) : (
-                  coachesList.map((c) => (
-                    <option key={c.coach_id} value={c.coach_id}>
-                      {c.coach_name} (Coach #{c.coach_id})
-                    </option>
-                  ))
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] font-black uppercase font-mono text-slate-900">
+                  1. Coach Name:
+                </label>
+                <span className="text-[9.5px] font-mono text-neutral-500 font-bold">
+                  (from league_coaches table)
+                </span>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-600">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  list="coach-names-list"
+                  value={coachName}
+                  onChange={(e) => setCoachName(e.target.value)}
+                  placeholder="Type your coach name (e.g. Skip, Tom, Chaos)..."
+                  autoComplete="off"
+                  autoFocus
+                  className="w-full bg-white border-2 border-black py-2.5 pl-8 pr-8 text-xs font-bold font-sans focus:outline-none focus:bg-yellow-50 focus:border-black"
+                />
+                {coachName && (
+                  <button
+                    type="button"
+                    onClick={() => setCoachName('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-black text-xs font-bold p-1 cursor-pointer"
+                    title="Clear coach name"
+                  >
+                    ✕
+                  </button>
                 )}
-              </select>
+              </div>
+
+              {/* Instant match preview badge */}
+              {matchedLoginCoach ? (
+                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-emerald-800 font-mono font-bold bg-emerald-50 px-2 py-0.5 border border-emerald-300">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span className="truncate">Found in database: <strong>{matchedLoginCoach.coach_name}</strong> (Coach ID #{matchedLoginCoach.coach_id})</span>
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-500 italic mt-1 font-serif">
+                  Type your coach name as registered in the league database. Suggestions will appear as you type.
+                </p>
+              )}
             </div>
 
             <div>
@@ -345,6 +432,7 @@ export default function CoachAuthModal() {
                   type="button"
                   onClick={() => {
                     setMode('reset');
+                    setResetCoachName(coachName);
                     setError(null);
                   }}
                   className="text-[10px] text-red-800 font-bold uppercase underline hover:text-black cursor-pointer"
