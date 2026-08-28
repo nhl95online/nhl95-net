@@ -7,7 +7,7 @@ import {
   Trophy, Clock, CheckCircle2, Search, Filter, Sparkles, UserCheck, 
   AlertCircle, ChevronDown, ChevronRight, Layers, ArrowRight, Shield, 
   Flame, ExternalLink, RefreshCw, Send, PlusCircle, HelpCircle, Eye,
-  SlidersHorizontal, Check, Award, Calendar, Star
+  SlidersHorizontal, Check, Award, Calendar, Star, Lock, Unlock, Timer
 } from 'lucide-react';
 import { useCoachAuth } from '@/lib/coach-auth';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
@@ -18,12 +18,15 @@ interface SeasonOption {
   seasonName: string;
   leagueType: string;
   year: number;
+  draftDate?: string | null;
 }
 
 interface DraftData {
   id?: string | number;
   team: string;
   teamId?: string | number;
+  coachId?: string | number | null;
+  coachName?: string | null;
   rd: number;
   pk: number;
   player: string;
@@ -39,7 +42,6 @@ interface DraftData {
   leagueType: string;
   ratings?: Record<string, any>;
   playerInfo?: Record<string, any>;
-  coachName?: string;
   isSubmitted?: boolean;
 }
 
@@ -51,6 +53,16 @@ interface DatabasePlayer {
   ratings?: Record<string, any>;
   player_info?: Record<string, any>;
   ovr: number;
+}
+
+interface TeamInfo {
+  team_id: number;
+  team_name: string;
+  abbreviation: string;
+  logo_url: string | null;
+  league_id: number;
+  coach_id?: number | null;
+  coach_name?: string | null;
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
@@ -84,15 +96,7 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   }
 };
 
-// Authoritative League ID -> League Prefix mapping
-const SEASON_TYPES: Record<number, string> = {
-  1: 'W', 2: 'W', 3: 'W', 4: 'W', 5: 'Q', 6: 'W', 7: 'Q', 8: 'Q', 9: 'W', 10: 'Q',
-  11: 'W', 12: 'Q', 13: 'Q', 14: 'W', 15: 'Q', 16: 'G', 17: 'Q', 18: 'W', 19: 'Q', 20: 'V',
-  21: 'Q', 22: 'W', 23: 'Q', 24: 'W', 25: 'Q', 26: 'Q', 27: 'Q', 28: 'W', 29: 'Q', 30: 'Q',
-  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
-};
-
-// Known accurate season metadata mapping connected strictly by League ID
+// Known accurate base seasons mapping
 export const KNOWN_LEAGUE_SEASON_MAP: Record<number | string, { badge: string; prefix: string; year: number; name: string }> = {
   1: { badge: 'W01 (1995)', prefix: 'W', year: 1995, name: 'W League - Season 1 (1995)' },
   2: { badge: 'W02 (1996)', prefix: 'W', year: 1996, name: 'W League - Season 2 (1996)' },
@@ -136,9 +140,11 @@ export const KNOWN_LEAGUE_SEASON_MAP: Record<number | string, { badge: string; p
   40: { badge: 'W18 (2013)', prefix: 'W', year: 2013, name: 'W League - Season 18 (2013)' }
 };
 
-// Helper: Resolve accurate season badge and metadata given league_id, name, and year
+// Helper: Dynamically resolve accurate season badge, prefix, and year for ANY league_id (including 41+, O02, etc.)
 const resolveSeasonInfo = (leagueId: number | string, dbLeagueName?: string, dbYear?: number): { badge: string; prefix: string; year: number; name: string } => {
   const numId = Number(leagueId);
+
+  // 1. Check known base map
   if (!isNaN(numId) && KNOWN_LEAGUE_SEASON_MAP[numId]) {
     const known = KNOWN_LEAGUE_SEASON_MAP[numId];
     if (dbLeagueName && dbLeagueName.includes('(') && /^[A-Z]+\d+/i.test(dbLeagueName.trim())) {
@@ -147,26 +153,39 @@ const resolveSeasonInfo = (leagueId: number | string, dbLeagueName?: string, dbY
     return known;
   }
 
-  // Fallback for custom or newly registered league IDs
+  // 2. Parse from dynamic dbLeagueName if provided (e.g. "W19", "O02", "W19 (2025)", "Original 6 - Season 2")
   let prefix = 'W';
+  let seasonNumber = numId || 1;
+  let year = dbYear || new Date().getFullYear();
+
   if (dbLeagueName) {
-    const trimmed = dbLeagueName.trim().toUpperCase();
-    const match = trimmed.match(/^[A-Z]+/);
-    if (match && match[0] && LEAGUE_LOGOS[match[0]]) {
-      prefix = match[0];
+    const trimmed = dbLeagueName.trim();
+    // Check if starts with a code like W19, O02, Q20, V02, G02
+    const codeMatch = trimmed.match(/^([A-Za-z]+)\s*0*(\d+)/);
+    if (codeMatch) {
+      prefix = codeMatch[1].toUpperCase();
+      seasonNumber = parseInt(codeMatch[2], 10);
+    } else if (trimmed.toUpperCase().includes('ORIGINAL')) {
+      prefix = 'O';
+    } else if (trimmed.toUpperCase().includes('VINTAGE')) {
+      prefix = 'V';
+    } else if (trimmed.toUpperCase().includes('GOLDEN')) {
+      prefix = 'G';
+    } else if (trimmed.toUpperCase().includes('THE Q') || trimmed.toUpperCase().startsWith('Q')) {
+      prefix = 'Q';
     }
-  } else if (!isNaN(numId) && SEASON_TYPES[numId]) {
-    prefix = SEASON_TYPES[numId];
-  }
 
-  let year = dbYear || 1995;
-  if (!dbYear && dbLeagueName) {
-    const yrMatch = dbLeagueName.match(/\b(19\d\d|20\d\d)\b/);
+    const yrMatch = trimmed.match(/\b(19\d\d|20\d\d)\b/);
     if (yrMatch) year = parseInt(yrMatch[1], 10);
+  } else if (!isNaN(numId) && numId > 40) {
+    // Dynamic formula for upcoming W-League seasons beyond 40 (e.g. 41 -> W19, 42 -> W20)
+    prefix = 'W';
+    seasonNumber = numId - 22; // 40 is W18 -> 41 is W19
+    year = 2013 + (numId - 40);
   }
 
-  const badge = `${prefix}${String(numId || 1).padStart(2, '0')} (${year})`;
-  const name = dbLeagueName || `Season ${leagueId} (${year})`;
+  const badge = `${prefix}${String(seasonNumber).padStart(2, '0')} (${year})`;
+  const name = dbLeagueName || `${prefix === 'O' ? 'Original 6' : prefix === 'Q' ? 'The Q' : 'W League'} - Season ${seasonNumber} (${year})`;
 
   return { badge, prefix, year, name };
 };
@@ -175,9 +194,7 @@ const parsePlayerOvr = (ratings: any): number | null => {
   if (!ratings) return null;
   try {
     const r = typeof ratings === 'string' ? JSON.parse(ratings) : ratings;
-    const candidates = [
-      r?.Ovr, r?.OVR, r?.OVERALL, r?.overall, r?.Overall, r?.ovr
-    ];
+    const candidates = [r?.Ovr, r?.OVR, r?.OVERALL, r?.overall, r?.Overall, r?.ovr];
     for (const c of candidates) {
       const n = Number(c);
       if (!isNaN(n) && n > 0) return n;
@@ -188,7 +205,7 @@ const parsePlayerOvr = (ratings: any): number | null => {
   }
 };
 
-// Helper: Player Portrait with fallback handling
+// Player Portrait Component
 const PlayerPortrait = ({ name, className = "w-20 h-20" }: { name: string; className?: string }) => {
   const filename = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
   const [imgSrc, setImgSrc] = useState(`${SUPABASE_URL}/storage/v1/object/public/${PORTRAIT_BUCKET}/${filename}.png`);
@@ -387,22 +404,24 @@ function CardAttribute({ label, value }: { label: string; value: any }) {
 }
 
 // =========================================================================
-// MAIN DRAFT PAGE (Single Draft Viewport Engine)
+// MAIN DRAFT PAGE (Dynamic Discovery, Date Lock & Coach Turn Engine)
 // =========================================================================
 export default function DraftPage() {
   const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
+  
   // Top-Level Mode: 'floor' (Draft Central), 'past' (Past Drafts Archive), 'capital' (Draft Capital)
   const [activeTab, setActiveTab] = useState<'floor' | 'past' | 'capital'>('floor');
 
   // Core Data
   const [data, setData] = useState<DraftData[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
+  const [teamsMap, setTeamsMap] = useState<Map<number, TeamInfo>>(new Map());
   const [dbPlayers, setDbPlayers] = useState<DatabasePlayer[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Single Draft Selection State (Strictly 1 Draft at a time)
+  // Single Draft Selection State
   const [floorLeague, setFloorLeague] = useState<string>('W');
-  const [floorLeagueId, setFloorLeagueId] = useState<string>('40'); // Default to W18 (2013)
+  const [floorLeagueId, setFloorLeagueId] = useState<string>('40'); // Automatically updated to highest available draft
   const [showCapital, setShowCapital] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoundFilter, setSelectedRoundFilter] = useState<'ALL' | '1' | '2' | '3' | '4+'>('ALL');
@@ -410,7 +429,7 @@ export default function DraftPage() {
 
   // Past Single Draft Selection State
   const [pastLeagueType, setPastLeagueType] = useState<string>('W');
-  const [pastLeagueId, setPastLeagueId] = useState<string>('1'); // Default to W01 (1995)
+  const [pastLeagueId, setPastLeagueId] = useState<string>('1');
   const [pastSearchQuery, setPastSearchQuery] = useState<string>('');
 
   // Coach Submission Desk State
@@ -421,23 +440,65 @@ export default function DraftPage() {
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState<string | null>(null);
   const [overridePickSlot, setOverridePickSlot] = useState<DraftData | null>(null);
 
-  // 1. Initial Load of Drafts, Seasons, Leagues, and Player Database
+  // Countdown timer clock state for draft lock
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+
+  // Interval ticker for live countdown
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 1. Dynamic Load of Drafts, New League IDs (41+, O02), Teams, Coaches, and Player DB
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
       try {
-        // Fetch Leagues & Seasons
-        const [leaguesRes, seasonsRes] = await Promise.all([
+        // Fetch all relevant tables in parallel
+        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes] = await Promise.all([
+          supabase.from('league_drafts').select('*, league_player_database (*), league_teams (*)'),
+          supabase.from('league_teams').select('*'),
+          supabase.from('league_coaches').select('*'),
           supabase.from('leagues').select('*'),
           supabase.from('league_seasons').select('*')
         ]);
 
+        const rawDrafts = draftsRes.data || [];
+        const rawTeams = teamsRes.data || [];
+        const rawCoaches = coachesRes.data || [];
         const rawLeagues = leaguesRes.data || [];
         const rawSeasons = seasonsRes.data || [];
 
+        // Build coaches map (ID -> Name)
+        const coachMap = new Map<number, string>();
+        rawCoaches.forEach((c: any) => {
+          const id = Number(c.coach_id ?? c.id);
+          const name = String(c.coach_name ?? c.name ?? `Coach #${id}`).trim();
+          coachMap.set(id, name);
+        });
+
+        // Build teams map with coach linkage
+        const compiledTeamsMap = new Map<number, TeamInfo>();
+        rawTeams.forEach((t: any) => {
+          const tId = Number(t.team_id);
+          const cId = t.coach_id ? Number(t.coach_id) : null;
+          const cName = t.coach_name || (cId && coachMap.get(cId)) || null;
+
+          compiledTeamsMap.set(tId, {
+            team_id: tId,
+            team_name: t.team_name || `Team #${tId}`,
+            abbreviation: t.abbreviation || 'TM',
+            logo_url: t.logo_url || null,
+            league_id: Number(t.league_id) || 1,
+            coach_id: cId,
+            coach_name: cName
+          });
+        });
+        setTeamsMap(compiledTeamsMap);
+
         const combinedSeasonMap = new Map<string, SeasonOption>();
 
-        // 1. Populate from Known League Season Map
+        // 1. Populate Known League Seasons
         Object.entries(KNOWN_LEAGUE_SEASON_MAP).forEach(([lId, meta]) => {
           combinedSeasonMap.set(String(lId), {
             leagueId: String(lId),
@@ -448,66 +509,86 @@ export default function DraftPage() {
           });
         });
 
-        // 2. Process leagues table from database
+        // 2. Process leagues table from database (includes draft dates / rules_json)
         rawLeagues.forEach((l: any) => {
           const lId = String(l.league_id !== undefined ? l.league_id : (l.id || l.season_id));
+          let draftDate = l.draft_date || l.draft_datetime || l.start_date || null;
+          if (l.rules_json) {
+            try {
+              const r = typeof l.rules_json === 'string' ? JSON.parse(l.rules_json) : l.rules_json;
+              draftDate = draftDate || r.draft_date || r.draft_datetime || r.draft_time;
+            } catch {}
+          }
+
           const resolved = resolveSeasonInfo(lId, l.league_name || l.name, l.year);
           combinedSeasonMap.set(lId, {
             leagueId: lId,
             seasonBadge: resolved.badge,
             seasonName: resolved.name,
             leagueType: resolved.prefix,
-            year: resolved.year
+            year: resolved.year,
+            draftDate
           });
         });
 
         // 3. Process league_seasons table from database
         rawSeasons.forEach((s: any) => {
           const sId = String(s.league_id !== undefined ? s.league_id : s.id);
+          let draftDate = s.draft_date || s.draft_datetime || s.start_date || null;
           const resolved = resolveSeasonInfo(sId, s.season_name, s.year);
-          if (!combinedSeasonMap.has(sId)) {
+          if (!combinedSeasonMap.has(sId) || draftDate) {
             combinedSeasonMap.set(sId, {
               leagueId: sId,
               seasonBadge: resolved.badge,
               seasonName: resolved.name,
               leagueType: resolved.prefix,
-              year: resolved.year
+              year: resolved.year,
+              draftDate: draftDate || combinedSeasonMap.get(sId)?.draftDate
             });
           }
         });
 
+        // 4. AUTO-DISCOVER ANY NEW LEAGUE_ID BEYOND 40 DIRECTLY FROM LEAGUE_DRAFTS (e.g. 41 for W19, O02, etc.)
+        rawDrafts.forEach((d: any) => {
+          if (d.league_id) {
+            const lId = String(d.league_id);
+            if (!combinedSeasonMap.has(lId)) {
+              const resolved = resolveSeasonInfo(lId, "", Number(d.year));
+              combinedSeasonMap.set(lId, {
+                leagueId: lId,
+                seasonBadge: resolved.badge,
+                seasonName: resolved.name,
+                leagueType: resolved.prefix,
+                year: resolved.year,
+                draftDate: d.draft_date || d.draft_datetime || null
+              });
+            }
+          }
+        });
+
+        // Sort seasons by year / leagueId descending (highest/newest first)
         const seasonList = Array.from(combinedSeasonMap.values()).sort((a, b) => {
           if (b.year !== a.year) return b.year - a.year;
           return Number(b.leagueId) - Number(a.leagueId);
         });
         setSeasons(seasonList);
 
-        // Set default single draft selection (W18 / League ID 40 for Live Floor, W01 / League ID 1 for Past)
-        const w18 = seasonList.find(s => s.leagueId === '40') || seasonList[0];
-        if (w18) {
-          setFloorLeague(w18.leagueType);
-          setFloorLeagueId(w18.leagueId);
+        // Auto-select newest available draft for Draft Floor (e.g. 41 if exists, or 40)
+        if (seasonList.length > 0) {
+          const newest = seasonList[0];
+          setFloorLeague(newest.leagueType);
+          setFloorLeagueId(newest.leagueId);
         }
 
-        const w01 = seasonList.find(s => s.leagueId === '1') || (seasonList.length > 1 ? seasonList[1] : seasonList[0]);
+        const w01 = seasonList.find(s => s.leagueId === '1') || seasonList[seasonList.length - 1];
         if (w01) {
           setPastLeagueType(w01.leagueType);
           setPastLeagueId(w01.leagueId);
         }
 
-        // Fetch Draft Data
-        const { data: rawData, error } = await supabase
-          .from('league_drafts')
-          .select(`
-            round, pick_number, year, transaction_type, league_id,
-            league_player_database (*),
-            league_teams (*)
-          `);
-
-        if (error) console.error("Supabase Query Error:", error);
-
-        if (rawData && rawData.length > 0) {
-          const parsedDrafts: DraftData[] = rawData.map((d: any, index: number) => {
+        // Parse Draft Records
+        if (rawDrafts.length > 0) {
+          const parsedDrafts: DraftData[] = rawDrafts.map((d: any, index: number) => {
             const p = d.league_player_database;
             const t = d.league_teams;
             const ovr = parsePlayerOvr(p?.ratings);
@@ -516,43 +597,31 @@ export default function DraftPage() {
             const isFilled = pName && pName !== "N/A" && pName !== "-";
             const rawYear = Number(d.year) || 1995;
 
-            // Connect strictly by League ID
             let resolvedLeagueId = String(d.league_id || t?.league_id || "");
-            
             if (!resolvedLeagueId || resolvedLeagueId === "0" || !combinedSeasonMap.has(resolvedLeagueId)) {
               const teamAbbr = String(t?.abbreviation || "").toUpperCase();
               const isO6 = ['BOS', 'CHI', 'DET', 'DTC', 'MTL', 'NYR', 'TOR'].includes(teamAbbr) || rawYear === 1927;
               
-              if (isO6 || rawYear === 1927) {
-                resolvedLeagueId = "39";
-              } else if (rawYear === 1917) {
-                resolvedLeagueId = "20";
-              } else if (rawYear === 1980) {
-                resolvedLeagueId = "16";
-              } else if (rawYear === 1995) {
-                resolvedLeagueId = "1"; // W01
-              } else if (rawYear === 1996) {
-                resolvedLeagueId = "2"; // W02
-              } else if (rawYear === 1997) {
-                resolvedLeagueId = "3"; // W03
-              } else if (rawYear === 1998) {
-                resolvedLeagueId = "4"; // W04
-              } else if (rawYear === 2012) {
-                resolvedLeagueId = "38"; // W17
-              } else if (rawYear === 2013) {
-                resolvedLeagueId = "40"; // W18
-              } else {
+              if (isO6 || rawYear === 1927) resolvedLeagueId = "39";
+              else if (rawYear === 1917) resolvedLeagueId = "20";
+              else if (rawYear === 1980) resolvedLeagueId = "16";
+              else if (rawYear === 2013) resolvedLeagueId = "40";
+              else {
                 const match = seasonList.find(s => s.year === rawYear);
                 resolvedLeagueId = match ? match.leagueId : "1";
               }
             }
 
             const seasonMeta = combinedSeasonMap.get(resolvedLeagueId) || resolveSeasonInfo(resolvedLeagueId, "", rawYear);
+            const teamIdNum = t?.team_id ? Number(t.team_id) : undefined;
+            const teamDetails = teamIdNum ? compiledTeamsMap.get(teamIdNum) : undefined;
 
             return {
               id: d.id || `draft-${resolvedLeagueId}-${d.round}-${d.pick_number}-${index}`,
-              team: t?.team_name || "Unknown Team",
-              teamId: t?.team_id,
+              team: teamDetails?.team_name || t?.team_name || "Unknown Team",
+              teamId: teamIdNum,
+              coachId: teamDetails?.coach_id || t?.coach_id || null,
+              coachName: teamDetails?.coach_name || t?.coach_name || null,
               rd: Number(d.round) || 1,
               pk: Number(d.pick_number) || (index + 1),
               player: isFilled ? pName : "N/A",
@@ -560,7 +629,7 @@ export default function DraftPage() {
               pos: p?.pos || (isFilled ? "F" : null),
               ovr: ovr,
               transaction: d.transaction_type || (isFilled ? "Original Selection" : "Open Capital Slot"),
-              logo: t?.logo_url || "",
+              logo: teamDetails?.logo_url || t?.logo_url || "",
               year: seasonMeta.year,
               leagueId: resolvedLeagueId,
               seasonBadge: seasonMeta.seasonBadge,
@@ -571,7 +640,7 @@ export default function DraftPage() {
             };
           });
 
-          // Sort drafts by league_id / year descending, then round, then pick
+          // Sort drafts by league_id descending, then round, then pick
           parsedDrafts.sort((a, b) => {
             if (b.year !== a.year) return b.year - a.year;
             if (Number(b.leagueId) !== Number(a.leagueId)) return Number(b.leagueId) - Number(a.leagueId);
@@ -581,8 +650,8 @@ export default function DraftPage() {
 
           setData(parsedDrafts);
 
-          // Default podium spotlight to #1 pick in active draft
-          const activeDraftPicks = parsedDrafts.filter(d => d.leagueId === '40' && d.player && d.player !== "N/A");
+          // Spotlight default: Pick #1
+          const activeDraftPicks = parsedDrafts.filter(d => d.leagueId === seasonList[0]?.leagueId && d.player && d.player !== "N/A");
           if (activeDraftPicks.length > 0) {
             setPodium(activeDraftPicks[0]);
           } else {
@@ -591,7 +660,7 @@ export default function DraftPage() {
           }
         }
 
-        // Fetch Player Database for Coach Pick Auto-complete
+        // Fetch Player Database
         const { data: rawPlayers } = await supabase
           .from('league_player_database')
           .select('*')
@@ -620,17 +689,15 @@ export default function DraftPage() {
     fetchData();
   }, []);
 
-  // Filtered Season Options for Draft Floor (Grouped by League Tier)
+  // Filtered Season Options for Draft Floor & Past
   const availableFloorSeasons = useMemo(() => {
     return seasons.filter(s => floorLeague === 'ALL' || s.leagueType === floorLeague);
   }, [seasons, floorLeague]);
 
-  // Filtered Season Options for Past Drafts (Grouped by League Tier)
   const availablePastSeasons = useMemo(() => {
     return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
   }, [seasons, pastLeagueType]);
 
-  // Currently Selected Draft Meta for Floor & Past tabs
   const activeFloorSeasonMeta = useMemo(() => {
     return seasons.find(s => s.leagueId === floorLeagueId) || seasons[0];
   }, [seasons, floorLeagueId]);
@@ -639,7 +706,38 @@ export default function DraftPage() {
     return seasons.find(s => s.leagueId === pastLeagueId) || seasons[0];
   }, [seasons, pastLeagueId]);
 
-  // Handle switching League tier on Draft Floor (Auto-selects top draft in that league)
+  // =========================================================================
+  // DRAFT DATE LOCK & COUNTDOWN LOGIC
+  // =========================================================================
+  const draftLockStatus = useMemo(() => {
+    if (!activeFloorSeasonMeta?.draftDate) {
+      return { isLocked: false, timeRemaining: null, targetDate: null };
+    }
+
+    const targetDate = new Date(activeFloorSeasonMeta.draftDate);
+    const targetMs = targetDate.getTime();
+    if (isNaN(targetMs)) {
+      return { isLocked: false, timeRemaining: null, targetDate: null };
+    }
+
+    const diff = targetMs - currentTime;
+    if (diff <= 0) {
+      return { isLocked: false, timeRemaining: null, targetDate };
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+    const minutes = Math.floor((diff / (1000 * 60)) % 60);
+    const seconds = Math.floor((diff / 1000) % 60);
+
+    return {
+      isLocked: true,
+      timeRemaining: { days, hours, minutes, seconds, totalMs: diff },
+      targetDate
+    };
+  }, [activeFloorSeasonMeta, currentTime]);
+
+  // Handle switching League tier on Draft Floor
   const handleFloorLeagueChange = (newLeagueType: string) => {
     setFloorLeague(newLeagueType);
     const matches = seasons.filter(s => newLeagueType === 'ALL' || s.leagueType === newLeagueType);
@@ -648,7 +746,6 @@ export default function DraftPage() {
     }
   };
 
-  // Handle switching League tier on Past Drafts (Auto-selects top draft in that league)
   const handlePastLeagueChange = (newLeagueType: string) => {
     setPastLeagueType(newLeagueType);
     const matches = seasons.filter(s => newLeagueType === 'ALL' || s.leagueType === newLeagueType);
@@ -664,7 +761,6 @@ export default function DraftPage() {
     if (activeTab === 'floor') {
       const currentDraftPicks = data.filter(d => d.leagueId === floorLeagueId && d.player && d.player !== 'N/A');
       if (currentDraftPicks.length > 0) {
-        // If current podium player is not in this draft, switch to #1 pick
         if (!podium || podium.leagueId !== floorLeagueId) {
           setPodium(currentDraftPicks[0]);
         }
@@ -679,28 +775,26 @@ export default function DraftPage() {
     }
   }, [floorLeagueId, pastLeagueId, activeTab, data]);
 
-  // STRICTLY 1 DRAFT AT A TIME: Filtered Draft Floor Data
+  // Filtered Draft Floor Data (1 Draft at a time)
   const filteredData = useMemo(() => {
     return data.filter(d => {
-      // 1. Strictly filter to the 1 selected draft
       if (d.leagueId !== floorLeagueId) return false;
 
       const isCapitalRow = (!d.player || d.player === "N/A");
       const viewMatch = showCapital ? isCapitalRow : !isCapitalRow;
       if (!viewMatch) return false;
       
-      // Search inside this single draft
       if (searchQuery.trim()) {
         const search = searchQuery.toLowerCase().trim();
         const matchSearch = 
           d.team.toLowerCase().includes(search) || 
           d.player.toLowerCase().includes(search) ||
+          (d.coachName && d.coachName.toLowerCase().includes(search)) ||
           (d.pos && d.pos.toLowerCase().includes(search)) ||
           d.pk.toString().includes(search);
         if (!matchSearch) return false;
       }
 
-      // Round Filter
       if (selectedRoundFilter === '1') return d.rd === 1;
       if (selectedRoundFilter === '2') return d.rd === 2;
       if (selectedRoundFilter === '3') return d.rd === 3;
@@ -710,16 +804,24 @@ export default function DraftPage() {
     });
   }, [data, floorLeagueId, showCapital, searchQuery, selectedRoundFilter]);
 
-  // Identify Current "On The Clock" Pick Slot in the Active Single Draft
+  // =========================================================================
+  // 1ST OVERALL PICK & ON-THE-CLOCK SELECTION LINKED BY TEAM_ID & COACH_ID
+  // =========================================================================
+
+  // Round 1 Pick 1 (First Overall Selection)
+  const firstOverallPick = useMemo(() => {
+    const singleDraftRows = data.filter(d => d.leagueId === floorLeagueId);
+    return singleDraftRows.find(d => d.rd === 1 && d.pk === 1) || null;
+  }, [data, floorLeagueId]);
+
+  // Identify Current "On The Clock" Pick Slot
   const nextEmptyPickSlot = useMemo(() => {
     if (overridePickSlot && overridePickSlot.leagueId === floorLeagueId) return overridePickSlot;
     
-    // Find the first unfilled slot in the currently selected single draft
     const singleDraftRows = data.filter(d => d.leagueId === floorLeagueId);
     const emptySlot = singleDraftRows.find(d => !d.player || d.player === "N/A" || d.player.trim() === "");
     if (emptySlot) return emptySlot;
 
-    // Fallback: create an upcoming pick slot for this specific draft
     const currentMeta = activeFloorSeasonMeta;
     const maxPick = singleDraftRows.reduce((max, d) => Math.max(max, d.pk), 0);
     const roundNumber = Math.floor(maxPick / 16) + 1;
@@ -741,21 +843,35 @@ export default function DraftPage() {
     } as DraftData;
   }, [data, floorLeagueId, overridePickSlot, activeFloorSeasonMeta]);
 
-  // STRICTLY 1 DRAFT AT A TIME: Past Drafts Filtered Records
+  // Check if Currently Logged-in Coach is On The Clock
+  const isCurrentCoachOnClock = useMemo(() => {
+    if (!isLoggedIn || !currentCoach) return false;
+    if (!nextEmptyPickSlot) return false;
+
+    // Check by coach_id match
+    if (nextEmptyPickSlot.coachId && Number(nextEmptyPickSlot.coachId) === Number(currentCoach.coach_id)) {
+      return true;
+    }
+    // Check by coach_name match
+    if (nextEmptyPickSlot.coachName && nextEmptyPickSlot.coachName.trim().toLowerCase() === currentCoach.coach_name.trim().toLowerCase()) {
+      return true;
+    }
+
+    return false;
+  }, [isLoggedIn, currentCoach, nextEmptyPickSlot]);
+
+  // Past Drafts Filtered Records
   const pastDraftsData = useMemo(() => {
     return data.filter(d => {
-      // 1. Must be the 1 selected past draft
       if (d.leagueId !== pastLeagueId) return false;
-
-      // Must be a made selection
       if (!d.player || d.player === "N/A") return false;
 
-      // Search
       if (pastSearchQuery.trim()) {
         const q = pastSearchQuery.toLowerCase().trim();
         const matches = 
           d.player.toLowerCase().includes(q) ||
           d.team.toLowerCase().includes(q) ||
+          (d.coachName && d.coachName.toLowerCase().includes(q)) ||
           (d.pos && d.pos.toLowerCase().includes(q)) ||
           d.pk.toString().includes(q);
         if (!matches) return false;
@@ -765,7 +881,6 @@ export default function DraftPage() {
     });
   }, [data, pastLeagueId, pastSearchQuery]);
 
-  // Statistics strictly for the 1 selected past draft class
   const pastDraftStats = useMemo(() => {
     if (pastDraftsData.length === 0) {
       return { count: 0, avgOvr: 0, topPick: null, topPosition: 'N/A' };
@@ -798,7 +913,6 @@ export default function DraftPage() {
     };
   }, [pastDraftsData]);
 
-  // Coach Player Autocomplete search filter
   const filteredDbPlayers = useMemo(() => {
     if (!coachSearch.trim()) return dbPlayers.slice(0, 8);
     const q = coachSearch.toLowerCase().trim();
@@ -807,9 +921,13 @@ export default function DraftPage() {
       .slice(0, 8);
   }, [dbPlayers, coachSearch]);
 
-  // Handle Coach Pick Submission for the active single draft
+  // Handle Coach Pick Submission
   const handleSubmitPick = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (draftLockStatus.isLocked) {
+      alert(`The draft is locked until ${draftLockStatus.targetDate?.toLocaleString()}.`);
+      return;
+    }
     if (!isLoggedIn) {
       openLoginModal('Draft Submissions');
       return;
@@ -865,10 +983,7 @@ export default function DraftPage() {
         return [newDraftData, ...prev];
       });
 
-      // Update Spotlight immediately to show the drafted player
       setPodium(newDraftData);
-
-      // Flash success toast
       setSubmitSuccessMessage(`🎉 SELECTION SUBMITTED: ${targetSlot.team} selects ${chosenPlayerName} with Pick #${targetSlot.pk} (Rd ${targetSlot.rd}) for ${targetSlot.seasonBadge}!`);
       setTimeout(() => setSubmitSuccessMessage(null), 6000);
 
@@ -889,7 +1004,7 @@ export default function DraftPage() {
       <div className="max-w-7xl mx-auto space-y-6">
 
         {/* ========================================================================= */}
-        {/* HEADER: Draft Central Broadcast Command Center */}
+        {/* HEADER: Draft Central Command */}
         {/* ========================================================================= */}
         <header className="border-b-4 border-black pb-4 text-center relative bg-[#fdfaf5] p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)] border-2">
           <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
@@ -897,8 +1012,8 @@ export default function DraftPage() {
               <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
               Official League Draft Headquarters
             </span>
-            <span className="bg-black text-white font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest">
-              Live Broadcast Center
+            <span className="bg-black text-amber-300 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest border border-amber-300">
+              Active: {activeFloorSeasonMeta?.seasonBadge || 'Draft Floor'}
             </span>
           </div>
 
@@ -906,7 +1021,7 @@ export default function DraftPage() {
             The Draft Floor
           </h1>
           <p className="text-xs uppercase tracking-widest font-sans font-bold text-gray-700 mt-1 max-w-2xl mx-auto">
-            Live War Room, Official Coach Selections, Top-Right Trading Card Spotlight & Single Draft Viewport
+            Live War Room, Official Coach Selections, Draft Date Locking & Single Draft Viewport
           </p>
 
           {/* Navigation Tabs */}
@@ -949,7 +1064,56 @@ export default function DraftPage() {
           </div>
         </header>
 
-        {/* Success Alert Banner when Pick is Submitted */}
+        {/* ========================================================================= */}
+        {/* DRAFT LOCKED COUNTDOWN BANNER (WHEN DRAFT IS SCHEDULED IN FUTURE) */}
+        {/* ========================================================================= */}
+        {draftLockStatus.isLocked && draftLockStatus.timeRemaining && (
+          <div className="bg-[#121418] border-4 border-amber-400 text-white p-4 sm:p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-4 font-mono">
+            <div className="flex items-center gap-3 text-left">
+              <div className="w-12 h-12 bg-amber-400 text-black flex items-center justify-center border-2 border-black shrink-0 font-black">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 tracking-wider animate-pulse">
+                    DRAFT LOCKED
+                  </span>
+                  <span className="text-amber-300 text-xs font-black tracking-widest uppercase">
+                    {activeFloorSeasonMeta?.seasonBadge} SCHEDULED EVENT
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-300 font-sans mt-0.5">
+                  Official draft selections commence on <strong className="text-white">{draftLockStatus.targetDate?.toLocaleString()}</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* Retro Segmented Digital Timer */}
+            <div className="flex items-center gap-2 bg-black/80 border-2 border-neutral-700 p-2 text-center shrink-0">
+              <div className="px-2">
+                <div className="text-xl sm:text-2xl font-black text-amber-300">{draftLockStatus.timeRemaining.days}</div>
+                <div className="text-[8px] uppercase text-neutral-400 font-bold">Days</div>
+              </div>
+              <span className="text-amber-300 font-black">:</span>
+              <div className="px-2">
+                <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.hours).padStart(2, '0')}</div>
+                <div className="text-[8px] uppercase text-neutral-400 font-bold">Hours</div>
+              </div>
+              <span className="text-amber-300 font-black">:</span>
+              <div className="px-2">
+                <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.minutes).padStart(2, '0')}</div>
+                <div className="text-[8px] uppercase text-neutral-400 font-bold">Mins</div>
+              </div>
+              <span className="text-amber-300 font-black">:</span>
+              <div className="px-2">
+                <div className="text-xl sm:text-2xl font-black text-emerald-400">{String(draftLockStatus.timeRemaining.seconds).padStart(2, '0')}</div>
+                <div className="text-[8px] uppercase text-neutral-400 font-bold">Secs</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Alert Toast */}
         {submitSuccessMessage && (
           <div className="bg-emerald-100 border-2 border-emerald-800 text-emerald-950 p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center justify-between gap-3 animate-bounce">
             <div className="flex items-center gap-2 font-bold text-xs sm:text-sm uppercase font-sans">
@@ -971,6 +1135,43 @@ export default function DraftPage() {
         {activeTab === 'floor' && (
           <div className="space-y-6">
             
+            {/* 1ST OVERALL SELECTION SHOWCASE BAR */}
+            {firstOverallPick && (
+              <div className="bg-[#fff9e6] border-3 border-black p-3.5 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-400 text-black font-black px-2.5 py-1 text-xs border-2 border-black shadow-xs flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-black" />
+                    <span>1ST OVERALL PICK</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {firstOverallPick.logo && (
+                      <img src={firstOverallPick.logo} alt="" className="w-6 h-6 object-contain" />
+                    )}
+                    <span className="font-sans font-black text-sm uppercase text-black">
+                      {firstOverallPick.team}
+                    </span>
+                    {firstOverallPick.coachName && (
+                      <span className="text-[11px] font-sans font-bold text-slate-700 bg-neutral-200/80 px-2 py-0.5 border border-black/30">
+                        Coach: {firstOverallPick.coachName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-xs font-bold font-sans">
+                  {firstOverallPick.player && firstOverallPick.player !== "N/A" ? (
+                    <span className="bg-emerald-600 text-white px-2.5 py-1 border border-emerald-900 shadow-2xs font-mono font-black">
+                      ✓ SELECTED: {firstOverallPick.player} {firstOverallPick.ovr ? `(OVR ${firstOverallPick.ovr})` : ''}
+                    </span>
+                  ) : (
+                    <span className="bg-black text-amber-300 px-2.5 py-1 border border-black font-mono font-black">
+                      ★ ON THE CLOCK FOR #1 OVERALL ★
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* TOP HERO SECTION: Coach Desk on Left, Hockey Card Spotlight on Top Right */}
             <div className="grid grid-cols-12 gap-5 items-start">
               
@@ -985,12 +1186,25 @@ export default function DraftPage() {
                   />
                 )}
 
+                {/* Personalized "YOU ARE ON THE CLOCK" Alert Banner */}
+                {isCurrentCoachOnClock && !draftLockStatus.isLocked && (
+                  <div className="bg-emerald-600 border-2 border-black text-white p-2.5 mb-3 font-mono font-black text-xs uppercase flex items-center justify-between shadow-[2px_2px_0px_#000] animate-pulse">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>🚨 COACH {currentCoach?.coach_name}, YOU ARE CURRENTLY ON THE CLOCK!</span>
+                    </div>
+                    <span className="bg-black text-white px-2 py-0.5 border border-white text-[10px]">
+                      PICK #{nextEmptyPickSlot.pk}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-3 mb-4 gap-2">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="w-3 h-3 bg-red-600 rounded-full animate-ping"></span>
                     <h2 className="text-base sm:text-lg font-black uppercase tracking-tight flex items-center gap-2">
                       <Clock className="w-4 h-4 text-red-700" />
-                      Coach War Room &bull; Next Selection Slot
+                      Coach War Room &bull; Selection Desk
                     </h2>
                     {isLoggedIn && currentCoach && (
                       <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 border border-emerald-600 uppercase flex items-center gap-1">
@@ -1008,7 +1222,7 @@ export default function DraftPage() {
                   </div>
                 </div>
 
-                {/* Team On Clock Showcase */}
+                {/* Team On Clock Showcase with Coach Assignment */}
                 <div className="bg-white border-2 border-black p-3 mb-4 flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     {nextEmptyPickSlot.logo ? (
@@ -1023,7 +1237,14 @@ export default function DraftPage() {
                       </div>
                     )}
                     <div>
-                      <div className="text-[10px] font-mono uppercase font-bold text-slate-500">Franchise On The Clock</div>
+                      <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                        <span>Franchise On The Clock</span>
+                        {nextEmptyPickSlot.coachName && (
+                          <span className="bg-neutral-200 text-black px-1.5 py-0 border border-black/20 font-bold">
+                            Coach: {nextEmptyPickSlot.coachName}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-sm sm:text-base font-black uppercase text-black">
                         {nextEmptyPickSlot.team}
                       </div>
@@ -1068,13 +1289,14 @@ export default function DraftPage() {
                             setCoachSelectedPlayer(null);
                           }
                         }}
-                        placeholder="TYPE PLAYER NAME (e.g. Gretzky, Lemieux, Jagr, Roy)..."
-                        className="w-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans"
+                        disabled={draftLockStatus.isLocked}
+                        placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE PLAYER NAME (e.g. Gretzky, Lemieux, Jagr, Roy)..."}
+                        className="w-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
                       />
                     </div>
 
                     {/* Autocomplete Quick Results */}
-                    {coachSearch.trim() && !coachSelectedPlayer && (
+                    {coachSearch.trim() && !coachSelectedPlayer && !draftLockStatus.isLocked && (
                       <div className="mt-1 bg-white border-2 border-black shadow-md max-h-48 overflow-y-auto divide-y divide-black/10">
                         {filteredDbPlayers.length === 0 ? (
                           <div className="p-2.5 text-xs italic text-slate-500">
@@ -1090,6 +1312,9 @@ export default function DraftPage() {
                                 setCoachSearch(player.player_name);
                                 setPodium({
                                   team: nextEmptyPickSlot.team,
+                                  teamId: nextEmptyPickSlot.teamId,
+                                  coachId: nextEmptyPickSlot.coachId,
+                                  coachName: nextEmptyPickSlot.coachName,
                                   rd: nextEmptyPickSlot.rd,
                                   pk: nextEmptyPickSlot.pk,
                                   player: player.player_name,
@@ -1133,18 +1358,24 @@ export default function DraftPage() {
                         type="text"
                         value={coachTransactionNote}
                         onChange={(e) => setCoachTransactionNote(e.target.value)}
+                        disabled={draftLockStatus.isLocked}
                         placeholder="e.g. Original Pick, Trade from DET..."
-                        className="w-full bg-white border-2 border-black px-3 py-1.5 text-xs font-sans uppercase focus:outline-none"
+                        className="w-full bg-white border-2 border-black px-3 py-1.5 text-xs font-sans uppercase focus:outline-none disabled:bg-neutral-100"
                       />
                     </div>
 
                     <div className="flex items-end">
                       <button
                         type="submit"
-                        disabled={isSubmitting || (!coachSelectedPlayer && !coachSearch.trim())}
+                        disabled={isSubmitting || draftLockStatus.isLocked || (!coachSelectedPlayer && !coachSearch.trim())}
                         className="w-full bg-black text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-4 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
                       >
-                        {isSubmitting ? (
+                        {draftLockStatus.isLocked ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5 text-amber-400" />
+                            Draft Locked Until Start Date
+                          </>
+                        ) : isSubmitting ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             Recording Selection...
@@ -1196,7 +1427,7 @@ export default function DraftPage() {
                     <option value="G">GOLDEN ERA</option>
                   </select>
 
-                  {/* Single Draft Selector Dropdown (STRICTLY 1 DRAFT) */}
+                  {/* Single Draft Selector Dropdown (Includes newly discovered 41+, O02, etc.) */}
                   <select
                     value={floorLeagueId}
                     onChange={(e) => setFloorLeagueId(e.target.value)}
@@ -1204,7 +1435,7 @@ export default function DraftPage() {
                   >
                     {availableFloorSeasons.map((s) => (
                       <option key={s.leagueId} value={s.leagueId}>
-                        {s.seasonBadge}
+                        {s.seasonBadge} {s.draftDate ? `(📅 Draft: ${new Date(s.draftDate).toLocaleDateString()})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1253,19 +1484,13 @@ export default function DraftPage() {
                 </div>
               </div>
 
-              {/* Mobile Swipe Notice */}
-              <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 rounded-xs uppercase tracking-wider">
-                <span>↔ Swipe table sideways for all draft columns</span>
-                <span>{filteredData.length} Picks</span>
-              </div>
-
               {/* Main Draft Board Table (Single Draft) */}
               <div className="bg-white border-2 border-black overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs min-w-[700px]">
                   <thead>
                     <tr className="bg-black text-white text-[10px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">SEASON / DRAFT</th>
-                      <th className="py-2.5 px-3">TEAM</th>
+                      <th className="py-2.5 px-3">TEAM & COACH</th>
                       <th className="py-2.5 px-3 text-center">RD</th>
                       <th className="py-2.5 px-3 text-center">PK</th>
                       <th className="py-2.5 px-3">PLAYER</th>
@@ -1311,7 +1536,14 @@ export default function DraftPage() {
                             </td>
                             <td className="py-2.5 px-3 flex items-center gap-2 font-bold uppercase">
                               {d.logo && <img src={d.logo} className="w-5 h-5 object-contain" alt="" />}
-                              <span className="truncate max-w-[140px]">{d.team}</span>
+                              <div>
+                                <div className="truncate max-w-[140px] text-black">{d.team}</div>
+                                {d.coachName && (
+                                  <div className="text-[9.5px] text-slate-500 font-mono font-bold lowercase">
+                                    coach: {d.coachName}
+                                  </div>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono">{d.rd}</td>
                             <td className="py-2.5 px-3 text-center font-mono font-bold">#{d.pk}</td>
@@ -1476,7 +1708,7 @@ export default function DraftPage() {
                           type="text"
                           value={pastSearchQuery}
                           onChange={(e) => setPastSearchQuery(e.target.value)}
-                          placeholder="SEARCH PLAYER, FRANCHISE..."
+                          placeholder="SEARCH PLAYER, FRANCHISE, COACH..."
                           className="w-full bg-white border-2 border-black pl-8 pr-3 py-1.5 text-xs font-bold uppercase focus:outline-none font-sans"
                         />
                       </div>
@@ -1484,7 +1716,7 @@ export default function DraftPage() {
                   </div>
                 </div>
 
-                {/* Historical Archive Stats Summary Cards (For this 1 Draft) */}
+                {/* Historical Archive Stats Summary Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-[#fdfaf5] border-2 border-black p-3 text-center shadow-xs">
                     <div className="text-[10px] font-mono uppercase font-bold text-slate-500">Class Selections</div>
@@ -1521,7 +1753,7 @@ export default function DraftPage() {
               </div>
             </div>
 
-            {/* Past Drafts Table (Strictly 1 Draft Ledger) */}
+            {/* Past Drafts Table */}
             <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="font-mono text-xs font-black uppercase tracking-wider">
@@ -1537,7 +1769,7 @@ export default function DraftPage() {
                   <thead>
                     <tr className="bg-black text-white text-[10px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">SEASON / DRAFT</th>
-                      <th className="py-2.5 px-3">TEAM</th>
+                      <th className="py-2.5 px-3">TEAM & COACH</th>
                       <th className="py-2.5 px-3 text-center">RD</th>
                       <th className="py-2.5 px-3 text-center">PK</th>
                       <th className="py-2.5 px-3">PLAYER</th>
@@ -1576,7 +1808,14 @@ export default function DraftPage() {
                             </td>
                             <td className="py-2.5 px-3 flex items-center gap-2 font-bold uppercase">
                               {d.logo && <img src={d.logo} className="w-5 h-5 object-contain" alt="" />}
-                              <span>{d.team}</span>
+                              <div>
+                                <span className="text-black">{d.team}</span>
+                                {d.coachName && (
+                                  <span className="block text-[9.5px] text-slate-500 font-mono lowercase">
+                                    coach: {d.coachName}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono">{d.rd}</td>
                             <td className="py-2.5 px-3 text-center font-mono font-bold">#{d.pk}</td>
