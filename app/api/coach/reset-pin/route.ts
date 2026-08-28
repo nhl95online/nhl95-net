@@ -13,39 +13,62 @@ const supabase = serviceKey
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { coachId, currentPinOrMasterKey, newPin } = body as {
-      coachId: number | string;
+    const { coachId, email, coachName, currentPinOrMasterKey, newPin } = body as {
+      coachId?: number | string;
+      email?: string;
+      coachName?: string;
       currentPinOrMasterKey: string;
       newPin: string;
     };
 
-    if (!coachId) {
-      return NextResponse.json({ error: 'Missing coach ID' }, { status: 400 });
+    if (!coachId && !email && !coachName) {
+      return NextResponse.json({ error: 'Missing coach identification (email, coach name, or coach ID)' }, { status: 400 });
     }
 
     if (!newPin || !newPin.trim()) {
       return NextResponse.json({ error: 'New PIN cannot be empty' }, { status: 400 });
     }
 
-    const cId = Number(coachId);
     const cleanNewPin = newPin.trim();
     const cleanAuthKey = (currentPinOrMasterKey || '').trim();
 
-    // 1. Fetch the coach's current record
-    const { data: coachData, error: fetchErr } = await supabase
-      .from('league_coaches')
-      .select('coach_id, coach_name, pin')
-      .eq('coach_id', cId)
-      .single();
+    // 1. Fetch the coach's current record by coach_id, email, or coach_name
+    let coachData: any = null;
 
-    if (fetchErr || !coachData) {
-      return NextResponse.json({ error: 'Coach not found in database' }, { status: 404 });
+    if (coachId && !isNaN(Number(coachId)) && Number(coachId) > 0) {
+      const { data } = await supabase
+        .from('league_coaches')
+        .select('coach_id, coach_name, email, pin')
+        .eq('coach_id', Number(coachId))
+        .single();
+      coachData = data;
+    }
+
+    if (!coachData && email && email.trim()) {
+      const { data } = await supabase
+        .from('league_coaches')
+        .select('coach_id, coach_name, email, pin')
+        .ilike('email', email.trim())
+        .limit(1);
+      if (data && data.length > 0) coachData = data[0];
+    }
+
+    if (!coachData && coachName && coachName.trim()) {
+      const { data } = await supabase
+        .from('league_coaches')
+        .select('coach_id, coach_name, email, pin')
+        .ilike('coach_name', coachName.trim())
+        .limit(1);
+      if (data && data.length > 0) coachData = data[0];
+    }
+
+    if (!coachData) {
+      return NextResponse.json({ error: 'Coach record was not found in league_coaches table' }, { status: 404 });
     }
 
     // 2. Validate authorization: must match master league passkey OR existing coach PIN
     const isMasterValid = cleanAuthKey.toLowerCase() === DEFAULT_LEAGUE_PASSKEY.toLowerCase();
     const isCurrentPinValid = coachData.pin && cleanAuthKey === coachData.pin;
-    const isFirstTimeSetup = !coachData.pin && isMasterValid;
 
     if (!isMasterValid && !isCurrentPinValid) {
       return NextResponse.json({ 
@@ -57,7 +80,7 @@ export async function POST(req: NextRequest) {
     const { error: updateErr } = await supabase
       .from('league_coaches')
       .update({ pin: cleanNewPin })
-      .eq('coach_id', cId);
+      .eq('coach_id', coachData.coach_id);
 
     if (updateErr) {
       console.error('Failed to update coach PIN:', updateErr);
@@ -66,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `PIN for Coach ${coachData.coach_name} updated successfully!`
+      message: `PIN for Coach ${coachData.coach_name} (${coachData.email || 'ID #' + coachData.coach_id}) updated successfully!`
     });
   } catch (error: any) {
     console.error('Error resetting coach PIN:', error);

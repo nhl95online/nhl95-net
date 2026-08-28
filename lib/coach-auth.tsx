@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 export interface CoachUser {
   coach_id: number;
   coach_name: string;
+  email?: string;
   discord_tag?: string;
   pin?: string;
 }
@@ -21,9 +22,9 @@ interface CoachAuthContextType {
   isLoginModalOpen: boolean;
   openLoginModal: (targetContext?: string) => void;
   closeLoginModal: () => void;
-  login: (coachNameOrId: string | number, passkey: string) => Promise<{ success: boolean; error?: string }>;
+  login: (emailOrNameOrId: string | number, passkey: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  updatePin: (coachIdOrName: number | string, currentPinOrMasterKey: string, newPin: string) => Promise<{ success: boolean; error?: string }>;
+  updatePin: (emailOrNameOrId: number | string, currentPinOrMasterKey: string, newPin: string) => Promise<{ success: boolean; error?: string }>;
   loginContext: string | null;
 }
 
@@ -36,19 +37,20 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [loginContext, setLoginContext] = useState<string | null>(null);
 
-  // 1. Fetch live coaches list from Supabase on mount
+  // 1. Fetch live coaches list from Supabase on mount (including email and pin)
   useEffect(() => {
     async function fetchCoaches() {
       try {
         const { data, error } = await supabase
           .from('league_coaches')
-          .select('coach_id, coach_name, discord_tag, pin')
+          .select('coach_id, coach_name, email, discord_tag, pin')
           .order('coach_name', { ascending: true });
 
         if (!error && data && data.length > 0) {
           const list: CoachUser[] = data.map((c: any) => ({
             coach_id: Number(c.coach_id),
             coach_name: c.coach_name || `Coach #${c.coach_id}`,
+            email: c.email ? String(c.email).trim() : undefined,
             discord_tag: c.discord_tag || undefined,
             pin: c.pin || undefined
           }));
@@ -92,32 +94,35 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (
-    coachNameOrId: string | number,
+    emailOrNameOrId: string | number,
     passkey: string
   ): Promise<{ success: boolean; error?: string }> => {
     const cleanPass = passkey.trim();
     if (!cleanPass) {
-      return { success: false, error: 'Please enter your coach passkey or PIN.' };
+      return { success: false, error: 'Please enter your coach PIN or passkey.' };
     }
 
-    const cleanInput = String(coachNameOrId).trim();
+    const cleanInput = String(emailOrNameOrId).trim();
     if (!cleanInput) {
-      return { success: false, error: 'Please enter your coach name as registered in the league_coaches table.' };
+      return { success: false, error: 'Please enter your coach email (or coach name).' };
     }
 
-    // 1. Search in local coaches list (case-insensitive)
+    const lowerInput = cleanInput.toLowerCase();
+
+    // 1. Search in local coaches list (by email, coach_name, or coach_id)
     let foundCoach = coachesList.find(c =>
-      String(c.coach_id) === cleanInput ||
-      c.coach_name.trim().toLowerCase() === cleanInput.toLowerCase()
+      (c.email && c.email.trim().toLowerCase() === lowerInput) ||
+      c.coach_name.trim().toLowerCase() === lowerInput ||
+      String(c.coach_id) === cleanInput
     );
 
-    // 2. If not found in local list, perform a direct Supabase lookup
+    // 2. If not found in local list, perform a direct Supabase lookup from league_coaches table
     if (!foundCoach) {
       try {
         const { data, error } = await supabase
           .from('league_coaches')
-          .select('coach_id, coach_name, discord_tag, pin')
-          .ilike('coach_name', cleanInput)
+          .select('coach_id, coach_name, email, discord_tag, pin')
+          .or(`email.ilike.${cleanInput},coach_name.ilike.${cleanInput}`)
           .limit(1);
 
         if (!error && data && data.length > 0) {
@@ -125,6 +130,7 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
           foundCoach = {
             coach_id: Number(c.coach_id),
             coach_name: c.coach_name,
+            email: c.email ? String(c.email).trim() : undefined,
             discord_tag: c.discord_tag || undefined,
             pin: c.pin || undefined
           };
@@ -139,20 +145,24 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!foundCoach) {
-      return { success: false, error: `Coach "${cleanInput}" was not found in the league_coaches table. Please check spelling.` };
+      return { 
+        success: false, 
+        error: `Coach with email or name "${cleanInput}" was not found in the league_coaches table.` 
+      };
     }
 
-    // 3. Validate passkey against master league key or individual coach PIN
+    // 3. Validate PIN / passkey against coach's PIN column or master league passkey
     const isMasterValid = cleanPass.toLowerCase() === DEFAULT_LEAGUE_PASSKEY.toLowerCase();
-    const isPinValid = Boolean(foundCoach.pin && cleanPass === foundCoach.pin);
+    const isPinValid = Boolean(foundCoach.pin && cleanPass === String(foundCoach.pin).trim());
 
     if (!isMasterValid && !isPinValid) {
-      return { success: false, error: 'Invalid passkey or PIN. Please check your credentials.' };
+      return { success: false, error: 'Invalid PIN or passkey. Please check your credentials.' };
     }
 
     const sessionData: CoachUser = {
       coach_id: foundCoach.coach_id,
       coach_name: foundCoach.coach_name,
+      email: foundCoach.email,
       discord_tag: foundCoach.discord_tag
     };
 
@@ -178,48 +188,58 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updatePin = useCallback(async (
-    coachIdOrName: number | string,
+    emailOrNameOrId: number | string,
     currentPinOrMasterKey: string,
     newPin: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       let targetCoachId: number | null = null;
+      let targetEmail: string | undefined = undefined;
 
-      if (typeof coachIdOrName === 'number') {
-        targetCoachId = coachIdOrName;
+      if (typeof emailOrNameOrId === 'number') {
+        targetCoachId = emailOrNameOrId;
       } else {
-        const cleanInput = String(coachIdOrName).trim();
+        const cleanInput = String(emailOrNameOrId).trim();
+        const lower = cleanInput.toLowerCase();
         const found = coachesList.find(c =>
-          String(c.coach_id) === cleanInput ||
-          c.coach_name.trim().toLowerCase() === cleanInput.toLowerCase()
+          (c.email && c.email.trim().toLowerCase() === lower) ||
+          c.coach_name.trim().toLowerCase() === lower ||
+          String(c.coach_id) === cleanInput
         );
 
         if (found) {
           targetCoachId = found.coach_id;
+          targetEmail = found.email;
         } else if (!isNaN(Number(cleanInput)) && Number(cleanInput) > 0) {
           targetCoachId = Number(cleanInput);
         } else {
           // Direct lookup in Supabase
           const { data } = await supabase
             .from('league_coaches')
-            .select('coach_id')
-            .ilike('coach_name', cleanInput)
+            .select('coach_id, email')
+            .or(`email.ilike.${cleanInput},coach_name.ilike.${cleanInput}`)
             .limit(1);
 
           if (data && data.length > 0) {
             targetCoachId = Number(data[0].coach_id);
+            targetEmail = data[0].email;
           }
         }
       }
 
-      if (!targetCoachId) {
-        return { success: false, error: `Coach "${coachIdOrName}" was not found in the league_coaches table.` };
+      if (!targetCoachId && !targetEmail) {
+        return { success: false, error: `Coach "${emailOrNameOrId}" was not found in the league_coaches table.` };
       }
 
       const res = await fetch('/api/coach/reset-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coachId: targetCoachId, currentPinOrMasterKey, newPin })
+        body: JSON.stringify({ 
+          coachId: targetCoachId, 
+          email: targetEmail || (typeof emailOrNameOrId === 'string' && emailOrNameOrId.includes('@') ? emailOrNameOrId : undefined),
+          currentPinOrMasterKey, 
+          newPin 
+        })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -227,7 +247,7 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Update local coachesList state so subsequent logins use new PIN
-      setCoachesList(prev => prev.map(c => c.coach_id === targetCoachId ? { ...c, pin: newPin.trim() } : c));
+      setCoachesList(prev => prev.map(c => (c.coach_id === targetCoachId || (targetEmail && c.email === targetEmail)) ? { ...c, pin: newPin.trim() } : c));
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Network error while resetting PIN.' };
