@@ -1,5 +1,5 @@
 {
-  "updated_at": "Published August 30, 2026 at 03:35 PM",
+  "updated_at": "Published August 30, 2026 at 03:55 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
@@ -7,7 +7,7 @@
     "author": "GaelicGopher",
     "context": "Uttered in #segathon-tournaments-inperson"
   },
-  "total_messages": 115,
+  "total_messages": 108,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -76,11 +76,6 @@
       "title": "Dispatches from #open-discussion",
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
-        {
-          "time": "15:54",
-          "author": "Pink_Elephants",
-          "text": "😂"
-        },
         {
           "time": "15:59",
           "author": "Unholy",
@@ -289,36 +284,6 @@
       "title": "Dispatches from #praise",
       "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
       "messages": [
-        {
-          "time": "15:36",
-          "author": "Tickenest",
-          "text": "Sorry what did I do? A thing?"
-        },
-        {
-          "time": "15:36",
-          "author": "Tickenest",
-          "text": "I mean I'm sure you could ask Claude to do it these days and it would be faster and more efficient and would involve _much_ less swearing."
-        },
-        {
-          "time": "15:43",
-          "author": "Ticklepuss",
-          "text": "What will the uploads be used for?"
-        },
-        {
-          "time": "15:46",
-          "author": "Pink_Elephants",
-          "text": "Where is the competing website?… I only know where https://wn95-online.vercel.app is"
-        },
-        {
-          "time": "15:51",
-          "author": "UltraMagnus",
-          "text": "Posting to the database and updating."
-        },
-        {
-          "time": "15:52",
-          "author": "UltraMagnus",
-          "text": "Currently still cleaning out the tweaks. But will be released this coming week."
-        },
         {
           "time": "15:58",
           "author": "Ticklepuss",
@@ -556,6 +521,16 @@
           "time": "14:57",
           "author": "Unholy",
           "text": "The W permits women and children to play - cheer up!"
+        },
+        {
+          "time": "15:39",
+          "author": "Adolf Oliver Nipples",
+          "text": "Poor Party Dan😢"
+        },
+        {
+          "time": "15:47",
+          "author": "Pink_Elephants",
+          "text": "I can’t wait to see this picture in the background of TickleWeb when The Seabass  make the front page"
         }
       ]
     },
@@ -592,24 +567,6 @@
           "time": "01:00",
           "author": "Ticklepuss",
           "text": "🚨 TickleBlurb: Report:  Rumor:  Proposed rule change requires home team to post state to discord and away team to post state to pies.net.  If a team gets beaded by 4+ goals they are responsible for posting to both designated areas."
-        }
-      ]
-    },
-    {
-      "channel": "injuries",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #injuries",
-      "commentary": "Heated debate and banter erupts in #injuries over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "15:50",
-          "author": "Pink_Elephants",
-          "text": "https://x.com/ufconparamount/status/2093607367640330678?s=12"
-        },
-        {
-          "time": "15:52",
-          "author": "Pink_Elephants",
-          "text": "https://www.reddit.com/r/MMALabs/s/9rXc4B6yrn"
         }
       ]
     },
