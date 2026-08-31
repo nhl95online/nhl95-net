@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published August 30, 2026 at 03:55 PM",
+  "updated_at": "Published August 31, 2026 at 06:18 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "I have been accused of being the guy in this gif before lol",
-    "author": "GaelicGopher",
-    "context": "Uttered in #segathon-tournaments-inperson"
+    "quote": "tell them to mind their own business",
+    "author": "Ticklepuss",
+    "context": "Uttered in #game-code"
   },
-  "total_messages": 108,
+  "total_messages": 90,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -71,210 +71,281 @@
   ],
   "sections": [
     {
+      "channel": "leave_of_absence",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #leave_of_absence",
+      "commentary": "Heated debate and banter erupts in #leave_of_absence over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "00:07",
+          "author": "shawnmb",
+          "text": "Aug 31 - Sept 8"
+        },
+        {
+          "time": "00:07",
+          "author": "GaelicGopher",
+          "text": "No one cares"
+        },
+        {
+          "time": "00:08",
+          "author": "shawnmb",
+          "text": "https://klipy.com/gifs/clint-eastwood-draw-1"
+        }
+      ]
+    },
+    {
       "channel": "open-discussion",
       "badge": "LOCKER ROOM",
       "title": "Dispatches from #open-discussion",
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:59",
+          "time": "22:41",
+          "author": "Lloyd10xmas",
+          "text": "Is North Bay tanking?"
+        },
+        {
+          "time": "23:02",
           "author": "Unholy",
-          "text": "I finally made the front page! 🎉"
+          "text": "It’s even worse than that. I’m not tanking."
         },
         {
-          "time": "16:13",
-          "author": "Ellis",
-          "text": "@UltraMagnus i understand your dropped states on a website being the norm but personally I think having the states dropped here in discord is much more convenient. ..\nAlso why kill Tickleweb? With states being dropped here both and other projects in the future can be supported. I actually doubt any other gaming leagues have this type of feature. Even compared to 94 online the state dropping process here is absolutely better ...\nJust my opinion..."
+          "time": "23:05",
+          "author": "Ticklepuss",
+          "text": "What website is that?"
         },
         {
-          "time": "16:14",
-          "author": "Ellis",
-          "text": "Obviously nhl95.net is official. Always has been even though it was way behind but its still official"
+          "time": "01:03",
+          "author": "Unholy",
+          "text": "It’s one of the Top 5 WN95HL web sites"
         },
         {
-          "time": "16:15",
+          "time": "01:07",
+          "author": "Pink_Elephants",
+          "text": "Is that the one where everyone has to create a login and password like it’s some HOA portal to post states?"
+        },
+        {
+          "time": "12:26",
+          "author": "Lloyd10xmas",
+          "text": "Maybe you guys shouldn’t go near Lake America(!) https://www.tiktok.com/t/ZTDw7jtYs/"
+        },
+        {
+          "time": "13:55",
+          "author": "Ticklepuss",
+          "text": "https://klipy.com/gifs/girl-shut-up-kenya-pleaser"
+        },
+        {
+          "time": "13:58",
+          "author": "Lloyd10xmas",
+          "text": "https://klipy.com/gifs/watch-your-mouth-1"
+        },
+        {
+          "time": "13:59",
+          "author": "segathon",
+          "text": "I like my team this year.  I feel another Bruel Cup on horizon"
+        },
+        {
+          "time": "14:01",
+          "author": "Lloyd10xmas",
+          "text": "You’re not the only one(!)"
+        },
+        {
+          "time": "14:10",
+          "author": "Ticklepuss",
+          "text": "Just thinking out loud....Vicky owns Matty's #1 pick.  Matty hasn't finished a season since Season 11 (no last year does not count).  Vicky may or may not finish himself.  If neither finishes, A), does it make a sound?  B) best Italy could do is #5 and # (late) 20 something?"
+        },
+        {
+          "time": "14:12",
+          "author": "Ticklepuss",
+          "text": "This assumes the flying V isn't in effect"
+        },
+        {
+          "time": "14:35",
+          "author": "GaelicGopher",
+          "text": "Jesus, I know where this is headed.  1st pick ends up going to @bclinton_666 for Tanking.  😤(although I heard in tailgate practice he got his ass kicked by mediocre players.  So perhaps he has lost it!)"
+        },
+        {
+          "time": "14:37",
+          "author": "Lloyd10xmas",
+          "text": "@Unholy could possibly get it too?"
+        },
+        {
+          "time": "14:37",
+          "author": "segathon",
+          "text": "That is a whole lotta fuck you speed"
+        },
+        {
+          "time": "14:38",
+          "author": "GaelicGopher",
+          "text": "Don’t light a fire under Unholy, I’m trying to make the show!"
+        },
+        {
+          "time": "14:40",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/black-swan-2OK"
+        },
+        {
+          "time": "14:40",
+          "author": "segathon",
+          "text": "Also low check ratings.  This will be the golden era of Ballerina Hockey"
+        },
+        {
+          "time": "14:40",
+          "author": "Lloyd10xmas",
+          "text": "https://klipy.com/gifs/kucherov-press-conference"
+        },
+        {
+          "time": "14:40",
+          "author": "Lloyd10xmas",
+          "text": "I hope I get Kuch(!) I was reffing a 10U game last year and one of the kids came up to me in warmups and asked if I was him(!) Said I looked just like him(!) I think he parties like I do(!)"
+        },
+        {
+          "time": "14:50",
+          "author": "Ticklepuss",
+          "text": "Tough to say who would get it.  Best odds likely go to whoever actually plays those 2 teams since a team can't be higher than 5 without a complete schedule."
+        },
+        {
+          "time": "14:50",
+          "author": "Ticklepuss",
+          "text": "Forgive me but I'm just assuming Matt won't be able to finish"
+        },
+        {
+          "time": "14:55",
           "author": "Adolf Oliver Nipples",
-          "text": "Wolf won't know how to do any of this."
+          "text": "They’re not trading fairly."
         },
         {
-          "time": "16:16",
-          "author": "UltraMagnus",
-          "text": "They can still both be working. I never said it will go away. There can be both options thats all"
+          "time": "15:03",
+          "author": "Lloyd10xmas",
+          "text": "I need affordable hockey sticks(!)"
         },
         {
-          "time": "16:18",
-          "author": "Ellis",
-          "text": "If you have state uploads on your site then that most likely requires 2 spots for states?"
-        },
-        {
-          "time": "16:18",
-          "author": "UltraMagnus",
-          "text": "Plus tickleweb has features i love."
-        },
-        {
-          "time": "16:19",
-          "author": "UltraMagnus",
-          "text": "I just think with the Google sheets Sunset. Over time."
-        },
-        {
-          "time": "16:20",
-          "author": "Ellis",
-          "text": "As mentioned I got no problem having your bot moving to take over bsb for all things handled here in this discord."
-        },
-        {
-          "time": "16:20",
-          "author": "UltraMagnus",
-          "text": "Can be instrumental to both sites."
-        },
-        {
-          "time": "16:21",
-          "author": "Ellis",
-          "text": "@UltraMagnus your states being dropped on one website vs being dropped in discord is what im suggesting...."
-        },
-        {
-          "time": "16:21",
-          "author": "UltraMagnus",
-          "text": "I i said im just doing something different. Thats what makes our community grwat"
-        },
-        {
-          "time": "16:23",
-          "author": "Ellis",
-          "text": "Keep states here in discord, have nhl95 bot process them and send the data to both sites....\nNo changes in state submissions for anyone and all in one place.."
-        },
-        {
-          "time": "16:31",
-          "author": "MattyA",
-          "text": "I first thought I would be around today to get to start playing the W season and finish up the OG 6 season but I will be gone due to a family thing at the last minute. I will be here tomorrow (Sunday) though and setting my alarm to get up around 8:00 to get a bunch of games in"
-        },
-        {
-          "time": "17:33",
+          "time": "15:04",
           "author": "Unholy",
-          "text": "I enjoy Puss’ website, I use it daily and I like the overlays for the playoffs. Let’s not ruin it with this states nonsense."
+          "text": "I’ve heard it’s extremely hard to play hockey without sticks."
         },
         {
-          "time": "17:37",
+          "time": "15:06",
           "author": "Lloyd10xmas",
-          "text": "What are you ladies up to today?(!!)?"
+          "text": "https://klipy.com/gifs/broom-rNL"
         },
         {
-          "time": "17:38",
-          "author": "Ticklepuss",
-          "text": "Cleaning garage.  My garbage cans are now full and trash day was yesterday"
-        },
-        {
-          "time": "17:39",
+          "time": "15:06",
           "author": "Lloyd10xmas",
-          "text": "That’s the worst(!)"
+          "text": "Team USA in the next Olympics…."
         },
         {
-          "time": "17:39",
+          "time": "15:35",
+          "author": "The Villain CTJ",
+          "text": "Not with that attitude"
+        },
+        {
+          "time": "15:36",
+          "author": "NathanMB",
+          "text": "The steroid era of the W"
+        },
+        {
+          "time": "15:37",
+          "author": "NathanMB",
+          "text": "All speed agility and endurance - no checking, roughing, aggression"
+        },
+        {
+          "time": "15:37",
+          "author": "NathanMB",
+          "text": "The flag football version of hockey"
+        },
+        {
+          "time": "16:57",
           "author": "Ticklepuss",
-          "text": "I am also in negotiations to purchase the intellectual property of an undisclosed bot"
+          "text": "Extension?"
         },
         {
-          "time": "17:40",
+          "time": "17:18",
           "author": "Lloyd10xmas",
-          "text": "Busy men(!) The rest of you ladies?"
+          "text": "It might not be a bad idea to start thinking about it(!)"
         },
         {
-          "time": "18:13",
-          "author": "Ellis",
-          "text": "Did your old rotors just slip off nice and easy..."
+          "time": "17:26",
+          "author": "GaelicGopher",
+          "text": "Yeah, if those guys wanna play me they will more than likely need to start in Sept.  first 3 weeks of Oct I’m very doubtful (all over the place.  Domestic,  but not bringing a controller!)"
         },
         {
-          "time": "18:42",
-          "author": "Pink_Elephants",
-          "text": "Brakes!!!!!!"
+          "time": "17:28",
+          "author": "segathon",
+          "text": "I am SAVORING the season.  After I WOLF SWEPT Nips, it's best to just relax and enjoy the victory"
         },
         {
-          "time": "18:44",
-          "author": "UltraMagnus",
-          "text": "I said only using my site for other things."
-        },
-        {
-          "time": "18:45",
-          "author": "Adolf Oliver Nipples",
-          "text": "play your games"
-        },
-        {
-          "time": "18:47",
-          "author": "UltraMagnus",
-          "text": "Been playing get after the non players"
-        },
-        {
-          "time": "22:18",
-          "author": "Unholy",
-          "text": "I’ve heard of military wars & trade wars .. but this is the first States War I’ve ever heard about"
-        },
-        {
-          "time": "22:18",
-          "author": "Unholy",
-          "text": "Another first for the W!"
-        },
-        {
-          "time": "22:25",
-          "author": "Ticklepuss",
-          "text": "As a peer website owner I would be interested in knowing the benefits of the change to state uploads.  Is it just because it’s different or is there an added perk?"
-        },
-        {
-          "time": "22:27",
-          "author": "Ticklepuss",
-          "text": "I do think uploading states would be good for Yoda, Pinky, Dwardo and Nippy to track their exi records"
-        },
-        {
-          "time": "22:51",
-          "author": "Pink_Elephants",
-          "text": "That’s impossible at this point… I think Yoda and I have played 1000+ exis… he doesn’t think it’s that many so I say conservatively we easily played 750+"
-        },
-        {
-          "time": "23:26",
-          "author": "red",
-          "text": "Bucking our bulls"
-        },
-        {
-          "time": "23:34",
-          "author": "Ticklepuss",
-          "text": "Saturday Spectacular starts at 8:00"
-        },
-        {
-          "time": "00:24",
-          "author": "Pink_Elephants",
-          "text": "I can’t wait to repeatedly post states in multiple places just because it’s different"
-        },
-        {
-          "time": "01:09",
-          "author": "Ellis",
-          "text": "Your bot can write directly to your new db and avoid sheets. It can do both or whatever you want. BSB already writes to both. Its easy to send game data to wherever. \nWe can set up your bot to handle this. \nTheres also live streaming overlays for playoffs that exist via states dropped here in discord..."
-        },
-        {
-          "time": "01:11",
-          "author": "Ellis",
-          "text": "I'm happy to pass all or any BSB code to your bot."
-        },
-        {
-          "time": "01:11",
-          "author": "Ellis",
-          "text": "Well you already have the github repo"
-        },
-        {
-          "time": "01:43",
+          "time": "17:28",
           "author": "Lloyd10xmas",
-          "text": "They came off pretty easy(!) A few hits with a mallet. I highly recommend an impact screwdriver to get the rotor screw out(!)"
+          "text": "You swept him too????"
         },
         {
-          "time": "01:45",
+          "time": "17:28",
           "author": "Lloyd10xmas",
-          "text": "How’s it going?"
+          "text": "Feels good(!)"
         },
         {
-          "time": "01:46",
+          "time": "18:10",
           "author": "Ticklepuss",
-          "text": "It’s really picking up"
+          "text": "With Shawn leaving we are also devoid of podcasts unless and offline DarkSide surfaces"
         },
         {
-          "time": "14:11",
+          "time": "18:10",
           "author": "Ticklepuss",
-          "text": "Tomorrow marks the start of the dog days"
+          "text": "did he try to cheat and post a tie like he did with me?"
+        },
+        {
+          "time": "18:12",
+          "author": "segathon",
+          "text": "no a wolf sweep humbling experience"
+        }
+      ]
+    },
+    {
+      "channel": "complaints",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #complaints",
+      "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "18:18",
+          "author": "The Villain CTJ",
+          "text": "Complaint: Thomas Vanek. He needs to be investigated for PEDs"
+        },
+        {
+          "time": "18:18",
+          "author": "The Villain CTJ",
+          "text": "@Lloyd10xmas"
+        },
+        {
+          "time": "18:19",
+          "author": "Ticklepuss",
+          "text": "“He”?"
+        },
+        {
+          "time": "18:19",
+          "author": "The Villain CTJ",
+          "text": "They?"
+        },
+        {
+          "time": "18:30",
+          "author": "Lloyd10xmas",
+          "text": "https://klipy.com/gifs/arnold-29"
+        },
+        {
+          "time": "18:31",
+          "author": "Lloyd10xmas",
+          "text": "Look out(!)"
+        },
+        {
+          "time": "18:31",
+          "author": "Lloyd10xmas",
+          "text": "Repopulating(!)"
+        },
+        {
+          "time": "19:28",
+          "author": "Ticklepuss",
+          "text": "She/them"
         }
       ]
     },
@@ -285,94 +356,29 @@
       "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:58",
-          "author": "Ticklepuss",
-          "text": "So states will be uploaded there instead of bsb?"
-        },
-        {
-          "time": "16:02",
-          "author": "UltraMagnus",
-          "text": "Yeah but the boxscores will still post through discord."
-        },
-        {
-          "time": "16:04",
-          "author": "Ticklepuss",
-          "text": "Ok.  Will that be ready for next season?  I have to announce the sunset date for Tickleweb loyal subscribers"
-        },
-        {
-          "time": "16:07",
-          "author": "UltraMagnus",
-          "text": "It will be ready before. But will give each coach a login for league based coaches."
-        },
-        {
-          "time": "16:10",
-          "author": "Ticklepuss",
-          "text": "Coolio"
-        },
-        {
-          "time": "16:17",
-          "author": "UltraMagnus",
-          "text": "You keep doing what amazing things you have done there. Im just trying something else thats all."
-        },
-        {
-          "time": "17:51",
-          "author": "Ticklepuss",
-          "text": "Asking people to upload states to 2 places isn’t a good idea.  Just run with ur thing if the league is headed that way.  It was a fun learning experience."
-        },
-        {
-          "time": "18:00",
-          "author": "Ticklepuss",
-          "text": "If u end up going with the discord posting of states i will keep it around"
-        },
-        {
-          "time": "18:45",
-          "author": "UltraMagnus",
-          "text": "I know. Just like j said thats all. Just trying something different"
-        },
-        {
-          "time": "18:50",
-          "author": "Pink_Elephants",
-          "text": "PRAISE: @MattyA’s Game Theory numbers…. He’s improved so much!"
-        },
-        {
-          "time": "19:50",
+          "time": "23:13",
           "author": "MattyA",
-          "text": "What can I Say other than it is what it is."
+          "text": "Same here @Lloyd10xmas ... Love y'all guys. It's what makes me keep coming back even though I suck at this game so horribly bad"
         },
         {
-          "time": "01:46",
+          "time": "00:00",
+          "author": "Pink_Elephants",
+          "text": "I left instructions for @MNYoda to come back for you once he wins a championship"
+        },
+        {
+          "time": "00:00",
           "author": "Lloyd10xmas",
-          "text": "Fancy dinner in THE city(!)"
+          "text": "City kids flying down Broad Street(!)"
         },
         {
-          "time": "01:48",
+          "time": "02:56",
           "author": "Lloyd10xmas",
-          "text": "Celebrating the duration of time my lady friend has been able to put up with me(!)"
+          "text": "@MNYoda(!)"
         },
         {
-          "time": "07:15",
-          "author": "GMDS",
-          "text": "@NathanMB \nCongrats on your upcoming nuptials."
-        },
-        {
-          "time": "11:49",
-          "author": "Adolf Oliver Nipples",
-          "text": "Way to go!!!! @NathanMB"
-        },
-        {
-          "time": "12:41",
-          "author": "Lloyd10xmas",
-          "text": "One vagina for the rest of your life(!)"
-        },
-        {
-          "time": "13:49",
-          "author": "NathanMB",
-          "text": "Not if I’m a scumbag"
-        },
-        {
-          "time": "15:22",
-          "author": "Lloyd10xmas",
-          "text": "The constant chirps this league provides(!) Love you guys(!)"
+          "time": "02:57",
+          "author": "MNYoda",
+          "text": "https://klipy.com/gifs/happy-dance-excited-48"
         }
       ]
     },
@@ -383,154 +389,104 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "17:34",
+          "time": "19:01",
           "author": "The Villain CTJ",
           "text": "season games"
         },
         {
-          "time": "18:19",
-          "author": "Moses Bogart",
-          "text": "season games"
-        },
-        {
-          "time": "20:32",
-          "author": "The Villain CTJ",
-          "text": "season games"
-        },
-        {
-          "time": "21:07",
-          "author": "Adolf Oliver Nipples",
-          "text": "Season Games"
-        },
-        {
-          "time": "21:07",
-          "author": "GaelicGopher",
-          "text": "Season Games"
-        },
-        {
-          "time": "21:50",
-          "author": "MNYoda",
-          "text": "season games"
-        },
-        {
-          "time": "00:23",
-          "author": "GaelicGopher",
-          "text": "Season Games"
-        },
-        {
-          "time": "00:36",
-          "author": "Ticklepuss",
-          "text": "Fuck on"
-        },
-        {
-          "time": "00:55",
-          "author": "Ticklepuss",
-          "text": "Season games"
-        },
-        {
-          "time": "00:58",
-          "author": "Ticklepuss",
-          "text": "Anyone want their ass handed to them?"
-        },
-        {
-          "time": "01:10",
-          "author": "MNYoda",
-          "text": "season games"
-        },
-        {
-          "time": "01:11",
-          "author": "Unholy",
-          "text": "Season games"
-        },
-        {
-          "time": "01:36",
-          "author": "Ticklepuss",
-          "text": "Season games"
-        },
-        {
-          "time": "02:14",
-          "author": "Ticklepuss",
-          "text": "season games"
-        },
-        {
-          "time": "02:14",
-          "author": "Ticklepuss",
-          "text": "prefer someone uber baked"
-        },
-        {
-          "time": "03:23",
-          "author": "Ticklepuss",
-          "text": "season games"
-        },
-        {
-          "time": "03:27",
-          "author": "Ticklepuss",
-          "text": "Where’s @krav1 ?"
-        },
-        {
-          "time": "03:28",
-          "author": "Ticklepuss",
-          "text": "@shawnmb do u want ur ass handed to u?"
-        },
-        {
-          "time": "03:35",
-          "author": "Unholy",
-          "text": "Season games"
-        },
-        {
-          "time": "03:54",
-          "author": "Unholy",
-          "text": "It’s actually happening."
-        },
-        {
-          "time": "03:57",
-          "author": "Ticklepuss",
-          "text": "Season games"
-        },
-        {
-          "time": "04:23",
-          "author": "Unholy",
-          "text": "Season games"
-        },
-        {
-          "time": "12:42",
-          "author": "Lloyd10xmas",
-          "text": "How does one get an invite?"
-        },
-        {
-          "time": "14:20",
-          "author": "Unholy",
-          "text": "Sorry, no Down Vaginoiders allowed"
-        },
-        {
-          "time": "14:35",
-          "author": "Lloyd10xmas",
-          "text": "You’re just jealous of people who score a lot of goals(!)"
-        },
-        {
-          "time": "14:49",
-          "author": "Unholy",
-          "text": "LIV95 is a mens-only league, sorry!"
-        },
-        {
-          "time": "14:55",
-          "author": "Lloyd10xmas",
-          "text": "Look at that wrist extension(!)"
-        },
-        {
-          "time": "14:57",
-          "author": "Unholy",
-          "text": "The W permits women and children to play - cheer up!"
-        },
-        {
-          "time": "15:39",
-          "author": "Adolf Oliver Nipples",
-          "text": "Poor Party Dan😢"
-        },
-        {
-          "time": "15:47",
+          "time": "19:11",
           "author": "Pink_Elephants",
-          "text": "I can’t wait to see this picture in the background of TickleWeb when The Seabass  make the front page"
+          "text": "Season games"
+        },
+        {
+          "time": "19:48",
+          "author": "Unholy",
+          "text": "No offence but"
+        },
+        {
+          "time": "19:48",
+          "author": "Unholy",
+          "text": "Fuck off"
+        },
+        {
+          "time": "20:25",
+          "author": "Lloyd10xmas",
+          "text": "She's back(!)"
+        },
+        {
+          "time": "23:11",
+          "author": "Adolf Oliver Nipples",
+          "text": "Season Games"
+        },
+        {
+          "time": "23:13",
+          "author": "segathon",
+          "text": "its time"
+        },
+        {
+          "time": "00:26",
+          "author": "MNYoda",
+          "text": "season games"
+        },
+        {
+          "time": "00:28",
+          "author": "shawnmb",
+          "text": "Season Games"
+        },
+        {
+          "time": "00:34",
+          "author": "shawnmb",
+          "text": "Hey Chuckles Lets Go"
+        },
+        {
+          "time": "01:20",
+          "author": "Pink_Elephants",
+          "text": "I’m scared because you’re the champ. Plus I thought we agreed you wanted to be embarrassed publicly"
+        },
+        {
+          "time": "01:23",
+          "author": "shawnmb",
+          "text": "I understand. The nightmares of last finals haven't stopped yet?"
+        },
+        {
+          "time": "01:23",
+          "author": "shawnmb",
+          "text": "@Moses Bogart we need an announcer for a finals rematch"
+        },
+        {
+          "time": "01:29",
+          "author": "Adolf Oliver Nipples",
+          "text": "Season Games"
+        },
+        {
+          "time": "01:29",
+          "author": "shawnmb",
+          "text": "lets go"
+        },
+        {
+          "time": "01:29",
+          "author": "Adolf Oliver Nipples",
+          "text": "calm down."
+        },
+        {
+          "time": "01:30",
+          "author": "shawnmb",
+          "text": "https://klipy.com/gifs/wolf-of-wall-street-lets-goo-1"
+        },
+        {
+          "time": "01:30",
+          "author": "Ticklepuss",
+          "text": "I am available to watch"
+        },
+        {
+          "time": "10:59",
+          "author": "Ticklepuss",
+          "text": "Fuck off"
+        },
+        {
+          "time": "13:02",
+          "author": "Moses Bogart",
+          "text": "Sorry, didn't see this until now."
         }
       ]
     },
@@ -541,19 +497,14 @@
       "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "01:37",
-          "author": "GaelicGopher",
-          "text": "<:THT:918653529953034240> <:MGG:897245448522313738>"
+          "time": "23:43",
+          "author": "Adolf Oliver Nipples",
+          "text": "<:PIT:878396735028863007> <:MHT:918212056094740510>"
         },
         {
-          "time": "02:20",
-          "author": "Unholy",
-          "text": "<:NBK:996400156272496641> <:MGG:897245448522313738>"
-        },
-        {
-          "time": "03:21",
-          "author": "Ticklepuss",
-          "text": "<:TAI:890999468743348224> <:THT:918653529953034240>"
+          "time": "02:55",
+          "author": "Lloyd10xmas",
+          "text": "<:PRO:918148694820405308> <:OCW:1030175920536948868>"
         }
       ]
     },
@@ -564,22 +515,55 @@
       "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "01:00",
+          "time": "13:41",
           "author": "Ticklepuss",
-          "text": "🚨 TickleBlurb: Report:  Rumor:  Proposed rule change requires home team to post state to discord and away team to post state to pies.net.  If a team gets beaded by 4+ goals they are responsible for posting to both designated areas."
+          "text": "The \"no comments\" fell off the todo list pending state upload location determination"
         }
       ]
     },
     {
-      "channel": "newspaper_clippings",
+      "channel": "injuries",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #newspaper_clippings",
-      "commentary": "Heated debate and banter erupts in #newspaper_clippings over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #injuries",
+      "commentary": "Heated debate and banter erupts in #injuries over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "21:08",
+          "time": "20:10",
           "author": "Pink_Elephants",
-          "text": "**FUMBLES FINDS NEW WAY TO FIX SOMETHING THAT WASN’T BROKEN**\n\nWN95HL — Commissioner Tommy Fumbles has apparently identified the league’s newest crisis: posting a save state once simply isn’t annoying enough.\n\nHis solution? Post it twice.\n\nPlayers already post states in Discord, which also powers TickleWeb, the system Ticklepuss spent considerable time building around the league’s existing workflow. Critics say Fumbles’ proposed second posting requirement threatens to flush that work straight down the drain.\n\nFumbles offered this reassurance: “You keep doing what amazing things you have done there. Im just trying something else thats all.”\n\nCritics heard something considerably different: “You keep doing what you’re doing. In the end, it won’t matter because your website is about to dry up.”\n\nOpponents are now calling for a boycott of posting save states anywhere outside Discord, preserving the system that already works rather than feeding Fumbles’ new bureaucracy.\n\nOne league insider summed it up: “This league really can’t have nice things.”\n\nAt press time, Fumbles had not clarified whether posting a save state twice will eventually require a third post confirming the first two."
+          "text": "https://www.reddit.com/r/interestingasfuck/s/GhfZLR3tDV"
+        },
+        {
+          "time": "00:48",
+          "author": "Pink_Elephants",
+          "text": "https://www.reddit.com/r/badassanimals/s/fi55loavK3"
+        }
+      ]
+    },
+    {
+      "channel": "cooking-with-puss",
+      "badge": "CULINARY CONTROVERSY",
+      "title": "Kitchen Confidential & Hate-Watching",
+      "commentary": "Late-night food critique reaches boiling point as members profess deep disdain for online buffet content while simultaneously watching every single second.",
+      "messages": [
+        {
+          "time": "01:32",
+          "author": "Ticklepuss",
+          "text": "@Pink_Elephants what cut of cow is that?"
+        },
+        {
+          "time": "01:33",
+          "author": "Pink_Elephants",
+          "text": "It’s a cut of pig… they’re pork steaks"
+        },
+        {
+          "time": "01:44",
+          "author": "Ticklepuss",
+          "text": "https://klipy.com/gifs/pig-looking-meme"
+        },
+        {
+          "time": "11:29",
+          "author": "Lloyd10xmas",
+          "text": "A look at the layers(!)"
         }
       ]
     },
@@ -590,95 +574,37 @@
       "commentary": "Heated debate and banter erupts in #stiller-nation over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "05:51",
-          "author": "Unholy",
-          "text": "Clark Haggans"
-        },
-        {
-          "time": "05:52",
-          "author": "Unholy",
-          "text": "Great guy"
-        },
-        {
-          "time": "11:11",
+          "time": "16:23",
           "author": "Ticklepuss",
-          "text": "He was great.  Fun teams"
+          "text": "https://twitter.com/i/status/2093829941515182539"
         },
         {
-          "time": "15:11",
-          "author": "Ticklepuss",
-          "text": "https://thescore.com/nfl/news/3588276"
-        },
-        {
-          "time": "15:13",
-          "author": "Unholy",
-          "text": "Cowboys traded that much for a pylon?"
+          "time": "18:04",
+          "author": "Adolf Oliver Nipples",
+          "text": "He looks ready to excel."
         }
       ]
     },
     {
-      "channel": "art_gallery",
+      "channel": "game-code",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #art_gallery",
-      "commentary": "Heated debate and banter erupts in #art_gallery over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #game-code",
+      "commentary": "Heated debate and banter erupts in #game-code over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:14",
-          "author": "Ticklepuss",
-          "text": "Archiving"
-        },
-        {
-          "time": "15:14",
+          "time": "18:14",
           "author": "segathon",
-          "text": "I love this site"
-        }
-      ]
-    },
-    {
-      "channel": "segathon-tournaments-inperson",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #segathon-tournaments-inperson",
-      "commentary": "Heated debate and banter erupts in #segathon-tournaments-inperson over game tape, timing, and locker room etiquette.",
-      "messages": [
+          "text": "the modders over in 94 said that \"I think 95 was reworked to use C code as a base for many things (then compiled to the assembly for the system). So I think very little of the 94 code remains\""
+        },
         {
-          "time": "13:38",
+          "time": "18:14",
           "author": "segathon",
-          "text": "Happy birthday to @GaelicGopher who’s somehow managed to keep a literal pallet of Sega consoles and TVs under his stairs in his house, only for us to defiled them yearly for over a decade"
+          "text": "I am still fascinated on checking.  who ever unlock what that math is behind a successful check will dominate"
         },
         {
-          "time": "13:45",
-          "author": "GaelicGopher",
-          "text": "Thanks @segathon  (now play your games!!!)"
-        },
-        {
-          "time": "13:48",
-          "author": "NathanMB",
-          "text": "Happy Birthday buddy"
-        },
-        {
-          "time": "14:20",
-          "author": "krav1",
-          "text": "Happy Birthday!"
-        },
-        {
-          "time": "14:53",
-          "author": "shawnmb",
-          "text": "https://klipy.com/gifs/happy-birthday-DIr"
-        },
-        {
-          "time": "14:53",
-          "author": "shawnmb",
-          "text": "@GaelicGopher"
-        },
-        {
-          "time": "14:54",
+          "time": "18:16",
           "author": "Ticklepuss",
-          "text": "https://klipy.com/gifs/kiss-happy-12"
-        },
-        {
-          "time": "15:33",
-          "author": "GaelicGopher",
-          "text": "I have been accused of being the guy in this gif before lol"
+          "text": "tell them to mind their own business"
         }
       ]
     }
