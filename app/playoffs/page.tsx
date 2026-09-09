@@ -17,6 +17,11 @@ export interface SeriesGameResult {
   away_score: number;
   home_team_id: number;
   away_team_id: number;
+  game_id?: number | string;
+  home_stats?: any;
+  away_stats?: any;
+  game_results?: string;
+  game_meta?: any;
 }
 
 export interface PlayoffTeam {
@@ -29,12 +34,16 @@ export interface PlayoffTeam {
 }
 
 export interface PlayoffMatch {
-  id?: number;
+  id?: number | string;
+  playoff_id?: number | string;
   league_id?: number | string;
   season_id?: number | string;
+  round_name?: string;
   match_label: string;
   home_team_id?: number;
   away_team_id?: number;
+  next_match_id?: number | string | null;
+  winner_id?: number | null;
   home_team_seed?: number | string;
   away_team_seed?: number | string;
   series_length?: number;
@@ -59,8 +68,8 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
     };
   }
 
-  const parentHomeId = match.home_team_id;
-  const parentAwayId = match.away_team_id;
+  const parentHomeId = match.home_team_id || (match.results && match.results.length > 0 ? match.results[0].home_team_id : null);
+  const parentAwayId = match.away_team_id || (match.results && match.results.length > 0 ? match.results[0].away_team_id : null);
   const seriesLength = match.series_length || 5;
   const winsNeeded = Math.ceil(seriesLength / 2);
   const games = match.results || [];
@@ -683,59 +692,152 @@ export default function PlayoffBracket() {
   }, [selectedLeagueId]);
 
   const fetchPlayoffs = async (leagueId: number | string) => {
-    const { data, error } = await supabase
-      .from('league_playoffs')
-      .select(`
-        *, 
-        home_team:league_teams!league_playoffs_home_team_id_fkey(team_id, team_name, abbreviation, banner_filename),
-        away_team:league_teams!league_playoffs_away_team_id_fkey(team_id, team_name, abbreviation, banner_filename),
-        results:league_playoff_results(game_number, home_score, away_score, home_team_id, away_team_id)
-      `)
-      .eq('league_id', leagueId);
+    try {
+      // 1. Fetch playoff series matches, all games from league_playoff_gamestats, and team metadata
+      const [playoffsRes, gamestatsRes, teamsRes] = await Promise.all([
+        supabase
+          .from('league_playoffs')
+          .select(`
+            *, 
+            home_team:league_teams!league_playoffs_home_team_id_fkey(team_id, team_name, abbreviation, banner_filename),
+            away_team:league_teams!league_playoffs_away_team_id_fkey(team_id, team_name, abbreviation, banner_filename)
+          `)
+          .eq('league_id', leagueId)
+          .order('playoff_id', { ascending: true }),
+        supabase
+          .from('league_playoff_gamestats')
+          .select('*')
+          .eq('league_id', leagueId)
+          .order('game_id', { ascending: true }),
+        supabase
+          .from('league_teams')
+          .select('team_id, team_name, abbreviation, banner_filename')
+          .eq('league_id', leagueId)
+      ]);
 
-    if (error) {
-      console.error("⛔ Supabase Playoff Query Error:", error.message, error.details);
-      return;
-    }
+      if (playoffsRes.error) {
+        console.error("⛔ Supabase Playoff Query Error:", playoffsRes.error.message, playoffsRes.error.details);
+        return;
+      }
 
-    if (data) {
-      const matchesWithBanners = data.map((match: any) => {
-        const homeBannerInfo = getTeamBannerUrls({
-          team_id: match.home_team?.team_id,
-          team_name: match.home_team?.team_name,
-          abbreviation: match.home_team?.abbreviation,
-          banner_filename: match.home_team?.banner_filename,
+      const rawPlayoffs = playoffsRes.data || [];
+      const rawGames = gamestatsRes.data || [];
+      const allTeams = teamsRes.data || [];
+
+      // Create quick lookup map for team details & banners
+      const teamsMap = new Map<number, any>();
+      allTeams.forEach((t: any) => teamsMap.set(Number(t.team_id), t));
+
+      const matchesWithBanners = rawPlayoffs.map((match: any) => {
+        const pId = match.playoff_id ?? match.id;
+
+        // Group games for this playoff series
+        const matchedGames: SeriesGameResult[] = rawGames
+          .filter((g: any) => Number(g.playoff_id) === Number(pId))
+          .map((g: any) => ({
+            game_number: Number(g.game_num ?? g.game_number ?? 1),
+            home_score: Number(g.home_score ?? 0),
+            away_score: Number(g.away_score ?? 0),
+            home_team_id: Number(g.home_team_id),
+            away_team_id: Number(g.away_team_id),
+            game_id: g.game_id,
+            home_stats: g.home_stats,
+            away_stats: g.away_stats,
+            game_results: g.game_results,
+            game_meta: g.game_meta
+          }))
+          .sort((a: SeriesGameResult, b: SeriesGameResult) => a.game_number - b.game_number);
+
+        // Auto-detect teams from games if league_playoffs row has null home/away teams
+        const effectiveHomeTeamId = match.home_team_id || (matchedGames.length > 0 ? matchedGames[0].home_team_id : null);
+        const effectiveAwayTeamId = match.away_team_id || (matchedGames.length > 0 ? matchedGames[0].away_team_id : null);
+
+        const resolvedHomeTeam = match.home_team || (effectiveHomeTeamId ? teamsMap.get(Number(effectiveHomeTeamId)) : null);
+        const resolvedAwayTeam = match.away_team || (effectiveAwayTeamId ? teamsMap.get(Number(effectiveAwayTeamId)) : null);
+
+        const homeBannerInfo = resolvedHomeTeam ? getTeamBannerUrls({
+          team_id: resolvedHomeTeam.team_id,
+          team_name: resolvedHomeTeam.team_name,
+          abbreviation: resolvedHomeTeam.abbreviation,
+          banner_filename: resolvedHomeTeam.banner_filename,
           league_id: leagueId
-        }, leagueId);
+        }, leagueId) : null;
 
-        const awayBannerInfo = getTeamBannerUrls({
-          team_id: match.away_team?.team_id,
-          team_name: match.away_team?.team_name,
-          abbreviation: match.away_team?.abbreviation,
-          banner_filename: match.away_team?.banner_filename,
+        const awayBannerInfo = resolvedAwayTeam ? getTeamBannerUrls({
+          team_id: resolvedAwayTeam.team_id,
+          team_name: resolvedAwayTeam.team_name,
+          abbreviation: resolvedAwayTeam.abbreviation,
+          banner_filename: resolvedAwayTeam.banner_filename,
           league_id: leagueId
-        }, leagueId);
+        }, leagueId) : null;
 
         return {
           ...match,
-          home_team: match.home_team ? {
-            ...match.home_team,
-            banner_url: homeBannerInfo.primaryUrl,
-            fallback_urls: homeBannerInfo.fallbackUrls
+          playoff_id: pId,
+          home_team_id: effectiveHomeTeamId,
+          away_team_id: effectiveAwayTeamId,
+          home_team: resolvedHomeTeam ? {
+            ...resolvedHomeTeam,
+            banner_url: homeBannerInfo?.primaryUrl || null,
+            fallback_urls: homeBannerInfo?.fallbackUrls || []
           } : null,
-          away_team: match.away_team ? {
-            ...match.away_team,
-            banner_url: awayBannerInfo.primaryUrl,
-            fallback_urls: awayBannerInfo.fallbackUrls
-          } : null
+          away_team: resolvedAwayTeam ? {
+            ...resolvedAwayTeam,
+            banner_url: awayBannerInfo?.primaryUrl || null,
+            fallback_urls: awayBannerInfo?.fallbackUrls || []
+          } : null,
+          results: matchedGames
         };
       });
+
       setMatches(matchesWithBanners);
+    } catch (err) {
+      console.error("⛔ Error loading playoffs:", err);
     }
   };
 
-  const getMatch = (label: string): PlayoffMatch => 
-    matches.find(m => m.match_label === label) || { match_label: label, results: [] };
+  // Helper map linking bracket card labels to playoff_id (1 - 15)
+  const LABEL_TO_ID_MAP: Record<string, number> = {
+    'quarterfinals1': 1,
+    'quarterfinals2': 2,
+    'quarterfinals3': 3,
+    'quarterfinals4': 4,
+    'quarterfinals5': 5,
+    'quarterfinals6': 6,
+    'quarterfinals7': 7,
+    'quarterfinals8': 8,
+    'semifinals1': 9,
+    'semifinals2': 10,
+    'semifinals3': 11,
+    'semifinals4': 12,
+    'conferencefinals1': 13,
+    'conferencefinals2': 14,
+    'finals': 15
+  };
+
+  const normalizeLabel = (str?: string | null) =>
+    (str || '').replace(/[\s\-_]+/g, '').toLowerCase();
+
+  const getMatch = (label: string): PlayoffMatch => {
+    const normTarget = normalizeLabel(label);
+    const expectedId = LABEL_TO_ID_MAP[normTarget];
+
+    // 1. Primary lookup by expected playoff_id (1-15)
+    if (expectedId !== undefined) {
+      const byId = matches.find(m => Number(m.playoff_id ?? m.id) === expectedId);
+      if (byId) return byId;
+    }
+
+    // 2. Flexible lookup by match_label (ignoring spaces and hyphens)
+    const byLabel = matches.find(m => normalizeLabel(m.match_label) === normTarget);
+    if (byLabel) return byLabel;
+
+    // 3. Flexible lookup by round_name (for Finals or custom names)
+    const byRound = matches.find(m => normalizeLabel(m.round_name) === normTarget);
+    if (byRound) return byRound;
+
+    return { match_label: label, results: [] };
+  };
 
   // Helper function to extract and calculate champion details
   const getChampionDetails = () => {
