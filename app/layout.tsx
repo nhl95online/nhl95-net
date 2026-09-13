@@ -7,6 +7,9 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'NHL95 Online League | The Official Record of NHL95 Athletics',
   description: 'The premier online league and digital hockey world for Sega Genesis NHL 95.',
+  icons: {
+    icon: '/icon.svg',
+  },
 };
 
 export const viewport: Viewport = {
