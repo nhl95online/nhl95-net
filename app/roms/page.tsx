@@ -1,100 +1,57 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Download, HardDrive, ShieldCheck, Check, Copy, ExternalLink, FileArchive, Music, Cpu, Sparkles } from 'lucide-react';
-
-interface RomItem {
-  id: string;
-  league: string;
-  seasonName: string;
-  fileName: string;
-  fileSize: string;
-  md5: string;
-  releaseDate: string;
-  description: string;
-  downloadUrl?: string;
-  badge?: string;
-}
-
-const ROM_DOWNLOADS: RomItem[] = [
-  {
-    id: 'w18',
-    league: 'W League',
-    seasonName: 'Season 40 (W18)',
-    fileName: 'NHL95_Season40_W18_Official.bin',
-    fileSize: '2.0 MB',
-    md5: 'a4f8e219b678c0024e819fa281b379c1',
-    releaseDate: 'Current Active Season',
-    description: 'The official current season ROM featuring the 40th anniversary updated rosters, custom franchise ice center logos, and tweaked manual goalie reaction profiles.',
-    badge: 'ACTIVE SEASON'
-  },
-  {
-    id: 'o01',
-    league: 'Original 6',
-    seasonName: 'Season 39 (O01)',
-    fileName: 'NHL95_OriginalSix_O01.bin',
-    fileSize: '2.0 MB',
-    md5: 'd7a1e582c918b4317f229eb914a88f02',
-    releaseDate: 'Archival Vault',
-    description: 'Vintage Original Six tournament ROM (BOS, CHI, DET, MTL, NYR, TOR) with classic wooden stick physics, vintage sweaters, and authentic goalie masks.',
-    badge: 'CLASSIC'
-  },
-  {
-    id: 'q19',
-    league: 'The Q',
-    seasonName: 'Season 36 (Q19)',
-    fileName: 'NHL95_TheQ_Q19_Official.bin',
-    fileSize: '2.0 MB',
-    md5: '7c32d90a1841e5492d19bc2981a54ee3',
-    releaseDate: 'Archival Vault',
-    description: 'Premier tier Q League competitive edition with fast-paced skater ratings and high-aggression defense mechanics.'
-  },
-  {
-    id: 'v01',
-    league: 'Vintage',
-    seasonName: 'Season 20 (V01)',
-    fileName: 'NHL95_Vintage_V01_Grail.bin',
-    fileSize: '2.0 MB',
-    md5: 'e5b29c01824a77d13b610fa728bc991a',
-    releaseDate: 'Archival Vault',
-    description: 'The Grail Cup vintage league edition featuring 80s legends and classic arena organ audio enhancements.'
-  },
-  {
-    id: 'g01',
-    league: 'Golden Era',
-    seasonName: 'Season 16 (G01)',
-    fileName: 'NHL95_GoldenEra_G01.bin',
-    fileSize: '2.0 MB',
-    md5: 'f819ac29b710e6648c291ba8192ec405',
-    releaseDate: 'Archival Vault',
-    description: 'Golden Era showcase ROM celebrating the greatest offensive dynasties and high-scoring showdowns.'
-  }
-];
-
-const UTILITY_PACKS = [
-  {
-    title: 'RetroArch NHL95 Pre-Configured Starter Pack',
-    fileName: 'RetroArch_NHL95_StarterKit_v2.zip',
-    size: '48.5 MB',
-    desc: 'Includes optimized Genesis Plus GX core, ultra-low latency audio/video configs, Netplay hotkeys, and 6-button controller profiles.'
-  },
-  {
-    title: 'OBS Broadcast Overlay & Scoreboard Assets',
-    fileName: 'NHL95_OBS_StreamOverlays_Pack.zip',
-    size: '18.2 MB',
-    desc: 'Transparent 16:9 sidebar pillarbox graphics, lower third starting goalies comparison, and intermission period breakdown templates.'
-  },
-  {
-    title: 'Authentic 90s Arena Sound & Organ Pack',
-    fileName: 'NHL95_Audio_ArenaMusic_Mod.zip',
-    size: '6.4 MB',
-    desc: 'High-fidelity crowd cheers, siren horns, and custom synthesizer organ charge tracks.'
-  }
-];
+import { 
+  Download, 
+  HardDrive, 
+  ShieldCheck, 
+  Check, 
+  Copy, 
+  ExternalLink, 
+  FileArchive, 
+  Sparkles, 
+  Search, 
+  Calendar, 
+  Trophy, 
+  Gamepad2, 
+  Wrench, 
+  Filter, 
+  Clock, 
+  Users, 
+  Layers,
+  ArrowDown,
+  Info,
+  Flame,
+  Star
+} from 'lucide-react';
+import { 
+  OFFICIAL_LEAGUE_ROMS, 
+  HISTORICAL_NHL_ROMS, 
+  MISC_ROMS, 
+  UTILITY_PACKS_DATA,
+  LeagueRom,
+  HistoricalNhlRom,
+  MiscRom,
+  UtilityPack
+} from './roms_data';
 
 export default function RomsPage() {
   const [copiedMd5, setCopiedMd5] = useState<string | null>(null);
+
+  // Active section tab
+  const [activeSection, setActiveSection] = useState<'all' | 'nhl-history' | 'leagues' | 'misc' | 'utilities'>('all');
+
+  // Search and filter for historical NHL ROMs
+  const [historySearch, setHistorySearch] = useState('');
+  const [selectedEra, setSelectedEra] = useState<string>('all');
+  const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'table'>('grid');
+
+  // League filter
+  const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>('all');
+
+  // Misc category filter
+  const [selectedMiscCategory, setSelectedMiscCategory] = useState<string>('all');
 
   const copyMd5 = (hash: string, id: string) => {
     navigator.clipboard.writeText(hash);
@@ -102,134 +59,710 @@ export default function RomsPage() {
     setTimeout(() => setCopiedMd5(null), 2500);
   };
 
-  return (
-    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-3 sm:p-6">
-      <header className="border-b-4 border-black pb-3 sm:pb-4 mb-6 text-center">
-        <span className="bg-black text-white font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest inline-block mb-1">
-          League File Repository
-        </span>
-        <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tight">ROMs & League Files</h1>
-        <p className="text-xs font-bold uppercase italic mt-1 text-slate-700">
-          Official Tournament Builds, Genesis Plus GX Core Packs, and Broadcast Media
-        </p>
-      </header>
+  // Filtered Historical NHL ROMs
+  const filteredHistoricalRoms = useMemo(() => {
+    return HISTORICAL_NHL_ROMS.filter(rom => {
+      const matchesEra = selectedEra === 'all' || rom.era === selectedEra;
+      const q = historySearch.toLowerCase().trim();
+      const matchesSearch = !q || 
+        rom.year.toString().includes(q) ||
+        rom.seasonLabel.toLowerCase().includes(q) ||
+        (rom.champion && rom.champion.toLowerCase().includes(q)) ||
+        (rom.runnerUp && rom.runnerUp.toLowerCase().includes(q)) ||
+        (rom.notableTeams && rom.notableTeams.some(t => t.toLowerCase().includes(q))) ||
+        (rom.modder && rom.modder.toLowerCase().includes(q)) ||
+        rom.features.toLowerCase().includes(q);
+      return matchesEra && matchesSearch;
+    });
+  }, [selectedEra, historySearch]);
 
-      {/* Notice Banner */}
-      <div className="border-2 border-black bg-amber-50 p-4 mb-8 shadow-xs">
-        <div className="flex items-center gap-2 font-mono font-black text-xs uppercase text-amber-900 mb-1">
-          <ShieldCheck className="w-4 h-4 text-amber-700" /> ROM Compatibility & Netplay Integrity
+  // Filtered League ROMs
+  const filteredLeagueRoms = useMemo(() => {
+    return OFFICIAL_LEAGUE_ROMS.filter(rom => {
+      if (selectedLeagueFilter === 'all') return true;
+      return rom.leagueCode === selectedLeagueFilter;
+    });
+  }, [selectedLeagueFilter]);
+
+  // Filtered Misc ROMs
+  const filteredMiscRoms = useMemo(() => {
+    return MISC_ROMS.filter(rom => {
+      if (selectedMiscCategory === 'all') return true;
+      return rom.category === selectedMiscCategory;
+    });
+  }, [selectedMiscCategory]);
+
+  const handleDownload = (fileName: string, itemTitle: string) => {
+    alert(`Initiating download for "${itemTitle}" (${fileName}).\n\nDirect server downloads are mirrored on the official NHL95 Discord (#resources channel).`);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-20">
+      
+      {/* ===================================================================== */}
+      {/* 1. HERO MASTHEAD & RETRO MASHUP BANNER                                 */}
+      {/* ===================================================================== */}
+      <div className="bg-[#0b0c10] border-b-4 border-black text-white relative overflow-hidden shadow-md">
+        
+        {/* Banner Image Showcase */}
+        <div className="relative w-full max-w-[1500px] mx-auto overflow-hidden group">
+          <div className="relative aspect-[21/9] sm:aspect-[24/9] max-h-[380px] w-full overflow-hidden">
+            <img 
+              src="/images/roms-hero-banner.jpg" 
+              alt="NHL95 Modding & Retro Gaming Mashup" 
+              className="w-full h-full object-cover object-center filter saturate-110 contrast-105"
+            />
+            {/* Retro Synthwave Ambient Gradients */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0b0c10] via-transparent to-black/30 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-black/60 pointer-events-none" />
+          </div>
+
+          {/* Floating Hero Badge & Title Overlay */}
+          <div className="absolute bottom-4 sm:bottom-6 left-4 sm:left-8 right-4 flex flex-col md:flex-row md:items-end justify-between gap-3 pointer-events-none">
+            <div className="bg-black/85 backdrop-blur-md p-4 sm:p-5 rounded-lg border border-amber-500/40 shadow-xl max-w-2xl pointer-events-auto">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-mono text-[10px] font-black uppercase px-2.5 py-0.5 rounded tracking-wider shadow-xs">
+                  Retro Modding Repository
+                </span>
+                <span className="bg-amber-400 text-black font-mono text-[10px] font-black uppercase px-2 py-0.5 rounded flex items-center gap-1">
+                  <Flame className="w-3 h-3 text-red-600" /> 1909 — Present
+                </span>
+                <span className="text-xs font-mono text-slate-300">
+                  {HISTORICAL_NHL_ROMS.length + OFFICIAL_LEAGUE_ROMS.length + MISC_ROMS.length}+ Builds Available
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight text-white font-serif drop-shadow-md">
+                ROMs & Modded Files
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-300 font-sans mt-1 leading-relaxed">
+                Official tournament editions, century-spanning historical NHL seasons (1909–Present), arcade cross-game mashups, and Netplay packages.
+              </p>
+            </div>
+
+            <div className="hidden lg:flex items-center gap-2 pointer-events-auto self-end">
+              <Link
+                href="/setup-guide?tab=netplay"
+                className="bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-black uppercase px-4 py-2.5 rounded shadow-lg transition-colors flex items-center gap-2"
+              >
+                <ShieldCheck className="w-4 h-4" /> Netplay Setup Guide &rarr;
+              </Link>
+            </div>
+          </div>
         </div>
-        <p className="font-sans text-xs text-slate-800 leading-relaxed">
-          Both players in a Netplay match must use identical ROM binary files. A mismatched file checksum (MD5) will result in an immediate desynchronization. If you experience gameplay divergence, re-download the official build below.
-        </p>
+
+        {/* Quick Jump Area Nav Tabs */}
+        <div className="bg-[#12141a] border-t border-slate-800 px-4 py-2.5">
+          <div className="max-w-[1500px] mx-auto flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-slate-400 font-bold uppercase mr-1 text-[11px] flex items-center gap-1">
+                <Layers className="w-3.5 h-3.5 text-amber-400" /> Jump To Area:
+              </span>
+              <button
+                onClick={() => setActiveSection('all')}
+                className={`px-3 py-1.5 rounded transition cursor-pointer font-bold uppercase text-[11px] ${
+                  activeSection === 'all' 
+                    ? 'bg-amber-500 text-black shadow-xs' 
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                All Areas
+              </button>
+              <button
+                onClick={() => setActiveSection('nhl-history')}
+                className={`px-3 py-1.5 rounded transition cursor-pointer font-bold uppercase text-[11px] flex items-center gap-1.5 ${
+                  activeSection === 'nhl-history' 
+                    ? 'bg-amber-500 text-black shadow-xs' 
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                🏒 NHL Seasons (1909–Pres) <span className="text-[10px] opacity-75">({HISTORICAL_NHL_ROMS.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveSection('leagues')}
+                className={`px-3 py-1.5 rounded transition cursor-pointer font-bold uppercase text-[11px] flex items-center gap-1.5 ${
+                  activeSection === 'leagues' 
+                    ? 'bg-amber-500 text-black shadow-xs' 
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                🏆 League ROMs (W, Q, V, G) <span className="text-[10px] opacity-75">({OFFICIAL_LEAGUE_ROMS.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveSection('misc')}
+                className={`px-3 py-1.5 rounded transition cursor-pointer font-bold uppercase text-[11px] flex items-center gap-1.5 ${
+                  activeSection === 'misc' 
+                    ? 'bg-amber-500 text-black shadow-xs' 
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                🕹️ Misc & Other Games <span className="text-[10px] opacity-75">({MISC_ROMS.length})</span>
+              </button>
+              <button
+                onClick={() => setActiveSection('utilities')}
+                className={`px-3 py-1.5 rounded transition cursor-pointer font-bold uppercase text-[11px] flex items-center gap-1.5 ${
+                  activeSection === 'utilities' 
+                    ? 'bg-amber-500 text-black shadow-xs' 
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                🛠️ Utilities & Emulators <span className="text-[10px] opacity-75">({UTILITY_PACKS_DATA.length})</span>
+              </button>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-2 text-slate-400 text-[11px]">
+              <Info className="w-3.5 h-3.5 text-amber-400" />
+              <span>Netplay requires matching MD5 checksums</span>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* Official Season ROMs Grid */}
-      <div className="mb-10">
-        <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-4">
-          <h2 className="font-black text-xl uppercase tracking-tight flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-amber-700" /> Official League Tournament ROMs
-          </h2>
-          <span className="text-xs font-mono text-slate-500 font-bold uppercase">
-            {ROM_DOWNLOADS.length} Builds Available
-          </span>
+      {/* Main Content Body */}
+      <div className="max-w-[1500px] mx-auto px-4 sm:px-6 pt-8">
+
+        {/* Netplay Checksum Advisory Card */}
+        <div className="border-2 border-black bg-amber-50 p-4 mb-8 shadow-xs rounded-sm">
+          <div className="flex items-center gap-2 font-mono font-black text-xs uppercase text-amber-900 mb-1">
+            <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0" /> Netplay Checksum Integrity Notice
+          </div>
+          <p className="font-sans text-xs text-slate-800 leading-relaxed">
+            Genesis Netplay matches require bit-identical ROM binaries between both players. If you experience unexpected desynchronization during an online match, copy the MD5 checksum below and compare it in RetroArch to ensure exact parity.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {ROM_DOWNLOADS.map((rom) => (
-            <div
-              key={rom.id}
-              className="border-2 border-black p-4 bg-[#fdfaf5] shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col justify-between"
-            >
+        {/* ===================================================================== */}
+        {/* AREA 1: ALL HISTORICAL NHL ROMS (1909 - PRESENT, OVER 100 ROMS)       */}
+        {/* ===================================================================== */}
+        {(activeSection === 'all' || activeSection === 'nhl-history') && (
+          <section id="nhl-history" className="mb-14 scroll-mt-6">
+            <div className="border-b-4 border-black pb-3 mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
-                <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <span className="text-[10px] font-mono font-black text-amber-800 uppercase tracking-wider block">
-                      {rom.league}
-                    </span>
-                    <h3 className="text-base font-black uppercase text-black leading-snug">
-                      {rom.seasonName}
-                    </h3>
-                  </div>
-                  {rom.badge && (
-                    <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-2 py-0.5">
-                      {rom.badge}
-                    </span>
+                <div className="flex items-center gap-2 text-xs font-mono font-black uppercase text-amber-800 tracking-wider mb-1">
+                  <span>🏒 Vault Archive</span>
+                  <span>•</span>
+                  <span>1909 through 2026</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black font-serif">
+                  All Historical NHL Season ROMs
+                </h2>
+                <p className="text-xs text-slate-600 font-sans mt-0.5">
+                  Over a century of hockey history faithfully converted into playable 16-bit Genesis ROMs.
+                </p>
+              </div>
+
+              {/* Search & Era Filters */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative min-w-[220px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    placeholder="Search year, team, modder..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded font-sans focus:outline-none focus:ring-2 focus:ring-black shadow-2xs"
+                  />
+                  {historySearch && (
+                    <button
+                      onClick={() => setHistorySearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-black cursor-pointer font-bold"
+                    >
+                      ×
+                    </button>
                   )}
                 </div>
 
-                <p className="font-sans text-xs text-slate-700 leading-relaxed mb-3">
-                  {rom.description}
-                </p>
+                <div className="flex items-center border border-slate-300 bg-white rounded text-xs font-mono">
+                  <button
+                    onClick={() => setHistoryViewMode('grid')}
+                    className={`px-2.5 py-1.5 transition cursor-pointer font-bold uppercase text-[11px] ${
+                      historyViewMode === 'grid' ? 'bg-black text-white' : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    Cards
+                  </button>
+                  <button
+                    onClick={() => setHistoryViewMode('table')}
+                    className={`px-2.5 py-1.5 transition cursor-pointer font-bold uppercase text-[11px] ${
+                      historyViewMode === 'table' ? 'bg-black text-white' : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    Table
+                  </button>
+                </div>
+              </div>
+            </div>
 
-                <div className="bg-neutral-100 border border-neutral-300 p-2.5 font-mono text-[11px] space-y-1 text-slate-800 mb-3">
-                  <div className="truncate"><strong>File:</strong> {rom.fileName} ({rom.fileSize})</div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-600">
-                    <span className="truncate"><strong>MD5:</strong> {rom.md5}</span>
+            {/* Era Filter Badges */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-6 scrollbar-thin font-mono text-xs">
+              {[
+                { id: 'all', label: 'All Eras' },
+                { id: 'present-2020s', label: '2020s & Present' },
+                { id: 'modern-2010s', label: '2010s' },
+                { id: 'modern-2000s', label: '2000s' },
+                { id: 'golden-90s', label: '90s Golden Era' },
+                { id: 'dynasties-80s', label: '80s Dynasties' },
+                { id: 'expansion-70s', label: '70s Expansion' },
+                { id: 'original-six', label: 'Original Six (1942-67)' },
+                { id: 'pre-war', label: 'Pre-War (1909-41)' }
+              ].map(era => (
+                <button
+                  key={era.id}
+                  onClick={() => setSelectedEra(era.id)}
+                  className={`px-3 py-1 rounded-full whitespace-nowrap text-[11px] font-bold uppercase transition cursor-pointer ${
+                    selectedEra === era.id
+                      ? 'bg-black text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-slate-300 hover:border-black'
+                  }`}
+                >
+                  {era.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Historical ROMs Content (Grid or Table) */}
+            {filteredHistoricalRoms.length === 0 ? (
+              <div className="bg-white border-2 border-dashed border-slate-300 p-8 text-center rounded">
+                <p className="text-sm font-mono text-slate-500">No historical seasons match your search query.</p>
+                <button
+                  onClick={() => { setHistorySearch(''); setSelectedEra('all'); }}
+                  className="mt-2 text-xs font-mono font-bold text-amber-700 underline cursor-pointer"
+                >
+                  Reset all filters
+                </button>
+              </div>
+            ) : historyViewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredHistoricalRoms.map((rom) => (
+                  <div
+                    key={rom.id}
+                    className="border-2 border-black bg-white p-4 shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col justify-between hover:translate-y-[-1px] transition-transform"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded inline-block">
+                            {rom.eraLabel}
+                          </span>
+                          <span className="font-mono text-xs font-black text-slate-500 ml-2">
+                            {rom.year}
+                          </span>
+                        </div>
+                        <span className="font-mono text-[10px] text-slate-400 font-bold">
+                          {rom.fileSize}
+                        </span>
+                      </div>
+
+                      <h3 className="font-serif text-base font-black uppercase text-black leading-snug mb-1">
+                        {rom.seasonLabel}
+                      </h3>
+
+                      {rom.champion && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-800 mb-2 font-mono">
+                          <Trophy className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="font-bold">Champion:</span>
+                          <span className="truncate">{rom.champion}</span>
+                        </div>
+                      )}
+
+                      <p className="text-xs text-slate-600 font-sans leading-relaxed mb-3">
+                        {rom.features}
+                      </p>
+
+                      {rom.notableTeams && rom.notableTeams.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {rom.notableTeams.map((team, idx) => (
+                            <span 
+                              key={idx}
+                              className="bg-slate-100 text-slate-700 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-200"
+                            >
+                              {team}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                      <div className="text-[10px] font-mono text-slate-500 truncate">
+                        Mod: <span className="font-bold text-slate-700">{rom.modder || 'Community'}</span>
+                      </div>
+
+                      <button
+                        onClick={() => handleDownload(rom.fileName, rom.seasonLabel)}
+                        className="px-3 py-1.5 bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase transition-colors flex items-center gap-1.5 rounded cursor-pointer shrink-0"
+                      >
+                        <Download className="w-3 h-3" /> Download .BIN
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white border-2 border-black overflow-x-auto shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-neutral-900 text-white font-mono uppercase text-[11px] border-b-2 border-black">
+                      <th className="p-3 w-16">Year</th>
+                      <th className="p-3">Season & Title</th>
+                      <th className="p-3 w-40">Champion</th>
+                      <th className="p-3">Features & Summary</th>
+                      <th className="p-3 w-32">Modder</th>
+                      <th className="p-3 w-28 text-right">Download</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredHistoricalRoms.map((rom, idx) => (
+                      <tr key={rom.id} className={`border-b border-slate-200 hover:bg-amber-50/60 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                        <td className="p-3 font-mono font-black">{rom.year}</td>
+                        <td className="p-3 font-bold font-serif text-slate-900">{rom.seasonLabel}</td>
+                        <td className="p-3 font-mono text-slate-700">{rom.champion || '—'}</td>
+                        <td className="p-3 text-slate-600 max-w-md truncate">{rom.features}</td>
+                        <td className="p-3 font-mono text-slate-500 text-[11px]">{rom.modder || 'Community'}</td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => handleDownload(rom.fileName, rom.seasonLabel)}
+                            className="px-2.5 py-1 bg-black hover:bg-amber-600 text-white font-mono text-[10px] font-bold uppercase transition-colors inline-flex items-center gap-1 rounded cursor-pointer"
+                          >
+                            <Download className="w-3 h-3" /> BIN
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ===================================================================== */}
+        {/* AREA 2: OFFICIAL COMMUNITY LEAGUE TOURNAMENT ROMS                     */}
+        {/* ===================================================================== */}
+        {(activeSection === 'all' || activeSection === 'leagues') && (
+          <section id="leagues" className="mb-14 scroll-mt-6">
+            <div className="border-b-4 border-black pb-3 mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-mono font-black uppercase text-amber-800 tracking-wider mb-1">
+                  <span>🏆 Official Builds</span>
+                  <span>•</span>
+                  <span>Netplay Verified</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black font-serif">
+                  Official League Tournament ROMs
+                </h2>
+                <p className="text-xs text-slate-600 font-sans mt-0.5">
+                  The official sanctioned tournament builds for The W League, The Q, Vintage Grail Cup, and Golden Era.
+                </p>
+              </div>
+
+              {/* League Code Selector */}
+              <div className="flex items-center gap-1.5 overflow-x-auto font-mono text-xs">
+                {[
+                  { id: 'all', label: 'All Leagues' },
+                  { id: 'W', label: 'The W' },
+                  { id: 'Q', label: 'The Q' },
+                  { id: 'V', label: 'Vintage' },
+                  { id: 'G', label: 'Golden Era' },
+                  { id: 'O', label: 'Original 6' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setSelectedLeagueFilter(tab.id)}
+                    className={`px-3 py-1 rounded text-[11px] font-bold uppercase transition cursor-pointer ${
+                      selectedLeagueFilter === tab.id
+                        ? 'bg-black text-white shadow-xs'
+                        : 'bg-white text-slate-700 border border-slate-300 hover:border-black'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {filteredLeagueRoms.map((rom) => (
+                <div
+                  key={rom.id}
+                  className={`border-2 border-black p-5 bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative ${
+                    rom.isActive ? 'ring-2 ring-amber-500' : ''
+                  }`}
+                >
+                  {rom.isActive && (
+                    <div className="absolute top-0 right-6 -translate-y-1/2 bg-amber-500 text-black font-mono text-[9px] font-black uppercase px-2 py-0.5 border border-black shadow-xs">
+                      ★ Active Season Tournament Build ★
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="text-[10px] font-mono font-black text-amber-800 uppercase tracking-wider block">
+                          {rom.league}
+                        </span>
+                        <h3 className="text-lg font-black uppercase text-black font-serif leading-snug">
+                          {rom.seasonName}
+                        </h3>
+                      </div>
+                      {rom.badge && (
+                        <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-2 py-0.5">
+                          {rom.badge}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="font-sans text-xs text-slate-700 leading-relaxed mb-4">
+                      {rom.description}
+                    </p>
+
+                    <div className="bg-neutral-100 border border-neutral-300 p-3 font-mono text-[11px] space-y-1.5 text-slate-800 mb-4 rounded-xs">
+                      <div className="truncate"><strong>Binary:</strong> {rom.fileName} ({rom.fileSize})</div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-neutral-200">
+                        <span className="truncate"><strong>MD5:</strong> {rom.md5}</span>
+                        <button
+                          onClick={() => copyMd5(rom.md5, rom.id)}
+                          className="ml-2 px-2 py-0.5 bg-white border border-black text-[9px] font-bold uppercase hover:bg-black hover:text-white cursor-pointer shrink-0 transition-colors"
+                        >
+                          {copiedMd5 === rom.id ? 'COPIED!' : 'COPY MD5'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-3 border-t border-black/10">
                     <button
-                      onClick={() => copyMd5(rom.md5, rom.id)}
-                      className="ml-2 px-1.5 py-0.5 bg-white border border-black text-[9px] font-bold uppercase hover:bg-black hover:text-white cursor-pointer shrink-0"
+                      onClick={() => handleDownload(rom.fileName, rom.seasonName)}
+                      className="flex-1 text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2.5 transition-colors flex items-center justify-center gap-1.5 rounded-xs cursor-pointer"
                     >
-                      {copiedMd5 === rom.id ? 'COPIED' : 'COPY'}
+                      <Download className="w-3.5 h-3.5" /> Download Official ROM
+                    </button>
+                    <Link
+                      href="/setup-guide?tab=netplay"
+                      className="px-3.5 py-2.5 border border-black font-mono text-xs font-bold uppercase hover:bg-neutral-100 transition-colors rounded-xs"
+                      title="Netplay Connection Guide"
+                    >
+                      Setup &rarr;
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ===================================================================== */}
+        {/* AREA 3: MISC ROMS & OTHER GAMES (THEMED WITH HERO MASHUP ARTWORK)     */}
+        {/* ===================================================================== */}
+        {(activeSection === 'all' || activeSection === 'misc') && (
+          <section id="misc" className="mb-14 scroll-mt-6">
+            <div className="border-b-4 border-black pb-3 mb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-mono font-black uppercase text-purple-700 tracking-wider mb-1">
+                  <span>🕹️ Arcade & Cross-Sport Mods</span>
+                  <span>•</span>
+                  <span>Featured Collection</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black font-serif flex items-center gap-2">
+                  <Gamepad2 className="w-7 h-7 text-purple-700" /> Misc ROMs & Other Games
+                </h2>
+                <p className="text-xs text-slate-600 font-sans mt-0.5">
+                  Community-created arcade crossovers, basketball conversions, NCAA college hockey, and fighting game mashups.
+                </p>
+              </div>
+
+              {/* Misc Category Selector */}
+              <div className="flex items-center gap-1.5 overflow-x-auto font-mono text-xs">
+                {[
+                  { id: 'all', label: 'All Misc' },
+                  { id: 'Cross-Sport', label: 'Basketball / NBA' },
+                  { id: 'Arcade Mashup', label: 'Arcade / Fighting' },
+                  { id: 'International', label: 'IIHF World' },
+                  { id: 'College', label: 'NCAA College' },
+                  { id: 'Pop Culture', label: '16-Bit All-Stars' }
+                ].map(cat => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedMiscCategory(cat.id)}
+                    className={`px-3 py-1 rounded text-[11px] font-bold uppercase transition cursor-pointer ${
+                      selectedMiscCategory === cat.id
+                        ? 'bg-purple-900 text-white shadow-xs'
+                        : 'bg-white text-slate-700 border border-slate-300 hover:border-black'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Featured Hero Card For Misc Collection */}
+            <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 text-white p-5 sm:p-6 rounded-lg border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-6 flex flex-col md:flex-row items-center gap-6">
+              <div className="w-full md:w-1/3 aspect-[16/9] rounded-md overflow-hidden border border-purple-500/50 shadow-md shrink-0">
+                <img 
+                  src="/images/roms-hero-banner.jpg" 
+                  alt="Retro Gaming Mashup Collage" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1 text-center md:text-left">
+                <span className="bg-purple-600 text-white font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-widest inline-block mb-1">
+                  Community Showcase
+                </span>
+                <h3 className="text-xl sm:text-2xl font-black uppercase font-serif tracking-tight text-white mb-2">
+                  Retro Crossovers & Multi-Sport Genesis Hacks
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed font-sans mb-3">
+                  The Genesis 16-bit engine has been modded into unexpected masterpieces by passionate modders: from Michael Jordan dunking on frozen ponds in NBA On Ice to Street Fighter Hadouken slapshots and the 32-team IIHF World Championship.
+                </p>
+                <div className="flex items-center gap-2 font-mono text-[11px] text-purple-300">
+                  <span>★ Featuring Michael Jordan, Sonic, Street Fighter, Mortal Kombat, and Mario</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Misc ROMs Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredMiscRoms.map((rom) => (
+                <div
+                  key={rom.id}
+                  className="border-2 border-black bg-white p-4 shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col justify-between hover:translate-y-[-1px] transition-transform"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <span className="bg-purple-100 text-purple-900 border border-purple-300 font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded">
+                        {rom.category}
+                      </span>
+                      <span className="font-mono text-xs text-slate-400 font-bold">
+                        {rom.releaseYear}
+                      </span>
+                    </div>
+
+                    <h4 className="font-serif text-base font-black uppercase text-black leading-snug mb-1">
+                      {rom.title}
+                    </h4>
+
+                    <div className="text-[11px] font-mono text-slate-500 mb-2">
+                      Platform: <span className="text-slate-800 font-bold">{rom.platform}</span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 font-sans leading-relaxed mb-3">
+                      {rom.description}
+                    </p>
+
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {rom.tags.map((tag, i) => (
+                        <span key={i} className="bg-slate-100 text-slate-700 text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-200">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200 flex items-center justify-between gap-2">
+                    <div className="text-[10px] font-mono text-slate-500 truncate">
+                      Author: <span className="font-bold text-slate-700">{rom.author}</span>
+                    </div>
+
+                    <button
+                      onClick={() => handleDownload(rom.fileName, rom.title)}
+                      className="px-3 py-1.5 bg-purple-900 hover:bg-black text-white font-mono text-xs font-bold uppercase transition-colors flex items-center gap-1.5 rounded cursor-pointer shrink-0"
+                    >
+                      <Download className="w-3 h-3" /> Download Mod
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-black/10">
-                <a
-                  href={`/api/download-rom?id=${rom.id}`}
-                  className="flex-1 text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2 transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" /> Download ROM
-                </a>
-                <Link
-                  href="/setup-guide?tab=netplay"
-                  className="px-3 py-2 border border-black font-mono text-xs font-bold uppercase hover:bg-neutral-100 transition-colors"
-                  title="Netplay Connection Guide"
-                >
-                  Setup &rarr;
-                </Link>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </div>
+          </section>
+        )}
 
-      {/* Utilities & Broadcast Assets */}
-      <div className="mb-8">
-        <div className="border-b-2 border-black pb-2 mb-4">
-          <h2 className="font-black text-xl uppercase tracking-tight flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-amber-700" /> Utility Kits, Overlays & Sound Packs
-          </h2>
-        </div>
+        {/* ===================================================================== */}
+        {/* AREA 4: UTILITIES, EMULATORS & BROADCAST MEDIA                        */}
+        {/* ===================================================================== */}
+        {(activeSection === 'all' || activeSection === 'utilities') && (
+          <section id="utilities" className="mb-14 scroll-mt-6">
+            <div className="border-b-4 border-black pb-3 mb-6">
+              <div className="flex items-center gap-2 text-xs font-mono font-black uppercase text-amber-800 tracking-wider mb-1">
+                <span>🛠️ Competitive Tooling</span>
+                <span>•</span>
+                <span>Turnkey Packages</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black font-serif flex items-center gap-2">
+                <Wrench className="w-6 h-6 text-amber-700" /> Utility Kits, Overlays & Tools
+              </h2>
+              <p className="text-xs text-slate-600 font-sans mt-0.5">
+                Pre-configured Genesis Plus GX packages, stream scorebugs, arena organ synthesizers, and ROM editor suites.
+              </p>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {UTILITY_PACKS.map((pack, idx) => (
-            <div key={idx} className="border-2 border-black p-4 bg-white shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-mono font-black text-amber-800 uppercase mb-1">
-                  <FileArchive className="w-4 h-4" /> {pack.size}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {UTILITY_PACKS_DATA.map((pack) => (
+                <div key={pack.id} className="border-2 border-black p-4 bg-white shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-mono font-black text-amber-800 uppercase mb-2">
+                      <span className="flex items-center gap-1">
+                        <FileArchive className="w-3.5 h-3.5 text-amber-700" /> {pack.category}
+                      </span>
+                      <span className="text-slate-500 text-[10px]">{pack.fileSize}</span>
+                    </div>
+
+                    <h3 className="font-serif font-black text-sm uppercase mb-2 leading-snug text-black">
+                      {pack.title}
+                    </h3>
+                    <p className="font-sans text-xs text-slate-700 leading-relaxed mb-4">
+                      {pack.desc}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleDownload(pack.fileName, pack.title)}
+                    className="w-full text-center border border-black bg-white hover:bg-black hover:text-white font-mono text-xs font-bold uppercase py-2 transition-colors rounded-xs cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Package
+                  </button>
                 </div>
-                <h3 className="font-black text-sm uppercase mb-1.5">{pack.title}</h3>
-                <p className="font-sans text-xs text-slate-700 leading-relaxed mb-3">
-                  {pack.desc}
-                </p>
-              </div>
-              <a
-                href="#"
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert(`Downloading ${pack.fileName}... Check Discord #resources channel for direct mirror.`);
-                }}
-                className="block text-center border border-black font-mono text-xs font-bold uppercase py-1.5 hover:bg-black hover:text-white transition-colors"
-              >
-                Download Package &darr;
-              </a>
+              ))}
             </div>
-          ))}
+          </section>
+        )}
+
+        {/* ===================================================================== */}
+        {/* 5. COMMUNITY ROM SUBMISSION CALLOUT                                    */}
+        {/* ===================================================================== */}
+        <div className="border-3 border-black bg-neutral-900 text-white p-6 sm:p-8 rounded shadow-[5px_5px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="max-w-2xl">
+            <span className="bg-amber-400 text-black font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded tracking-widest inline-block mb-1.5">
+              Have a Modded ROM to Share?
+            </span>
+            <h3 className="text-xl sm:text-2xl font-black uppercase font-serif tracking-tight text-white mb-2">
+              Contribute To The NHL95 ROM Vault
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300 font-sans leading-relaxed">
+              Are you a ROM hacker or historian who has built an unlisted season, international tournament, or retro sports mashup? Join our Discord server to submit your `.bin` build, changelogs, and custom team center ice banners to be cataloged in the repository.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
+            <a
+              href="https://discord.gg/nhl95"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-black uppercase px-5 py-3 rounded transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <Users className="w-4 h-4" /> Submit ROM on Discord &rarr;
+            </a>
+            <Link
+              href="/setup-guide"
+              className="border border-white/40 hover:bg-white/10 text-white font-mono text-xs font-bold uppercase px-4 py-3 rounded transition-colors text-center"
+            >
+              Setup Guide
+            </Link>
+          </div>
         </div>
+
       </div>
+
     </div>
   );
 }
