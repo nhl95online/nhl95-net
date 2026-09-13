@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Trophy, ChevronDown, CheckCircle2, X, ZoomIn, ZoomOut, RotateCcw, Info, Sparkles, Flame, Award,
-  Activity, Clock, Shield, ChevronRight, ExternalLink
+  Activity, Clock, Shield, ChevronRight
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getTeamBannerUrls } from '../standings/page';
@@ -161,7 +161,6 @@ export const getSeriesDetails = (match: PlayoffMatch | null | undefined) => {
   };
 };
 
-// Parse OT status from game metadata or game results
 const getGameOTStatus = (game?: SeriesGameResult): { isOT: boolean; label: string } => {
   if (!game) return { isOT: false, label: '' };
   let isOT = false;
@@ -175,7 +174,7 @@ const getGameOTStatus = (game?: SeriesGameResult): { isOT: boolean; label: strin
         label = meta?.ot_period > 1 ? `${meta.ot_period}OT` : 'OT';
       }
     } catch (e) {
-      // ignore parse err
+      // ignore
     }
   }
 
@@ -203,7 +202,6 @@ const getGameOTStatus = (game?: SeriesGameResult): { isOT: boolean; label: strin
 interface ModernMatchupCardProps {
   match?: PlayoffMatch;
   label: string;
-  roundName?: string;
   conference?: 'east' | 'west' | 'finals';
   onSelect?: (match: PlayoffMatch, label: string) => void;
   isChampionship?: boolean;
@@ -223,9 +221,6 @@ const ModernMatchupCard = ({
   const homeName = match?.home_team?.team_name || "TBD";
   const awayName = match?.away_team?.team_name || "TBD";
 
-  const homeAbbr = match?.home_team?.abbreviation || (match?.home_team ? "HOM" : "TBD");
-  const awayAbbr = match?.away_team?.abbreviation || (match?.away_team ? "AWY" : "TBD");
-
   const homeBanner = match?.home_team?.banner_url;
   const awayBanner = match?.away_team?.banner_url;
 
@@ -241,14 +236,12 @@ const ModernMatchupCard = ({
   const isHomeSeriesWinner = series.isComplete && series.winner === 'home';
   const isAwaySeriesWinner = series.isComplete && series.winner === 'away';
 
-  // Seed badge colors matching NHL conference color themes
   const seedBgColor = conference === 'west' 
     ? 'bg-[#1e3a8a] text-white' 
     : conference === 'east' 
       ? 'bg-[#831843] text-white'
       : 'bg-neutral-900 text-amber-300';
 
-  // Soft conference row backgrounds (pastel Wikipedia style)
   const homeRowBg = isHomeSeriesWinner
     ? (conference === 'west' ? 'bg-[#dbeafe]' : conference === 'east' ? 'bg-[#ffe4e6]' : 'bg-amber-100')
     : (conference === 'west' ? 'bg-[#f0f7ff]' : conference === 'east' ? 'bg-[#fff5f5]' : 'bg-white');
@@ -260,54 +253,50 @@ const ModernMatchupCard = ({
   return (
     <div 
       onClick={() => onSelect && onSelect(match, label)}
-      className={`group relative select-none w-[320px] rounded-xs border transition-all cursor-pointer shadow-xs hover:shadow-md ${
+      className={`group select-none w-[310px] h-[72px] rounded-xs border transition-all cursor-pointer shadow-xs hover:shadow-md ${
         isChampionship
           ? 'border-amber-600 bg-amber-50/40 ring-1 ring-amber-500/50'
           : 'border-neutral-900 bg-white hover:border-black'
       }`}
     >
-      {/* Table-based Wikipedia NHL playoff series card */}
-      <table className="w-full text-left border-collapse table-fixed">
+      <table className="w-full h-full text-left border-collapse table-fixed">
         <thead>
-          <tr className="bg-neutral-100/90 border-b border-neutral-300 text-[9px] font-sans font-semibold text-neutral-500">
-            <th className="w-[32px] p-0 text-center font-mono">#</th>
+          <tr className="h-[18px] bg-neutral-100 border-b border-neutral-300 text-[9px] font-sans font-semibold text-neutral-500">
+            <th className="w-[28px] p-0 text-center font-mono">#</th>
             <th className="p-0 pl-1.5 truncate">Team</th>
             {Array.from({ length: maxDisplayGames }).map((_, i) => (
               <th key={`hdr-g-${i}`} className="w-[18px] p-0 text-center border-l border-neutral-300 font-mono">
                 {i + 1}
               </th>
             ))}
-            <th className="w-[28px] p-0 text-center border-l-2 border-neutral-900 font-mono font-bold text-neutral-900">
+            <th className="w-[26px] p-0 text-center border-l-2 border-neutral-900 font-mono font-bold text-neutral-900">
               W
             </th>
           </tr>
         </thead>
         <tbody>
-          {/* 1. TOP / HOME TEAM ROW */}
-          <tr className={`border-b border-neutral-300 ${homeRowBg} transition-colors`}>
-            {/* Seed badge */}
+          {/* Top / Home Team */}
+          <tr className={`h-[27px] border-b border-neutral-300 ${homeRowBg} transition-colors`}>
             <td className={`p-0 text-center font-mono font-bold text-[10px] ${seedBgColor}`}>
               {homeSeed || '—'}
             </td>
 
-            {/* Team Logo & Name */}
-            <td className="py-1 px-1.5 min-w-0">
+            <td className="p-0 px-1.5 min-w-0">
               <div className="flex items-center gap-1.5 overflow-hidden">
                 {homeBanner && !homeImgFailed ? (
                   <img
                     src={homeBanner}
                     alt={homeName}
-                    className="h-4 max-w-[42px] w-auto object-contain shrink-0"
+                    className="h-3.5 max-w-[38px] w-auto object-contain shrink-0"
                     onError={() => setHomeImgFailed(true)}
                   />
                 ) : null}
-                <span className={`text-[11px] truncate font-sans ${isHomeSeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
+                <span className={`text-[11px] truncate font-sans leading-none ${isHomeSeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
                   {homeName}
                 </span>
               </div>
             </td>
 
-            {/* Game-by-Game Score Cells */}
             {Array.from({ length: maxDisplayGames }).map((_, idx) => {
               const gameResult = games.find(g => g.game_number === idx + 1);
               if (!gameResult) {
@@ -326,11 +315,11 @@ const ModernMatchupCard = ({
 
               return (
                 <td key={`h-cell-${idx}`} className="p-0 text-center border-l border-neutral-300 font-mono text-[11px] leading-tight">
-                  <span className={wonGame ? 'font-extrabold text-black' : 'font-normal text-neutral-600'}>
+                  <span className={wonGame ? 'font-black text-black' : 'font-normal text-neutral-600'}>
                     {hasScore ? topScore : ''}
                   </span>
                   {ot.isOT && (
-                    <div className="text-[6.5px] font-bold text-red-600 -mt-1 leading-none">
+                    <div className="text-[6px] font-bold text-red-600 leading-none">
                       {ot.label}
                     </div>
                   )}
@@ -338,7 +327,6 @@ const ModernMatchupCard = ({
               );
             })}
 
-            {/* Series Score (Wins) */}
             <td className={`p-0 text-center border-l-2 border-neutral-900 font-mono font-black text-xs ${
               isHomeSeriesWinner ? 'bg-neutral-950 text-white' : 'text-neutral-900'
             }`}>
@@ -346,31 +334,28 @@ const ModernMatchupCard = ({
             </td>
           </tr>
 
-          {/* 2. BOTTOM / AWAY TEAM ROW */}
-          <tr className={`${awayRowBg} transition-colors`}>
-            {/* Seed badge */}
+          {/* Bottom / Away Team */}
+          <tr className={`h-[27px] ${awayRowBg} transition-colors`}>
             <td className={`p-0 text-center font-mono font-bold text-[10px] ${seedBgColor}`}>
               {awaySeed || '—'}
             </td>
 
-            {/* Team Logo & Name */}
-            <td className="py-1 px-1.5 min-w-0">
+            <td className="p-0 px-1.5 min-w-0">
               <div className="flex items-center gap-1.5 overflow-hidden">
                 {awayBanner && !awayImgFailed ? (
                   <img
                     src={awayBanner}
                     alt={awayName}
-                    className="h-4 max-w-[42px] w-auto object-contain shrink-0"
+                    className="h-3.5 max-w-[38px] w-auto object-contain shrink-0"
                     onError={() => setAwayImgFailed(true)}
                   />
                 ) : null}
-                <span className={`text-[11px] truncate font-sans ${isAwaySeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
+                <span className={`text-[11px] truncate font-sans leading-none ${isAwaySeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
                   {awayName}
                 </span>
               </div>
             </td>
 
-            {/* Game-by-Game Score Cells */}
             {Array.from({ length: maxDisplayGames }).map((_, idx) => {
               const gameResult = games.find(g => g.game_number === idx + 1);
               if (!gameResult) {
@@ -389,11 +374,11 @@ const ModernMatchupCard = ({
 
               return (
                 <td key={`a-cell-${idx}`} className="p-0 text-center border-l border-neutral-300 font-mono text-[11px] leading-tight">
-                  <span className={wonGame ? 'font-extrabold text-black' : 'font-normal text-neutral-600'}>
+                  <span className={wonGame ? 'font-black text-black' : 'font-normal text-neutral-600'}>
                     {hasScore ? botScore : ''}
                   </span>
                   {ot.isOT && (
-                    <div className="text-[6.5px] font-bold text-red-600 -mt-1 leading-none">
+                    <div className="text-[6px] font-bold text-red-600 leading-none">
                       {ot.label}
                     </div>
                   )}
@@ -401,7 +386,6 @@ const ModernMatchupCard = ({
               );
             })}
 
-            {/* Series Score (Wins) */}
             <td className={`p-0 text-center border-l-2 border-neutral-900 font-mono font-black text-xs ${
               isAwaySeriesWinner ? 'bg-neutral-950 text-white' : 'text-neutral-900'
             }`}>
@@ -415,22 +399,44 @@ const ModernMatchupCard = ({
 };
 
 // ==========================================
-// 3. VECTOR CONNECTOR LINES (BRACKET FORK)
+// 3. PIXEL-PERFECT BRACKET CONNECTOR LINES
 // ==========================================
 
-const BracketFork = () => (
-  <div className="w-8 sm:w-12 h-full flex items-center justify-center shrink-0">
-    <svg className="w-full h-full min-h-[140px]" viewBox="0 0 40 100" preserveAspectRatio="none">
-      <path d="M 0 25 H 20 V 75 H 0" fill="none" stroke="#1e293b" strokeWidth="1.5" />
-      <path d="M 20 50 H 40" fill="none" stroke="#1e293b" strokeWidth="1.5" />
+// Connects 2 cards (height 72px each with gap 16px) into 1 card in next round
+const ForkQFtoSF = () => (
+  <div className="w-[40px] h-[160px] flex items-center justify-center shrink-0">
+    <svg width="40" height="160" viewBox="0 0 40 160" fill="none" stroke="#0f172a" strokeWidth="2">
+      <path d="M 0 36 H 20 V 124 H 0" />
+      <path d="M 20 80 H 40" />
     </svg>
   </div>
 );
 
-const BracketStraight = () => (
-  <div className="w-8 sm:w-12 h-full flex items-center justify-center shrink-0">
-    <svg className="w-full h-full min-h-[70px]" viewBox="0 0 40 100" preserveAspectRatio="none">
-      <path d="M 0 50 H 40" fill="none" stroke="#1e293b" strokeWidth="1.5" />
+// Connects 2 Semifinals (height 160px blocks with gap 32px) into 1 Conference Final
+const ForkSFtoCF = () => (
+  <div className="w-[40px] h-[352px] flex items-center justify-center shrink-0">
+    <svg width="40" height="352" viewBox="0 0 40 352" fill="none" stroke="#0f172a" strokeWidth="2">
+      <path d="M 0 80 H 20 V 272 H 0" />
+      <path d="M 20 176 H 40" />
+    </svg>
+  </div>
+);
+
+// Connects 2 Conference Finals (height 352px blocks with gap 48px) into Finals
+const ForkCFtoFinals = () => (
+  <div className="w-[60px] h-[752px] flex items-center justify-center shrink-0">
+    <svg width="60" height="752" viewBox="0 0 60 752" fill="none" stroke="#0f172a" strokeWidth="2">
+      <path d="M 0 176 H 30 V 576 H 0" />
+      <path d="M 30 376 H 60" />
+    </svg>
+  </div>
+);
+
+// Straight connector for byes
+const StraightLead = ({ width = 40, height = 72 }: { width?: number; height?: number }) => (
+  <div style={{ width: `${width}px`, height: `${height}px` }} className="flex items-center justify-center shrink-0">
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} fill="none" stroke="#0f172a" strokeWidth="2">
+      <path d={`M 0 ${height / 2} H ${width}`} />
     </svg>
   </div>
 );
@@ -717,7 +723,7 @@ const SeriesModal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white border border-neutral-300 rounded-lg shadow-2xl overflow-hidden font-sans">
         
-        {/* Modern Modal Header */}
+        {/* Modal Header */}
         <div className="bg-slate-900 text-white p-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <Trophy className="w-5 h-5 text-amber-400" />
@@ -828,7 +834,7 @@ const SeriesModal = ({
           })}
         </div>
 
-        {/* Modal Scrollable Body */}
+        {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 bg-white">
           {activeView === 'overview' && (
             <div className="space-y-4">
@@ -1059,7 +1065,6 @@ const SeriesModal = ({
 
                   {activeTab === 'skaters' && (
                     <div className="space-y-4">
-                      {/* Away Skaters */}
                       <div>
                         <h5 className="font-bold text-xs uppercase text-slate-700 mb-1">{away?.team_name} Skaters</h5>
                         <table className="w-full text-xs font-mono text-center">
@@ -1092,7 +1097,6 @@ const SeriesModal = ({
                         </table>
                       </div>
 
-                      {/* Home Skaters */}
                       <div>
                         <h5 className="font-bold text-xs uppercase text-slate-700 mb-1">{home?.team_name} Skaters</h5>
                         <table className="w-full text-xs font-mono text-center">
@@ -1270,7 +1274,6 @@ export default function PlayoffBracket() {
   const [selectedSeries, setSelectedSeries] = useState<{ match: PlayoffMatch; label: string } | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
 
-  // Fetch available seasons/leagues with playoff entries
   useEffect(() => {
     const fetchSeasons = async () => {
       const { data, error } = await supabase
@@ -1316,7 +1319,6 @@ export default function PlayoffBracket() {
     fetchSeasons();
   }, []);
 
-  // Fetch matches when selected season changes
   useEffect(() => {
     if (selectedLeagueId) {
       fetchPlayoffs(selectedLeagueId);
@@ -1424,29 +1426,23 @@ export default function PlayoffBracket() {
     }
   };
 
-  // Resilient match lookup helper
   const normalizeLabel = (str?: string | null) =>
     (str || '').replace(/[\s\-_]+/g, '').toLowerCase();
 
   const getMatch = (searchLabel: string): PlayoffMatch => {
     const targetNorm = normalizeLabel(searchLabel);
-    
-    // 1. Check match_label exact match
     const byLabel = matches.find(m => normalizeLabel(m.match_label) === targetNorm);
     if (byLabel) return byLabel;
 
-    // 2. Check round_name match (especially for 'Finals')
     const byRound = matches.find(m => normalizeLabel(m.round_name) === targetNorm);
     if (byRound) return byRound;
 
-    // 3. Check partial label matching
     const byPartial = matches.find(m => normalizeLabel(m.match_label).includes(targetNorm) || targetNorm.includes(normalizeLabel(m.match_label)));
     if (byPartial) return byPartial;
 
     return { match_label: searchLabel, results: [] };
   };
 
-  // Helper for 6-team, 12-team, 16-team format detection
   const matchCount = matches.length;
   const playoffFormat = useMemo<'6-team' | '12-team' | '16-team'>(() => {
     if (matchCount <= 6 && matchCount > 0) return '6-team';
@@ -1454,7 +1450,6 @@ export default function PlayoffBracket() {
     return '16-team';
   }, [matchCount]);
 
-  // Champion calculation
   const getChampionDetails = () => {
     const finalsMatch = matches.find(m => normalizeLabel(m.round_name) === 'finals') || getMatch('Finals');
     if (!finalsMatch || !finalsMatch.results || finalsMatch.results.length === 0) return null;
@@ -1479,7 +1474,6 @@ export default function PlayoffBracket() {
     return null;
   };
 
-  // Cup Title & Trophy Metadata
   const getCupMetadata = () => {
     const currentLeague = seasons.find(s => String(s.league_id) === String(selectedLeagueId));
     const databaseLeagueName = currentLeague?.league_name || "";
@@ -1517,13 +1511,9 @@ export default function PlayoffBracket() {
   return (
     <div className="min-h-screen w-full bg-[#f8fafc] text-slate-900 font-sans pb-16">
       
-      {/* ==========================================
-          1. MODERN CLEAN MASTHEAD & CONTROLS
-      ========================================== */}
+      {/* Masthead Header */}
       <header className="bg-white border-b border-slate-200 py-6 mb-6">
         <div className="max-w-[1500px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-          
-          {/* Main Title & Subtitle */}
           <div className="text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
               <Shield className="w-5 h-5 text-blue-700" />
@@ -1539,7 +1529,6 @@ export default function PlayoffBracket() {
             </p>
           </div>
 
-          {/* Controls Bar: League Selector & Zoom */}
           <div className="flex items-center gap-3 flex-wrap justify-center">
             {seasons.length > 0 && (
               <div className="flex items-center gap-2">
@@ -1561,7 +1550,6 @@ export default function PlayoffBracket() {
               </div>
             )}
 
-            {/* Zoom Controls */}
             <div className="flex items-center border border-slate-300 rounded bg-white shadow-xs text-xs font-mono">
               <button
                 onClick={() => setZoomLevel(prev => Math.max(60, prev - 10))}
@@ -1589,7 +1577,6 @@ export default function PlayoffBracket() {
               </button>
             </div>
           </div>
-
         </div>
       </header>
 
@@ -1597,126 +1584,129 @@ export default function PlayoffBracket() {
       <div className="w-full overflow-x-auto pb-10 px-4 scrollbar-thin">
         <div 
           style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-          className="min-w-[1360px] max-w-[1520px] mx-auto transition-transform duration-200"
+          className="w-[1420px] mx-auto transition-transform duration-200"
         >
 
           {/* ========================================================= */}
           {/* FORMAT A: 16-TEAM BRACKET (4 ROUNDS, 15 SERIES)           */}
           {/* ========================================================= */}
           {playoffFormat === '16-team' && (
-            <div className="space-y-4">
-              
-              {/* Column Header Titles (Wikipedia Style) */}
-              <div className="grid grid-cols-4 gap-4 px-2 text-center">
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
+            <div>
+              {/* Perfectly Aligned Column Header Bar */}
+              <div className="flex items-center mb-6 font-sans font-bold text-xs text-slate-800">
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
                   Conference Quarterfinals
                 </div>
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
+                <div className="w-[40px]" />
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
                   Conference Semifinals
                 </div>
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
+                <div className="w-[40px]" />
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
                   Conference Finals
                 </div>
-                <div className="bg-amber-100 border border-amber-300 py-1.5 rounded font-sans font-bold text-xs text-amber-900 shadow-xs">
+                <div className="w-[60px]" />
+                <div className="w-[310px] text-center bg-amber-100 border border-amber-300 py-2 rounded text-amber-950 shadow-xs">
                   {cupMeta.title} Finals
                 </div>
               </div>
 
-              {/* Tournament Tree Grid */}
-              <div className="grid grid-cols-4 gap-0 items-center bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
+              {/* Tournament Tree Wrapper */}
+              <div className="flex items-center bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
                 
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 1: QUARTERFINALS (8 Matches: 4 East, 4 West)          */}
-                {/* ------------------------------------------------------------- */}
-                <div className="flex flex-col space-y-6">
-                  {/* Eastern Conference Top Half */}
-                  <div className="space-y-4">
-                    {/* Pair 1: QF 1 & QF 2 */}
-                    <div className="space-y-2">
-                      <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} />
-                      <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} />
-                    </div>
-                    {/* Pair 2: QF 3 & QF 4 */}
-                    <div className="space-y-2">
-                      <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} />
-                      <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} />
-                    </div>
-                  </div>
+                {/* BOTH CONFERENCES (East top, West bottom) */}
+                <div className="flex flex-col gap-[48px]">
 
-                  {/* Western Conference Bottom Half */}
-                  <div className="space-y-4 pt-6 border-t border-slate-200">
-                    {/* Pair 3: QF 5 & QF 6 */}
-                    <div className="space-y-2">
-                      <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} />
-                      <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} />
-                    </div>
-                    {/* Pair 4: QF 7 & QF 8 */}
-                    <div className="space-y-2">
-                      <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} />
-                      <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 2: SEMIFINALS (4 Matches: 2 East, 2 West) + Connectors */}
-                {/* ------------------------------------------------------------- */}
-                <div className="flex flex-col h-full justify-between py-2">
-                  {/* Top Half: East Semifinals */}
-                  <div className="flex flex-col justify-around h-[360px]">
-                    <div className="flex items-center">
-                      <BracketStraight />
-                      <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
-                    </div>
-
-                    {/* Eastern Conference Badge */}
-                    <div className="flex items-center justify-center my-2">
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-[#831843] text-white rounded shadow-xs text-[11px] font-bold uppercase tracking-wider">
-                        <Shield className="w-3.5 h-3.5 text-rose-300" />
-                        <span>EASTERN CONFERENCE</span>
+                  {/* ==================== EASTERN CONFERENCE ==================== */}
+                  <div className="flex items-center h-[352px]">
+                    <div className="flex flex-col gap-[32px]">
+                      
+                      {/* Pair 1: QF 1 & QF 2 -> SF 1 */}
+                      <div className="flex items-center h-[160px]">
+                        <div className="flex flex-col gap-[16px]">
+                          <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} />
+                          <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} />
+                        </div>
+                        <ForkQFtoSF />
+                        <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
                       </div>
-                    </div>
 
-                    <div className="flex items-center">
-                      <BracketStraight />
-                      <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} />
-                    </div>
-                  </div>
-
-                  {/* Bottom Half: West Semifinals */}
-                  <div className="flex flex-col justify-around h-[360px] pt-6 border-t border-slate-200">
-                    <div className="flex items-center">
-                      <BracketStraight />
-                      <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
-                    </div>
-
-                    {/* Western Conference Badge */}
-                    <div className="flex items-center justify-center my-2">
-                      <div className="flex items-center gap-1.5 px-3 py-1 bg-[#1e3a8a] text-white rounded shadow-xs text-[11px] font-bold uppercase tracking-wider">
-                        <Shield className="w-3.5 h-3.5 text-blue-300" />
-                        <span>WESTERN CONFERENCE</span>
+                      {/* Eastern Conference Badge in the gap */}
+                      <div className="absolute left-[350px] -mt-2">
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-[#831843] text-white rounded shadow-xs text-[11px] font-bold uppercase tracking-wider">
+                          <Shield className="w-3.5 h-3.5 text-rose-300" />
+                          <span>EASTERN CONFERENCE</span>
+                        </div>
                       </div>
+
+                      {/* Pair 2: QF 3 & QF 4 -> SF 2 */}
+                      <div className="flex items-center h-[160px]">
+                        <div className="flex flex-col gap-[16px]">
+                          <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} />
+                          <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} />
+                        </div>
+                        <ForkQFtoSF />
+                        <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} />
+                      </div>
+
                     </div>
 
-                    <div className="flex items-center">
-                      <BracketStraight />
-                      <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} />
-                    </div>
-                  </div>
-                </div>
+                    {/* Fork from SF 1 & SF 2 into CF 1 */}
+                    <ForkSFtoCF />
 
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 3: CONFERENCE FINALS (2 Matches)                      */}
-                {/* ------------------------------------------------------------- */}
-                <div className="flex flex-col h-full justify-between py-6">
-                  {/* East Conference Final */}
-                  <div className="flex items-center h-[340px]">
-                    <BracketStraight />
+                    {/* Conference Final 1 */}
                     <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
                   </div>
 
-                  {/* Center Stanley Cup / Brule Cup Trophy Showcase */}
-                  <div className="flex flex-col items-center justify-center py-4 my-2 text-center">
+                  {/* ==================== WESTERN CONFERENCE ==================== */}
+                  <div className="flex items-center h-[352px]">
+                    <div className="flex flex-col gap-[32px]">
+                      
+                      {/* Pair 3: QF 5 & QF 6 -> SF 3 */}
+                      <div className="flex items-center h-[160px]">
+                        <div className="flex flex-col gap-[16px]">
+                          <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} />
+                          <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} />
+                        </div>
+                        <ForkQFtoSF />
+                        <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
+                      </div>
+
+                      {/* Western Conference Badge in the gap */}
+                      <div className="absolute left-[350px] -mt-2">
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-[#1e3a8a] text-white rounded shadow-xs text-[11px] font-bold uppercase tracking-wider">
+                          <Shield className="w-3.5 h-3.5 text-blue-300" />
+                          <span>WESTERN CONFERENCE</span>
+                        </div>
+                      </div>
+
+                      {/* Pair 4: QF 7 & QF 8 -> SF 4 */}
+                      <div className="flex items-center h-[160px]">
+                        <div className="flex flex-col gap-[16px]">
+                          <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} />
+                          <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} />
+                        </div>
+                        <ForkQFtoSF />
+                        <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} />
+                      </div>
+
+                    </div>
+
+                    {/* Fork from SF 3 & SF 4 into CF 2 */}
+                    <ForkSFtoCF />
+
+                    {/* Conference Final 2 */}
+                    <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
+                  </div>
+
+                </div>
+
+                {/* Fork from CF 1 & CF 2 into FINALS */}
+                <div className="relative flex items-center justify-center">
+                  <ForkCFtoFinals />
+
+                  {/* Centered Cup Trophy Showcase Emblem */}
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center text-center pointer-events-auto z-10 w-[140px]">
                     {cupMeta.trophyUrl && (
                       <img
                         src={cupMeta.trophyUrl}
@@ -1724,39 +1714,28 @@ export default function PlayoffBracket() {
                         className="h-20 w-auto object-contain filter drop-shadow-md mb-1.5"
                       />
                     )}
-                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs">
+                    <div className="bg-slate-900 text-amber-300 px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-widest shadow-xs whitespace-nowrap">
                       ★ {cupMeta.title} ★
                     </div>
                     {championData && (
-                      <div className="mt-2 bg-amber-50 border border-amber-300 rounded p-1.5 shadow-xs max-w-[180px]">
+                      <div className="mt-2 bg-amber-50 border border-amber-300 rounded p-1.5 shadow-xs w-full">
                         <div className="text-[9px] font-bold text-amber-800 uppercase">CHAMPION</div>
                         <div className="text-xs font-bold text-slate-900 truncate">{championData.team?.team_name}</div>
                         <div className="text-[10px] text-emerald-700 font-mono font-bold">Won {championData.score}</div>
                       </div>
                     )}
                   </div>
-
-                  {/* West Conference Final */}
-                  <div className="flex items-center h-[340px]">
-                    <BracketStraight />
-                    <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
-                  </div>
                 </div>
 
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 4: CHAMPIONSHIP FINALS (1 Match)                      */}
-                {/* ------------------------------------------------------------- */}
-                <div className="flex flex-col justify-center items-center h-full pl-2">
-                  <div className="flex items-center">
-                    <BracketStraight />
-                    <ModernMatchupCard
-                      match={getMatch('Finals')}
-                      label="CHAMPIONSHIP FINALS"
-                      conference="finals"
-                      isChampionship={true}
-                      onSelect={handleCardSelect}
-                    />
-                  </div>
+                {/* CHAMPIONSHIP FINALS CARD */}
+                <div className="flex items-center justify-center">
+                  <ModernMatchupCard
+                    match={getMatch('Finals')}
+                    label="CHAMPIONSHIP FINALS"
+                    conference="finals"
+                    isChampionship={true}
+                    onSelect={handleCardSelect}
+                  />
                 </div>
 
               </div>
@@ -1767,144 +1746,151 @@ export default function PlayoffBracket() {
           {/* FORMAT B: 6-TEAM BRACKET (3 ROUNDS, e.g. Q01)              */}
           {/* ========================================================= */}
           {playoffFormat === '6-team' && (
-            <div className="space-y-4 max-w-[1240px] mx-auto">
-              {/* Header Columns */}
-              <div className="grid grid-cols-3 gap-4 px-2 text-center">
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
+            <div className="max-w-[1100px] mx-auto">
+              <div className="flex items-center mb-6 font-sans font-bold text-xs text-slate-800">
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
                   Conference Semifinals
                 </div>
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
+                <div className="w-[40px]" />
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
                   Conference Finals
                 </div>
-                <div className="bg-amber-100 border border-amber-300 py-1.5 rounded font-sans font-bold text-xs text-amber-900 shadow-xs">
+                <div className="w-[60px]" />
+                <div className="w-[310px] text-center bg-amber-100 border border-amber-300 py-2 rounded text-amber-950 shadow-xs">
                   {cupMeta.title} Finals
                 </div>
               </div>
 
-              {/* 3-Column Tree Grid */}
-              <div className="grid grid-cols-3 gap-0 items-center bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
-                
-                {/* Round 1: Semifinals (East #2 vs #3, West #2 vs #3) */}
-                <div className="flex flex-col justify-around h-[480px]">
-                  <div>
-                    <div className="text-xs font-bold text-[#831843] mb-1 uppercase font-mono">EASTERN SEMIFINAL (#2 vs #3)</div>
+              <div className="flex items-center bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
+                {/* East & West Semis -> CF */}
+                <div className="flex flex-col gap-[48px]">
+                  {/* East: SF 1 -> CF 1 */}
+                  <div className="flex items-center h-[160px]">
                     <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
+                    <StraightLead width={40} height={160} />
+                    <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
                   </div>
-                  <div className="pt-6 border-t border-slate-200">
-                    <div className="text-xs font-bold text-[#1e3a8a] mb-1 uppercase font-mono">WESTERN SEMIFINAL (#2 vs #3)</div>
+
+                  {/* West: SF 3 -> CF 2 */}
+                  <div className="flex items-center h-[160px]">
                     <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
+                    <StraightLead width={40} height={160} />
+                    <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
                   </div>
                 </div>
 
-                {/* Round 2: Conference Finals (#1 seed awaits) */}
-                <div className="flex flex-col justify-around h-[480px]">
-                  <div className="flex items-center">
-                    <BracketStraight />
-                    <div>
-                      <div className="text-xs font-bold text-[#831843] mb-1 uppercase font-mono">EASTERN FINAL (#1 Seed Bye)</div>
-                      <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
+                {/* Fork into Finals */}
+                <div className="relative flex items-center justify-center">
+                  <div className="w-[60px] h-[368px] flex items-center justify-center shrink-0">
+                    <svg width="60" height="368" viewBox="0 0 60 368" fill="none" stroke="#0f172a" strokeWidth="2">
+                      <path d="M 0 80 H 30 V 288 H 0" />
+                      <path d="M 30 184 H 60" />
+                    </svg>
+                  </div>
+
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center text-center pointer-events-auto z-10 w-[140px]">
+                    {cupMeta.trophyUrl && (
+                      <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-16 w-auto object-contain filter drop-shadow-md mb-1" />
+                    )}
+                    <div className="bg-slate-900 text-amber-300 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest shadow-xs">
+                      ★ {cupMeta.title} ★
                     </div>
                   </div>
-                  <div className="flex items-center pt-6 border-t border-slate-200">
-                    <BracketStraight />
-                    <div>
-                      <div className="text-xs font-bold text-[#1e3a8a] mb-1 uppercase font-mono">WESTERN FINAL (#1 Seed Bye)</div>
-                      <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
-                    </div>
-                  </div>
                 </div>
 
-                {/* Round 3: Championship Finals */}
-                <div className="flex flex-col justify-center items-center h-[480px] pl-2">
-                  {cupMeta.trophyUrl && (
-                    <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-16 w-auto object-contain filter drop-shadow-md mb-2" />
-                  )}
-                  <div className="flex items-center">
-                    <BracketStraight />
-                    <ModernMatchupCard
-                      match={getMatch('Finals')}
-                      label="CHAMPIONSHIP FINALS"
-                      conference="finals"
-                      isChampionship={true}
-                      onSelect={handleCardSelect}
-                    />
-                  </div>
+                {/* Finals Card */}
+                <div>
+                  <ModernMatchupCard
+                    match={getMatch('Finals')}
+                    label="CHAMPIONSHIP FINALS"
+                    conference="finals"
+                    isChampionship={true}
+                    onSelect={handleCardSelect}
+                  />
                 </div>
-
               </div>
             </div>
           )}
 
           {/* ========================================================= */}
-          {/* FORMAT C: 12-TEAM BRACKET (4 ROUNDS WITH BYES)             */}
+          {/* FORMAT C: 12-TEAM BRACKET                                  */}
           {/* ========================================================= */}
           {playoffFormat === '12-team' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-4 px-2 text-center">
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
-                  First Round (Wild Card)
-                </div>
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
-                  Conference Semifinals
-                </div>
-                <div className="bg-slate-100 border border-slate-300 py-1.5 rounded font-sans font-bold text-xs text-slate-800 shadow-xs">
-                  Conference Finals
-                </div>
-                <div className="bg-amber-100 border border-amber-300 py-1.5 rounded font-sans font-bold text-xs text-amber-900 shadow-xs">
-                  {cupMeta.title} Finals
-                </div>
+            <div>
+              <div className="flex items-center mb-6 font-sans font-bold text-xs text-slate-800">
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">First Round</div>
+                <div className="w-[40px]" />
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">Conference Semifinals</div>
+                <div className="w-[40px]" />
+                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">Conference Finals</div>
+                <div className="w-[60px]" />
+                <div className="w-[310px] text-center bg-amber-100 border border-amber-300 py-2 rounded text-amber-950 shadow-xs">{cupMeta.title} Finals</div>
               </div>
 
-              <div className="grid grid-cols-4 gap-0 items-center bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
-                {/* Round 1: 4 matches */}
-                <div className="flex flex-col justify-around h-[560px]">
-                  <div className="space-y-2">
-                    <ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} />
-                    <ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} />
+              <div className="flex items-center bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
+                <div className="flex flex-col gap-[48px]">
+                  <div className="flex items-center h-[352px]">
+                    <div className="flex flex-col gap-[32px]">
+                      <div className="flex items-center h-[160px]">
+                        <ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} />
+                        <StraightLead width={40} height={160} />
+                        <ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} />
+                      </div>
+                      <div className="flex items-center h-[160px]">
+                        <ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} />
+                        <StraightLead width={40} height={160} />
+                        <ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} />
+                      </div>
+                    </div>
+                    <ForkSFtoCF />
+                    <ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} />
                   </div>
-                  <div className="space-y-2 pt-6 border-t border-slate-200">
-                    <ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} />
-                    <ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} />
+
+                  <div className="flex items-center h-[352px]">
+                    <div className="flex flex-col gap-[32px]">
+                      <div className="flex items-center h-[160px]">
+                        <ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} />
+                        <StraightLead width={40} height={160} />
+                        <ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} />
+                      </div>
+                      <div className="flex items-center h-[160px]">
+                        <ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} />
+                        <StraightLead width={40} height={160} />
+                        <ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} />
+                      </div>
+                    </div>
+                    <ForkSFtoCF />
+                    <ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} />
                   </div>
                 </div>
 
-                {/* Round 2: Semifinals */}
-                <div className="flex flex-col justify-around h-[560px]">
-                  <div className="space-y-2">
-                    <div className="flex items-center"><BracketStraight /><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} /></div>
-                    <div className="flex items-center"><BracketStraight /><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} /></div>
-                  </div>
-                  <div className="space-y-2 pt-6 border-t border-slate-200">
-                    <div className="flex items-center"><BracketStraight /><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} /></div>
-                    <div className="flex items-center"><BracketStraight /><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} /></div>
+                <div className="relative flex items-center justify-center">
+                  <ForkCFtoFinals />
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center text-center pointer-events-auto z-10 w-[140px]">
+                    {cupMeta.trophyUrl && (
+                      <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-20 w-auto object-contain filter drop-shadow-md mb-1.5" />
+                    )}
+                    <div className="bg-slate-900 text-amber-300 px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-widest shadow-xs">
+                      ★ {cupMeta.title} ★
+                    </div>
                   </div>
                 </div>
 
-                {/* Round 3: Conference Finals */}
-                <div className="flex flex-col justify-around h-[560px]">
-                  <div className="flex items-center"><BracketStraight /><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} /></div>
-                  <div className="flex items-center"><BracketStraight /><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} /></div>
-                </div>
-
-                {/* Round 4: Finals */}
-                <div className="flex flex-col justify-center items-center h-[560px] pl-2">
-                  <div className="flex items-center">
-                    <BracketStraight />
-                    <ModernMatchupCard
-                      match={matches[10] || getMatch('Finals')}
-                      label="CHAMPIONSHIP FINALS"
-                      conference="finals"
-                      isChampionship={true}
-                      onSelect={handleCardSelect}
-                    />
-                  </div>
+                <div>
+                  <ModernMatchupCard
+                    match={matches[10] || getMatch('Finals')}
+                    label="CHAMPIONSHIP FINALS"
+                    conference="finals"
+                    isChampionship={true}
+                    onSelect={handleCardSelect}
+                  />
                 </div>
               </div>
             </div>
           )}
 
           {/* Footer Legend Bar */}
-          <div className="mt-4 px-4 py-3 bg-white border border-slate-200 rounded-lg shadow-xs flex flex-wrap items-center justify-between text-xs text-slate-600 gap-3">
+          <div className="mt-6 px-4 py-3 bg-white border border-slate-200 rounded-lg shadow-xs flex flex-wrap items-center justify-between text-xs text-slate-600 gap-3">
             <div className="flex items-center gap-2">
               <Info className="w-4 h-4 text-blue-600" />
               <span>Click on any matchup card to view the complete game-by-game boxscores, skater and goalie stats.</span>
