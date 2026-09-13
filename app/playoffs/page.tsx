@@ -1453,7 +1453,7 @@ export default function PlayoffBracket() {
     setSelectedSeries({ match, label });
   };
 
-  // Row height in pixels for the unified 15-row grid
+  // Row height in pixels for the unified grid
   const ROW_H = 88;
 
   return (
@@ -1461,7 +1461,7 @@ export default function PlayoffBracket() {
       
       {/* Masthead Header */}
       <header className="bg-white border-b border-slate-200 py-6 mb-6">
-        <div className="max-w-[1500px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="max-w-[1600px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
               <Shield className="w-5 h-5 text-blue-700" />
@@ -1532,262 +1532,293 @@ export default function PlayoffBracket() {
       <div className="w-full overflow-x-auto pb-10 px-4 scrollbar-thin">
         <div 
           style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-          className="w-[1370px] mx-auto transition-transform duration-200"
+          className="w-[1600px] mx-auto transition-transform duration-200"
         >
 
           {/* ========================================================= */}
-          {/* FORMAT A: 16-TEAM BRACKET (15-ROW SYSTEM, IMAGE 2 STYLE)   */}
+          {/* FORMAT A: 16-TEAM BRACKET                                  */}
           {/* ========================================================= */}
           {playoffFormat === '16-team' && (
-            <div>
-              {/* Perfectly Aligned Column Headers */}
-              <div className="flex items-center mb-6 font-sans font-bold text-xs text-slate-800">
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
-                  Conference Quarterfinals
-                </div>
-                <div className="w-[40px]" />
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
-                  Conference Semifinals
-                </div>
-                <div className="w-[40px]" />
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
-                  Conference Finals
-                </div>
-                <div className="w-[50px]" />
-                <div className="w-[310px] text-center bg-amber-100 border border-amber-300 py-2 rounded text-amber-950 shadow-xs">
-                  {cupMeta.title} Finals
-                </div>
-              </div>
-
-              {/* 15-Row Unified Tournament Bracket Grid */}
-              <div className="flex bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
-                
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 1: QUARTERFINALS (Rows 0, 2, 4, 6, 8, 10, 12, 14)       */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  {/* Row 0: QF 1 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 1: Space for SF 1 */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 2: QF 2 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 3: Space for East CF */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 4: QF 3 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 5: Space for SF 2 */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 6: QF 4 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 7: Space between Conferences (Trophy Row) */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 8: QF 5 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 9: Space for SF 3 */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 10: QF 6 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 11: Space for West CF */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 12: QF 7 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                  {/* Row 13: Space for SF 4 */}
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 14: QF 8 */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* CONNECTOR 1: QF -> SF (Forks at Rows 0-2, 4-6, 8-10, 12-14)    */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[40px] flex flex-col shrink-0">
-                  {/* Fork 1: QF 1 & QF 2 -> SF 1 (Height = 2 rows = 176px) */}
-                  <div style={{ height: ROW_H * 2 }}>
-                    <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
-                      <path d={`M 20 ${ROW_H} H 40`} />
-                    </svg>
-                  </div>
-                  {/* Gap between Fork 1 and Fork 2 = 2 rows = 176px */}
-                  <div style={{ height: ROW_H * 2 }} />
-                  {/* Fork 2: QF 3 & QF 4 -> SF 2 */}
-                  <div style={{ height: ROW_H * 2 }}>
-                    <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
-                      <path d={`M 20 ${ROW_H} H 40`} />
-                    </svg>
-                  </div>
-                  {/* Gap between Conferences = 2 rows = 176px */}
-                  <div style={{ height: ROW_H * 2 }} />
-                  {/* Fork 3: QF 5 & QF 6 -> SF 3 */}
-                  <div style={{ height: ROW_H * 2 }}>
-                    <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
-                      <path d={`M 20 ${ROW_H} H 40`} />
-                    </svg>
-                  </div>
-                  {/* Gap between Fork 3 and Fork 4 = 2 rows = 176px */}
-                  <div style={{ height: ROW_H * 2 }} />
-                  {/* Fork 4: QF 7 & QF 8 -> SF 4 */}
-                  <div style={{ height: ROW_H * 2 }}>
-                    <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
-                      <path d={`M 20 ${ROW_H} H 40`} />
-                    </svg>
-                  </div>
-                  <div style={{ height: ROW_H }} />
-                </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 2: SEMIFINALS (Rows 1, 5, 9, 13) + Conference Badges   */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 1: Semifinal 1 (Right in the gap between QF 1 & QF 2!) */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 3: Eastern Conference Badge */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-[#831843] text-white rounded shadow-xs text-[11px] font-bold uppercase tracking-wider">
-                      <Shield className="w-3.5 h-3.5 text-rose-300" />
+            <div className="flex bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
+              
+              {/* ------------------------------------------------------------- */}
+              {/* COLUMN 0: VERTICAL CONFERENCE BADGES ON FAR LEFT              */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[36px] flex flex-col shrink-0 mr-3">
+                {/* Eastern Conference Vertical Strip (Rows 0 to 6 = 7 rows) */}
+                <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
+                  <div className="w-[32px] h-[580px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-rose-300 shrink-0" />
                       <span>EASTERN CONFERENCE</span>
                     </div>
                   </div>
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 5: Semifinal 2 (Right in the gap between QF 3 & QF 4!) */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H * 3 }} />
-                  {/* Row 9: Semifinal 3 (Right in the gap between QF 5 & QF 6!) */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 11: Western Conference Badge */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-[#1e3a8a] text-white rounded shadow-xs text-[11px] font-bold uppercase tracking-wider">
-                      <Shield className="w-3.5 h-3.5 text-blue-300" />
+                </div>
+
+                {/* Row 7: Empty Center Gap */}
+                <div style={{ height: ROW_H }} />
+
+                {/* Western Conference Vertical Strip (Rows 8 to 14 = 7 rows) */}
+                <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
+                  <div className="w-[32px] h-[580px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-blue-300 shrink-0" />
                       <span>WESTERN CONFERENCE</span>
                     </div>
                   </div>
-                  <div style={{ height: ROW_H }} />
-                  {/* Row 13: Semifinal 4 (Right in the gap between QF 7 & QF 8!) */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H }} />
                 </div>
+              </div>
 
-                {/* ------------------------------------------------------------- */}
-                {/* CONNECTOR 2: SF -> CF (Forks at Rows 1-5 and 9-13)            */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[40px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} />
-                  {/* Fork from SF 1 (Row 1) & SF 2 (Row 5) -> East CF (Row 3). Height = 4 rows = 352px */}
-                  <div style={{ height: ROW_H * 4 }}>
-                    <svg width="40" height={ROW_H * 4} viewBox={`0 0 40 ${ROW_H * 4}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 3.5} H 0`} />
-                      <path d={`M 20 ${ROW_H * 2} H 40`} />
-                    </svg>
-                  </div>
-                  {/* Gap between Conference Forks = 4 rows = 352px */}
-                  <div style={{ height: ROW_H * 4 }} />
-                  {/* Fork from SF 3 (Row 9) & SF 4 (Row 13) -> West CF (Row 11). Height = 4 rows = 352px */}
-                  <div style={{ height: ROW_H * 4 }}>
-                    <svg width="40" height={ROW_H * 4} viewBox={`0 0 40 ${ROW_H * 4}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 3.5} H 0`} />
-                      <path d={`M 20 ${ROW_H * 2} H 40`} />
-                    </svg>
-                  </div>
-                  <div style={{ height: ROW_H * 2 }} />
+              {/* ------------------------------------------------------------- */}
+              {/* COLUMN 1: QUARTERFINALS (Rows 0, 2, 4, 6, 8, 10, 12, 14)       */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                {/* Row 0: QF 1 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} />
                 </div>
+                {/* Row 1: Space for SF 1 */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 2: QF 2 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} />
+                </div>
+                {/* Row 3: Space for East CF */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 4: QF 3 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} />
+                </div>
+                {/* Row 5: Space for SF 2 */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 6: QF 4 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} />
+                </div>
+                {/* Row 7: Center Spacer */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 8: QF 5 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} />
+                </div>
+                {/* Row 9: Space for SF 3 */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 10: QF 6 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} />
+                </div>
+                {/* Row 11: Space for West CF */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 12: QF 7 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} />
+                </div>
+                {/* Row 13: Space for SF 4 */}
+                <div style={{ height: ROW_H }} />
+                {/* Row 14: QF 8 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} />
+                </div>
+              </div>
 
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 3: CONFERENCE FINALS (Rows 3, 11) + Trophy in Row 7    */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 3 }} />
-                  {/* Row 3: Conference Final 1 (East) */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H * 3 }} />
-                  {/* Row 7: Trophy Showcase Emblem (Centering the bracket!) */}
-                  <div style={{ height: ROW_H }} className="flex flex-col items-center justify-center text-center">
+              {/* ------------------------------------------------------------- */}
+              {/* CONNECTOR 1: QF -> SF (Forks at Rows 0-2, 4-6, 8-10, 12-14)    */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[40px] flex flex-col shrink-0">
+                {/* Fork 1: QF 1 & QF 2 -> SF 1 */}
+                <div style={{ height: ROW_H * 2 }}>
+                  <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
+                    <path d={`M 20 ${ROW_H} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 2 }} />
+                {/* Fork 2: QF 3 & QF 4 -> SF 2 */}
+                <div style={{ height: ROW_H * 2 }}>
+                  <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
+                    <path d={`M 20 ${ROW_H} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 2 }} />
+                {/* Fork 3: QF 5 & QF 6 -> SF 3 */}
+                <div style={{ height: ROW_H * 2 }}>
+                  <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
+                    <path d={`M 20 ${ROW_H} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 2 }} />
+                {/* Fork 4: QF 7 & QF 8 -> SF 4 */}
+                <div style={{ height: ROW_H * 2 }}>
+                  <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
+                    <path d={`M 20 ${ROW_H} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* COLUMN 2: SEMIFINALS (Rows 1, 5, 9, 13)                        */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} />
+                {/* Row 1: Semifinal 1 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+                {/* Row 5: Semifinal 2 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+                {/* Row 9: Semifinal 3 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+                {/* Row 13: Semifinal 4 */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* CONNECTOR 2: SF -> CF (Forks at Rows 1-5 and 9-13)            */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} />
+                {/* Fork from SF 1 (Row 1) & SF 2 (Row 5) -> East CF (Row 3) */}
+                <div style={{ height: ROW_H * 4 }}>
+                  <svg width="40" height={ROW_H * 4} viewBox={`0 0 40 ${ROW_H * 4}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 3.5} H 0`} />
+                    <path d={`M 20 ${ROW_H * 2} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 4 }} />
+                {/* Fork from SF 3 (Row 9) & SF 4 (Row 13) -> West CF (Row 11) */}
+                <div style={{ height: ROW_H * 4 }}>
+                  <svg width="40" height={ROW_H * 4} viewBox={`0 0 40 ${ROW_H * 4}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 3.5} H 0`} />
+                    <path d={`M 20 ${ROW_H * 2} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 2 }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* COLUMN 3: CONFERENCE FINALS (Rows 3, 11)                      */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 3 }} />
+                {/* Row 3: Conference Final 1 (East) */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H * 7 }} />
+                {/* Row 11: Conference Final 2 (West) */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* CONNECTOR 3: CF -> FINALS (Fork from Row 3 to Row 11 into Row 7) */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[50px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 3 }} />
+                <div style={{ height: ROW_H * 8 }}>
+                  <svg width="50" height={ROW_H * 8} viewBox={`0 0 50 ${ROW_H * 8}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 25 V ${ROW_H * 7.5} H 0`} />
+                    <path d={`M 25 ${ROW_H * 4} H 50`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 4 }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* COLUMN 4: CHAMPIONSHIP FINALS (Row 7)                         */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 7 }} />
+                {/* Row 7: Championship Finals */}
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard
+                    match={getMatch('Finals')}
+                    label="CHAMPIONSHIP FINALS"
+                    conference="finals"
+                    isChampionship={true}
+                    onSelect={handleCardSelect}
+                  />
+                </div>
+                <div style={{ height: ROW_H * 7 }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* CONNECTOR 4: FINALS -> TROPHY & WINNER SHOWCASE                */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 7 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <svg width="40" height="2" viewBox="0 0 40 2" fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d="M 0 1 H 40" />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 7 }} />
+              </div>
+
+              {/* ------------------------------------------------------------- */}
+              {/* COLUMN 5: TROPHY & WINNER SHOWCASE (OFF TO THE RIGHT!)        */}
+              {/* ------------------------------------------------------------- */}
+              <div className="w-[230px] flex flex-col shrink-0 pl-2">
+                <div style={{ height: ROW_H * 6 }} />
+                {/* Aligned with Finals (Row 7) */}
+                <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
                     {cupMeta.trophyUrl && (
-                      <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-14 w-auto object-contain filter drop-shadow-md mb-1" />
+                      <img
+                        src={cupMeta.trophyUrl}
+                        alt={cupMeta.title}
+                        className="h-20 w-auto object-contain filter drop-shadow-md mb-2"
+                      />
                     )}
-                    <div className="bg-slate-900 text-amber-300 px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-widest shadow-xs whitespace-nowrap">
+                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs whitespace-nowrap mb-2">
                       ★ {cupMeta.title} ★
                     </div>
-                    {championData && (
-                      <div className="text-[10px] font-bold text-slate-800 mt-0.5">
-                        {championData.team?.abbreviation} ({championData.score})
+                    {championData ? (
+                      <div className="text-center w-full border-t border-amber-200 pt-2 mt-1">
+                        <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block mb-1">
+                          CHAMPION
+                        </span>
+                        {championData.team?.banner_url ? (
+                          <img
+                            src={championData.team.banner_url}
+                            alt={championData.team.team_name}
+                            className="h-6 w-auto max-w-[140px] object-contain mx-auto my-1 filter contrast-110"
+                          />
+                        ) : (
+                          <div className="text-sm font-black text-slate-900 truncate">
+                            {championData.team?.team_name}
+                          </div>
+                        )}
+                        <div className="text-xs text-emerald-700 font-mono font-black mt-1">
+                          Won Series {championData.score}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs font-semibold text-slate-500 mt-1 font-mono">
+                        Awaiting Champion
                       </div>
                     )}
                   </div>
-                  <div style={{ height: ROW_H * 3 }} />
-                  {/* Row 11: Conference Final 2 (West) */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H * 3 }} />
                 </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* CONNECTOR 3: CF -> FINALS (Fork from Row 3 to Row 11 into Row 7) */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[50px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 3 }} />
-                  {/* Fork spans from Row 3 to Row 11 (8 rows = 704px) */}
-                  <div style={{ height: ROW_H * 8 }}>
-                    <svg width="50" height={ROW_H * 8} viewBox={`0 0 50 ${ROW_H * 8}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 25 V ${ROW_H * 7.5} H 0`} />
-                      <path d={`M 25 ${ROW_H * 4} H 50`} />
-                    </svg>
-                  </div>
-                  <div style={{ height: ROW_H * 4 }} />
-                </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* COLUMN 4: CHAMPIONSHIP FINALS (Row 7)                         */}
-                {/* ------------------------------------------------------------- */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 7 }} />
-                  {/* Row 7: Championship Finals */}
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center">
-                    <ModernMatchupCard
-                      match={getMatch('Finals')}
-                      label="CHAMPIONSHIP FINALS"
-                      conference="finals"
-                      isChampionship={true}
-                      onSelect={handleCardSelect}
-                    />
-                  </div>
-                  <div style={{ height: ROW_H * 7 }} />
-                </div>
-
+                <div style={{ height: ROW_H * 6 }} />
               </div>
+
             </div>
           )}
 
@@ -1795,93 +1826,125 @@ export default function PlayoffBracket() {
           {/* FORMAT B: 6-TEAM BRACKET (Q01 STYLE)                      */}
           {/* ========================================================= */}
           {playoffFormat === '6-team' && (
-            <div className="max-w-[1100px] mx-auto">
-              <div className="flex items-center mb-6 font-sans font-bold text-xs text-slate-800">
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
-                  Conference Semifinals
+            <div className="flex bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
+              
+              {/* Column 0: Vertical Conference Labels */}
+              <div className="w-[36px] flex flex-col shrink-0 mr-3">
+                <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
+                  <div className="w-[32px] h-[240px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+                      <span>EASTERN</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="w-[50px]" />
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">
-                  Conference Finals
-                </div>
-                <div className="w-[60px]" />
-                <div className="w-[310px] text-center bg-amber-100 border border-amber-300 py-2 rounded text-amber-950 shadow-xs">
-                  {cupMeta.title} Finals
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
+                  <div className="w-[32px] h-[240px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                      <span>WESTERN</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
-                {/* Col 1: Semifinals (Row 0: East SF, Row 2: West SF) */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H * 2 }} />
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
-                  </div>
+              {/* Col 1: Semifinals */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
                 </div>
-
-                {/* Connector 1: Straight leads into CF */}
-                <div className="w-[50px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <svg width="50" height="2" viewBox="0 0 50 2" fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d="M 0 1 H 50" />
-                    </svg>
-                  </div>
-                  <div style={{ height: ROW_H * 2 }} />
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <svg width="50" height="2" viewBox="0 0 50 2" fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d="M 0 1 H 50" />
-                    </svg>
-                  </div>
+                <div style={{ height: ROW_H * 3 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
                 </div>
+              </div>
 
-                {/* Col 2: Conference Finals */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
-                  </div>
-                  <div style={{ height: ROW_H * 2 }} className="flex flex-col items-center justify-center">
+              {/* Connector 1: Straight leads into CF */}
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <svg width="40" height="2" viewBox="0 0 40 2" fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d="M 0 1 H 40" />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <svg width="40" height="2" viewBox="0 0 40 2" fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d="M 0 1 H 40" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Col 2: Conference Finals */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
+                </div>
+              </div>
+
+              {/* Connector 2: Fork into Finals */}
+              <div className="w-[50px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 5 }}>
+                  <svg width="50" height={ROW_H * 5} viewBox={`0 0 50 ${ROW_H * 5}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 25 V ${ROW_H * 4.5} H 0`} />
+                    <path d={`M 25 ${ROW_H * 2.5} H 50`} />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Col 3: Finals */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 2 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <ModernMatchupCard
+                    match={getMatch('Finals')}
+                    label="CHAMPIONSHIP FINALS"
+                    conference="finals"
+                    isChampionship={true}
+                    onSelect={handleCardSelect}
+                  />
+                </div>
+                <div style={{ height: ROW_H * 2 }} />
+              </div>
+
+              {/* Connector 3: Lead into Trophy Showcase */}
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 2 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center">
+                  <svg width="40" height="2" viewBox="0 0 40 2" fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d="M 0 1 H 40" />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 2 }} />
+              </div>
+
+              {/* Col 4: Trophy Showcase */}
+              <div className="w-[230px] flex flex-col shrink-0 pl-2">
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
                     {cupMeta.trophyUrl && (
-                      <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-12 w-auto object-contain mb-1" />
+                      <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-16 w-auto object-contain filter drop-shadow-md mb-2" />
                     )}
-                    <span className="text-[10px] font-black uppercase font-mono bg-slate-900 text-amber-300 px-2 py-0.5 rounded">
-                      {cupMeta.title}
-                    </span>
-                  </div>
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
+                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs mb-1">
+                      ★ {cupMeta.title} ★
+                    </div>
+                    {championData && (
+                      <div className="text-center w-full border-t border-amber-200 pt-1 mt-1">
+                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block">CHAMPION</span>
+                        <div className="text-xs font-black text-slate-900 truncate">{championData.team?.team_name}</div>
+                        <div className="text-[10px] text-emerald-700 font-mono font-bold">Won {championData.score}</div>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {/* Connector 2: Fork into Finals */}
-                <div className="w-[60px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H * 4 }}>
-                    <svg width="60" height={ROW_H * 4} viewBox={`0 0 60 ${ROW_H * 4}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 30 V ${ROW_H * 3.5} H 0`} />
-                      <path d={`M 30 ${ROW_H * 2} H 60`} />
-                    </svg>
-                  </div>
-                  <div style={{ height: ROW_H }} />
-                </div>
-
-                {/* Col 3: Finals */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 2 }} />
-                  <div style={{ height: ROW_H * 2 }} className="flex items-center justify-center">
-                    <ModernMatchupCard
-                      match={getMatch('Finals')}
-                      label="CHAMPIONSHIP FINALS"
-                      conference="finals"
-                      isChampionship={true}
-                      onSelect={handleCardSelect}
-                    />
-                  </div>
-                  <div style={{ height: ROW_H * 2 }} />
-                </div>
+                <div style={{ height: ROW_H }} />
               </div>
+
             </div>
           )}
 
@@ -1889,87 +1952,129 @@ export default function PlayoffBracket() {
           {/* FORMAT C: 12-TEAM BRACKET                                  */}
           {/* ========================================================= */}
           {playoffFormat === '12-team' && (
-            <div>
-              <div className="flex items-center mb-6 font-sans font-bold text-xs text-slate-800">
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">First Round</div>
-                <div className="w-[40px]" />
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">Conference Semifinals</div>
-                <div className="w-[40px]" />
-                <div className="w-[310px] text-center bg-slate-100 border border-slate-300 py-2 rounded shadow-xs">Conference Finals</div>
-                <div className="w-[50px]" />
-                <div className="w-[310px] text-center bg-amber-100 border border-amber-300 py-2 rounded text-amber-950 shadow-xs">{cupMeta.title} Finals</div>
-              </div>
-
-              <div className="flex bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
-                {/* 12-team grid */}
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H * 5 }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} /></div>
-                </div>
-
-                <div className="w-[40px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
-                  <div style={{ height: ROW_H * 5 }} />
-                  <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
-                </div>
-
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H * 5 }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} /></div>
-                </div>
-
-                <div className="w-[40px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 2 }}>
-                    <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
-                      <path d={`M 20 ${ROW_H} H 40`} />
-                    </svg>
-                  </div>
-                  <div style={{ height: ROW_H * 6 }} />
-                  <div style={{ height: ROW_H * 2 }}>
-                    <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
-                      <path d={`M 20 ${ROW_H} H 40`} />
-                    </svg>
+            <div className="flex bg-white p-6 rounded-lg border border-slate-200 shadow-xs">
+              
+              {/* Vertical Conference Labels on Far Left */}
+              <div className="w-[36px] flex flex-col shrink-0 mr-3">
+                <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
+                  <div className="w-[32px] h-[580px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-rose-300 shrink-0" />
+                      <span>EASTERN CONFERENCE</span>
+                    </div>
                   </div>
                 </div>
-
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} /></div>
-                  <div style={{ height: ROW_H * 7 }} />
-                  <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} /></div>
-                </div>
-
-                <div className="w-[50px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H / 2 }} />
-                  <div style={{ height: ROW_H * 8 }}>
-                    <svg width="50" height={ROW_H * 8} viewBox={`0 0 50 ${ROW_H * 8}`} fill="none" stroke="#0f172a" strokeWidth="2">
-                      <path d={`M 0 ${ROW_H / 2} H 25 V ${ROW_H * 7.5} H 0`} />
-                      <path d={`M 25 ${ROW_H * 4} H 50`} />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="w-[310px] flex flex-col shrink-0">
-                  <div style={{ height: ROW_H * 4 }} className="flex items-center justify-center">
-                    <ModernMatchupCard match={matches[10] || getMatch('Finals')} label="CHAMPIONSHIP FINALS" conference="finals" isChampionship={true} onSelect={handleCardSelect} />
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
+                  <div className="w-[32px] h-[580px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                      <span>WESTERN CONFERENCE</span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* Col 1: Opening Round */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H * 5 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} /></div>
+              </div>
+
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
+                <div style={{ height: ROW_H * 5 }} />
+                <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H }} className="flex items-center"><svg width="40" height="2"><path d="M 0 1 H 40" stroke="#0f172a" strokeWidth="2" /></svg></div>
+              </div>
+
+              {/* Col 2: Semifinals */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H * 5 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} /></div>
+              </div>
+
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 2 }}>
+                  <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
+                    <path d={`M 20 ${ROW_H} H 40`} />
+                  </svg>
+                </div>
+                <div style={{ height: ROW_H * 6 }} />
+                <div style={{ height: ROW_H * 2 }}>
+                  <svg width="40" height={ROW_H * 2} viewBox={`0 0 40 ${ROW_H * 2}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 20 V ${ROW_H * 1.5} H 0`} />
+                    <path d={`M 20 ${ROW_H} H 40`} />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Col 3: Conference Finals */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H * 7 }} />
+                <div style={{ height: ROW_H }} className="flex items-center justify-center"><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} /></div>
+              </div>
+
+              <div className="w-[50px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H / 2 }} />
+                <div style={{ height: ROW_H * 8 }}>
+                  <svg width="50" height={ROW_H * 8} viewBox={`0 0 50 ${ROW_H * 8}`} fill="none" stroke="#0f172a" strokeWidth="2">
+                    <path d={`M 0 ${ROW_H / 2} H 25 V ${ROW_H * 7.5} H 0`} />
+                    <path d={`M 25 ${ROW_H * 4} H 50`} />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Col 4: Finals */}
+              <div className="w-[310px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 4 }} className="flex items-center justify-center">
+                  <ModernMatchupCard match={matches[10] || getMatch('Finals')} label="CHAMPIONSHIP FINALS" conference="finals" isChampionship={true} onSelect={handleCardSelect} />
+                </div>
+              </div>
+
+              {/* Connector to Showcase */}
+              <div className="w-[40px] flex flex-col shrink-0">
+                <div style={{ height: ROW_H * 4 }} className="flex items-center justify-center">
+                  <svg width="40" height="2" viewBox="0 0 40 2" fill="none" stroke="#0f172a" strokeWidth="2"><path d="M 0 1 H 40" /></svg>
+                </div>
+              </div>
+
+              {/* Col 5: Showcase */}
+              <div className="w-[230px] flex flex-col shrink-0 pl-2">
+                <div style={{ height: ROW_H * 3 }} />
+                <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
+                  <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
+                    {cupMeta.trophyUrl && <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-16 w-auto object-contain mb-2" />}
+                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs mb-1">
+                      ★ {cupMeta.title} ★
+                    </div>
+                    {championData && (
+                      <div className="text-center w-full border-t border-amber-200 pt-1 mt-1">
+                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block">CHAMPION</span>
+                        <div className="text-xs font-black text-slate-900 truncate">{championData.team?.team_name}</div>
+                        <div className="text-[10px] text-emerald-700 font-mono font-bold">Won {championData.score}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ height: ROW_H * 3 }} />
+              </div>
+
             </div>
           )}
 
