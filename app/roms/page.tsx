@@ -172,8 +172,11 @@ export default function RomsPage() {
   const [selectedEra, setSelectedEra] = useState<string>('all');
   const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'table'>('grid');
 
-  // League filter
+  // League filter, search, sort & view mode
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>('all');
+  const [leagueSearch, setLeagueSearch] = useState<string>('');
+  const [leagueViewMode, setLeagueViewMode] = useState<'grid' | 'table'>('grid');
+  const [leagueSortOrder, setLeagueSortOrder] = useState<'latest' | 'oldest'>('latest');
 
   // Misc category filter
   const [selectedMiscCategory, setSelectedMiscCategory] = useState<string>('all');
@@ -203,11 +206,41 @@ export default function RomsPage() {
 
   // Filtered League ROMs
   const filteredLeagueRoms = useMemo(() => {
-    return OFFICIAL_LEAGUE_ROMS.filter(rom => {
-      if (selectedLeagueFilter === 'all') return true;
-      return rom.leagueCode === selectedLeagueFilter;
+    let result = OFFICIAL_LEAGUE_ROMS.filter(rom => {
+      const matchesLeague = selectedLeagueFilter === 'all' || rom.leagueCode === selectedLeagueFilter;
+      const q = leagueSearch.toLowerCase().trim();
+      const matchesSearch = !q ||
+        rom.id.toLowerCase().includes(q) ||
+        rom.league.toLowerCase().includes(q) ||
+        rom.seasonName.toLowerCase().includes(q) ||
+        rom.nhlYear.toString().includes(q) ||
+        rom.seasonNumber.toString().includes(q) ||
+        `season ${rom.seasonNumber}`.includes(q) ||
+        (rom.champion && rom.champion.toLowerCase().includes(q)) ||
+        (rom.rulesSummary && rom.rulesSummary.toLowerCase().includes(q)) ||
+        (rom.badge && rom.badge.toLowerCase().includes(q)) ||
+        rom.description.toLowerCase().includes(q);
+      return matchesLeague && matchesSearch;
     });
-  }, [selectedLeagueFilter]);
+
+    if (leagueSortOrder === 'oldest') {
+      result = [...result].sort((a, b) => {
+        if (a.leagueCode === b.leagueCode) {
+          return a.seasonNumber - b.seasonNumber;
+        }
+        return a.league.localeCompare(b.league);
+      });
+    } else {
+      result = [...result].sort((a, b) => {
+        if (a.leagueCode === b.leagueCode) {
+          return b.seasonNumber - a.seasonNumber;
+        }
+        return a.league.localeCompare(b.league);
+      });
+    }
+
+    return result;
+  }, [selectedLeagueFilter, leagueSearch, leagueSortOrder]);
 
   // Filtered Misc ROMs
   const filteredMiscRoms = useMemo(() => {
@@ -657,126 +690,294 @@ export default function RomsPage() {
                   <span>🏆 Official Builds</span>
                   <span>•</span>
                   <span>Netplay Verified</span>
+                  <span>•</span>
+                  <span>{OFFICIAL_LEAGUE_ROMS.length} Historical Seasons</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black font-serif">
                   Official League Tournament ROMs
                 </h2>
                 <p className="text-xs text-slate-600 font-sans mt-0.5">
-                  The official sanctioned tournament builds for The W League, The Q, Vintage Grail Cup, and Golden Era.
+                  The complete historical archives from Season 1 to Active for The W League, The Q, Golden Era, Vintage Grail Cup, and Original Six.
                 </p>
               </div>
 
-              {/* League Code Selector */}
-              <div className="flex items-center gap-1.5 overflow-x-auto font-mono text-xs">
-                {[
-                  { id: 'all', label: 'All Leagues' },
-                  { id: 'W', label: 'The W' },
-                  { id: 'Q', label: 'The Q' },
-                  { id: 'V', label: 'Vintage' },
-                  { id: 'G', label: 'Golden Era' },
-                  { id: 'O', label: 'Original 6' }
-                ].map(tab => (
+              {/* Search, Sort, and Cards/Table Controls */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Search Input */}
+                <div className="relative min-w-[220px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={leagueSearch}
+                    onChange={(e) => setLeagueSearch(e.target.value)}
+                    placeholder="Search season, code (e.g. W01), year, champion..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded font-sans focus:outline-none focus:ring-2 focus:ring-black shadow-2xs"
+                  />
+                  {leagueSearch && (
+                    <button
+                      onClick={() => setLeagueSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-black cursor-pointer font-bold"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* Sort Order Toggle */}
+                <div className="flex items-center border border-slate-300 bg-white rounded text-xs font-mono">
                   <button
-                    key={tab.id}
-                    onClick={() => setSelectedLeagueFilter(tab.id)}
-                    className={`px-3 py-1 rounded text-[11px] font-bold uppercase transition cursor-pointer ${
-                      selectedLeagueFilter === tab.id
-                        ? 'bg-black text-white shadow-xs'
-                        : 'bg-white text-slate-700 border border-slate-300 hover:border-black'
+                    onClick={() => setLeagueSortOrder('latest')}
+                    className={`px-2.5 py-1.5 transition cursor-pointer font-bold uppercase text-[11px] ${
+                      leagueSortOrder === 'latest' ? 'bg-black text-white' : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                    title="Sort newest seasons first"
+                  >
+                    Latest First
+                  </button>
+                  <button
+                    onClick={() => setLeagueSortOrder('oldest')}
+                    className={`px-2.5 py-1.5 transition cursor-pointer font-bold uppercase text-[11px] ${
+                      leagueSortOrder === 'oldest' ? 'bg-black text-white' : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                    title="Sort starting from Season 1"
+                  >
+                    Season 1 First
+                  </button>
+                </div>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center border border-slate-300 bg-white rounded text-xs font-mono">
+                  <button
+                    onClick={() => setLeagueViewMode('grid')}
+                    className={`px-2.5 py-1.5 transition cursor-pointer font-bold uppercase text-[11px] ${
+                      leagueViewMode === 'grid' ? 'bg-black text-white' : 'hover:bg-slate-100 text-slate-700'
                     }`}
                   >
-                    {tab.label}
+                    Cards
                   </button>
-                ))}
+                  <button
+                    onClick={() => setLeagueViewMode('table')}
+                    className={`px-2.5 py-1.5 transition cursor-pointer font-bold uppercase text-[11px] ${
+                      leagueViewMode === 'table' ? 'bg-black text-white' : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    Table
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {filteredLeagueRoms.map((rom) => (
-                <div
-                  key={rom.id}
-                  className={`border-2 border-black bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative overflow-hidden ${
-                    rom.isActive ? 'ring-2 ring-amber-500' : ''
+            {/* League Code Selector Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-6 scrollbar-thin font-mono text-xs">
+              {[
+                { id: 'all', label: `All Leagues (${OFFICIAL_LEAGUE_ROMS.length})` },
+                { id: 'W', label: `The W League (${OFFICIAL_LEAGUE_ROMS.filter(r => r.leagueCode === 'W').length})` },
+                { id: 'Q', label: `The Q League (${OFFICIAL_LEAGUE_ROMS.filter(r => r.leagueCode === 'Q').length})` },
+                { id: 'G', label: `Golden Era (${OFFICIAL_LEAGUE_ROMS.filter(r => r.leagueCode === 'G').length})` },
+                { id: 'V', label: `Vintage Grail (${OFFICIAL_LEAGUE_ROMS.filter(r => r.leagueCode === 'V').length})` },
+                { id: 'O', label: `Original 6 (${OFFICIAL_LEAGUE_ROMS.filter(r => r.leagueCode === 'O').length})` }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedLeagueFilter(tab.id)}
+                  className={`px-3 py-1 rounded-full whitespace-nowrap text-[11px] font-bold uppercase transition cursor-pointer ${
+                    selectedLeagueFilter === tab.id
+                      ? 'bg-black text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-slate-300 hover:border-black'
                   }`}
                 >
-                  {rom.isActive && (
-                    <div className="absolute top-2 right-4 z-20 bg-amber-500 text-black font-mono text-[9px] font-black uppercase px-2 py-0.5 border border-black shadow-xs">
-                      ★ Active Season Tournament Build ★
-                    </div>
-                  )}
-
-                  <div>
-                    {/* Official League Image Preview */}
-                    <RomThumbnail
-                      imagePath={rom.imageUrl || `${rom.id}.png`}
-                      alt={rom.seasonName}
-                      eraOrCategory={rom.league}
-                      className="aspect-[16/8]"
-                      onEnlarge={() => setActivePreview({
-                        imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id}.png`)!,
-                        title: rom.seasonName,
-                        subtitle: `${rom.league} • Tournament Edition`,
-                        badge: rom.badge || 'OFFICIAL ROM',
-                        fileName: rom.fileName,
-                        downloadCandidates: [`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName],
-                        downloadUrl: rom.downloadUrl
-                      })}
-                    />
-
-                    <div className="p-5">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <span className="text-[10px] font-mono font-black text-amber-800 uppercase tracking-wider block">
-                            {rom.league}
-                          </span>
-                          <h3 className="text-lg font-black uppercase text-black font-serif leading-snug">
-                            {rom.seasonName}
-                          </h3>
-                        </div>
-                        {rom.badge && (
-                          <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-2 py-0.5">
-                            {rom.badge}
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="font-sans text-xs text-slate-700 leading-relaxed mb-4">
-                        {rom.description}
-                      </p>
-
-                      <div className="bg-neutral-100 border border-neutral-300 p-3 font-mono text-[11px] space-y-1.5 text-slate-800 mb-4 rounded-xs">
-                        <div className="truncate"><strong>Binary:</strong> {rom.fileName} ({rom.fileSize})</div>
-                        <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-neutral-200">
-                          <span className="truncate"><strong>MD5:</strong> {rom.md5}</span>
-                          <button
-                            onClick={() => copyMd5(rom.md5, rom.id)}
-                            className="ml-2 px-2 py-0.5 bg-white border border-black text-[9px] font-bold uppercase hover:bg-black hover:text-white cursor-pointer shrink-0 transition-colors"
-                          >
-                            {copiedMd5 === rom.id ? 'COPIED!' : 'COPY MD5'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 p-5 pt-0 border-t-0">
-                    <button
-                      onClick={() => handleDownload([`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, rom.id)}
-                      className="flex-1 text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2.5 transition-colors flex items-center justify-center gap-1.5 rounded-xs cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" /> {downloadingId === rom.id ? 'Connecting...' : 'Download Official ROM'}
-                    </button>
-                    <Link
-                      href="/setup-guide?tab=netplay"
-                      className="px-3.5 py-2.5 border border-black font-mono text-xs font-bold uppercase hover:bg-neutral-100 transition-colors rounded-xs"
-                      title="Netplay Connection Guide"
-                    >
-                      Setup &rarr;
-                    </Link>
-                  </div>
-                </div>
+                  {tab.label}
+                </button>
               ))}
             </div>
+
+            {/* League Content (Cards or Table) */}
+            {filteredLeagueRoms.length === 0 ? (
+              <div className="bg-white border-2 border-dashed border-slate-300 p-8 text-center rounded">
+                <p className="text-sm font-mono text-slate-500">No league tournament seasons match your search query.</p>
+                <button
+                  onClick={() => { setLeagueSearch(''); setSelectedLeagueFilter('all'); }}
+                  className="mt-2 text-xs font-mono font-bold text-amber-700 underline cursor-pointer"
+                >
+                  Reset all filters
+                </button>
+              </div>
+            ) : leagueViewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredLeagueRoms.map((rom) => (
+                  <div
+                    key={rom.id}
+                    className={`border-2 border-black bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative overflow-hidden ${
+                      rom.isActive ? 'ring-2 ring-amber-500' : ''
+                    }`}
+                  >
+                    {rom.isActive && (
+                      <div className="absolute top-2 right-4 z-20 bg-amber-500 text-black font-mono text-[9px] font-black uppercase px-2 py-0.5 border border-black shadow-xs">
+                        ★ Active Season Tournament Build ★
+                      </div>
+                    )}
+
+                    <div>
+                      {/* Official League Image Preview */}
+                      <RomThumbnail
+                        imagePath={rom.imageUrl || `${rom.id}.png`}
+                        alt={rom.seasonName}
+                        eraOrCategory={rom.league}
+                        className="aspect-[16/8]"
+                        onEnlarge={() => setActivePreview({
+                          imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id}.png`)!,
+                          title: rom.seasonName,
+                          subtitle: `${rom.league} • ${rom.nhlYear} NHL Base`,
+                          badge: rom.badge || (rom.isActive ? 'ACTIVE' : rom.id.toUpperCase()),
+                          fileName: rom.fileName,
+                          downloadCandidates: [`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName],
+                          downloadUrl: rom.downloadUrl
+                        })}
+                      />
+
+                      <div className="p-4">
+                        <div className="flex justify-between items-start mb-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded inline-block">
+                              {rom.id.toUpperCase()}
+                            </span>
+                            <span className="font-mono text-xs font-black text-slate-500">
+                              {rom.nhlYear} NHL Base
+                            </span>
+                          </div>
+                          {rom.badge && (
+                            <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-1.5 py-0.5">
+                              {rom.badge}
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="text-base font-black uppercase text-black font-serif leading-snug mb-1">
+                          {rom.seasonName}
+                        </h3>
+
+                        {rom.champion && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-800 mb-2 font-mono bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                            <Trophy className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-bold text-[11px]">Champion:</span>
+                            <span className="truncate text-[11px] font-semibold">{rom.champion}</span>
+                          </div>
+                        )}
+
+                        {rom.rulesSummary && (
+                          <div className="text-[10px] font-mono text-slate-600 bg-neutral-100 px-2 py-1 rounded border border-neutral-200 mb-3">
+                            {rom.rulesSummary}
+                          </div>
+                        )}
+
+                        <p className="font-sans text-xs text-slate-700 leading-relaxed mb-4">
+                          {rom.description}
+                        </p>
+
+                        <div className="bg-neutral-100 border border-neutral-300 p-2.5 font-mono text-[11px] space-y-1.5 text-slate-800 mb-3 rounded-xs">
+                          <div className="truncate text-[10px]"><strong>Binary:</strong> {rom.fileName} ({rom.fileSize})</div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-neutral-200">
+                            <span className="truncate font-mono"><strong>MD5:</strong> {rom.md5}</span>
+                            <button
+                              onClick={() => copyMd5(rom.md5, rom.id)}
+                              className="ml-2 px-1.5 py-0.5 bg-white border border-black text-[9px] font-bold uppercase hover:bg-black hover:text-white cursor-pointer shrink-0 transition-colors"
+                            >
+                              {copiedMd5 === rom.id ? 'COPIED!' : 'COPY'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 p-4 pt-0 border-t-0">
+                      <button
+                        onClick={() => handleDownload([`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, rom.id)}
+                        className="flex-1 text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2 transition-colors flex items-center justify-center gap-1.5 rounded-xs cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" /> {downloadingId === rom.id ? 'Connecting...' : 'Download ROM'}
+                      </button>
+                      <Link
+                        href="/setup-guide?tab=netplay"
+                        className="px-3 py-2 border border-black font-mono text-xs font-bold uppercase hover:bg-neutral-100 transition-colors rounded-xs"
+                        title="Netplay Connection Guide"
+                      >
+                        Setup &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* League Table View */
+              <div className="bg-white border-2 border-black overflow-x-auto shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-neutral-900 text-white font-mono uppercase text-[11px] border-b-2 border-black">
+                      <th className="p-3 w-16 text-center">Preview</th>
+                      <th className="p-3 w-20">Code</th>
+                      <th className="p-3">Season & Title</th>
+                      <th className="p-3 w-24">Base Year</th>
+                      <th className="p-3">Rules & Structure</th>
+                      <th className="p-3 w-44">Champion</th>
+                      <th className="p-3 w-24 text-center">Status</th>
+                      <th className="p-3 w-28 text-right">Download</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLeagueRoms.map((rom, idx) => (
+                      <tr key={rom.id} className={`border-b border-slate-200 hover:bg-amber-50/60 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                        <td className="p-2 text-center">
+                          <TableThumbnail
+                            imagePath={rom.imageUrl || `${rom.id}.png`}
+                            alt={rom.seasonName}
+                            onClick={() => setActivePreview({
+                              imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id}.png`)!,
+                              title: rom.seasonName,
+                              subtitle: `${rom.league} • ${rom.nhlYear} NHL Base`,
+                              badge: rom.badge || rom.id.toUpperCase(),
+                              fileName: rom.fileName,
+                              downloadCandidates: [`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName],
+                              downloadUrl: rom.downloadUrl
+                            })}
+                          />
+                        </td>
+                        <td className="p-3 font-mono font-black">
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">
+                            {rom.id.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="p-3 font-bold font-serif text-slate-900">
+                          {rom.seasonName}
+                          <div className="font-mono text-[10px] text-slate-500 font-normal mt-0.5">{rom.league}</div>
+                        </td>
+                        <td className="p-3 font-mono font-black text-slate-700">{rom.nhlYear}</td>
+                        <td className="p-3 font-mono text-[11px] text-slate-600 max-w-xs">{rom.rulesSummary || 'Standard Netplay'}</td>
+                        <td className="p-3 font-mono text-slate-700 text-[11px]">{rom.champion || '—'}</td>
+                        <td className="p-3 text-center">
+                          {rom.isActive ? (
+                            <span className="bg-emerald-600 text-white font-mono text-[9px] font-black uppercase px-2 py-0.5 rounded">
+                              ACTIVE
+                            </span>
+                          ) : (
+                            <span className="bg-slate-200 text-slate-700 font-mono text-[9px] font-bold uppercase px-2 py-0.5 rounded">
+                              VAULT
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => handleDownload([`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, `table-${rom.id}`)}
+                            className="px-2.5 py-1 bg-black hover:bg-amber-600 text-white font-mono text-[10px] font-bold uppercase transition-colors inline-flex items-center gap-1 rounded cursor-pointer"
+                          >
+                            <Download className="w-3 h-3" /> {downloadingId === `table-${rom.id}` ? '...' : 'Download'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
