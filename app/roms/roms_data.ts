@@ -67,7 +67,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "a4f8e219b678c0024e819fa281b379c1",
     "releaseDate": "Active Season",
     "description": "The official active competitive season ROM featuring updated team rosters, custom franchise center ice logos, and manual goalie reaction profiles.",
-    "imageUrl": "w18.png",
+    "imageUrl": "W18.png",
     "badge": "ACTIVE SEASON",
     "isActive": true
   },
@@ -87,7 +87,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "8b3c10294fec9817ad91740283b49f22",
     "releaseDate": "2026-03-07",
     "description": "W17 tournament build with full historical line combination balance and competitive exhibition netplay settings.",
-    "imageUrl": "w17.png",
+    "imageUrl": "W17.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -107,7 +107,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "e5d2c13d1e835054ccf26a31c29ec266",
     "releaseDate": "2025-12-13",
     "description": "Official The W League W16 tournament build (2011 NHL base) with 27 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w16.png",
+    "imageUrl": "W16.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -126,7 +126,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "6b134de6d8b482cdcae0528197b04674",
     "releaseDate": "2025-09-19",
     "description": "Official The W League W15 tournament build (2010 NHL base) with 27 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w15.png",
+    "imageUrl": "W15.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -145,7 +145,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "cd2b79647aeff16824561fe281c866f6",
     "releaseDate": "2025-05-16",
     "description": "Official The W League W14 tournament build (2009 NHL base) with 31 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w14.png",
+    "imageUrl": "W14.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -164,7 +164,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "3065e4fc2481072449d9f75f78354622",
     "releaseDate": "2025-02-10",
     "description": "Official The W League W13 tournament build (2008 NHL base) with 29 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w13.png",
+    "imageUrl": "W13.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -183,7 +183,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "0571f84b4c030c58042ca4138b20cb6f",
     "releaseDate": "2024-11-06",
     "description": "Official The W League W12 tournament build (2007 NHL base) with 29 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w12.png",
+    "imageUrl": "W12.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -202,7 +202,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "5189702fbcac783171143e079b0279ef",
     "releaseDate": "2024-08-01",
     "description": "Official The W League W11 tournament build (2006 NHL base) with 27 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w11.png",
+    "imageUrl": "W11.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -221,7 +221,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "9cd56a03304f75ca4efa1d1080821411",
     "releaseDate": "2024-02-18",
     "description": "Official The W League W10 tournament build (2004 NHL base) with 28 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w10.png",
+    "imageUrl": "W10.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -240,7 +240,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "ee355888d8272fbd6bf23f242281c454",
     "releaseDate": "2023-11-22",
     "description": "Official The W League W09 tournament build (2003 NHL base) with 30 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w09.png",
+    "imageUrl": "W09.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -259,7 +259,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "bd44b0668864a1a21b76a814c3ff6e11",
     "releaseDate": "2023-07-28",
     "description": "Official The W League W08 tournament build (2002 NHL base) with 32 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w08.png",
+    "imageUrl": "W08.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -279,7 +279,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "562e525a6e5df6f7d8539fb064439dd6",
     "releaseDate": "2023-02-28",
     "description": "Official The W League W07 tournament build (2001 NHL base) with 32 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w07.png",
+    "imageUrl": "W07.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -299,7 +299,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "df44c27e8e990c6ce5b756e2c408745f",
     "releaseDate": "2022-12-01",
     "description": "Official The W League W06 tournament build (2000 NHL base) with 34 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w06.png",
+    "imageUrl": "W06.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -319,7 +319,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "91c1fcf207960525ebf2445262ec0a7c",
     "releaseDate": "2022-08-04",
     "description": "Official The W League W05 tournament build (1999 NHL base) with 34 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w05.png",
+    "imageUrl": "W05.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -339,7 +339,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "120f9079ff6f0753e804d7b31c02cfa5",
     "releaseDate": "2022-04-04",
     "description": "Official The W League W04 tournament build (1998 NHL base) with 32 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w04.png",
+    "imageUrl": "W04.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -359,7 +359,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "c2158958cebbe2aba235adcde763d149",
     "releaseDate": "2022-01-07",
     "description": "Official The W League W03 tournament build (1997 NHL base) with 30 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w03.png",
+    "imageUrl": "W03.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -379,7 +379,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "91c32a41a9fa2f53d01be3b87cd98453",
     "releaseDate": "2021-10-20",
     "description": "Official The W League W02 tournament build (1996 NHL base) with 25 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "w02.png",
+    "imageUrl": "W02.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -399,7 +399,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "00f2fe5a3276a3dc57a2c5f5a9c07ba5",
     "releaseDate": "2021-08-21",
     "description": "The historic Season 1 inaugural tournament build of The W League (1995 NHL season base), 24 teams with full classic netplay balance.",
-    "imageUrl": "w01.png",
+    "imageUrl": "W01.png",
     "badge": "W LEAGUE",
     "isActive": false
   },
@@ -418,7 +418,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "7c32d90a1841e5492d19bc2981a54ee3",
     "releaseDate": "2025-10-01",
     "description": "Premier tier Q League competitive edition tuned for lightning-fast skating speed, high-aggression defense mechanics, and manual shot controls.",
-    "imageUrl": "q19.png",
+    "imageUrl": "Q19.png",
     "badge": "PREMIER",
     "isActive": false
   },
@@ -437,7 +437,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "6d123e4a908b1a2387cf91823ab02814",
     "releaseDate": "2025-06-11",
     "description": "Official The Q League Q18 tournament build (1997 NHL base) with 16 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q18.png",
+    "imageUrl": "Q18.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -456,7 +456,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "98923b2fcfe6920060232be15cb713ff",
     "releaseDate": "2025-04-11",
     "description": "Official The Q League Q17 tournament build (1996 NHL base) with 15 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q17.png",
+    "imageUrl": "Q17.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -475,7 +475,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "fd3aa6172fd9adefe5aba154de105d2e",
     "releaseDate": "2025-01-22",
     "description": "Official The Q League Q16 tournament build (1995 NHL base) with 12 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q16.png",
+    "imageUrl": "Q16.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -494,7 +494,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "ade16abed3387e073cddb5d7fc0b10dd",
     "releaseDate": "2024-11-18",
     "description": "Official The Q League Q15 tournament build (1994 NHL base) with 13 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q15.png",
+    "imageUrl": "Q15.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -513,7 +513,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "c7e8071b9ba341bff3508bd3b8f6027b",
     "releaseDate": "2024-09-25",
     "description": "Official The Q League Q14 tournament build (1993 NHL base) with 13 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q14.png",
+    "imageUrl": "Q14.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -532,7 +532,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "1f175611d19e04ee67a59e2a5141e4c0",
     "releaseDate": "2024-08-11",
     "description": "Official The Q League Q13 tournament build (1992 NHL base) with 16 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q13.png",
+    "imageUrl": "Q13.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -551,7 +551,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "8d528d04407c644a0a897f148c9c38f8",
     "releaseDate": "2024-06-28",
     "description": "Official The Q League Q12 tournament build (1991 NHL base) with 17 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q12.png",
+    "imageUrl": "Q12.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -570,7 +570,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "627f9b06ccb8d10790e17f6e7f7727d3",
     "releaseDate": "2024-05-03",
     "description": "Official The Q League Q11 tournament build (1990 NHL base) with 20 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q11.png",
+    "imageUrl": "Q11.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -589,7 +589,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "8859a0edcca458b5b583060fe4495360",
     "releaseDate": "2024-02-26",
     "description": "Official The Q League Q10 tournament build (1989 NHL base) with 20 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q10.png",
+    "imageUrl": "Q10.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -608,7 +608,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "506dc065010824bf2b2f7b6b081664ff",
     "releaseDate": "2023-12-15",
     "description": "Official The Q League Q09 tournament build (1988 NHL base) with 18 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q09.png",
+    "imageUrl": "Q09.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -627,7 +627,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "a24e6d6562e4d2e007b88044df95736d",
     "releaseDate": "2023-10-02",
     "description": "Official The Q League Q08 tournament build (1987 NHL base) with 20 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q08.png",
+    "imageUrl": "Q08.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -646,7 +646,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "2b0ddcc56e691e78946a8e2b15691c5d",
     "releaseDate": "2023-08-12",
     "description": "Official The Q League Q07 tournament build (1986 NHL base) with 21 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q07.png",
+    "imageUrl": "Q07.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -665,7 +665,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "a94bf4a986e51b8348da2a015a373a81",
     "releaseDate": "2023-06-07",
     "description": "Official The Q League Q06 tournament build (1985 NHL base) with 18 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q06.png",
+    "imageUrl": "Q06.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -684,7 +684,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "dfdf83790fa541687bf729a4a349bf0d",
     "releaseDate": "2023-03-05",
     "description": "Official The Q League Q05 tournament build (1984 NHL base) with 18 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q05.png",
+    "imageUrl": "Q05.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -703,7 +703,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "cdac2cae8b62b330ef327be7264bf6e7",
     "releaseDate": "2022-12-24",
     "description": "Official The Q League Q04 tournament build (1983 NHL base) with 15 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q04.png",
+    "imageUrl": "Q04.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -722,7 +722,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "b497bae540835101359be886c8615cac",
     "releaseDate": "2022-09-11",
     "description": "Official The Q League Q03 tournament build (1982 NHL base) with 12 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q03.png",
+    "imageUrl": "Q03.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -741,7 +741,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "78db73db5743f01236e7596b213b460e",
     "releaseDate": "2022-08-01",
     "description": "Official The Q League Q02 tournament build (1981 NHL base) with 10 teams, 5-minute periods, and competitive netplay rules.",
-    "imageUrl": "q02.png",
+    "imageUrl": "Q02.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -760,7 +760,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "d71c61204f9ba69d52b2051c1b76e656",
     "releaseDate": "2022-06-08",
     "description": "The inaugural Season 1 tournament build of The Q League (1980 NHL base), 10 franchises battling in early 80s arcade hockey showdowns.",
-    "imageUrl": "q01.png",
+    "imageUrl": "Q01.png",
     "badge": "THE Q",
     "isActive": false
   },
@@ -779,7 +779,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "d7a1e582c918b4317f229eb914a88f02",
     "releaseDate": "Active Season",
     "description": "Vintage Original Six tournament ROM (BOS, CHI, DET, MTL, NYR, TOR) with 1927 classic rosters, vintage sweaters, and leather pad physics.",
-    "imageUrl": "o01.png",
+    "imageUrl": "O01.png",
     "badge": "ORIGINAL 6",
     "isActive": true
   },
@@ -798,7 +798,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "f819ac29b710e6648c291ba8192ec405",
     "releaseDate": "2023-09-03",
     "description": "Golden Era showcase ROM celebrating 1941 NHL dynasties, heavy checking, and historic playoff showdowns.",
-    "imageUrl": "g01.png",
+    "imageUrl": "G01.png",
     "badge": "GOLDEN ERA",
     "isActive": false
   },
@@ -817,7 +817,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     "md5": "e5b29c01824a77d13b610fa728bc991a",
     "releaseDate": "2024-01-15",
     "description": "The Grail Cup vintage league edition celebrating 1917 NHL roots, classic wooden stick shot physics, and arena organ charge tracks.",
-    "imageUrl": "v01.png",
+    "imageUrl": "V01.png",
     "badge": "GRAIL CUP",
     "isActive": false
   }

@@ -43,7 +43,7 @@ import {
 } from './roms_data';
 
 // ============================================================================
-// RETRO ROM THUMBNAIL COMPONENT
+// RETRO ROM THUMBNAIL COMPONENT (WITH MULTI-CANDIDATE CASING FALLBACK)
 // ============================================================================
 function RomThumbnail({
   imagePath,
@@ -52,25 +52,57 @@ function RomThumbnail({
   onEnlarge,
   className = "aspect-[16/9]"
 }: {
-  imagePath?: string;
+  imagePath?: string | string[];
   alt: string;
   eraOrCategory?: string;
   onEnlarge?: () => void;
   className?: string;
 }) {
-  const [imgError, setImgError] = useState(false);
-  const resolvedUrl = getRomImageUrl(imagePath);
+  const candidateList = useMemo(() => {
+    if (!imagePath) return [];
+    const raw = Array.isArray(imagePath) ? imagePath : [imagePath];
+    const list: string[] = [];
+    for (const item of raw) {
+      if (!item) continue;
+      const clean = item.trim();
+      if (!list.includes(clean)) list.push(clean);
+      const upper = clean.toUpperCase();
+      if (!list.includes(upper)) list.push(upper);
+      const lower = clean.toLowerCase();
+      if (!list.includes(lower)) list.push(lower);
+      if (clean.toLowerCase().endsWith('.png')) {
+        const base = clean.slice(0, -4);
+        const upperPng = base.toUpperCase() + '.png';
+        if (!list.includes(upperPng)) list.push(upperPng);
+      }
+    }
+    return list;
+  }, [imagePath]);
 
-  if (resolvedUrl && !imgError) {
+  const [candidateIndex, setCandidateIndex] = useState(0);
+
+  React.useEffect(() => {
+    setCandidateIndex(0);
+  }, [imagePath]);
+
+  const currentPath = candidateList[candidateIndex];
+  const resolvedUrl = currentPath ? getRomImageUrl(currentPath) : undefined;
+
+  const handleImgError = () => {
+    setCandidateIndex(prev => prev + 1);
+  };
+
+  if (resolvedUrl && candidateIndex < candidateList.length) {
     return (
       <div 
         onClick={onEnlarge}
         className={`relative w-full overflow-hidden bg-neutral-950 group/thumb ${onEnlarge ? 'cursor-pointer' : ''} select-none border-b border-black ${className}`}
       >
         <img
+          key={resolvedUrl}
           src={resolvedUrl}
           alt={alt}
-          onError={() => setImgError(true)}
+          onError={handleImgError}
           className="w-full h-full object-cover object-center group-hover/thumb:scale-105 transition-transform duration-300"
           style={{ imageRendering: 'pixelated' }}
         />
@@ -109,21 +141,52 @@ function RomThumbnail({
 }
 
 // ============================================================================
-// TABLE ROW THUMBNAIL COMPONENT (WITH ERROR FALLBACK)
+// TABLE ROW THUMBNAIL COMPONENT (WITH MULTI-CANDIDATE CASING FALLBACK)
 // ============================================================================
 function TableThumbnail({
   imagePath,
   alt,
   onClick
 }: {
-  imagePath?: string;
+  imagePath?: string | string[];
   alt: string;
   onClick?: () => void;
 }) {
-  const [hasError, setHasError] = useState(false);
-  const url = getRomImageUrl(imagePath);
+  const candidateList = useMemo(() => {
+    if (!imagePath) return [];
+    const raw = Array.isArray(imagePath) ? imagePath : [imagePath];
+    const list: string[] = [];
+    for (const item of raw) {
+      if (!item) continue;
+      const clean = item.trim();
+      if (!list.includes(clean)) list.push(clean);
+      const upper = clean.toUpperCase();
+      if (!list.includes(upper)) list.push(upper);
+      const lower = clean.toLowerCase();
+      if (!list.includes(lower)) list.push(lower);
+      if (clean.toLowerCase().endsWith('.png')) {
+        const base = clean.slice(0, -4);
+        const upperPng = base.toUpperCase() + '.png';
+        if (!list.includes(upperPng)) list.push(upperPng);
+      }
+    }
+    return list;
+  }, [imagePath]);
 
-  if (url && !hasError) {
+  const [candidateIndex, setCandidateIndex] = useState(0);
+
+  React.useEffect(() => {
+    setCandidateIndex(0);
+  }, [imagePath]);
+
+  const currentPath = candidateList[candidateIndex];
+  const url = currentPath ? getRomImageUrl(currentPath) : undefined;
+
+  const handleImgError = () => {
+    setCandidateIndex(prev => prev + 1);
+  };
+
+  if (url && candidateIndex < candidateList.length) {
     return (
       <button
         onClick={onClick}
@@ -131,9 +194,10 @@ function TableThumbnail({
         title="Click to view screenshot"
       >
         <img
+          key={url}
           src={url}
           alt={alt}
-          onError={() => setHasError(true)}
+          onError={handleImgError}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform"
           style={{ imageRendering: 'pixelated' }}
         />
@@ -143,7 +207,7 @@ function TableThumbnail({
 
   return (
     <div className="w-10 h-7 rounded border border-slate-300 bg-slate-100 inline-flex items-center justify-center text-[8px] font-mono text-slate-400 font-bold" title="SEGA 16-BIT">
-      .BIN
+      95
     </div>
   );
 }
@@ -820,17 +884,17 @@ export default function RomsPage() {
                     <div>
                       {/* Official League Image Preview */}
                       <RomThumbnail
-                        imagePath={rom.imageUrl || `${rom.id}.png`}
+                        imagePath={[rom.imageUrl || `${rom.id.toUpperCase()}.png`, `${rom.id.toUpperCase()}.png`, `${rom.id.toLowerCase()}.png`]}
                         alt={rom.seasonName}
                         eraOrCategory={rom.league}
                         className="aspect-[16/8]"
                         onEnlarge={() => setActivePreview({
-                          imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id}.png`)!,
+                          imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id.toUpperCase()}.png`)!,
                           title: rom.seasonName,
                           subtitle: `${rom.league} • ${rom.nhlYear} NHL Base`,
                           badge: rom.badge || (rom.isActive ? 'ACTIVE' : rom.id.toUpperCase()),
                           fileName: rom.fileName,
-                          downloadCandidates: [`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName],
+                          downloadCandidates: [`${rom.id.toUpperCase()}.zip`, `${rom.id.toLowerCase()}.zip`, `${rom.id.toUpperCase()}.bin`, `${rom.id.toLowerCase()}.bin`, rom.fileName],
                           downloadUrl: rom.downloadUrl
                         })}
                       />
@@ -891,7 +955,7 @@ export default function RomsPage() {
 
                     <div className="flex items-center gap-2 p-4 pt-0 border-t-0">
                       <button
-                        onClick={() => handleDownload([`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, rom.id)}
+                        onClick={() => handleDownload([`${rom.id.toUpperCase()}.zip`, `${rom.id.toLowerCase()}.zip`, `${rom.id.toUpperCase()}.bin`, `${rom.id.toLowerCase()}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, rom.id)}
                         className="flex-1 text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2 transition-colors flex items-center justify-center gap-1.5 rounded-xs cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> {downloadingId === rom.id ? 'Connecting...' : 'Download ROM'}
@@ -928,15 +992,15 @@ export default function RomsPage() {
                       <tr key={rom.id} className={`border-b border-slate-200 hover:bg-amber-50/60 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
                         <td className="p-2 text-center">
                           <TableThumbnail
-                            imagePath={rom.imageUrl || `${rom.id}.png`}
+                            imagePath={[rom.imageUrl || `${rom.id.toUpperCase()}.png`, `${rom.id.toUpperCase()}.png`, `${rom.id.toLowerCase()}.png`]}
                             alt={rom.seasonName}
                             onClick={() => setActivePreview({
-                              imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id}.png`)!,
+                              imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id.toUpperCase()}.png`)!,
                               title: rom.seasonName,
                               subtitle: `${rom.league} • ${rom.nhlYear} NHL Base`,
                               badge: rom.badge || rom.id.toUpperCase(),
                               fileName: rom.fileName,
-                              downloadCandidates: [`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName],
+                              downloadCandidates: [`${rom.id.toUpperCase()}.zip`, `${rom.id.toLowerCase()}.zip`, `${rom.id.toUpperCase()}.bin`, `${rom.id.toLowerCase()}.bin`, rom.fileName],
                               downloadUrl: rom.downloadUrl
                             })}
                           />
@@ -966,7 +1030,7 @@ export default function RomsPage() {
                         </td>
                         <td className="p-3 text-right">
                           <button
-                            onClick={() => handleDownload([`${rom.id}.zip`, `${rom.id}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, `table-${rom.id}`)}
+                            onClick={() => handleDownload([`${rom.id.toUpperCase()}.zip`, `${rom.id.toLowerCase()}.zip`, `${rom.id.toUpperCase()}.bin`, `${rom.id.toLowerCase()}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, `table-${rom.id}`)}
                             className="px-2.5 py-1 bg-black hover:bg-amber-600 text-white font-mono text-[10px] font-bold uppercase transition-colors inline-flex items-center gap-1 rounded cursor-pointer"
                           >
                             <Download className="w-3 h-3" /> {downloadingId === `table-${rom.id}` ? '...' : 'Download'}
