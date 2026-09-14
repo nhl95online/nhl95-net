@@ -867,17 +867,17 @@ export default function RomsPage() {
                 </button>
               </div>
             ) : leagueViewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3.5">
                 {filteredLeagueRoms.map((rom) => (
                   <div
                     key={rom.id}
-                    className={`border-2 border-black bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative overflow-hidden ${
+                    className={`border-2 border-black bg-[#fdfaf5] shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col justify-between relative overflow-hidden rounded-xs ${
                       rom.isActive ? 'ring-2 ring-amber-500' : ''
                     }`}
                   >
                     {rom.isActive && (
-                      <div className="absolute top-2 right-4 z-20 bg-amber-500 text-black font-mono text-[9px] font-black uppercase px-2 py-0.5 border border-black shadow-xs">
-                        ★ Active Season Tournament Build ★
+                      <div className="absolute top-1.5 right-2 z-20 bg-amber-500 text-black font-mono text-[8px] font-black uppercase px-1.5 py-0.5 border border-black shadow-xs">
+                        ★ Active Season ★
                       </div>
                     )}
 
@@ -887,7 +887,7 @@ export default function RomsPage() {
                         imagePath={[rom.imageUrl || `${rom.id.toUpperCase()}.png`, `${rom.id.toUpperCase()}.png`, `${rom.id.toLowerCase()}.png`]}
                         alt={rom.seasonName}
                         eraOrCategory={rom.league}
-                        className="aspect-[16/8]"
+                        className="aspect-[16/9]"
                         onEnlarge={() => setActivePreview({
                           imageUrl: getRomImageUrl(rom.imageUrl || `${rom.id.toUpperCase()}.png`)!,
                           title: rom.seasonName,
@@ -899,74 +899,54 @@ export default function RomsPage() {
                         })}
                       />
 
-                      <div className="p-4">
-                        <div className="flex justify-between items-start mb-1.5">
+                      <div className="p-3">
+                        <div className="flex justify-between items-start mb-1 gap-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded inline-block">
                               {rom.id.toUpperCase()}
                             </span>
-                            <span className="font-mono text-xs font-black text-slate-500">
+                            <span className="font-mono text-[11px] font-black text-slate-500">
                               {rom.nhlYear} NHL Base
                             </span>
                           </div>
                           {rom.badge && (
-                            <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-1.5 py-0.5">
+                            <span className="bg-black text-white font-mono text-[8px] font-black uppercase px-1.5 py-0.5 shrink-0">
                               {rom.badge}
                             </span>
                           )}
                         </div>
 
-                        <h3 className="text-base font-black uppercase text-black font-serif leading-snug mb-1">
+                        <h3 className="text-sm font-black uppercase text-black font-serif leading-snug mb-1">
                           {rom.seasonName}
                         </h3>
 
                         {rom.champion && (
-                          <div className="flex items-center gap-1.5 text-xs text-slate-800 mb-2 font-mono bg-amber-50 border border-amber-200 px-2 py-1 rounded">
-                            <Trophy className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span className="font-bold text-[11px]">Champion:</span>
-                            <span className="truncate text-[11px] font-semibold">{rom.champion}</span>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-800 mb-1.5 font-mono bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                            <Trophy className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span className="font-bold">Champion:</span>
+                            <span className="truncate font-semibold">{rom.champion}</span>
                           </div>
                         )}
 
                         {rom.rulesSummary && (
-                          <div className="text-[10px] font-mono text-slate-600 bg-neutral-100 px-2 py-1 rounded border border-neutral-200 mb-3">
+                          <div className="text-[9px] font-mono text-slate-600 bg-neutral-100 px-1.5 py-0.5 rounded border border-neutral-200 mb-2">
                             {rom.rulesSummary}
                           </div>
                         )}
 
-                        <p className="font-sans text-xs text-slate-700 leading-relaxed mb-4">
+                        <p className="font-sans text-[11px] text-slate-700 leading-snug mb-2 line-clamp-2">
                           {rom.description}
                         </p>
-
-                        <div className="bg-neutral-100 border border-neutral-300 p-2.5 font-mono text-[11px] space-y-1.5 text-slate-800 mb-3 rounded-xs">
-                          <div className="truncate text-[10px]"><strong>Binary:</strong> {rom.fileName} ({rom.fileSize})</div>
-                          <div className="flex items-center justify-between text-[10px] text-slate-600 pt-1 border-t border-neutral-200">
-                            <span className="truncate font-mono"><strong>MD5:</strong> {rom.md5}</span>
-                            <button
-                              onClick={() => copyMd5(rom.md5, rom.id)}
-                              className="ml-2 px-1.5 py-0.5 bg-white border border-black text-[9px] font-bold uppercase hover:bg-black hover:text-white cursor-pointer shrink-0 transition-colors"
-                            >
-                              {copiedMd5 === rom.id ? 'COPIED!' : 'COPY'}
-                            </button>
-                          </div>
-                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 p-4 pt-0 border-t-0">
+                    <div className="p-3 pt-0 border-t-0">
                       <button
                         onClick={() => handleDownload([`${rom.id.toUpperCase()}.zip`, `${rom.id.toLowerCase()}.zip`, `${rom.id.toUpperCase()}.bin`, `${rom.id.toLowerCase()}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, rom.id)}
-                        className="flex-1 text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2 transition-colors flex items-center justify-center gap-1.5 rounded-xs cursor-pointer"
+                        className="w-full text-center bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase py-2 transition-colors flex items-center justify-center gap-1.5 rounded-xs cursor-pointer shadow-xs"
                       >
                         <Download className="w-3.5 h-3.5" /> {downloadingId === rom.id ? 'Connecting...' : 'Download ROM'}
                       </button>
-                      <Link
-                        href="/setup-guide?tab=netplay"
-                        className="px-3 py-2 border border-black font-mono text-xs font-bold uppercase hover:bg-neutral-100 transition-colors rounded-xs"
-                        title="Netplay Connection Guide"
-                      >
-                        Setup &rarr;
-                      </Link>
                     </div>
                   </div>
                 ))}
