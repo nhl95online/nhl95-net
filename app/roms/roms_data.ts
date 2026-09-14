@@ -1,3 +1,30 @@
+export const SUPABASE_ROM_IMAGES_URL = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/rom-images';
+export const SUPABASE_ROMS_URL = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/roms';
+
+/**
+ * Resolves an image path to a full URL.
+ * If path starts with http://, https://, or /, it returns it directly.
+ * Otherwise, resolves against the Supabase `rom-images` public storage bucket.
+ */
+export function getRomImageUrl(imagePath?: string): string | undefined {
+  if (!imagePath || !imagePath.trim()) return undefined;
+  const path = imagePath.trim();
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('/')) {
+    return path;
+  }
+  return `${SUPABASE_ROM_IMAGES_URL}/${encodeURI(path)}`;
+}
+
+/**
+ * Resolves a ROM download URL.
+ * If a custom URL is provided, returns that.
+ * Otherwise, builds a direct download URL against the Supabase `roms` storage bucket with ?download flag.
+ */
+export function getRomDownloadUrl(fileName: string, customUrl?: string): string {
+  if (customUrl && customUrl.trim()) return customUrl.trim();
+  return `${SUPABASE_ROMS_URL}/${encodeURIComponent(fileName)}?download`;
+}
+
 export interface LeagueRom {
   id: string;
   league: string;
@@ -8,6 +35,7 @@ export interface LeagueRom {
   md5: string;
   releaseDate: string;
   description: string;
+  imageUrl?: string;
   downloadUrl?: string;
   badge?: string;
   isActive?: boolean;
@@ -26,6 +54,7 @@ export interface HistoricalNhlRom {
   modder?: string;
   fileName: string;
   fileSize: string;
+  imageUrl?: string;
   downloadUrl?: string;
 }
 
@@ -39,6 +68,7 @@ export interface MiscRom {
   releaseYear: string;
   author: string;
   description: string;
+  imageUrl?: string;
   coverImage?: string;
   downloadUrl?: string;
   tags: string[];
@@ -51,6 +81,7 @@ export interface UtilityPack {
   fileName: string;
   fileSize: string;
   desc: string;
+  imageUrl?: string;
   downloadUrl?: string;
 }
 
@@ -68,6 +99,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     md5: 'a4f8e219b678c0024e819fa281b379c1',
     releaseDate: 'Active Season',
     description: 'The official active competitive season ROM featuring updated team rosters, custom franchise center ice logos, and manual goalie reaction profiles.',
+    imageUrl: 'w18.png',
     badge: 'ACTIVE SEASON',
     isActive: true
   },
@@ -80,6 +112,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     fileSize: '2.0 MB',
     md5: '8b3c10294fec9817ad91740283b49f22',
     releaseDate: 'Previous Season',
+    imageUrl: 'w17.png',
     description: 'W17 tournament build with full historical line combination balance and competitive exhibition netplay settings.'
   },
   {
@@ -91,6 +124,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     fileSize: '2.0 MB',
     md5: '7c32d90a1841e5492d19bc2981a54ee3',
     releaseDate: 'Active Tier',
+    imageUrl: 'q19.png',
     description: 'Premier tier Q League competitive edition tuned for lightning-fast skating speed, high-aggression defense mechanics, and manual shot controls.',
     badge: 'PREMIER'
   },
@@ -103,6 +137,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     fileSize: '2.0 MB',
     md5: '6d123e4a908b1a2387cf91823ab02814',
     releaseDate: 'Archival Vault',
+    imageUrl: 'q18.png',
     description: 'Previous Q League championship tournament build preserved for historical playoff series recreation.'
   },
   {
@@ -114,6 +149,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     fileSize: '2.0 MB',
     md5: 'e5b29c01824a77d13b610fa728bc991a',
     releaseDate: 'Archival Vault',
+    imageUrl: 'v01.png',
     description: 'The Grail Cup vintage league edition celebrating 80s icons, classic wooden stick shot physics, and arena organ charge tracks.',
     badge: 'GRAIL CUP'
   },
@@ -126,6 +162,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     fileSize: '2.0 MB',
     md5: 'f819ac29b710e6648c291ba8192ec405',
     releaseDate: 'Archival Vault',
+    imageUrl: 'g01.png',
     description: 'Golden Era showcase ROM celebrating the greatest 90s offensive dynasties, heavy checking, and high-scoring showdowns.',
     badge: 'GOLDEN ERA'
   },
@@ -138,6 +175,7 @@ export const OFFICIAL_LEAGUE_ROMS: LeagueRom[] = [
     fileSize: '2.0 MB',
     md5: 'd7a1e582c918b4317f229eb914a88f02',
     releaseDate: 'Archival Vault',
+    imageUrl: 'o01.png',
     description: 'Vintage Original Six tournament ROM (BOS, CHI, DET, MTL, NYR, TOR) with vintage sweaters, leather pads, and classic rinks.',
     badge: 'ORIGINAL 6'
   }
@@ -822,6 +860,7 @@ export const MISC_ROMS: MiscRom[] = [
     releaseYear: '2024',
     author: 'RetroMashup Studios',
     description: 'What if Michael Jordan, Shaq, Barkley, and Pippen played professional hockey? Features on-fire turbo sprint mechanics, shatterable glass backboards on slapshots, and arcade dunk animations after scoring.',
+    imageUrl: 'NBA On Ice.png',
     coverImage: '/images/roms-hero-banner.jpg',
     tags: ['NBA', 'Michael Jordan', 'On Fire', 'Arcade']
   },
@@ -835,6 +874,7 @@ export const MISC_ROMS: MiscRom[] = [
     releaseYear: '2023',
     author: 'CapcomPuck',
     description: 'Ryu, Ken, Guile, Chun-Li, and Zangief take to the ice! Custom sound effects (Hadouken on slapshots, Sonic Boom one-timers), custom fight engine replacement for bench-clearing brawls.',
+    imageUrl: 'Street Fighter II.png',
     coverImage: '/images/roms-hero-banner.jpg',
     tags: ['Street Fighter', 'Fighting', 'Capcom', 'Custom Sounds']
   },
@@ -848,6 +888,7 @@ export const MISC_ROMS: MiscRom[] = [
     releaseYear: '2024',
     author: 'BlastProcessing',
     description: 'Sonic the Hedgehog, ToeJam & Earl, Axel Stone (Streets of Rage), Shinobi, and Vectorman battle it out in a neon retro synthwave arena.',
+    imageUrl: 'Sega 16-Bit All-Stars Hockey Brawl.png',
     coverImage: '/images/roms-hero-banner.jpg',
     tags: ['Sonic', 'ToeJam & Earl', 'Streets of Rage', 'Synthwave']
   },
@@ -861,6 +902,7 @@ export const MISC_ROMS: MiscRom[] = [
     releaseYear: '2024',
     author: 'Euro95 Federation',
     description: 'Comprehensive 32-nation international tournament ROM featuring Olympic ice dimensions, European team sweaters, IIHF hybrid icing rules, and international shootout format.',
+    imageUrl: 'IIHF World Hockey Championship.png',
     coverImage: '/images/roms-hero-banner.jpg',
     tags: ['International', 'Olympics', 'Team Canada', 'USA', 'Sweden', 'Finland']
   },
@@ -874,6 +916,7 @@ export const MISC_ROMS: MiscRom[] = [
     releaseYear: '2023',
     author: 'CampusModder',
     description: 'Features Michigan, Boston College, Minnesota, North Dakota, Boston University, Denver, and classic college rivalries with authentic marching band fight songs.',
+    imageUrl: 'NCAA Frozen Four College Hockey.png',
     coverImage: '/images/roms-hero-banner.jpg',
     tags: ['NCAA', 'College', 'Fight Songs', 'Rivalries']
   },
@@ -887,6 +930,7 @@ export const MISC_ROMS: MiscRom[] = [
     releaseYear: '2024',
     author: 'Midway95',
     description: 'Scorpion, Sub-Zero, Raiden, and Liu Kang swap martial arts for hockey sticks. High-velocity freeze pucks, arena stage hazards, and gory checking animations.',
+    imageUrl: 'Mortal Kombat Ice Kampground.png',
     coverImage: '/images/roms-hero-banner.jpg',
     tags: ['Mortal Kombat', 'Sub-Zero', 'Scorpion', 'Arcade']
   }
@@ -902,6 +946,7 @@ export const UTILITY_PACKS_DATA: UtilityPack[] = [
     category: 'Emulator',
     fileName: 'RetroArch_NHL95_StarterKit_v2.4.zip',
     fileSize: '48.5 MB',
+    imageUrl: 'RetroArch Starter Pack.png',
     desc: 'Turnkey competitive package including optimized Genesis Plus GX core, sub-millisecond audio latency setup, Netplay hotkeys, and pre-mapped 6-button controller profiles.'
   },
   {
@@ -910,6 +955,7 @@ export const UTILITY_PACKS_DATA: UtilityPack[] = [
     category: 'Broadcast',
     fileName: 'NHL95_OBS_StreamOverlays_Pack.zip',
     fileSize: '18.2 MB',
+    imageUrl: 'OBS Stream Overlays.png',
     desc: 'High-resolution pillarbox graphic borders for retro 4:3 Genesis games on modern 16:9 monitors, lower-third starting goalies comparison, and intermission period summaries.'
   },
   {
@@ -918,6 +964,7 @@ export const UTILITY_PACKS_DATA: UtilityPack[] = [
     category: 'Audio',
     fileName: 'NHL95_Audio_ArenaMusic_Mod.zip',
     fileSize: '6.4 MB',
+    imageUrl: 'Arena Sound Mod.png',
     desc: 'Digitally restored crowd ambiance, vintage arena air-horns, synthesizer organ charge melodies, and custom whistle sound effects.'
   },
   {
@@ -926,6 +973,7 @@ export const UTILITY_PACKS_DATA: UtilityPack[] = [
     category: 'Tool',
     fileName: 'NHL95_Editor_Suite_v3.1.zip',
     fileSize: '12.8 MB',
+    imageUrl: 'NHL95 Suite Editor.png',
     desc: 'Windows utility for modifying player attributes, lines, jersey colors, center ice graphics, and team rosters on any Genesis NHL95 binary ROM.'
   }
 ];
