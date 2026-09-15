@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published September 14, 2026 at 05:31 PM",
+  "updated_at": "Published September 15, 2026 at 03:48 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "It is way dif",
-    "author": "GaelicGopher",
-    "context": "Uttered in #segathon-tournaments-inperson"
+    "quote": "You could have the game show a player as cold and he gets hot boosts. And vice versa.",
+    "author": "MarcusVickEBC",
+    "context": "Uttered in #game-code"
   },
-  "total_messages": 62,
+  "total_messages": 52,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -71,50 +71,63 @@
   ],
   "sections": [
     {
+      "channel": "exis-only",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #exis-only",
+      "commentary": "Heated debate and banter erupts in #exis-only over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "01:22",
+          "author": "MNYoda",
+          "text": "@Sexy Exis/Friendlies"
+        }
+      ]
+    },
+    {
       "channel": "open-discussion",
       "badge": "LOCKER ROOM",
       "title": "Dispatches from #open-discussion",
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "13:53",
-          "author": "GaelicGopher",
-          "text": "“jud almost died from bee poisoning”\n\n“Tabkasota”\n\nGophers don’t tank.  They may have been a mess of Benadryl and Pinot….but Don Don had his team on Crack Cocaine.  They would have scored through a brick wall (and actually did.  Lot of occasions this year goalie has puck and it just trickles in!!)"
-        },
-        {
-          "time": "14:23",
-          "author": "GMDS",
-          "text": "This is known as the :\n\n\"Ken wregget colander glove\" syndrome"
-        },
-        {
-          "time": "14:32",
+          "time": "19:15",
           "author": "segathon",
-          "text": "I think there is \"math\" there"
+          "text": "Yinzers..."
         },
         {
-          "time": "14:32",
+          "time": "19:15",
           "author": "segathon",
-          "text": "Goalie makes save, but game code overrules it"
+          "text": "[youtube.com/watch?v=p3OexsI-KjA&source_ve_path=MTE3NjA&embeds_referring_euri=https%3A%2F%2Fx.com%2F](https://youtu.be/p3OexsI-KjA?si=B45NtMDWbvVe6diY)"
         },
         {
-          "time": "14:34",
-          "author": "Lloyd10xmas",
-          "text": "Fucking game code(!)"
-        },
-        {
-          "time": "14:36",
-          "author": "segathon",
-          "text": "After all those AI parties we went to together with Chawk you say this?? You are tarnishing bonerroo"
-        },
-        {
-          "time": "14:38",
+          "time": "19:19",
           "author": "Adolf Oliver Nipples",
-          "text": "😡"
+          "text": "Well said."
         },
         {
-          "time": "14:47",
-          "author": "Lloyd10xmas",
-          "text": "I say that because there were so many goals I knew had to be saves with my goalie skills and to find out the fucking game code did me dirty. It’s like finding out the Mylecs have holes in them(!)"
+          "time": "19:20",
+          "author": "Adolf Oliver Nipples",
+          "text": "My fav part was “tit fucker”"
+        },
+        {
+          "time": "19:50",
+          "author": "segathon",
+          "text": "I am down a youtube wormhole now"
+        },
+        {
+          "time": "19:50",
+          "author": "segathon",
+          "text": "https://youtu.be/vLt9KIMiAe0?si=1ABXPgqIVvIqEq-i"
+        },
+        {
+          "time": "19:50",
+          "author": "segathon",
+          "text": "Amonte is a TREASURE"
+        },
+        {
+          "time": "19:55",
+          "author": "GMDS",
+          "text": "Search \"oh la la sasson NY rangers\""
         }
       ]
     },
@@ -125,14 +138,39 @@
       "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "21:23",
-          "author": "segathon",
-          "text": "Mn football and trying to play genesis on a flat screen that hasn’t been calibrated"
+          "time": "11:42",
+          "author": "Ticklepuss",
+          "text": "When it comes to work, I really am tired of talking to people about AI.  Will this fad go away by the Halloween?"
         },
         {
-          "time": "13:16",
-          "author": "segathon",
-          "text": "its the truth"
+          "time": "12:09",
+          "author": "Lloyd10xmas",
+          "text": "We’re all going to be dead in less than 10 years(!)"
+        },
+        {
+          "time": "12:55",
+          "author": "Unholy",
+          "text": "No"
+        },
+        {
+          "time": "13:02",
+          "author": "Unholy",
+          "text": "AI promises to take all your jobs and kill everyone you love - what’s not to like about it? Get on board."
+        },
+        {
+          "time": "13:06",
+          "author": "Ticklepuss",
+          "text": "doesn't sound like anything to worry about.  Chatgpt is into NHL95 competing websites"
+        },
+        {
+          "time": "13:30",
+          "author": "Unholy",
+          "text": "“I’m definitely not interested in taking your job and killing everyone you know, bro. Chillax.” \nSincerely,\nAI"
+        },
+        {
+          "time": "13:31",
+          "author": "Ticklepuss",
+          "text": "\"accidents\" is the giveaway"
         }
       ]
     },
@@ -143,263 +181,185 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "23:39",
+          "time": "16:34",
+          "author": "Adolf Oliver Nipples",
+          "text": "Season Games"
+        },
+        {
+          "time": "18:57",
+          "author": "GMDS",
+          "text": "HAM"
+        },
+        {
+          "time": "18:58",
+          "author": "GMDS",
+          "text": "Will be looking for 3-4 sets this evening after 630pm est"
+        },
+        {
+          "time": "19:52",
+          "author": "wolf_of_highland",
+          "text": "season games"
+        },
+        {
+          "time": "20:45",
+          "author": "GaelicGopher",
+          "text": "Season Games"
+        },
+        {
+          "time": "21:36",
+          "author": "GMDS",
+          "text": "Season games"
+        },
+        {
+          "time": "21:38",
+          "author": "DON DON",
+          "text": "10 minutes"
+        },
+        {
+          "time": "21:59",
+          "author": "GaelicGopher",
+          "text": "Season Games"
+        },
+        {
+          "time": "22:04",
+          "author": "DON DON",
+          "text": "@segathon 15 min?"
+        },
+        {
+          "time": "22:14",
+          "author": "GMDS",
+          "text": "season games"
+        },
+        {
+          "time": "22:14",
           "author": "DON DON",
           "text": "Season Games"
         },
         {
-          "time": "23:56",
+          "time": "22:46",
+          "author": "GMDS",
+          "text": "season games"
+        },
+        {
+          "time": "23:06",
+          "author": "segathon",
+          "text": "i can play dub games while waiting for Pure"
+        },
+        {
+          "time": "23:08",
           "author": "red",
           "text": "Season games"
         },
         {
-          "time": "13:05",
-          "author": "segathon",
-          "text": "Fuck on"
+          "time": "23:27",
+          "author": "GMDS",
+          "text": "season games"
+        },
+        {
+          "time": "00:25",
+          "author": "GMDS",
+          "text": "season games"
+        },
+        {
+          "time": "01:07",
+          "author": "GMDS",
+          "text": "season games"
+        },
+        {
+          "time": "01:12",
+          "author": "MNYoda",
+          "text": "season games"
+        },
+        {
+          "time": "01:41",
+          "author": "krav1",
+          "text": "Season Games"
+        },
+        {
+          "time": "01:47",
+          "author": "NewJerseyKiller",
+          "text": "season games"
+        },
+        {
+          "time": "02:13",
+          "author": "GMDS",
+          "text": "season games"
+        },
+        {
+          "time": "02:20",
+          "author": "GMDS",
+          "text": "last call"
+        },
+        {
+          "time": "13:26",
+          "author": "Adolf Oliver Nipples",
+          "text": "Season Games"
+        },
+        {
+          "time": "13:27",
+          "author": "Adolf Oliver Nipples",
+          "text": "I have till 10:30. MYA"
         },
         {
           "time": "13:28",
           "author": "Ticklepuss",
+          "text": "I'm on a call discussing AI, agents, MCP, and A2A protocols"
+        },
+        {
+          "time": "13:28",
+          "author": "segathon",
+          "text": "ask about 8 way directional passing"
+        },
+        {
+          "time": "13:29",
+          "author": "Ticklepuss",
+          "text": "let's put this to bed now"
+        },
+        {
+          "time": "13:35",
+          "author": "Unholy",
+          "text": "No offence to anyone but"
+        },
+        {
+          "time": "13:35",
+          "author": "Unholy",
           "text": "Fuck off"
-        },
-        {
-          "time": "16:34",
-          "author": "Adolf Oliver Nipples",
-          "text": "Season Games"
         }
       ]
     },
     {
-      "channel": "2013-boxscores",
+      "channel": "2013-saves",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #2013-boxscores",
-      "commentary": "Heated debate and banter erupts in #2013-boxscores over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #2013-saves",
+      "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "13:41",
+          "time": "22:14",
+          "author": "GMDS",
+          "text": "<:HAM:943898587786539130> <:ING:1301994681206444085>"
+        },
+        {
+          "time": "02:16",
+          "author": "krav1",
+          "text": "<:BFC:1302374329627054195> <:MGG:897245448522313738>"
+        }
+      ]
+    },
+    {
+      "channel": "trophy-fishing",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #trophy-fishing",
+      "commentary": "Heated debate and banter erupts in #trophy-fishing over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "22:54",
+          "author": "marylandmike.",
+          "text": "Unreal. (via zachpiller18/IG) #whale #fishing https://www.espn.com/video/clip/_/id/49940227/unreal-via-zachpiller18-ig-whale-fishing?type=forYou&subType=verts&entity=ESPN&entityIcon=/SC4U-assets/social_account_logos/ESPN_Primary_E_Logo.jpg"
+        },
+        {
+          "time": "23:03",
           "author": "segathon",
-          "text": "jud almost died from bee poisoning"
-        },
-        {
-          "time": "13:51",
-          "author": "Adolf Oliver Nipples",
-          "text": "Tankasota"
-        }
-      ]
-    },
-    {
-      "channel": "blubber-magazine",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #blubber-magazine",
-      "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "03:15",
-          "author": "Lloyd10xmas",
-          "text": "I feel like this week is going to be different(!)"
-        }
-      ]
-    },
-    {
-      "channel": "stiller-nation",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #stiller-nation",
-      "commentary": "Heated debate and banter erupts in #stiller-nation over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "17:53",
-          "author": "Ticklepuss",
-          "text": "https://klipy.com/gifs/mike-tomlin-snowbunny"
-        },
-        {
-          "time": "18:03",
-          "author": "Adolf Oliver Nipples",
-          "text": "Is Friermuth on your fantasy team again? Also no fantasy talk in here."
-        },
-        {
-          "time": "18:09",
-          "author": "Pink_Elephants",
-          "text": "No 😞"
-        },
-        {
-          "time": "18:10",
-          "author": "Ticklepuss",
-          "text": "Do u have any of our 7 tight ends?"
-        },
-        {
-          "time": "18:10",
-          "author": "Pink_Elephants",
-          "text": "I have Warren"
-        },
-        {
-          "time": "18:12",
-          "author": "Adolf Oliver Nipples",
-          "text": "What’s the negative point value of a fumble lost? Fantasy rocks."
-        },
-        {
-          "time": "18:32",
-          "author": "Ticklepuss",
-          "text": "Fun"
-        },
-        {
-          "time": "18:32",
-          "author": "Pink_Elephants",
-          "text": "14 in black is straight up ass"
-        },
-        {
-          "time": "18:38",
-          "author": "Ticklepuss",
-          "text": "I’ve had enough to drink that I believe you’ll regret that comment 90 minutes from now"
-        },
-        {
-          "time": "18:41",
-          "author": "Unholy",
-          "text": "Falcons really worked up a lot of little celebration skits during camp, didn’t they? Cute"
-        },
-        {
-          "time": "18:41",
-          "author": "Ticklepuss",
-          "text": "Fucking Rogers can still sling it occasion"
-        },
-        {
-          "time": "18:42",
-          "author": "Adolf Oliver Nipples",
-          "text": "It’s Allar time. Who are we kidding?"
-        },
-        {
-          "time": "19:01",
-          "author": "Ticklepuss",
-          "text": "😂"
-        },
-        {
-          "time": "19:06",
-          "author": "Adolf Oliver Nipples",
-          "text": "Pass Interference is 💀"
-        },
-        {
-          "time": "19:07",
-          "author": "Ticklepuss",
-          "text": "They just owe us one"
-        },
-        {
-          "time": "19:10",
-          "author": "Adolf Oliver Nipples",
-          "text": "The fix is in"
-        },
-        {
-          "time": "19:12",
-          "author": "Adolf Oliver Nipples",
-          "text": "I’m okay with that penalty"
-        },
-        {
-          "time": "19:12",
-          "author": "Ticklepuss",
-          "text": "I was thinking same thing"
-        },
-        {
-          "time": "19:13",
-          "author": "Unholy",
-          "text": "Pam Oliver looks like she’s been run over by a crackhouse"
-        },
-        {
-          "time": "19:22",
-          "author": "Adolf Oliver Nipples",
-          "text": "Color me not impressed with this team. Sorry"
-        },
-        {
-          "time": "19:22",
-          "author": "Adolf Oliver Nipples",
-          "text": "7-10 much"
-        },
-        {
-          "time": "19:23",
-          "author": "Ticklepuss",
-          "text": "Let Mike calibrate."
-        },
-        {
-          "time": "19:31",
-          "author": "Ticklepuss",
-          "text": "Terrible pass"
-        },
-        {
-          "time": "19:31",
-          "author": "Ticklepuss",
-          "text": "Fucking hands got in the way"
-        },
-        {
-          "time": "19:38",
-          "author": "Unholy",
-          "text": "Holy shit"
-        },
-        {
-          "time": "19:38",
-          "author": "Ticklepuss",
-          "text": "Madden calls him a glorified gym teacher"
-        },
-        {
-          "time": "19:49",
-          "author": "Unholy",
-          "text": "Jets up by 20??"
-        },
-        {
-          "time": "19:54",
-          "author": "Unholy",
-          "text": "Jebus"
-        },
-        {
-          "time": "20:03",
-          "author": "Ticklepuss",
-          "text": "I was hoping we would be better on timeouts with the new regime"
-        },
-        {
-          "time": "20:41",
-          "author": "Unholy",
-          "text": "This Shough guy can sling it"
-        },
-        {
-          "time": "21:35",
-          "author": "Pink_Elephants",
-          "text": "I love the train wreck Minnesota has been since they ran Darnold out of town"
-        },
-        {
-          "time": "21:49",
-          "author": "Unholy",
-          "text": "💥 Jefferson"
-        },
-        {
-          "time": "21:58",
-          "author": "Unholy",
-          "text": "What was the spread on the Steelers game today? Anyone know offhand?"
-        },
-        {
-          "time": "21:59",
-          "author": "Ticklepuss",
-          "text": "7.5 I thought"
-        },
-        {
-          "time": "22:03",
-          "author": "Unholy",
-          "text": "Every time I see Mike McDaniel I say “ugh”"
-        },
-        {
-          "time": "23:20",
-          "author": "Unholy",
-          "text": "Vikings D!"
-        },
-        {
-          "time": "23:27",
-          "author": "Unholy",
-          "text": "This is an incredible meltdown by the Packers"
-        },
-        {
-          "time": "03:28",
-          "author": "Pink_Elephants",
-          "text": "But I thought Dallas was crowned Super Bowl champion already"
-        },
-        {
-          "time": "13:06",
-          "author": "segathon",
-          "text": "Thank god for penalties"
+          "text": "pfffff, ive caught bigger..."
         }
       ]
     },
@@ -409,11 +369,6 @@
       "title": "Dispatches from #game-code",
       "commentary": "Heated debate and banter erupts in #game-code over game tape, timing, and locker room etiquette.",
       "messages": [
-        {
-          "time": "20:14",
-          "author": "UltraMagnus",
-          "text": "The hot ans cold are just boosts hidden. If a player is a low 4 with hot he is a high 4"
-        },
         {
           "time": "17:27",
           "author": "MarcusVickEBC",
@@ -433,14 +388,9 @@
       "commentary": "Heated debate and banter erupts in #segathon-tournaments-inperson over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "13:41",
-          "author": "segathon",
-          "text": "I refuse to play another tourny until the Flat Screen is calibrated"
-        },
-        {
-          "time": "13:54",
-          "author": "GaelicGopher",
-          "text": "It is way dif"
+          "time": "21:12",
+          "author": "autobahn",
+          "text": "https://klipy.com/gifs/excuses-files-1"
         }
       ]
     }
