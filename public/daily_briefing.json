@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published September 16, 2026 at 04:00 PM",
+  "updated_at": "Published September 17, 2026 at 03:45 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "Smolinski is the only player in the game who is both a starting skater and listed as the 6th skater for goalie pull. Mystery solved.",
-    "author": "MarcusVickEBC",
-    "context": "Uttered in #game-code"
+    "quote": "I get evil looks from spouse as I still can’t say his name right after being corrected 78 times",
+    "author": "GaelicGopher",
+    "context": "Uttered in #knightsvision"
   },
-  "total_messages": 61,
+  "total_messages": 26,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -71,51 +71,24 @@
   ],
   "sections": [
     {
+      "channel": "exis-only",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #exis-only",
+      "commentary": "Heated debate and banter erupts in #exis-only over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "03:23",
+          "author": "MNYoda",
+          "text": "@Sexy Exis/Friendlies holla atcha boy!"
+        }
+      ]
+    },
+    {
       "channel": "open-discussion",
       "badge": "LOCKER ROOM",
       "title": "Dispatches from #open-discussion",
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
-        {
-          "time": "02:15",
-          "author": "kamphuna8",
-          "text": "Dont let him let it go. Plz aide me in convincing him otherwise https://x.com/Hasselbeck/status/2100034062240891147"
-        },
-        {
-          "time": "02:19",
-          "author": "shawnmb",
-          "text": "somebody invite Hasselbeck to the league"
-        },
-        {
-          "time": "02:58",
-          "author": "segathon",
-          "text": "Great find kamp"
-        },
-        {
-          "time": "02:59",
-          "author": "segathon",
-          "text": "He’s talked about nhl 95 a few times on the twitter machine"
-        },
-        {
-          "time": "13:50",
-          "author": "NathanMB",
-          "text": "Always thought his name was hassleBACK"
-        },
-        {
-          "time": "13:54",
-          "author": "GMDS",
-          "text": "Still an all timer:\nhttps://youtu.be/vAgG9XcrDFY?si=AJry9CJOjDTOmvJY"
-        },
-        {
-          "time": "15:02",
-          "author": "Unholy",
-          "text": "I liked the moxie."
-        },
-        {
-          "time": "15:07",
-          "author": "segathon",
-          "text": "Yup,  I’m sure the packers committed a penalty there too"
-        },
         {
           "time": "15:53",
           "author": "NathanMB",
@@ -150,19 +123,69 @@
           "time": "15:54",
           "author": "segathon",
           "text": "Will probably be unfollowed by end of week"
+        },
+        {
+          "time": "16:13",
+          "author": "GMDS",
+          "text": "Tell him al Harris isn't allowed in our league. It's a safe space"
+        },
+        {
+          "time": "17:47",
+          "author": "Ticklepuss",
+          "text": "whatever happened to Josh Yohe?  he join the 94 league?"
+        },
+        {
+          "time": "18:20",
+          "author": "segathon",
+          "text": "I comment on the league anytime I have the opportunity too.  I think he was a SNES guy though"
+        },
+        {
+          "time": "21:06",
+          "author": "DON DON",
+          "text": "I dislike the packers but that was funny"
+        },
+        {
+          "time": "01:24",
+          "author": "Pink_Elephants",
+          "text": "Why isn’t Matt Hasselbeck enlisted in our cult yet?"
+        },
+        {
+          "time": "01:24",
+          "author": "Pink_Elephants",
+          "text": "And why hasn’t BellnBell asked him to be their guest?"
+        },
+        {
+          "time": "12:38",
+          "author": "segathon",
+          "text": "I just online stalked him.  He has posted about NHL 95 a dozen times on the twitter machine going back to 2018."
         }
       ]
     },
     {
-      "channel": "praise",
+      "channel": "complaints",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #praise",
-      "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #complaints",
+      "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "19:35",
+          "time": "17:59",
+          "author": "GMDS",
+          "text": "Everything on tickleticker gmds says is \"creepy\" \n\nMustangs legal is preparing cease and disist letter"
+        },
+        {
+          "time": "12:16",
           "author": "segathon",
-          "text": "Permutations in @MarcusVickEBC #game-code"
+          "text": "they dont make these shirts anymore"
+        },
+        {
+          "time": "12:32",
+          "author": "Ticklepuss",
+          "text": "They are on amazon"
+        },
+        {
+          "time": "12:33",
+          "author": "Ticklepuss",
+          "text": "Unless u need the official words"
         }
       ]
     },
@@ -173,263 +196,55 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "18:26",
-          "author": "Adolf Oliver Nipples",
-          "text": "Season Games"
-        },
-        {
-          "time": "18:26",
-          "author": "Adolf Oliver Nipples",
-          "text": "Last call ☎️"
-        },
-        {
-          "time": "22:45",
-          "author": "GMDS",
-          "text": "season games"
-        },
-        {
-          "time": "23:26",
-          "author": "red",
+          "time": "00:26",
+          "author": "chalkitup7777",
           "text": "Season games"
         },
         {
-          "time": "23:39",
-          "author": "GMDS",
+          "time": "00:33",
+          "author": "DSN",
+          "text": "Season games"
+        },
+        {
+          "time": "01:51",
+          "author": "NathanMB",
           "text": "season games"
         },
         {
-          "time": "00:12",
-          "author": "GMDS",
-          "text": "season games"
-        },
-        {
-          "time": "00:42",
-          "author": "GMDS",
-          "text": "season games"
-        },
-        {
-          "time": "01:23",
-          "author": "GMDS",
-          "text": "1 more try"
-        },
-        {
-          "time": "01:23",
-          "author": "GMDS",
-          "text": "season games"
-        },
-        {
-          "time": "01:48",
-          "author": "Adolf Oliver Nipples",
+          "time": "02:21",
+          "author": "shawnmb",
           "text": "Season Games"
         },
         {
-          "time": "02:00",
+          "time": "03:23",
           "author": "MNYoda",
           "text": "season games"
-        },
-        {
-          "time": "02:29",
-          "author": "GaelicGopher",
-          "text": "Season Games"
         }
       ]
     },
     {
-      "channel": "2013-saves",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #2013-saves",
-      "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
+      "channel": "crib-notes-with-pinot-and-gummies",
+      "badge": "LATE NIGHT INTEL",
+      "title": "Post-Midnight Tactical Reflections",
+      "commentary": "Cryptic communications transmitted during late-night downtime. Scouts are still deciphering the deeper strategic playbook.",
       "messages": [
         {
-          "time": "00:43",
-          "author": "GMDS",
-          "text": "<:HAM:943898587786539130> <:BAR:1447630932646301789>"
-        },
-        {
-          "time": "02:55",
-          "author": "GaelicGopher",
-          "text": "<:MGG:897245448522313738> <:BAY:1039716048510922802>"
+          "time": "15:16",
+          "author": "Lloyd10xmas",
+          "text": "Now imagine seeing them like that peaking on mushrooms instead of Pinot and gummies(!)"
         }
       ]
     },
     {
-      "channel": "highlights",
-      "badge": "TAPE ROOM",
-      "title": "Reel-to-Reel Reel Dump",
-      "commentary": "Film room flooded with twitch highlight reels featuring questionable wrap-arounds, diving poke-checks, and goalie heroics.",
+      "channel": "knightsvision",
+      "badge": "HOT SCOOP",
+      "title": "Archival Identity Verification Incident",
+      "commentary": "Vintage game film circulated through the wire. Unholy confirmed his legendary on-ice persona by sheer instinct without even rendering the media.",
       "messages": [
         {
-          "time": "00:49",
-          "author": "GMDS",
-          "text": "https://www.twitch.tv/mustangshamilton/clip/HandsomePrettiestScallionAMPEnergyCherry-MCzgXsmLT-kIGxg8"
-        },
-        {
-          "time": "00:56",
-          "author": "GMDS",
-          "text": "https://www.twitch.tv/mustangshamilton/clip/PeacefulCrunchyKumquatTebowing-8cTv9EqdlGh8490P"
-        },
-        {
-          "time": "01:02",
-          "author": "Pink_Elephants",
-          "text": "This was one of the only times I’ve seen a goalie pull work"
-        },
-        {
-          "time": "01:03",
-          "author": "GMDS",
-          "text": "may be my first success, love how schwartz came down the lane plowed a guy and jarred it lose to create the play"
-        },
-        {
-          "time": "01:04",
-          "author": "Pink_Elephants",
-          "text": "Yeah I saw it live. Haha it was wonderful! 👏"
-        }
-      ],
-      "clips": [
-        {
-          "name": "HandsomePrettiestScallio",
-          "url": "https://www.twitch.tv/mustangshamilton/clip/HandsomePrettiestScallionAMPEnergyCherry-MCzgXsmLT-kIGxg8"
-        },
-        {
-          "name": "PeacefulCrunchyKumquatTe",
-          "url": "https://www.twitch.tv/mustangshamilton/clip/PeacefulCrunchyKumquatTebowing-8cTv9EqdlGh8490P"
-        }
-      ]
-    },
-    {
-      "channel": "game-code",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #game-code",
-      "commentary": "Heated debate and banter erupts in #game-code over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "16:54",
-          "author": "MarcusVickEBC",
-          "text": "Across 16,000 simulations, AI confirms OFA has nothing to do with positioning in the slot for one timers."
-        },
-        {
-          "time": "17:33",
-          "author": "MarcusVickEBC",
-          "text": "This game continues to amaze me. \n\nAI found a goal scoring set up that I wanted to test. \n\nI had it use Mike Modano, and do it the exact same way (same coordinates and pixels on the ice) 1000x against Roy and 1000x against Don Beaupre. \n\n610/1000 goals against Roy. 307/1000 goals against Beaupre."
-        },
-        {
-          "time": "17:36",
-          "author": "MarcusVickEBC",
-          "text": "I just ran it again. 1000x again. \n\n620/1000 against Roy. 389/1000 against Beaupre."
-        },
-        {
-          "time": "17:36",
-          "author": "MarcusVickEBC",
-          "text": "Makes no sense whatsoever."
-        },
-        {
-          "time": "18:43",
+          "time": "21:14",
           "author": "GaelicGopher",
-          "text": "Wonder how he’d do versus Darcy Wakaluk!!!!"
-        },
-        {
-          "time": "18:46",
-          "author": "shawnmb",
-          "text": "This is very disappointing"
-        },
-        {
-          "time": "18:59",
-          "author": "MarcusVickEBC",
-          "text": "Goal percentage against both Roy and Beaupre for the scoring move in question. \n\nSomething above using 5 SHP against Beaupre is causing the puck to go in far less. \n\nEach permutation of SHP and SHA was run 1000 times per goalie."
-        },
-        {
-          "time": "19:00",
-          "author": "MarcusVickEBC",
-          "text": "So until you get to 5-5, 5-6, or 6-5…Beaupre is a far better goalie AGAINST THIS TYPE OF SCORING\nMOVE than Roy."
-        },
-        {
-          "time": "19:01",
-          "author": "MarcusVickEBC",
-          "text": "Specifying “this type of scoring move” because I don’t want you to think this means Beaupre is a better goalie than Roy generally."
-        },
-        {
-          "time": "19:03",
-          "author": "MarcusVickEBC",
-          "text": "I’m running another 54,400 simulations now, changing tiny variables around the shot to see if any of them matter or change the save percentage."
-        },
-        {
-          "time": "19:05",
-          "author": "Ticklepuss",
-          "text": "why not 54,500?"
-        },
-        {
-          "time": "19:07",
-          "author": "MarcusVickEBC",
-          "text": "16 rating permutations, 17 different wind-up stop points, 100 attempts each, against both goalies."
-        },
-        {
-          "time": "19:07",
-          "author": "MarcusVickEBC",
-          "text": "The AI decides man. The AI decides."
-        },
-        {
-          "time": "19:08",
-          "author": "MarcusVickEBC",
-          "text": "And yea, apparently there are 17 different points where you can release your wind up on a shot."
-        },
-        {
-          "time": "19:12",
-          "author": "MarcusVickEBC",
-          "text": "The craziest thing is - the AI is playing the game. It’s not just simulating the code. It is showing me actual gameplay footage."
-        },
-        {
-          "time": "19:15",
-          "author": "MarcusVickEBC",
-          "text": "Most disappointing finding: sent it  Twitch clips of times where goalies go crazy and skate all the way up ice.  It has gone through the ROM and cannot figure out what causes that."
-        },
-        {
-          "time": "19:18",
-          "author": "Pink_Elephants",
-          "text": "This is by far the worst channel"
-        },
-        {
-          "time": "19:18",
-          "author": "MarcusVickEBC",
-          "text": "Sorry"
-        },
-        {
-          "time": "19:28",
-          "author": "Ticklepuss",
-          "text": "To put it bluntly, this is going to make Nick from Minnesota cum"
-        },
-        {
-          "time": "19:33",
-          "author": "segathon",
-          "text": "https://klipy.com/gifs/in-there-out"
-        },
-        {
-          "time": "19:34",
-          "author": "segathon",
-          "text": "https://klipy.com/gifs/speechless-smoking-man"
-        },
-        {
-          "time": "19:35",
-          "author": "segathon",
-          "text": "oooo thats good"
-        },
-        {
-          "time": "20:57",
-          "author": "MarcusVickEBC",
-          "text": "Smolinski is the only player I found with this condition in your ROM’s default lineups. There is a concrete explanation.\n\nBoston assigns him to both LW and the hidden extra-attacker slot. When you select him for C or RW, the replacement routine:\n\nFinds his extra-attacker entry first.\nMoves the displaced center/right winger into that entry.\nAssigns Smolinski to your selected position—but leaves him at LW.\nThat creates the two visible Smolinski assignments.\n\nI scanned all 28 teams × eight lineup records and executed 12,768 replacement tests using the original ROM routine. Only selecting Boston’s Smolinski at C or RW produced duplicate visible skaters from those stock records.\n\nSimply trying another team’s extra attacker should not reproduce it: Smolinski uniquely starts with the necessary repeated entry. Ordinary replacements through this routine also cannot create that initial repetition for another player."
-        },
-        {
-          "time": "20:58",
-          "author": "MarcusVickEBC",
-          "text": "@segathon"
-        },
-        {
-          "time": "21:18",
-          "author": "MarcusVickEBC",
-          "text": "Smolinski is the only player in the game who is both a starting skater and listed as the 6th skater for goalie pull. Mystery solved."
-        },
-        {
-          "time": "21:23",
-          "author": "segathon",
-          "text": "https://klipy.com/gifs/now-you-know-the-more-you-know"
+          "text": "I get evil looks from spouse as I still can’t say his name right after being corrected 78 times"
         }
       ]
     }
