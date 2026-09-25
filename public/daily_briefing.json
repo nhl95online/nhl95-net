@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published September 24, 2026 at 04:22 PM",
+  "updated_at": "Published September 25, 2026 at 04:01 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "No fish, no pads… @Ticklepuss really mailing it in lately with the art(!)",
-    "author": "Lloyd10xmas",
-    "context": "Uttered in #art_gallery"
+    "quote": "That is too good",
+    "author": "segathon",
+    "context": "Uttered in #knightsvision"
   },
-  "total_messages": 22,
+  "total_messages": 41,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -71,20 +71,46 @@
   ],
   "sections": [
     {
+      "channel": "open-discussion",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #open-discussion",
+      "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "02:45",
+          "author": "Unholy",
+          "text": "Anyone watching “Lanterns”?"
+        },
+        {
+          "time": "15:40",
+          "author": "Ticklepuss",
+          "text": "his run with v1.10 is impressive"
+        }
+      ]
+    },
+    {
       "channel": "complaints",
       "badge": "LOCKER ROOM",
       "title": "Dispatches from #complaints",
       "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "01:47",
-          "author": "shawnmb",
-          "text": "Complaint: the green font on my name"
-        },
+          "time": "14:28",
+          "author": "Ticklepuss",
+          "text": "@shawnmb"
+        }
+      ]
+    },
+    {
+      "channel": "praise",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #praise",
+      "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
+      "messages": [
         {
-          "time": "05:04",
-          "author": "segathon",
-          "text": "Ceydan would of liked this…"
+          "time": "13:57",
+          "author": "Lloyd10xmas",
+          "text": "Friday Frenzies(!)"
         }
       ]
     },
@@ -95,119 +121,132 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:46",
+          "time": "16:32",
+          "author": "chalkitup7777",
+          "text": "Hockey tonight!!!!"
+        },
+        {
+          "time": "16:32",
+          "author": "chalkitup7777",
+          "text": "Season games"
+        },
+        {
+          "time": "17:00",
+          "author": "chalkitup7777",
+          "text": "8-9ish"
+        },
+        {
+          "time": "22:26",
+          "author": "NathanMB",
+          "text": "season games"
+        },
+        {
+          "time": "00:34",
           "author": "NathanMB",
           "text": "Season games"
         },
         {
-          "time": "01:46",
-          "author": "shawnmb",
-          "text": "Season Games"
-        },
-        {
-          "time": "01:49",
+          "time": "00:42",
           "author": "krav1",
           "text": "Season Games"
         },
         {
-          "time": "01:50",
-          "author": "autobahn",
-          "text": "I could be ready to go in about ten minutes"
-        },
-        {
-          "time": "01:56",
-          "author": "marylandmike.",
+          "time": "01:02",
+          "author": "Unholy",
           "text": "Season games"
         },
         {
-          "time": "02:00",
-          "author": "MNYoda",
-          "text": "season games"
-        }
-      ]
-    },
-    {
-      "channel": "2013-saves",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #2013-saves",
-      "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "02:34",
-          "author": "marylandmike.",
-          "text": "<:SHS:1249551823161786388> <:AUT:1040258542629826691>"
-        }
-      ]
-    },
-    {
-      "channel": "blubber-magazine",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #blubber-magazine",
-      "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "11:40",
-          "author": "Ticklepuss",
-          "text": "🚨 TickleBlurb: Report: Tomorrow shaping up to be 12th most active Friday Frenzy of the season"
-        },
-        {
-          "time": "12:56",
-          "author": "Lloyd10xmas",
-          "text": "Yes(!!!)"
-        }
-      ]
-    },
-    {
-      "channel": "the-hockey-news",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #the-hockey-news",
-      "commentary": "Heated debate and banter erupts in #the-hockey-news over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "18:05",
+          "time": "01:24",
           "author": "chalkitup7777",
-          "text": "https://klipy.com/gifs/kopitar-anze-1"
+          "text": "Got time for a series"
         },
         {
-          "time": "18:10",
+          "time": "01:24",
+          "author": "chalkitup7777",
+          "text": "Season games"
+        },
+        {
+          "time": "01:36",
+          "author": "chalkitup7777",
+          "text": "Season games"
+        },
+        {
+          "time": "01:36",
+          "author": "chalkitup7777",
+          "text": "@shawnmb"
+        },
+        {
+          "time": "01:39",
+          "author": "shawnmb",
+          "text": "https://klipy.com/gifs/calgary-flames-milan-lucic-8"
+        },
+        {
+          "time": "02:32",
+          "author": "krav1",
+          "text": "Season Games"
+        },
+        {
+          "time": "02:46",
+          "author": "MarcusVickEBC",
+          "text": "Season games"
+        },
+        {
+          "time": "02:46",
+          "author": "MarcusVickEBC",
+          "text": "But prob not til 11:15 or so"
+        },
+        {
+          "time": "14:31",
+          "author": "chalkitup7777",
+          "text": "Season games"
+        },
+        {
+          "time": "14:33",
+          "author": "chalkitup7777",
+          "text": "I’ll be around tonight . Hopefully hosts are cooperating"
+        },
+        {
+          "time": "15:15",
+          "author": "Adolf Oliver Nipples",
+          "text": "Fix your shit"
+        }
+      ]
+    },
+    {
+      "channel": "bell-n-bell",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #bell-n-bell",
+      "commentary": "Heated debate and banter erupts in #bell-n-bell over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "23:44",
+          "author": "segathon",
+          "text": "Asked this guy about Matt"
+        },
+        {
+          "time": "23:54",
+          "author": "GMDS",
+          "text": "Please tell me you are going to the market to throw a fish, and label it TB Pike"
+        },
+        {
+          "time": "23:55",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/seinfeld-thats-gold"
+        },
+        {
+          "time": "00:01",
+          "author": "GMDS",
+          "text": "https://klipy.com/gifs/fishy-tiffy-tiffany-stratton"
+        },
+        {
+          "time": "00:16",
           "author": "NathanMB",
-          "text": "@UltraMagnus any Craig Anderson updates? Segathon seems a bit too happy with how his season is going"
-        }
-      ]
-    },
-    {
-      "channel": "newspaper_clippings",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #newspaper_clippings",
-      "commentary": "Heated debate and banter erupts in #newspaper_clippings over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "21:32",
-          "author": "Pink_Elephants",
-          "text": "**GMDS, Fumbles Continue WNHL’s Beautiful Human-Robot Tradition**\n\nThe WNHL’s most important relationships apparently no longer require two humans—or, in General Manager Derek Sutton’s (GMDS) case, much self-confidence.\n\nCommissioner Tommy Fumbles set the standard by marrying Box Score Bot, proving that even an algorithm can make a questionable romantic decision. GMDS has chosen something even more intimate: an AI therapist available whenever his insecurities need emergency technical support.\n\nAfter TickleWeb’s ticker called GMDS “creepy,” the noted enemy of affectionate terms like “creepy” and “slime ball” apparently sought immediate reassurance from his silicon safe space.\n\n“When someone else always calls you creepy, what does that say about them?” GMDS asked.\n\nBeautiful. Fumbles found a bot willing to say “I do.” GMDS found one programmed not to say “Here we go again.”\n\nBetter yet, the ticker never identified a “someone.” GMDS supplied that himself, apparently so insecure about one word that he turned a ticker joke into a robot-assisted investigation of his critics.\n\nFumbles married his bot. GMDS emotionally married his—and somehow the robot got the worse deal.\n\nOne league insider insisted GMDS’s increasingly needy relationship with artificial intelligence was hardly surprising.\n\n“It’s Canada, man. That’s just what they do up there. Fumbles married a bot, GMDS tells one his feelings. Give Derek another winter and he’ll be asking ChatGPT to meet his parents.”"
-        }
-      ]
-    },
-    {
-      "channel": "la-hangar",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #la-hangar",
-      "commentary": "Heated debate and banter erupts in #la-hangar over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "22:07",
-          "author": "Pink_Elephants",
-          "text": "https://www.reddit.com/r/aviation/s/rPOuhS7CW0"
+          "text": "@segathon tag Hasselback on Twitter - won’t seem creepy at all"
         },
         {
-          "time": "23:48",
-          "author": "Pink_Elephants",
-          "text": "https://www.reddit.com/r/aviation/s/RCHq9ueGyA"
-        },
-        {
-          "time": "01:06",
-          "author": "Ticklepuss",
-          "text": "Gliders are dumb.  Tisi"
+          "time": "00:27",
+          "author": "segathon",
+          "text": "I was told he live here with Fraiser and Niles"
         }
       ]
     },
@@ -218,37 +257,85 @@
       "commentary": "Heated debate and banter erupts in #wolfs-den over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "05:05",
-          "author": "segathon",
-          "text": "Game of thrones crown"
+          "time": "17:02",
+          "author": "GaelicGopher",
+          "text": "I’m surprised @shawnmb  hasn’t made himself a Crown 👑.  Actually, he did make a Mug ☕️ after a Bazillion titles.\nRealistically Surprised @Pink_Elephants didn’t make a crown 👑 ."
+        },
+        {
+          "time": "17:03",
+          "author": "shawnmb",
+          "text": "i should make another mug"
+        },
+        {
+          "time": "17:03",
+          "author": "shawnmb",
+          "text": "that one is outdated"
+        },
+        {
+          "time": "17:09",
+          "author": "GMDS",
+          "text": "Why is the mannequin wearing a Herb Tarlek's jacket and the game of thrones crown?"
         }
       ]
     },
     {
-      "channel": "art_gallery",
+      "channel": "stiller-nation",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #art_gallery",
-      "commentary": "Heated debate and banter erupts in #art_gallery over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #stiller-nation",
+      "commentary": "Heated debate and banter erupts in #stiller-nation over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "18:07",
-          "author": "chalkitup7777",
-          "text": "Where my goddamn fish 🎣?"
+          "time": "14:50",
+          "author": "Unholy",
+          "text": "Wow, the Packers stink!"
         },
         {
-          "time": "18:09",
-          "author": "chalkitup7777",
-          "text": "Looks like we can hit em long though"
+          "time": "14:59",
+          "author": "GMDS",
+          "text": "Their OL is as safe as Ken wreggets glove hand"
         },
         {
-          "time": "18:35",
-          "author": "Lloyd10xmas",
-          "text": "No fish, no pads… @Ticklepuss really mailing it in lately with the art(!)"
+          "time": "15:04",
+          "author": "Unholy",
+          "text": "Jordan Love is overrated"
         },
         {
-          "time": "19:32",
-          "author": "chalkitup7777",
-          "text": "Soft"
+          "time": "15:05",
+          "author": "GMDS",
+          "text": "Never considered him top 10, but he's in the 12 to 18 range"
+        },
+        {
+          "time": "15:06",
+          "author": "Unholy",
+          "text": "Definitely a top 40 QB"
+        },
+        {
+          "time": "15:09",
+          "author": "GMDS",
+          "text": "Allen, Lamar, burrow, Lawrence, mahommes, Dakota, Stafford, purdy, Goff top 9 then the hurts, Williams, nix, maye, Herbert's of the world, he's in that next tier with daniels, baker, shough types"
+        },
+        {
+          "time": "15:11",
+          "author": "GMDS",
+          "text": "In that top 9 probably all have top half of the league OL's so tough to say if he played on let's say the lions or ravens with their OL, and RBs and playmakers would he elevate in the rankings"
+        },
+        {
+          "time": "15:44",
+          "author": "Unholy",
+          "text": "Lamar is also overrated"
+        }
+      ]
+    },
+    {
+      "channel": "knightsvision",
+      "badge": "HOT SCOOP",
+      "title": "Archival Identity Verification Incident",
+      "commentary": "Vintage game film circulated through the wire. Unholy confirmed his legendary on-ice persona by sheer instinct without even rendering the media.",
+      "messages": [
+        {
+          "time": "15:12",
+          "author": "segathon",
+          "text": "That is too good"
         }
       ]
     }
