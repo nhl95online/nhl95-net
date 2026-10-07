@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published October 06, 2026 at 05:49 PM",
+  "updated_at": "Published October 07, 2026 at 06:01 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "Fighting? Lol",
-    "author": "red",
+    "quote": "Working on a few things. Alot of testing to make sure.  Im reversed engineered the who game. Just need to figure out locations and placement",
+    "author": "UltraMagnus",
     "context": "Uttered in #game-code"
   },
-  "total_messages": 64,
+  "total_messages": 32,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -71,33 +71,71 @@
   ],
   "sections": [
     {
-      "channel": "exis-only",
+      "channel": "leave_of_absence",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #exis-only",
-      "commentary": "Heated debate and banter erupts in #exis-only over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #leave_of_absence",
+      "commentary": "Heated debate and banter erupts in #leave_of_absence over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "01:53",
-          "author": "DSN",
-          "text": "@Sexy Exis/Friendlies"
+          "time": "01:07",
+          "author": "MNYoda",
+          "text": "10/7-10/15.  No one cares."
+        },
+        {
+          "time": "01:33",
+          "author": "Ticklepuss",
+          "text": "I do"
+        },
+        {
+          "time": "01:34",
+          "author": "MNYoda",
+          "text": "You’re a standup guy puss!!"
         }
       ]
     },
     {
-      "channel": "complaints",
+      "channel": "open-discussion",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #complaints",
-      "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #open-discussion",
+      "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "13:00",
-          "author": "segathon",
-          "text": "getting dummied last night by this guy"
+          "time": "06:10",
+          "author": "Ticklepuss",
+          "text": "Went to a 90s party tonight.  Fyi - bel biv devoe holds up"
         },
         {
-          "time": "13:01",
+          "time": "06:54",
+          "author": "Ticklepuss",
+          "text": "As does sir mix alot"
+        },
+        {
+          "time": "14:51",
+          "author": "NathanMB",
+          "text": "Playoff race getting spicy…."
+        },
+        {
+          "time": "15:13",
+          "author": "shawnmb",
+          "text": "@Moses Bogart is on fire"
+        }
+      ]
+    },
+    {
+      "channel": "praise",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #praise",
+      "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "12:41",
+          "author": "segathon",
+          "text": "Referees in real life and in NHL 95.  We need to have rules"
+        },
+        {
+          "time": "12:47",
           "author": "Lloyd10xmas",
-          "text": "Sorry to hear that(!) That face annoys me(!)"
+          "text": "Finally someone who gets it(!)"
         }
       ]
     },
@@ -108,139 +146,59 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "18:55",
-          "author": "NathanMB",
-          "text": "Season games"
+          "time": "01:20",
+          "author": "Moses Bogart",
+          "text": "Seasoned Games?🧂"
         },
         {
-          "time": "18:55",
-          "author": "NathanMB",
-          "text": "Will be on tonight"
+          "time": "01:23",
+          "author": "Moses Bogart",
+          "text": "https://klipy.com/gifs/pearl-jam"
         },
         {
-          "time": "20:33",
-          "author": "chalkitup7777",
-          "text": "Me too"
+          "time": "01:23",
+          "author": "Moses Bogart",
+          "text": "Season Flow"
         },
         {
-          "time": "20:33",
-          "author": "chalkitup7777",
-          "text": "https://klipy.com/gifs/anze-kopitar-la-kings"
+          "time": "01:24",
+          "author": "Moses Bogart",
+          "text": "https://klipy.com/gifs/seasons-in-the-sun-terry-jacks"
         },
         {
-          "time": "22:31",
-          "author": "Pink_Elephants",
-          "text": "Me too"
+          "time": "01:24",
+          "author": "Moses Bogart",
+          "text": "We had joy we had fun we had Season Games in the sun"
         },
         {
-          "time": "23:28",
-          "author": "DON DON",
+          "time": "01:25",
+          "author": "Moses Bogart",
           "text": "Season Games"
         },
         {
-          "time": "23:33",
-          "author": "chalkitup7777",
-          "text": "Season games"
-        },
-        {
-          "time": "00:36",
-          "author": "segathon",
-          "text": "Still looking?"
-        },
-        {
-          "time": "00:59",
+          "time": "01:38",
           "author": "DSN",
           "text": "season games"
         },
         {
-          "time": "01:37",
-          "author": "Pink_Elephants",
-          "text": "Season games"
-        },
-        {
-          "time": "01:41",
-          "author": "segathon",
-          "text": "its time"
-        },
-        {
-          "time": "01:45",
-          "author": "krav1",
+          "time": "01:59",
+          "author": "Moses Bogart",
           "text": "Season Games"
         },
         {
-          "time": "01:50",
-          "author": "shawnmb",
-          "text": "Season Games"
+          "time": "02:37",
+          "author": "DSN",
+          "text": "season games"
         },
         {
-          "time": "01:50",
-          "author": "shawnmb",
-          "text": "Was that a Providence sighting?"
-        },
-        {
-          "time": "02:08",
-          "author": "MarcusVickEBC",
-          "text": "Season games"
-        },
-        {
-          "time": "02:08",
-          "author": "MarcusVickEBC",
-          "text": "Maybe 11:00?"
-        },
-        {
-          "time": "02:08",
-          "author": "MarcusVickEBC",
-          "text": "Or 10:45?"
-        },
-        {
-          "time": "02:17",
-          "author": "Pink_Elephants",
-          "text": "Season games"
-        },
-        {
-          "time": "02:31",
-          "author": "marylandmike.",
-          "text": "Season games"
-        },
-        {
-          "time": "02:32",
-          "author": "marylandmike.",
-          "text": "Time for 1 set!"
-        },
-        {
-          "time": "02:43",
-          "author": "marylandmike.",
-          "text": "Out"
-        },
-        {
-          "time": "03:18",
-          "author": "MarcusVickEBC",
-          "text": "Season games"
-        },
-        {
-          "time": "13:21",
-          "author": "Lloyd10xmas",
-          "text": "Season Games"
-        },
-        {
-          "time": "13:21",
-          "author": "Lloyd10xmas",
-          "text": "Anyone around later this morning or early afternoon?"
-        },
-        {
-          "time": "14:02",
-          "author": "MattyA",
-          "text": "@Lloyd10xmas I will, I will...how about around 1130 am today!!!"
-        },
-        {
-          "time": "15:11",
+          "time": "15:01",
           "author": "NewJerseyKiller",
           "text": "season games"
         },
         {
-          "time": "15:12",
-          "author": "NewJerseyKiller",
-          "text": "any on around to sneak a couple in?"
+          "time": "15:53",
+          "author": "wolf_of_highland",
+          "text": "season games"
         }
       ]
     },
@@ -251,24 +209,24 @@
       "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:13",
-          "author": "Lloyd10xmas",
-          "text": "<:PRO:918148694820405308> <:ING:1301994681206444085>"
+          "time": "02:02",
+          "author": "NewJerseyKiller",
+          "text": "<:WDY:1300956776652345356> <:BAR:1447630932646301789>"
         },
         {
-          "time": "02:18",
-          "author": "krav1",
-          "text": "<:BFC:1302374329627054195> <:HIG:897245384601108490>"
+          "time": "02:26",
+          "author": "Moses Bogart",
+          "text": "<:GRH:1486729910587490445> <:PRO:918148694820405308>"
         },
         {
-          "time": "03:23",
-          "author": "krav1",
-          "text": "<:BFC:1302374329627054195> <:ITA:1447630715675082804>"
+          "time": "02:27",
+          "author": "Moses Bogart",
+          "text": "whoops"
         },
         {
-          "time": "15:42",
-          "author": "wolf_of_highland",
-          "text": "<:HIG:897245384601108490> <:KAK:1447629097684697270>"
+          "time": "02:54",
+          "author": "Moses Bogart",
+          "text": "<:GRH:1486729910587490445> <:BAY:1039716048510922802>"
         }
       ]
     },
@@ -279,184 +237,32 @@
       "commentary": "Managers are talking behind closed doors. Draft picks and fourth-liners are flying around like loose pucks.",
       "messages": [
         {
-          "time": "13:45",
-          "author": "Adolf Oliver Nipples",
-          "text": "With just 17 days remaining in season, the trade office is officially open. Feel free to submit proposals. Also be advised of the following : Announcement. Anytime one you acquire a 2nd rounder and then pass on that second rounder in the draft, you’re permanently banned from acquiring second rounders going forward. This is a 1 strike you’re out rule. I will be watching very closely for this."
-        },
-        {
-          "time": "13:46",
-          "author": "Adolf Oliver Nipples",
-          "text": "Player donations are over."
-        },
-        {
-          "time": "13:47",
-          "author": "Adolf Oliver Nipples",
-          "text": "Also. Have fun!"
-        },
-        {
-          "time": "13:52",
-          "author": "Adolf Oliver Nipples",
-          "text": "@Leaguers"
-        },
-        {
-          "time": "13:53",
-          "author": "Adolf Oliver Nipples",
-          "text": "Still can’t tag the league. Who’s in charge of that?"
-        },
-        {
-          "time": "13:57",
-          "author": "segathon",
-          "text": "@Leaguers get a load of this shit"
-        },
-        {
-          "time": "13:58",
-          "author": "segathon",
-          "text": "also @UltraMagnus can you put nips mug in this screen"
-        },
-        {
-          "time": "14:02",
-          "author": "shawnmb",
-          "text": "That already looks like nips"
-        },
-        {
-          "time": "14:03",
+          "time": "20:44",
           "author": "UltraMagnus",
-          "text": "Im actually doing something"
-        },
-        {
-          "time": "14:18",
-          "author": "Ticklepuss",
-          "text": "Need help?  @wolf_of_highland"
-        },
-        {
-          "time": "15:44",
-          "author": "MattyA",
-          "text": "Tone down that orange!"
+          "text": "Hahhaa its who do i put in the that image"
         }
       ]
     },
     {
-      "channel": "blubber-magazine",
+      "channel": "draft-discussion",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #blubber-magazine",
-      "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #draft-discussion",
+      "commentary": "Heated debate and banter erupts in #draft-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "18:25",
-          "author": "MattyA",
-          "text": "https://klipy.com/gifs/what-watching"
+          "time": "16:41",
+          "author": "Adolf Oliver Nipples",
+          "text": "Are we snaking the draft and ditching waivers? What gives?"
         },
         {
-          "time": "18:26",
-          "author": "MattyA",
-          "text": "AI is an acronym that we do not even utilize in this house any longer.. but I'll be on tonight to get another four games or so in!!!"
+          "time": "16:41",
+          "author": "Adolf Oliver Nipples",
+          "text": "Dropped players can be selected immediately?"
         },
         {
-          "time": "18:27",
-          "author": "MattyA",
-          "text": "But I am hearing from the 95 community masses that they would like our hockey seasons tailored around MLB season 😉"
-        },
-        {
-          "time": "19:29",
-          "author": "Ticklepuss",
-          "text": "Have a great week everyone.  19+ games a day seems high for this collective"
-        },
-        {
-          "time": "19:48",
-          "author": "MattyA",
-          "text": "OMG..... I am no longer at the top of the least games played!  Now to build upon that...."
-        }
-      ]
-    },
-    {
-      "channel": "injuries",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #injuries",
-      "commentary": "Heated debate and banter erupts in #injuries over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "10:43",
-          "author": "DON DON",
-          "text": "Is there a way to post this so i can see it without having Twitter?"
-        },
-        {
-          "time": "11:04",
-          "author": "Pink_Elephants",
-          "text": "https://m.youtube.com/watch?v=uzvZOh1hu6s&pp=ygUPdGhvcm50b24gaW5qdXJ5&ra=m"
-        },
-        {
-          "time": "11:06",
-          "author": "DON DON",
-          "text": "O daym. That sucks."
-        }
-      ]
-    },
-    {
-      "channel": "highlights",
-      "badge": "TAPE ROOM",
-      "title": "Reel-to-Reel Reel Dump",
-      "commentary": "Film room flooded with twitch highlight reels featuring questionable wrap-arounds, diving poke-checks, and goalie heroics.",
-      "messages": [
-        {
-          "time": "13:15",
-          "author": "segathon",
-          "text": "https://www.twitch.tv/segathonsov/clip/GeniusLittleOysterDatSheffy-MRM98AD6N7RVsG6Q"
-        },
-        {
-          "time": "13:22",
-          "author": "Unholy",
-          "text": "Directional Defence can prevent goals like this FYI"
-        },
-        {
-          "time": "13:22",
-          "author": "segathon",
-          "text": "https://www.twitch.tv/segathonsov/clip/NicePlayfulPeafowlOptimizePrime-NcX7VvTAPdbhcrqg"
-        },
-        {
-          "time": "13:26",
-          "author": "segathon",
-          "text": "https://www.twitch.tv/segathonsov/clip/SteamyObliviousCobraTF2John-DYV6hEj6VcF6PqwF"
-        },
-        {
-          "time": "13:28",
-          "author": "segathon",
-          "text": "https://www.twitch.tv/segathonsov/clip/LaconicReliableOwlDBstyle-nLwpnZecQLI3vT4z"
-        }
-      ],
-      "clips": [
-        {
-          "name": "GeniusLittleOysterDatShe",
-          "url": "https://www.twitch.tv/segathonsov/clip/GeniusLittleOysterDatSheffy-MRM98AD6N7RVsG6Q"
-        },
-        {
-          "name": "NicePlayfulPeafowlOptimi",
-          "url": "https://www.twitch.tv/segathonsov/clip/NicePlayfulPeafowlOptimizePrime-NcX7VvTAPdbhcrqg"
-        },
-        {
-          "name": "SteamyObliviousCobraTF2J",
-          "url": "https://www.twitch.tv/segathonsov/clip/SteamyObliviousCobraTF2John-DYV6hEj6VcF6PqwF"
-        },
-        {
-          "name": "LaconicReliableOwlDBstyl",
-          "url": "https://www.twitch.tv/segathonsov/clip/LaconicReliableOwlDBstyle-nLwpnZecQLI3vT4z"
-        }
-      ]
-    },
-    {
-      "channel": "movie-night",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #movie-night",
-      "commentary": "Heated debate and banter erupts in #movie-night over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "00:24",
-          "author": "Pink_Elephants",
-          "text": "https://www.hollywoodreporter.com/movies/movie-news/sicario-3-emily-blunt-benicio-del-toro-josh-brolin-1236722522/"
-        },
-        {
-          "time": "00:25",
-          "author": "Pink_Elephants",
-          "text": "“So you want to be a Sicario…. Let’s talk about your future.”"
+          "time": "16:42",
+          "author": "Adolf Oliver Nipples",
+          "text": "Let’s clean it up."
         }
       ]
     },
@@ -467,24 +273,24 @@
       "commentary": "Heated debate and banter erupts in #game-code over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "10:54",
-          "author": "DON DON",
-          "text": "Are we going to use in the W? I like the 3v3 in ot."
-        },
-        {
-          "time": "11:55",
-          "author": "UltraMagnus",
-          "text": "Not sure. But im testing to make sure everything works."
-        },
-        {
-          "time": "12:59",
+          "time": "19:26",
           "author": "segathon",
-          "text": "maybe we could do a little 3 on 3 league."
+          "text": "@UltraMagnus check this out"
         },
         {
-          "time": "17:02",
-          "author": "red",
-          "text": "Fighting? Lol"
+          "time": "19:26",
+          "author": "segathon",
+          "text": "https://youtu.be/qwIq1ea8QsQ?is=ESuKvLOFpSgg7dzD"
+        },
+        {
+          "time": "20:46",
+          "author": "UltraMagnus",
+          "text": "Might be something way down the road"
+        },
+        {
+          "time": "20:47",
+          "author": "UltraMagnus",
+          "text": "Working on a few things. Alot of testing to make sure.  Im reversed engineered the who game. Just need to figure out locations and placement"
         }
       ]
     }
