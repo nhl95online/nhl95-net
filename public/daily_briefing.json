@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published October 20, 2026 at 04:15 PM",
+  "updated_at": "Published October 21, 2026 at 04:12 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "actually i want this",
-    "author": "segathon",
-    "context": "Uttered in #game-code"
+    "quote": "\"The truth is, Mitch was drunk. Mitch was stupid. He made bad decisions.\"",
+    "author": "shawnmb",
+    "context": "Uttered in #knightsvision"
   },
-  "total_messages": 179,
+  "total_messages": 183,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -50,6 +50,24 @@
       "url": "https://discord.com/events/146381349589090305/1521590788495249419",
       "interested": 7,
       "is_live": false
+    },
+    {
+      "date": "Oct 24",
+      "time": "01:00 AM",
+      "title": "Pitt Intramurals vs Sumter Trash",
+      "description": "Must See TV. Announcers inquire within.",
+      "url": "https://discord.com/events/146381349589090305/1562204618316980389",
+      "interested": 3,
+      "is_live": false
+    },
+    {
+      "date": "Oct 23",
+      "time": "01:00 AM",
+      "title": "Chalky vs Pinks Trash Team",
+      "description": "Two morons battle it out  …one winner wins, the other is the loser.",
+      "url": "https://discord.com/events/146381349589090305/1562206377420521562",
+      "interested": 2,
+      "is_live": false
     }
   ],
   "nhl_wire": [
@@ -71,220 +89,121 @@
   ],
   "sections": [
     {
+      "channel": "leave_of_absence",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #leave_of_absence",
+      "commentary": "Heated debate and banter erupts in #leave_of_absence over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "20:50",
+          "author": "Ticklepuss",
+          "text": "10/28 - 10/30"
+        }
+      ]
+    },
+    {
+      "channel": "exis-only",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #exis-only",
+      "commentary": "Heated debate and banter erupts in #exis-only over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "00:24",
+          "author": "LHX",
+          "text": "@Sexy Exis/Friendlies"
+        }
+      ]
+    },
+    {
       "channel": "open-discussion",
       "badge": "LOCKER ROOM",
       "title": "Dispatches from #open-discussion",
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "16:16",
-          "author": "UltraMagnus",
-          "text": "Its looking like that point total is around 60 as a bear minimum"
+          "time": "02:34",
+          "author": "GMDS",
+          "text": "Don't count out @marylandmike. \n\nHis schedule (if played) will make him an unappealing 14th-ish seed"
         },
         {
-          "time": "16:18",
+          "time": "03:48",
+          "author": "MarcusVickEBC",
+          "text": "What’s “BAG” in the team stats sheet?"
+        },
+        {
+          "time": "03:48",
+          "author": "MarcusVickEBC",
+          "text": "And BA and BA%"
+        },
+        {
+          "time": "08:09",
+          "author": "GMDS",
+          "text": "https://klipy.com/gifs/screaming-screaming-man-4"
+        },
+        {
+          "time": "08:09",
+          "author": "GMDS",
+          "text": "Breakaway goals"
+        },
+        {
+          "time": "10:50",
           "author": "Ticklepuss",
-          "text": "The TW cutoff is an exact value based on remaining points"
+          "text": "yinz can always hover over the headers on TickleWeb for a description...they don't fully match abbreviations that the Sheets used though"
         },
         {
-          "time": "16:18",
-          "author": "Ticklepuss",
-          "text": "it doesn't factor in estimations or douchbags who don't play"
-        },
-        {
-          "time": "16:18",
-          "author": "Unholy",
-          "text": "Yes, I see. That’s why I’m guessing it will be lower."
-        },
-        {
-          "time": "16:19",
-          "author": "Unholy",
-          "text": "If it’s actually 68 then I’m fucked - even if I won out (which I won’t) I wouldn’t get to 68"
-        },
-        {
-          "time": "16:20",
-          "author": "Ticklepuss",
-          "text": "if you sort by max points, the 17th team should have a max of 67"
-        },
-        {
-          "time": "16:21",
-          "author": "Ticklepuss",
-          "text": "so the 68 could/will fluctuate"
-        },
-        {
-          "time": "16:21",
-          "author": "Ticklepuss",
-          "text": "down, not up"
-        },
-        {
-          "time": "16:22",
-          "author": "Ticklepuss",
-          "text": "also if anything is wrong with it, let me know but i believe that's the way to calculate it"
-        },
-        {
-          "time": "16:22",
-          "author": "Ticklepuss",
-          "text": "i guess it could go up actually"
-        },
-        {
-          "time": "16:22",
-          "author": "Unholy",
-          "text": "All good, just doing some Monday morning nerding"
-        },
-        {
-          "time": "16:23",
-          "author": "Ticklepuss",
-          "text": "yeah, if marylandmike (currently 16) wins, it would jump to 71.....i'm not great with numbering"
-        },
-        {
-          "time": "16:23",
-          "author": "Ticklepuss",
-          "text": "well, 70 really i think....mheh, who knows"
-        },
-        {
-          "time": "16:24",
-          "author": "Adolf Oliver Nipples",
-          "text": "Yinz are doing great"
-        },
-        {
-          "time": "16:24",
-          "author": "Unholy",
-          "text": "I think it will end up around 62 or 63"
-        },
-        {
-          "time": "16:24",
-          "author": "Unholy",
-          "text": "No way these guys finish imo"
-        },
-        {
-          "time": "16:24",
-          "author": "Adolf Oliver Nipples",
-          "text": "You’ve successfully tanked.🏆"
-        },
-        {
-          "time": "16:24",
-          "author": "Ticklepuss",
-          "text": "just use your trusty playoff scenario simulator"
-        },
-        {
-          "time": "16:25",
-          "author": "Ticklepuss",
-          "text": "fyi, i think i need to tweak it, not sure it gives access to all the applicable teams 🙂"
-        },
-        {
-          "time": "16:27",
+          "time": "12:06",
           "author": "Lloyd10xmas",
-          "text": "Tough renaming games(!)"
+          "text": "A “bag” (!!!!!)"
         },
         {
-          "time": "16:28",
-          "author": "Ticklepuss",
-          "text": "yeah, having pro and svf with 3 days left is always tough"
+          "time": "12:13",
+          "author": "Lloyd10xmas",
+          "text": "Anyone get Calvin Harris tickets?"
         },
         {
-          "time": "16:32",
-          "author": "Unholy",
-          "text": "I’ve gathered all my receipts"
-        },
-        {
-          "time": "16:37",
-          "author": "Ellis",
-          "text": "It was only a matter of time with the use of AI and what's been going on with decoding the old 16 bit EA hockey games.\nAnyways Tickenest is seriously investigating vagina goals! In 94 he is doing this but doesn't matter. A ROM without this is just around the corner!"
-        },
-        {
-          "time": "16:40",
+          "time": "12:39",
           "author": "segathon",
-          "text": "You cant stop Down Bs you can only hope to contain them"
+          "text": "https://klipy.com/gifs/calvin-hobbes-bill-watterson"
         },
         {
-          "time": "16:45",
-          "author": "Adolf Oliver Nipples",
-          "text": "Look at these Sad Sacks."
-        },
-        {
-          "time": "16:56",
-          "author": "Unholy",
-          "text": "I’ve got some Down Squirts in my remaining games 🤬"
-        },
-        {
-          "time": "17:02",
-          "author": "Adolf Oliver Nipples",
-          "text": "They’re not very accommodating."
-        },
-        {
-          "time": "17:10",
-          "author": "chalkitup7777",
-          "text": "I think that fish has seen better days"
-        },
-        {
-          "time": "17:11",
-          "author": "Adolf Oliver Nipples",
-          "text": "Always with the limp wrist with this one."
-        },
-        {
-          "time": "17:25",
-          "author": "chalkitup7777",
-          "text": "Why you looking at his crotch ?"
-        },
-        {
-          "time": "17:27",
-          "author": "Adolf Oliver Nipples",
-          "text": "Because of his vagina"
-        },
-        {
-          "time": "17:28",
-          "author": "wolf_of_highland",
-          "text": "I haven't checked the standings in a while. Is there any chance I match up against the troglodyte nipples in the first round? Boy I hope so.  Ballerina hockey is dead."
-        },
-        {
-          "time": "17:39",
+          "time": "12:39",
           "author": "segathon",
-          "text": "https://x.com/IainMacBets/status/2112178317332042035?s=20"
+          "text": "Calvin and Hobbes?"
         },
         {
-          "time": "18:27",
-          "author": "red",
-          "text": "I think they should ad a game stat if possible that counts down B's that would be such a shameful thing to few after a game , make people think about what they have done🤣🤣🤣🤣"
-        },
-        {
-          "time": "18:29",
-          "author": "Ellis",
-          "text": "Red they can simply make the goalies stop down V's!"
-        },
-        {
-          "time": "18:38",
+          "time": "15:43",
           "author": "segathon",
-          "text": "https://klipy.com/gifs/stinky-i-think-you-should-leave-with-tim-robinson"
+          "text": "whos gonna be the leading goal scorer this year"
         },
         {
-          "time": "18:41",
-          "author": "Ticklepuss",
-          "text": "I believe down vagina and down squirt are now the official names for this.  Can we stay on brand?"
+          "time": "15:44",
+          "author": "segathon",
+          "text": "probably this guy"
         },
         {
-          "time": "20:10",
-          "author": "UltraMagnus",
-          "text": "I can see if that is a stat that can be added."
+          "time": "15:48",
+          "author": "GaelicGopher",
+          "text": "Had I known ol Getslaf was one fucking goal short of 100 I wouldn’t have played Autobahn higher than a kite 🪁.  I was concentrating more on reaching 400 Checks (failed at that too)"
         },
         {
-          "time": "20:10",
-          "author": "UltraMagnus",
-          "text": "Down squints gets my vote."
+          "time": "15:48",
+          "author": "GaelicGopher",
+          "text": "Ps…..Until today I’ve never heard of this Jiri guy lol"
         },
         {
-          "time": "01:03",
-          "author": "Ticklepuss",
-          "text": "I am pretty sure u are correct."
+          "time": "15:49",
+          "author": "segathon",
+          "text": "@Pink_Elephants always finds the WMDs hidden in the sheets"
         },
         {
-          "time": "01:20",
-          "author": "Ticklepuss",
-          "text": "Good season @krav1"
+          "time": "15:50",
+          "author": "Lloyd10xmas",
+          "text": "Don’t count this guy out(!)"
         },
         {
-          "time": "01:31",
-          "author": "krav1",
-          "text": "Thanks @Ticklepuss"
+          "time": "15:51",
+          "author": "Lloyd10xmas",
+          "text": "That’s why he’s a former champ(!) We all wish we could be(!)"
         }
       ]
     },
@@ -295,39 +214,34 @@
       "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:07",
+          "time": "16:42",
+          "author": "MarcusVickEBC",
+          "text": "Cast your stones elsewhere, unless this game is fake too?"
+        },
+        {
+          "time": "16:44",
+          "author": "MarcusVickEBC",
+          "text": "Can we see if an alternate, competing WN website can accurately count a 16th goal?"
+        },
+        {
+          "time": "17:12",
           "author": "Ticklepuss",
-          "text": "https://klipy.com/gifs/lucifer-lucifer69"
+          "text": "The times above align with Matt's bedtimes"
         },
         {
-          "time": "12:51",
-          "author": "segathon",
-          "text": "@shawnmb how much can I sue Tickle corp for in a defamation trial?"
+          "time": "19:04",
+          "author": "GaelicGopher",
+          "text": "Oh, it’s legit.  MattyA was flying…tied me in shots even.  Some crazy crazy games and Getslaf could score when he didn’t even tough the puck.  He just mind-fvcked MattyA Goalie"
         },
         {
-          "time": "13:04",
-          "author": "shawnmb",
-          "text": "The defence to defamation is Truth"
+          "time": "01:32",
+          "author": "MattyA",
+          "text": "Getzlaf was fucking on Iron Man Mode....."
         },
         {
-          "time": "13:04",
-          "author": "shawnmb",
-          "text": "i think you're screwed"
-        },
-        {
-          "time": "13:05",
-          "author": "segathon",
-          "text": "Tickle Corp has a monopoly right meow.  Where is The Hockey News, News Paper Clippings....the Bay Town Sun Times?!!?"
-        },
-        {
-          "time": "13:07",
-          "author": "shawnmb",
-          "text": "THN needs to get back on the horse"
-        },
-        {
-          "time": "13:33",
-          "author": "Ticklepuss",
-          "text": "I'm not seeing the issue?  No judge would take this"
+          "time": "01:54",
+          "author": "MNYoda",
+          "text": "Stop giving @GaelicGopher credit"
         }
       ]
     },
@@ -338,14 +252,39 @@
       "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "01:32",
-          "author": "Lloyd10xmas",
-          "text": "How many career goals do you have?"
+          "time": "23:24",
+          "author": "MNYoda",
+          "text": "There’s no way I make the cut! Unless people don’t finish!"
         },
         {
-          "time": "12:53",
+          "time": "15:36",
           "author": "segathon",
-          "text": "PRAISE:  The playoff Scenario simulator"
+          "text": "seeing dem boxscores"
+        },
+        {
+          "time": "15:36",
+          "author": "Adolf Oliver Nipples",
+          "text": "Seriously. You gotz to chill."
+        },
+        {
+          "time": "15:36",
+          "author": "segathon",
+          "text": "The League needs THE FACE"
+        },
+        {
+          "time": "15:37",
+          "author": "Adolf Oliver Nipples",
+          "text": "I’m getting angry"
+        },
+        {
+          "time": "15:38",
+          "author": "Lloyd10xmas",
+          "text": "What’s new?"
+        },
+        {
+          "time": "15:57",
+          "author": "segathon",
+          "text": "The Assist 2 stat"
         }
       ]
     },
@@ -356,429 +295,619 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "16:17",
-          "author": "UltraMagnus",
-          "text": "Im jumping on the next few days to bang mine out. Just got back from.vacation"
+          "time": "16:13",
+          "author": "Ticklepuss",
+          "text": "https://klipy.com/gifs/why-dont-you-shut-up-tom-papa"
+        },
+        {
+          "time": "16:15",
+          "author": "MattyA",
+          "text": "Is @bclinton_666 even able to play I have not seen anything from him in a long time and he's one of my series that I have left?"
+        },
+        {
+          "time": "16:16",
+          "author": "segathon",
+          "text": "We will roast him in text chain until he gets on"
+        },
+        {
+          "time": "16:20",
+          "author": "Unholy",
+          "text": "Matty is asking if he’s alive."
+        },
+        {
+          "time": "16:26",
+          "author": "segathon",
+          "text": "I think hes brain dead from the trip to Miami, I heard they made him sleep OUTSIDE"
+        },
+        {
+          "time": "16:28",
+          "author": "MarcusVickEBC",
+          "text": "I think I played Blair earlier this season and have the states somewhere…"
+        },
+        {
+          "time": "16:29",
+          "author": "MarcusVickEBC",
+          "text": "Meant to submit them as soon as we played but couldn’t find the folder on my laptop."
+        },
+        {
+          "time": "16:30",
+          "author": "MarcusVickEBC",
+          "text": "I’ll find the folder before Thursday."
+        },
+        {
+          "time": "16:34",
+          "author": "MarcusVickEBC",
+          "text": "I forgot about the missing folder of states from games earlier this season"
         },
         {
           "time": "16:57",
-          "author": "GaelicGopher",
-          "text": "Wrong Thread 🧵 Fellas.  Play your Games and stay in your Lane.\nSincerely the Channel Thread Tsar"
-        },
-        {
-          "time": "17:06",
-          "author": "chalkitup7777",
-          "text": "Day leaguers!"
-        },
-        {
-          "time": "17:06",
-          "author": "chalkitup7777",
-          "text": "Season games"
-        },
-        {
-          "time": "18:23",
-          "author": "red",
-          "text": "Season games"
-        },
-        {
-          "time": "18:23",
-          "author": "red",
-          "text": "I can play in about 15 min"
-        },
-        {
-          "time": "18:35",
-          "author": "red",
-          "text": "I have today and tomorrow to get my games in or I leave for rodeo finals in New Brunswick and will be on the road till Friday"
-        },
-        {
-          "time": "18:38",
           "author": "segathon",
-          "text": "@Leaguers see above"
+          "text": "if Blairs shows up,  he could win games he has been winning multiple tailgate championships"
         },
         {
-          "time": "18:39",
-          "author": "The Villain CTJ",
-          "text": "https://klipy.com/gifs/the-office-kevin-malone-6"
-        },
-        {
-          "time": "19:18",
-          "author": "shawnmb",
-          "text": "Dude, send a DM and we can schedule something ...."
-        },
-        {
-          "time": "19:28",
-          "author": "segathon",
-          "text": "yes the league has a FEVER and the PRESCRIPTION is Scheduling games."
-        },
-        {
-          "time": "19:34",
-          "author": "NewJerseyKiller",
-          "text": "season games"
-        },
-        {
-          "time": "19:35",
-          "author": "Adolf Oliver Nipples",
-          "text": "everyone has so many games left."
-        },
-        {
-          "time": "20:05",
+          "time": "17:09",
           "author": "MattyA",
-          "text": "Have to take nap during the day to stay up late to play Vick!"
+          "text": "If he doesn't show up, we are both fucked."
         },
         {
-          "time": "20:05",
-          "author": "MattyA",
-          "text": "@NewJerseyKiller Ican play if you are around"
-        },
-        {
-          "time": "20:16",
-          "author": "MarcusVickEBC",
-          "text": "Thank you @MattyA for keeping the lottery alive for me"
-        },
-        {
-          "time": "20:32",
-          "author": "NewJerseyKiller",
-          "text": "m0ar!"
-        },
-        {
-          "time": "20:32",
-          "author": "NewJerseyKiller",
-          "text": "season games"
-        },
-        {
-          "time": "20:46",
-          "author": "Ticklepuss",
-          "text": "it's not all about you"
-        },
-        {
-          "time": "20:46",
-          "author": "chalkitup7777",
-          "text": "SVF"
-        },
-        {
-          "time": "21:06",
-          "author": "NewJerseyKiller",
-          "text": "im around for another hour or so then again around tonight after 8pm again. lets keep it goin!!"
-        },
-        {
-          "time": "21:06",
-          "author": "NewJerseyKiller",
-          "text": "season games"
-        },
-        {
-          "time": "21:07",
-          "author": "segathon",
-          "text": "I'll hit ya up tonight!  #GoRats"
-        },
-        {
-          "time": "22:34",
-          "author": "The Villain CTJ",
-          "text": "Im just slowly watching my playoff spot slip away"
-        },
-        {
-          "time": "22:35",
-          "author": "The Villain CTJ",
-          "text": "https://klipy.com/gifs/sobbing-361"
-        },
-        {
-          "time": "22:50",
-          "author": "Unholy",
-          "text": "Season games"
-        },
-        {
-          "time": "22:51",
-          "author": "krav1",
-          "text": "Season Games"
-        },
-        {
-          "time": "23:13",
-          "author": "MarcusVickEBC",
-          "text": "Season games"
-        },
-        {
-          "time": "23:13",
-          "author": "MarcusVickEBC",
-          "text": "Tonight at 10:00"
-        },
-        {
-          "time": "23:14",
-          "author": "MarcusVickEBC",
-          "text": "@UltraMagnus where are you man you disappeared"
-        },
-        {
-          "time": "23:59",
-          "author": "segathon",
-          "text": "MHT"
-        },
-        {
-          "time": "00:02",
-          "author": "Ticklepuss",
-          "text": "He has been on vacation.  Or did u mean the past 2 months?"
-        },
-        {
-          "time": "00:02",
-          "author": "UltraMagnus",
-          "text": "Season Games"
-        },
-        {
-          "time": "00:22",
-          "author": "MarcusVickEBC",
-          "text": "No I mean since I decided to play."
-        },
-        {
-          "time": "01:00",
-          "author": "GMDS",
-          "text": "season games"
-        },
-        {
-          "time": "01:06",
+          "time": "17:11",
           "author": "Lloyd10xmas",
-          "text": "PRO"
+          "text": "Nathan would look amazing in a Providence jersey(!)"
         },
         {
-          "time": "01:06",
-          "author": "Lloyd10xmas",
-          "text": "Less than 20(!)"
-        },
-        {
-          "time": "01:13",
-          "author": "Moses Bogart",
-          "text": "Season Games"
-        },
-        {
-          "time": "01:15",
-          "author": "krav1",
-          "text": "season games"
-        },
-        {
-          "time": "01:20",
-          "author": "segathon",
-          "text": "season games"
-        },
-        {
-          "time": "01:31",
-          "author": "Lloyd10xmas",
-          "text": "Season Games"
-        },
-        {
-          "time": "01:31",
-          "author": "Lloyd10xmas",
-          "text": "Playoffs here I come(!)"
-        },
-        {
-          "time": "01:51",
-          "author": "UltraMagnus",
-          "text": "Season games"
-        },
-        {
-          "time": "01:52",
-          "author": "GaelicGopher",
-          "text": "Season Games"
-        },
-        {
-          "time": "01:52",
-          "author": "Moses Bogart",
-          "text": "Season Games"
-        },
-        {
-          "time": "01:53",
+          "time": "17:12",
           "author": "autobahn",
-          "text": "15 min or so"
-        },
-        {
-          "time": "02:21",
-          "author": "MarcusVickEBC",
           "text": "Season games"
         },
         {
-          "time": "02:21",
-          "author": "MarcusVickEBC",
-          "text": "@UltraMagnus u Rdy??"
+          "time": "17:13",
+          "author": "autobahn",
+          "text": "Only have 1 meeting this afternoon so I can sneak a set or 2 in"
         },
         {
-          "time": "02:40",
-          "author": "GMDS",
-          "text": "HAM"
+          "time": "17:14",
+          "author": "MattyA",
+          "text": "Holler at me @autobahn  when you are free.... I am booting up the game and computer now"
         },
         {
-          "time": "02:40",
-          "author": "GMDS",
-          "text": "fuck this team"
+          "time": "17:14",
+          "author": "autobahn",
+          "text": "Lets go!!!  I'll grab my laptop now"
         },
         {
-          "time": "02:40",
-          "author": "MarcusVickEBC",
-          "text": "Everyone scared of Vick"
+          "time": "17:15",
+          "author": "MattyA",
+          "text": "Cool, let my computer boot up and I'll holler at you as soon as it's up it takes a little longer cuz it's kind of older but this is the only thing I do on it. I'm switching over to direct messages now"
         },
         {
-          "time": "02:40",
-          "author": "MarcusVickEBC",
-          "text": "Season games"
-        },
-        {
-          "time": "02:47",
-          "author": "Lloyd10xmas",
-          "text": "PRO"
-        },
-        {
-          "time": "02:48",
-          "author": "Lloyd10xmas",
-          "text": "He's hungry for wins(!)"
-        },
-        {
-          "time": "02:51",
+          "time": "17:52",
           "author": "autobahn",
           "text": "AUT"
         },
         {
-          "time": "02:52",
-          "author": "Lloyd10xmas",
-          "text": "Does @Unholy still play in the league?"
-        },
-        {
-          "time": "03:07",
-          "author": "NewJerseyKiller",
-          "text": "season games"
-        },
-        {
-          "time": "03:09",
-          "author": "segathon",
-          "text": "https://klipy.com/gifs/laying-in-bed-awake"
-        },
-        {
-          "time": "03:09",
-          "author": "segathon",
-          "text": "me after blowing a 2 goal lead with 2 min left"
-        },
-        {
-          "time": "03:09",
-          "author": "segathon",
-          "text": "ggs @NewJerseyKiller !"
-        },
-        {
-          "time": "03:10",
-          "author": "segathon",
-          "text": "MHT"
-        },
-        {
-          "time": "03:17",
-          "author": "shawnmb",
-          "text": "TBT"
-        },
-        {
-          "time": "03:17",
-          "author": "shawnmb",
-          "text": "TBP"
-        },
-        {
-          "time": "03:19",
-          "author": "segathon",
-          "text": "PHI"
-        },
-        {
-          "time": "03:22",
-          "author": "GaelicGopher",
-          "text": "MGG"
-        },
-        {
-          "time": "11:07",
-          "author": "Adolf Oliver Nipples",
-          "text": "PIT"
-        },
-        {
-          "time": "11:10",
-          "author": "Lloyd10xmas",
-          "text": "The playoff hunt continues today(!)"
-        },
-        {
-          "time": "11:11",
-          "author": "Lloyd10xmas",
-          "text": "PRO"
-        },
-        {
-          "time": "11:14",
-          "author": "Unholy",
-          "text": "Reciepts"
-        },
-        {
-          "time": "11:44",
-          "author": "Lloyd10xmas",
-          "text": "He lives(!)"
-        },
-        {
-          "time": "13:35",
-          "author": "Ticklepuss",
-          "text": "151 seems like a reasonable amount of requests"
-        },
-        {
-          "time": "13:36",
-          "author": "Ticklepuss",
-          "text": "well maybe not?"
-        },
-        {
-          "time": "13:43",
-          "author": "MarcusVickEBC",
-          "text": "Season games"
-        },
-        {
-          "time": "15:40",
-          "author": "red",
-          "text": "Season games"
-        },
-        {
-          "time": "15:40",
-          "author": "red",
-          "text": "I am available after 5 till about midnight"
-        },
-        {
-          "time": "15:41",
-          "author": "red",
-          "text": "I can get all done tonight if guys are around"
-        },
-        {
-          "time": "15:45",
-          "author": "wolf_of_highland",
-          "text": "They won't be"
-        },
-        {
-          "time": "15:47",
-          "author": "Lloyd10xmas",
-          "text": "I will be(!)"
-        },
-        {
-          "time": "16:05",
-          "author": "MarcusVickEBC",
-          "text": "Season games"
-        },
-        {
-          "time": "16:06",
+          "time": "17:53",
           "author": "MattyA",
           "text": "KAR"
         },
         {
-          "time": "16:07",
+          "time": "17:53",
+          "author": "MattyA",
+          "text": "season games"
+        },
+        {
+          "time": "18:18",
+          "author": "MarcusVickEBC",
+          "text": "Season games"
+        },
+        {
+          "time": "18:35",
+          "author": "segathon",
+          "text": "we need @S’Vale Shithawks to mother hen us to get our games in"
+        },
+        {
+          "time": "18:41",
+          "author": "segathon",
+          "text": "dont make us get King Raph back and score michigan goals on us"
+        },
+        {
+          "time": "18:41",
+          "author": "segathon",
+          "text": "https://x.com/UltraMagnus1982/status/1483955270342660100?s=20"
+        },
+        {
+          "time": "19:11",
+          "author": "NewJerseyKiller",
+          "text": "season games"
+        },
+        {
+          "time": "19:11",
+          "author": "NewJerseyKiller",
+          "text": "i got like 40 minutes to sneak in  a set maybe two right now"
+        },
+        {
+          "time": "19:11",
+          "author": "NewJerseyKiller",
+          "text": "other wise its after  10pmEST tonight"
+        },
+        {
+          "time": "19:21",
+          "author": "MarcusVickEBC",
+          "text": "That was against a 103 rated Hasek if I remember correctly."
+        },
+        {
+          "time": "19:25",
+          "author": "Unholy",
+          "text": "A Down Squirt"
+        },
+        {
+          "time": "19:29",
+          "author": "chalkitup7777",
+          "text": "season games"
+        },
+        {
+          "time": "19:43",
+          "author": "shawnmb",
+          "text": "i've seen better"
+        },
+        {
+          "time": "20:05",
+          "author": "chalkitup7777",
+          "text": "season games"
+        },
+        {
+          "time": "20:18",
+          "author": "Adolf Oliver Nipples",
+          "text": "HIG"
+        },
+        {
+          "time": "20:33",
+          "author": "Lloyd10xmas",
+          "text": "I’ll be there(!)"
+        },
+        {
+          "time": "20:43",
+          "author": "Adolf Oliver Nipples",
+          "text": "https://discord.gg/BdK4YcQe?event=1562204618316980389"
+        },
+        {
+          "time": "20:44",
+          "author": "Lloyd10xmas",
+          "text": "Battle of the former champs(!)"
+        },
+        {
+          "time": "20:50",
+          "author": "chalkitup7777",
+          "text": "https://discord.gg/aXPUpM3CS?event=1562206377420521562"
+        },
+        {
+          "time": "20:51",
+          "author": "segathon",
+          "text": "Season games"
+        },
+        {
+          "time": "20:53",
+          "author": "segathon",
+          "text": "I got a little window"
+        },
+        {
+          "time": "21:15",
+          "author": "DSN",
+          "text": "season games"
+        },
+        {
+          "time": "21:35",
+          "author": "segathon",
+          "text": "@Boxscore how many games left"
+        },
+        {
+          "time": "21:44",
+          "author": "GaelicGopher",
+          "text": "@BoxScore. how many Sims left?"
+        },
+        {
+          "time": "21:46",
+          "author": "segathon",
+          "text": "MHT"
+        },
+        {
+          "time": "21:55",
+          "author": "Ticklepuss",
+          "text": "BUBBLE"
+        },
+        {
+          "time": "21:56",
+          "author": "Ticklepuss",
+          "text": "Pope @Ellis that tiebreaker was sooooo last season"
+        },
+        {
+          "time": "22:02",
+          "author": "Ticklepuss",
+          "text": "Also the standings and year are incorrect"
+        },
+        {
+          "time": "22:02",
+          "author": "Ticklepuss",
+          "text": "STANDINGS"
+        },
+        {
+          "time": "22:06",
+          "author": "Ticklepuss",
+          "text": "Maybe just the sort is off"
+        },
+        {
+          "time": "22:33",
+          "author": "vancecookcobxin",
+          "text": "Season Games"
+        },
+        {
+          "time": "23:01",
+          "author": "red",
+          "text": "Season games"
+        },
+        {
+          "time": "00:03",
+          "author": "vancecookcobxin",
+          "text": "Yooo can anyone host a game for me and @red ?"
+        },
+        {
+          "time": "00:03",
+          "author": "vancecookcobxin",
+          "text": "We are both downloading porn"
+        },
+        {
+          "time": "00:18",
+          "author": "NathanMB",
+          "text": "Still need a host?"
+        },
+        {
+          "time": "00:22",
+          "author": "LHX",
+          "text": "Season Games"
+        },
+        {
+          "time": "00:36",
+          "author": "Unholy",
+          "text": "Season games"
+        },
+        {
+          "time": "00:36",
+          "author": "shawnmb",
+          "text": "Season Games"
+        },
+        {
+          "time": "00:37",
+          "author": "Lloyd10xmas",
+          "text": "Lets go @Unholy(!)"
+        },
+        {
+          "time": "00:37",
+          "author": "Lloyd10xmas",
+          "text": "You can help me keep my winning streak up tonight(!)"
+        },
+        {
+          "time": "00:51",
+          "author": "segathon",
+          "text": "Season games"
+        },
+        {
+          "time": "01:03",
+          "author": "autobahn",
+          "text": "Season games"
+        },
+        {
+          "time": "01:04",
+          "author": "Lloyd10xmas",
+          "text": "PRO"
+        },
+        {
+          "time": "01:04",
+          "author": "Lloyd10xmas",
+          "text": "Who's next?"
+        },
+        {
+          "time": "01:05",
+          "author": "MattyA",
+          "text": "IF you get B Clinton, you send him to me after you all play"
+        },
+        {
+          "time": "01:05",
+          "author": "Lloyd10xmas",
+          "text": "Season Games"
+        },
+        {
+          "time": "01:05",
+          "author": "Lloyd10xmas",
+          "text": "NJ after 1030 tonight(!)"
+        },
+        {
+          "time": "01:05",
+          "author": "MattyA",
+          "text": "KAR"
+        },
+        {
+          "time": "01:05",
+          "author": "Lloyd10xmas",
+          "text": "Puss once he gets off the new shame list(!)"
+        },
+        {
+          "time": "01:05",
           "author": "MattyA",
           "text": "Season games"
         },
         {
-          "time": "16:10",
+          "time": "01:07",
+          "author": "Lloyd10xmas",
+          "text": "Everyone worried we weren't going to finish @MattyA(!)"
+        },
+        {
+          "time": "01:10",
+          "author": "MattyA",
+          "text": "Oh yeah @Lloyd10xmas ..... And now the only one I'm worried about finding to actually play is BClinton"
+        },
+        {
+          "time": "01:25",
           "author": "Ticklepuss",
-          "text": "I might be available Friday night - if you, or my remaining opponents aren't, I don't care one way or the other.  ty"
+          "text": "Wat?"
         },
         {
-          "time": "16:11",
-          "author": "segathon",
-          "text": "We can Do it Boys!  Lets finish those games.  Remember if you dont finish you dont get a shot at Nathan MacKinnon in the draft lotto.  You need to get to that 56 games\n@NewJerseyKiller - got in a bunch last night, hotter than a pistol. get those last 20 games\n@vancecookcobxin - just modded in Fighting!  Now need to bang out 20 games\n@Lloyd10xmas - 14 Games left for Vanek, then he can go into his black bag\n@marylandmike.  14 more games, then he can go back to winning multiple Pure championships\n@MattyA  - 14 more games  Do it for the CANES!\n@red  - dirty dozen games left hit this cowboy up tonight.  He's gone after this at a rodeo"
+          "time": "01:28",
+          "author": "Ellis",
+          "text": "STANDINGS"
         },
         {
-          "time": "16:11",
-          "author": "segathon",
-          "text": "@chalkitup7777 - Holy shit he has a .685 winning pct.  Dont blow it and finish out those last 10\n@autobahn - 10 games left for playoff push\n@bclinton_666 - do you remember you have 10 games left Blair.  If you dont get them in you have tanked for noting\n@UltraMagnus - get to the Chopper! 10 games\n@MarcusVickEBC - Nat Mackinnon needs you to play 10 more\n@Ticklepuss - 9 games?  Tickle has done a lot for this community play him, make the time\n@Pink_Elephants - current champ need crazy 8 games left\n@Unholy  - 8 games, hes on tonight, play him\n@DSN  - Lucky 7 games left\n@segathon - 6 games left, ill be around later tonight, ill steam and swear, its fun\n@Adolf Oliver Nipples @shawnmb @LHX @Moses Bogart @wolf_of_highland @jer_33   - 4 games just 4, if you have him on schedule play them!\n@krav1 @MNYoda  - two friggen games, don't be the zit that pops em to end of draft,  we have long memories\nThese guys should get a statue built for playing all their games @NathanMB @GMDS @GaelicGopher @The Villain CTJ @DON DON"
-        },
-        {
-          "time": "16:13",
+          "time": "01:29",
           "author": "Ticklepuss",
-          "text": "https://klipy.com/gifs/why-dont-you-shut-up-tom-papa"
+          "text": "Sexy"
+        },
+        {
+          "time": "01:30",
+          "author": "Ellis",
+          "text": "server restart"
+        },
+        {
+          "time": "01:30",
+          "author": "Ellis",
+          "text": "BUBBLE"
+        },
+        {
+          "time": "01:30",
+          "author": "Ticklepuss",
+          "text": "Restart for the win always"
+        },
+        {
+          "time": "01:31",
+          "author": "Ticklepuss",
+          "text": "That one isn’t correct.  Tiebreaks are incorrect.  No biggie man, we don’t deserve nice things"
+        },
+        {
+          "time": "01:32",
+          "author": "Ellis",
+          "text": "its close enough"
+        },
+        {
+          "time": "01:33",
+          "author": "GMDS",
+          "text": "@red v @MNYoda \nAnd every @NewJerseyKiller and @marylandmike.  Games are so vital right now"
+        },
+        {
+          "time": "01:35",
+          "author": "marylandmike.",
+          "text": "I can go"
+        },
+        {
+          "time": "01:36",
+          "author": "Ticklepuss",
+          "text": "We are spoiled"
+        },
+        {
+          "time": "01:36",
+          "author": "GMDS",
+          "text": "SHS"
+        },
+        {
+          "time": "01:37",
+          "author": "GMDS",
+          "text": "@vancecookcobxin @MarcusVickEBC @MattyA @bclinton_666 @UltraMagnus @NewJerseyKiller \n\nMike is looking"
+        },
+        {
+          "time": "01:38",
+          "author": "marylandmike.",
+          "text": "Shit. Thought we had to play 🤣"
+        },
+        {
+          "time": "01:38",
+          "author": "marylandmike.",
+          "text": "Yes"
+        },
+        {
+          "time": "01:38",
+          "author": "marylandmike.",
+          "text": "Season games"
+        },
+        {
+          "time": "01:47",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/mowing-lawn-6"
+        },
+        {
+          "time": "01:47",
+          "author": "segathon",
+          "text": "Let’s keep it going boys!"
+        },
+        {
+          "time": "01:51",
+          "author": "MarcusVickEBC",
+          "text": "@marylandmike. Are u good semi late? Like 10:30?"
+        },
+        {
+          "time": "01:52",
+          "author": "MarcusVickEBC",
+          "text": "@DSN we are still good for like 10:15 btw. I’ll DM u soon."
+        },
+        {
+          "time": "02:00",
+          "author": "Ellis",
+          "text": "BUBBLE"
+        },
+        {
+          "time": "02:03",
+          "author": "Ellis",
+          "text": "I made bubble by .pct to show more accurate race assuming games are played"
+        },
+        {
+          "time": "02:30",
+          "author": "Moses Bogart",
+          "text": "Season Games"
+        },
+        {
+          "time": "02:30",
+          "author": "Moses Bogart",
+          "text": "woooooooo"
+        },
+        {
+          "time": "02:33",
+          "author": "bclinton_666",
+          "text": "season games"
+        },
+        {
+          "time": "02:34",
+          "author": "bclinton_666",
+          "text": "I'm around! only have about a 15 minute window to wait"
+        },
+        {
+          "time": "02:40",
+          "author": "vancecookcobxin",
+          "text": "season games"
+        },
+        {
+          "time": "02:42",
+          "author": "MattyA",
+          "text": "@vancecookcobxin @bclinton_666 I am here and ready"
+        },
+        {
+          "time": "02:44",
+          "author": "MNYoda",
+          "text": "Anybody available to host for @red and I?"
+        },
+        {
+          "time": "02:49",
+          "author": "MarcusVickEBC",
+          "text": "Host up @bclinton_666"
+        },
+        {
+          "time": "02:53",
+          "author": "MarcusVickEBC",
+          "text": "@bclinton_666 Rdy?"
+        },
+        {
+          "time": "02:57",
+          "author": "LHX",
+          "text": "Season Games"
+        },
+        {
+          "time": "02:57",
+          "author": "LHX",
+          "text": "https://klipy.com/gifs/easter-blessings-2"
+        },
+        {
+          "time": "02:58",
+          "author": "MarcusVickEBC",
+          "text": "Blair don’t fade on me bubba @bclinton_666"
+        },
+        {
+          "time": "03:13",
+          "author": "MattyA",
+          "text": "KAR"
+        },
+        {
+          "time": "03:31",
+          "author": "krav1",
+          "text": "BFC"
+        },
+        {
+          "time": "03:44",
+          "author": "NewJerseyKiller",
+          "text": "season gamess"
+        },
+        {
+          "time": "03:44",
+          "author": "NewJerseyKiller",
+          "text": "season games"
+        },
+        {
+          "time": "03:45",
+          "author": "NewJerseyKiller",
+          "text": "see ya tomorrow guys^ ill be on 8:30pmEST-12am as Rats continue to chew their way further up the bracket"
+        },
+        {
+          "time": "03:46",
+          "author": "NewJerseyKiller",
+          "text": "https://klipy.com/gifs/rat-rat-lift"
+        },
+        {
+          "time": "03:48",
+          "author": "MarcusVickEBC",
+          "text": "What’s “BAG” in the team stats sheet?"
+        },
+        {
+          "time": "03:48",
+          "author": "MarcusVickEBC",
+          "text": "And BA and BA%?"
+        },
+        {
+          "time": "10:40",
+          "author": "LHX",
+          "text": "Breakaways?"
+        },
+        {
+          "time": "12:11",
+          "author": "Lloyd10xmas",
+          "text": "Performance enhancer(!)"
+        },
+        {
+          "time": "12:43",
+          "author": "MattyA",
+          "text": "KAR"
+        },
+        {
+          "time": "12:44",
+          "author": "MattyA",
+          "text": "Holler today if you can play....I was up late last night so I will be up late tonight as well I hope @Pink_Elephants @vancecookcobxin"
+        },
+        {
+          "time": "13:56",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/almost-there-27"
+        },
+        {
+          "time": "13:59",
+          "author": "Ticklepuss",
+          "text": "You'll be happy to know that some of my remaining competitors reached out, and even a few of them responded to me when I replied"
+        },
+        {
+          "time": "14:02",
+          "author": "segathon",
+          "text": "Everyone is getting into the Tag Week spirity"
+        },
+        {
+          "time": "14:02",
+          "author": "Lloyd10xmas",
+          "text": "I thought it was sim week?"
+        },
+        {
+          "time": "14:04",
+          "author": "Adolf Oliver Nipples",
+          "text": "It’s #SimWatch2026"
+        },
+        {
+          "time": "14:04",
+          "author": "Adolf Oliver Nipples",
+          "text": "Games are being closely monitored"
+        },
+        {
+          "time": "14:42",
+          "author": "DSN",
+          "text": "BAR"
         }
       ]
     },
@@ -789,44 +918,64 @@
       "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "20:31",
-          "author": "NewJerseyKiller",
-          "text": "<:WDY:1300956776652345356> <:KAK:1447629097684697270>"
-        },
-        {
-          "time": "21:05",
-          "author": "NewJerseyKiller",
-          "text": "<:WDY:1300956776652345356> <:MGG:897245448522313738>"
-        },
-        {
-          "time": "00:46",
-          "author": "Lloyd10xmas",
-          "text": "<:PRO:918148694820405308> <:HAM:943898587786539130>"
-        },
-        {
-          "time": "01:11",
-          "author": "krav1",
-          "text": "<:BFC:1302374329627054195> <:VHV:1303127943098138725>"
-        },
-        {
-          "time": "01:29",
-          "author": "Lloyd10xmas",
-          "text": "<:PRO:918148694820405308> <:VHV:1303127943098138725>"
-        },
-        {
-          "time": "02:40",
-          "author": "GMDS",
-          "text": "<:HAM:943898587786539130> <:WDY:1300956776652345356>"
-        },
-        {
-          "time": "02:49",
+          "time": "17:51",
           "author": "autobahn",
-          "text": "<:AUT:1040258542629826691> <:MGG:897245448522313738>"
+          "text": "<:AUT:1040258542629826691> <:KAK:1447629097684697270>"
         },
         {
-          "time": "03:08",
+          "time": "19:42",
+          "author": "autobahn",
+          "text": "<:AUT:1040258542629826691> <:WDY:1300956776652345356>"
+        },
+        {
+          "time": "00:36",
+          "author": "Lloyd10xmas",
+          "text": "<:PRO:918148694820405308> <:MHA:1347389671059095604>"
+        },
+        {
+          "time": "01:02",
+          "author": "Lloyd10xmas",
+          "text": "<:PRO:918148694820405308> <:NBK:996400156272496641>"
+        },
+        {
+          "time": "01:23",
+          "author": "wolf_of_highland",
+          "text": "<:BAY:1039716048510922802> <:HIG:897245384601108490>"
+        },
+        {
+          "time": "01:34",
+          "author": "Unholy",
+          "text": "<:NBK:996400156272496641> <:AUT:1040258542629826691>"
+        },
+        {
+          "time": "01:44",
+          "author": "Adolf Oliver Nipples",
+          "text": "<:PIT:878396735028863007> <:BAY:1039716048510922802>"
+        },
+        {
+          "time": "02:13",
+          "author": "Unholy",
+          "text": "<:NBK:996400156272496641> <:SHS:1249551823161786388>"
+        },
+        {
+          "time": "03:15",
+          "author": "red",
+          "text": "<:MHA:1347389671059095604> <:OCW:1030175920536948868>"
+        },
+        {
+          "time": "03:17",
+          "author": "krav1",
+          "text": "<:BFC:1302374329627054195> <:DHG:1486729741531873450>"
+        },
+        {
+          "time": "03:43",
           "author": "NewJerseyKiller",
-          "text": "<:WDY:1300956776652345356> <:MHT:918212056094740510>"
+          "text": "<:WDY:1300956776652345356> <:MHA:1347389671059095604>"
+        },
+        {
+          "time": "15:10",
+          "author": "Lloyd10xmas",
+          "text": "<:PRO:918148694820405308> <:WDY:1300956776652345356>"
         }
       ]
     },
@@ -837,9 +986,14 @@
       "commentary": "Heated debate and banter erupts in #2013-boxscores over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:23",
-          "author": "MarcusVickEBC",
-          "text": "Shootout"
+          "time": "13:59",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/wonder-years-basketball"
+        },
+        {
+          "time": "13:59",
+          "author": "segathon",
+          "text": "Look at all those boxscores"
         }
       ]
     },
@@ -850,99 +1004,60 @@
       "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "11:59",
-          "author": "Ticklepuss",
-          "text": "**Blubber Magazine - 2013 Regular Season Cumming To Close - Take It Up With Cocksinsun Volume 126**\n\n*The 2013 season, aka S18, is scheduled to turn into a pumpkin in roughly 3 days, capping off a long and dull stretch of nhl95 hockey.  The lack of excitement surrounding the World National is unmistakably as low as it’s ever been, and over the past few weeks, we’ve unleashed our interns to delve into just why the league seems impotent.  There are some seemingly obvious answers, namely, the regular season is too long.  Others may be far less obvious….Here’s what they came back with…*\n\n__#1) The regular season is too long….  __\n90 days….. NINETY for a regular season of 56 games.  This once proud league, ripe with excitement to be able to relive our glory days, used to have seasons > 80 games and the timeframe was shorter.  Back then, we didn’t have nearly the amount of tech perks that we have today….Streaming was few and far between, if at all, no websites and delayed box scores.  Have all the new features played a part in reducing excitement overall?  Not likely…."
-        },
-        {
-          "time": "11:59",
-          "author": "Ticklepuss",
-          "text": "__#2)  It’s the same teams in the playoffs every season…. __\nThis doesn’t seem like it would be the major catalyst, but could impact the initiative of those perennially towards the bottom with red squares.  I guess that could be understandable after double digit seasons.  More holistically, the league is arguably as competitive as it’s ever been.  Over the past few years, there’s been a number of different (and new) champions.  A handful of Shitty Bill “regulars” have put themselves in the mix for a Brule birth, most notably Betty Ford (clinched) and MNYoda (bubble).  Does this give teams below them hope?  Not likely…So yes, it is the same teams every year to a certain extent.  I personally thought this league would be at more players by now, with likely a champions/relegation league type situation, but it’s not.  That’s too bad, but blame the marketing department…."
-        },
-        {
-          "time": "11:59",
-          "author": "Ticklepuss",
-          "text": "__#3) The regular season starts when there’s a week left…__\nThis is a problem, but worse than that, it’s been a problem for a long time.  Teams shouldn’t be able to wait until the end and crowbar in 90% of their season into a week.  Yes people get busy, have personal things going on, yada yada….That’s fine, but there’s obviously a group that thinks it’s cute to take this approach, and while the playful banter is funny for a minute, it does get old.  So we here at BM do feel this is a major factor in the lack of excitement, but it’s unlikely to bring change anytime soon.  Would a midseason marker help, to at least force teams to get to the midway point in a reasonable amount of time?  Maybe….probably??  But after 40+ seasons, things will probably just continue as they are.  Secondary to draining the excitement is the fact that this approach, due to lack of integrity or consequences, leads to fake games being submitted.  On the surface, this may seem like a fair approach;  2 teams that weren’t able to play just submit two ties or a split, etc.  The problem is there’s a few in the World National that do not take this approach, and would just take the penalties that come with not finishing.  So the innocence of submitting fake games, after being unable to carve out 20 minutes a week, does impact other teams, and likely teams that need some help."
-        },
-        {
-          "time": "11:59",
-          "author": "Ticklepuss",
-          "text": "__#4) Maybe it’s just run it’s course…..__\nNot gonna lie, what’s going on over on the 94 server is next level amazing!  Does the World National need to follow their lead to stay afloat?  A few weeks ago, my answer would have been no, but I’m quickly questioning it more and more.  Given what this league has ~ decent number of streamers, BSB, live standings/stats, podcasts, etc ~ it wouldn’t seem necessary to duplicate (we can’t), or beg them to let us in, but I think it’s quickly becoming something we should look into.  It just feels like something needs to be done.  \n\nI think this league has been around for over 5 years now, and it’s been amazing.  Change is always inevitable, and perhaps change is what the World National needs.  In 5 years, we’ve never surpassed the max number of allowed teams.  Growth is necessary IMO to keep things fresh and exciting.  Otherwise, we only have numbers 1-3 above to talk about for 3 months a year.  \n\nSo where do we go from here?  I don’t know….Be sure to drop a comment and smash that like button if you enjoyed the content….\n\n\n\n**Brian Cocksinsun is a Senior Writer for Blubber Magazine and his parents are somehow happy together and still attend family picnics**"
-        },
-        {
-          "time": "12:22",
+          "time": "16:26",
           "author": "segathon",
-          "text": "Cocksinsun seems like he may need Blue Chew Gold...."
-        },
+          "text": "Im still mad about those loses"
+        }
+      ]
+    },
+    {
+      "channel": "bell-n-bell",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #bell-n-bell",
+      "commentary": "Heated debate and banter erupts in #bell-n-bell over game tape, timing, and locker room etiquette.",
+      "messages": [
         {
-          "time": "12:23",
+          "time": "20:45",
           "author": "Adolf Oliver Nipples",
-          "text": "The SIM’s are a damn slap in the face."
+          "text": "https://discord.gg/BdK4YcQe?event=1562204618316980389"
         },
         {
-          "time": "12:24",
+          "time": "20:47",
           "author": "Adolf Oliver Nipples",
-          "text": "Also effeminate."
-        },
+          "text": "@NathanMB @shawnmb @Unholy Adjust the Halloween Spooktacular Playoff Preview accordingly."
+        }
+      ]
+    },
+    {
+      "channel": "gmds-ball",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #gmds-ball",
+      "commentary": "Heated debate and banter erupts in #gmds-ball over game tape, timing, and locker room etiquette.",
+      "messages": [
         {
-          "time": "12:26",
-          "author": "Ticklepuss",
-          "text": "I think he's looking out for the up and cummers and the league as a whole"
-        },
-        {
-          "time": "12:27",
-          "author": "Ticklepuss",
-          "text": "but I can't speak for him.  Also this was mostly from interns"
-        },
-        {
-          "time": "12:36",
+          "time": "14:32",
           "author": "segathon",
-          "text": "There are good points there, I think it is harder to grow W as we are all very good players now.  New guys have a steep learning curve coming into the dub.  Also I was talking to an intern in the marketing department, after the playoff buzz dies down we all need to start getting in 95 games on the new system.  That is where we will get new blood https://kingof94.web.app/"
+          "text": "we get an update today?  Lots of action"
         },
         {
-          "time": "13:55",
-          "author": "Unholy",
-          "text": "Here are my thoughts on this"
-        },
-        {
-          "time": "13:55",
-          "author": "Unholy",
-          "text": "Tonight 8:47pm"
-        },
-        {
-          "time": "13:58",
+          "time": "14:37",
           "author": "Lloyd10xmas",
-          "text": "I call first dibs…."
+          "text": "Providence with a top 5 finish….."
         },
         {
-          "time": "14:08",
-          "author": "Ticklepuss",
-          "text": "Can you give the loligaggers a shout out please?"
+          "time": "14:44",
+          "author": "GMDS",
+          "text": "Now that work has blocked the sheets and the ticklesite it's a pain in the ass on my phone"
         },
         {
-          "time": "14:40",
-          "author": "Unholy",
-          "text": "I was making a “Season Games” scheduling joke but that may have been a reach now that I think of it"
+          "time": "15:46",
+          "author": "GaelicGopher",
+          "text": "It’s the only way I’ve viewed em since existence.  The Struggle is real"
         },
         {
-          "time": "14:41",
-          "author": "Unholy",
-          "text": "I do enjoy the Season Games and then a nice 12-hour window. Always get a kick out of that one."
-        },
-        {
-          "time": "15:59",
-          "author": "Ellis",
-          "text": "Maybe it's time to try a league schedule games per week vs 'X' opponents...."
-        },
-        {
-          "time": "16:08",
-          "author": "Ticklepuss",
-          "text": "Ever interested in looking back to see when a fellow league doucher actually played but didn't want to go through the box scores channel to look up dates?  Introducing game dates to the Scores page on TickleWeb....Now, when you want to attack someone for costing you a spot in the loser tournament or a bunch of draft spots, you can use trusted information in your insults:"
-        },
-        {
-          "time": "16:09",
-          "author": "Ticklepuss",
-          "text": "TickleWeb - bringing accuracy back to verbal attacks"
+          "time": "16:03",
+          "author": "GMDS",
+          "text": "Wonder if the sheers and site can reclassify as \"insurance\" and not sports"
         }
       ]
     },
@@ -953,95 +1068,42 @@
       "commentary": "Late-night food critique reaches boiling point as members profess deep disdain for online buffet content while simultaneously watching every single second.",
       "messages": [
         {
-          "time": "01:47",
-          "author": "segathon",
-          "text": "the helper"
+          "time": "20:56",
+          "author": "Lloyd10xmas",
+          "text": "Looks like you threw on an extra one for me(!)"
+        },
+        {
+          "time": "20:57",
+          "author": "Ticklepuss",
+          "text": "is that a grasshopper?"
+        },
+        {
+          "time": "12:38",
+          "author": "chalkitup7777",
+          "text": "Grease trap"
         }
       ]
     },
     {
-      "channel": "stiller-nation",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #stiller-nation",
-      "commentary": "Heated debate and banter erupts in #stiller-nation over game tape, timing, and locker room etiquette.",
+      "channel": "knightsvision",
+      "badge": "HOT SCOOP",
+      "title": "Archival Identity Verification Incident",
+      "commentary": "Vintage game film circulated through the wire. Unholy confirmed his legendary on-ice persona by sheer instinct without even rendering the media.",
       "messages": [
         {
-          "time": "19:48",
-          "author": "GMDS",
-          "text": "I'm sure the philly fans are caring and compassionate enough to accept the state of the iggles and flyers"
-        },
-        {
-          "time": "00:06",
-          "author": "Ticklepuss",
-          "text": "Laura Rutledge can most certainly get it"
-        }
-      ]
-    },
-    {
-      "channel": "game-code",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #game-code",
-      "commentary": "Heated debate and banter erupts in #game-code over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "21:39",
+          "time": "00:33",
           "author": "shawnmb",
-          "text": "What is this?"
+          "text": "https://www.cbc.ca/news/canada/canadian-flamingo-las-vegas-9.7386697"
         },
         {
-          "time": "21:40",
-          "author": "TMLeafs",
-          "text": "https://youtu.be/eI8lvObnKkY?is=3qgaXaG2pMyUWPk4"
-        },
-        {
-          "time": "21:42",
-          "author": "TMLeafs",
-          "text": "Rom with some songs swapped out. Just a song Rom in the above link for anyone who wants to input their own music"
-        },
-        {
-          "time": "21:52",
-          "author": "shawnmb",
-          "text": "oh i see.  i had the volume off and was wondering why you're showing us Roenick's one-timer prowess"
-        },
-        {
-          "time": "22:04",
+          "time": "00:39",
           "author": "Ticklepuss",
-          "text": "Can u make America, Fuck Ya play when Tegucigalpa scores?"
+          "text": "Wow, what a story"
         },
         {
-          "time": "23:51",
-          "author": "segathon",
-          "text": "That is AWESOME!"
-        },
-        {
-          "time": "23:51",
-          "author": "segathon",
-          "text": "I want flight of the bumblebee when I score a down b"
-        },
-        {
-          "time": "23:53",
-          "author": "segathon",
-          "text": "https://youtu.be/jVV9Zm7bGfk?is=FGX4f_z0eNw08-SL"
-        },
-        {
-          "time": "00:21",
-          "author": "Pink_Elephants",
-          "text": "Nothing beats Shadow of the Ninja: Stage 1"
-        },
-        {
-          "time": "00:59",
-          "author": "segathon",
-          "text": "That’s a deep cut"
-        },
-        {
-          "time": "01:40",
-          "author": "segathon",
-          "text": "actually i want this"
-        },
-        {
-          "time": "01:40",
-          "author": "segathon",
-          "text": "https://x.com/exQUIZitely/status/2111804992772317504?s=20"
+          "time": "00:41",
+          "author": "shawnmb",
+          "text": "\"The truth is, Mitch was drunk. Mitch was stupid. He made bad decisions.\""
         }
       ]
     }
