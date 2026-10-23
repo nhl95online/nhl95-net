@@ -27,6 +27,7 @@ import {
 import { parseSaveStateBuffer } from '@/lib/parsers/savestate';
 import { useCoachAuth } from '@/lib/coach-auth';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
+import RetroBoxscore from '@/components/RetroBoxscore';
 
 export function getLeagueCode(seasonId: number | string): string {
   const sId = Number(seasonId);
@@ -311,8 +312,57 @@ export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams
   const totalFaceoffs = (Number(game.awayTeam.faceoffWins) || 0) + (Number(game.homeTeam.faceoffWins) || 0);
   const threeStars = calculateThreeStars(game, awayCode, homeCode);
 
+  const mapGoalies = (arr: any[]) =>
+    (arr || []).map((g: any) => ({
+      name: g.name,
+      goals: g.goals || 0,
+      assists: g.assists || 0,
+      so: g.so || (g.ga === 0 ? 1 : 0),
+      ga: g.ga,
+      saves: g.saves,
+      shots: g.shots,
+      savePct: typeof g.savePct === 'number' ? g.savePct : 0,
+      toi: g.toi || '15:00',
+    }));
+
+  const mapSkaters = (arr: any[]) =>
+    (arr || []).map((s: any) => ({
+      name: s.name,
+      goals: s.goals,
+      assists: s.assists,
+      points: s.points,
+      sog: s.sog,
+      checks: s.checks,
+      pim: s.pim,
+      ppp: s.ppp,
+      shp: s.shp,
+      toi: s.toi || '15:00',
+    }));
+
+  const at = game.awayTeam;
+  const ht = game.homeTeam;
+
+  const statRows = [
+    { label: 'Shots', away: at.shots, home: ht.shots },
+    { label: '1rst Period', away: at.shotsP1, home: ht.shotsP1 },
+    { label: '2nd Period', away: at.shotsP2, home: ht.shotsP2 },
+    { label: '3rd Period', away: at.shotsP3, home: ht.shotsP3 },
+    { label: 'Overtime', away: at.shotsOT || 0, home: ht.shotsOT || 0 },
+    { label: 'Shooting %', away: `${Math.round(at.shootingPct * 100)}%`, home: `${Math.round(ht.shootingPct * 100)}%` },
+    { label: 'PowerPlay', away: `${at.ppGoals}/${at.ppTries}`, home: `${ht.ppGoals}/${ht.ppTries}` },
+    { label: 'PowerPlay Shots', away: at.ppShots, home: ht.ppShots },
+    { label: 'Shorthanded G', away: at.shGoals, home: ht.shGoals },
+    { label: 'Breakaways', away: `${at.breakawayGoals}/${at.breakawayTries}`, home: `${ht.breakawayGoals}/${ht.breakawayTries}` },
+    { label: 'One-Timers', away: `${at.oneTimerGoals}/${at.oneTimerTries}`, home: `${ht.oneTimerGoals}/${ht.oneTimerTries}` },
+    { label: 'Penalty Shots', away: `${at.penaltyShotGoals}/${at.penaltyShotTries}`, home: `${ht.penaltyShotGoals}/${ht.penaltyShotTries}` },
+    { label: 'Faceoffs', away: `${at.faceoffWins}/${totalFaceoffs}`, home: `${ht.faceoffWins}/${totalFaceoffs}` },
+    { label: 'Body Checks', away: at.checks, home: ht.checks },
+    { label: 'Penalties', away: at.penalties, home: ht.penalties },
+    { label: 'Attack Zone', away: at.attackZoneTime, home: ht.attackZoneTime },
+  ];
+
   return (
-    <div className="bg-black text-white p-4 font-mono select-none overflow-x-auto border-4 border-neutral-900 shadow-2xl rounded-xs space-y-4">
+    <div className="space-y-4">
       {/* Three Stars of the Game Banner */}
       {threeStars.length > 0 && (
         <div className="p-3 bg-neutral-950 border-2 border-yellow-500/70 rounded-xs shadow-md">
@@ -337,363 +387,31 @@ export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams
           </div>
         </div>
       )}
-
-      <div className="min-w-[1000px] grid grid-cols-12 gap-5 items-start text-xs">
-        
-        {/* LEFT COLUMN: Away & Home Rosters + Banners (Col-span 5) */}
-        <div className="col-span-5 space-y-6">
-          
-          {/* AWAY TEAM SECTION */}
-          <div>
-            {/* Away Team Logo & Score */}
-            <div className="flex items-center justify-between bg-black pb-2 mb-2">
-              <div className="flex items-center gap-3">
-                {awayLogo ? (
-                  <img
-                    src={awayLogo}
-                    alt={awayName}
-                    className="h-10 max-h-12 max-w-[280px] object-contain drop-shadow-md"
-                  />
-                ) : (
-                  <div className="bg-neutral-900 border border-white/40 px-3 py-1 text-white font-black text-xs uppercase tracking-wider">
-                    {awayName} {awayCoach ? `• ${awayCoach}` : ''}
-                  </div>
-                )}
-              </div>
-              <span className="font-mono font-black text-4xl text-[#00ff00] px-2 drop-shadow-[0_0_10px_rgba(0,255,0,0.9)]">
-                {game.awayTeam.goals}
-              </span>
-            </div>
-
-            {/* Away Goalies */}
-            <div className="mb-4">
-              <table className="w-full text-[11px] text-left">
-                <thead>
-                  <tr className="text-white border-b border-white/40 pb-0.5">
-                    <th className="font-normal w-32">Goalies</th>
-                    <th className="font-normal text-center">G</th>
-                    <th className="font-normal text-center">A</th>
-                    <th className="font-normal text-center">PTS</th>
-                    <th className="font-normal text-center">SO</th>
-                    <th className="font-normal text-center">GA</th>
-                    <th className="font-normal text-center">SV</th>
-                    <th className="font-normal text-center">SH</th>
-                    <th className="font-normal text-center">SV%</th>
-                    <th className="font-normal text-right">TOI</th>
-                  </tr>
-                </thead>
-                <tbody className="text-white">
-                  {game.awayGoalies.map((g, i) => (
-                    <tr key={i} className="hover:bg-white/5">
-                      <td className="truncate max-w-[130px]">{g.name}</td>
-                      <td className="text-center">{g.goals || 0}</td>
-                      <td className="text-center">{g.assists || 0}</td>
-                      <td className="text-center">{(g.goals || 0) + (g.assists || 0)}</td>
-                      <td className="text-center">{g.so || (g.ga === 0 ? 1 : 0)}</td>
-                      <td className="text-center">{g.ga}</td>
-                      <td className="text-center">{g.saves}</td>
-                      <td className="text-center">{g.shots}</td>
-                      <td className="text-center font-mono">{typeof g.savePct === 'number' ? `.${Math.round(g.savePct * 1000).toString().padStart(3, '0')}` : '.000'}</td>
-                      <td className="text-right">{g.toi || '15:00'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Away Skaters */}
-            <div>
-              <table className="w-full text-[11px] text-left">
-                <thead>
-                  <tr className="text-white border-b border-white/40 pb-0.5">
-                    <th className="font-normal w-32">Players</th>
-                    <th className="font-normal text-center">G</th>
-                    <th className="font-normal text-center">A</th>
-                    <th className="font-normal text-center">PTS</th>
-                    <th className="font-normal text-center">SOG</th>
-                    <th className="font-normal text-center">CHK</th>
-                    <th className="font-normal text-center">PIM</th>
-                    <th className="font-normal text-center">PPP</th>
-                    <th className="font-normal text-center">SHP</th>
-                    <th className="font-normal text-right">TOI</th>
-                  </tr>
-                </thead>
-                <tbody className="text-white">
-                  {game.awaySkaters.map((s, i) => (
-                    <tr key={i} className="hover:bg-white/5">
-                      <td className="truncate max-w-[130px]">{s.name}</td>
-                      <td className="text-center">{s.goals}</td>
-                      <td className="text-center">{s.assists}</td>
-                      <td className="text-center font-bold">{s.points}</td>
-                      <td className="text-center">{s.sog}</td>
-                      <td className="text-center">{s.checks}</td>
-                      <td className="text-center">{s.pim}</td>
-                      <td className="text-center">{s.ppp}</td>
-                      <td className="text-center">{s.shp}</td>
-                      <td className="text-right">{s.toi || '15:00'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* HOME TEAM SECTION */}
-          <div>
-            {/* Home Team Logo & Score */}
-            <div className="flex items-center justify-between bg-black pb-2 mb-2">
-              <div className="flex items-center gap-3">
-                {homeLogo ? (
-                  <img
-                    src={homeLogo}
-                    alt={homeName}
-                    className="h-10 max-h-12 max-w-[280px] object-contain drop-shadow-md"
-                  />
-                ) : (
-                  <div className="bg-neutral-900 border border-white/40 px-3 py-1 text-white font-black text-xs uppercase tracking-wider">
-                    {homeName} {homeCoach ? `• ${homeCoach}` : ''}
-                  </div>
-                )}
-              </div>
-              <span className="font-mono font-black text-4xl text-[#00ff00] px-2 drop-shadow-[0_0_10px_rgba(0,255,0,0.9)]">
-                {game.homeTeam.goals}
-              </span>
-            </div>
-
-            {/* Home Goalies */}
-            <div className="mb-4">
-              <table className="w-full text-[11px] text-left">
-                <thead>
-                  <tr className="text-white border-b border-white/40 pb-0.5">
-                    <th className="font-normal w-32">Goalies</th>
-                    <th className="font-normal text-center">G</th>
-                    <th className="font-normal text-center">A</th>
-                    <th className="font-normal text-center">PTS</th>
-                    <th className="font-normal text-center">SO</th>
-                    <th className="font-normal text-center">GA</th>
-                    <th className="font-normal text-center">SV</th>
-                    <th className="font-normal text-center">SH</th>
-                    <th className="font-normal text-center">SV%</th>
-                    <th className="font-normal text-right">TOI</th>
-                  </tr>
-                </thead>
-                <tbody className="text-white">
-                  {game.homeGoalies.map((g, i) => (
-                    <tr key={i} className="hover:bg-white/5">
-                      <td className="truncate max-w-[130px]">{g.name}</td>
-                      <td className="text-center">{g.goals || 0}</td>
-                      <td className="text-center">{g.assists || 0}</td>
-                      <td className="text-center">{(g.goals || 0) + (g.assists || 0)}</td>
-                      <td className="text-center">{g.so || (g.ga === 0 ? 1 : 0)}</td>
-                      <td className="text-center">{g.ga}</td>
-                      <td className="text-center">{g.saves}</td>
-                      <td className="text-center">{g.shots}</td>
-                      <td className="text-center font-mono">{typeof g.savePct === 'number' ? `.${Math.round(g.savePct * 1000).toString().padStart(3, '0')}` : '.000'}</td>
-                      <td className="text-right">{g.toi || '15:00'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Home Skaters */}
-            <div>
-              <table className="w-full text-[11px] text-left">
-                <thead>
-                  <tr className="text-white border-b border-white/40 pb-0.5">
-                    <th className="font-normal w-32">Players</th>
-                    <th className="font-normal text-center">G</th>
-                    <th className="font-normal text-center">A</th>
-                    <th className="font-normal text-center">PTS</th>
-                    <th className="font-normal text-center">SOG</th>
-                    <th className="font-normal text-center">CHK</th>
-                    <th className="font-normal text-center">PIM</th>
-                    <th className="font-normal text-center">PPP</th>
-                    <th className="font-normal text-center">SHP</th>
-                    <th className="font-normal text-right">TOI</th>
-                  </tr>
-                </thead>
-                <tbody className="text-white">
-                  {game.homeSkaters.map((s, i) => (
-                    <tr key={i} className="hover:bg-white/5">
-                      <td className="truncate max-w-[130px]">{s.name}</td>
-                      <td className="text-center">{s.goals}</td>
-                      <td className="text-center">{s.assists}</td>
-                      <td className="text-center font-bold">{s.points}</td>
-                      <td className="text-center">{s.sog}</td>
-                      <td className="text-center">{s.checks}</td>
-                      <td className="text-center">{s.pim}</td>
-                      <td className="text-center">{s.ppp}</td>
-                      <td className="text-center">{s.shp}</td>
-                      <td className="text-right">{s.toi || '15:00'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
-
-        {/* CENTER COLUMN: Period Line Score & Games Stats (Col-span 3) */}
-        <div className="col-span-3 space-y-4">
-          {/* League Logo Circle */}
-          <div className="flex justify-center">
-            <div className="w-16 h-16 rounded-full bg-white p-1 flex items-center justify-center border-2 border-neutral-700 shadow-md">
-              <img src="https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/brule_cup.png" alt="WN95HL" className="w-12 h-12 object-contain" />
-            </div>
-          </div>
-
-          {/* Period Table */}
-          <div className="border border-white/40 p-1.5 text-center bg-black">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-white/30 text-white">
-                  <th className="text-left font-normal py-0.5"></th>
-                  <th className="font-normal">1rst</th>
-                  <th className="font-normal">2nd</th>
-                  <th className="font-normal">3rd</th>
-                  <th className="font-normal">OT</th>
-                  <th className="font-bold">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-white/10">
-                  <td className="text-left font-bold text-[#00ff00] bg-neutral-900 px-1">{awayCode}</td>
-                  <td>{game.awayTeam.goalsP1}</td>
-                  <td>{game.awayTeam.goalsP2}</td>
-                  <td>{game.awayTeam.goalsP3}</td>
-                  <td>{game.awayTeam.goalsOT || 0}</td>
-                  <td className="font-bold text-[#00ff00]">{game.awayTeam.goals}</td>
-                </tr>
-                <tr>
-                  <td className="text-left font-bold text-[#00ff00] bg-neutral-900 px-1">{homeCode}</td>
-                  <td>{game.homeTeam.goalsP1}</td>
-                  <td>{game.homeTeam.goalsP2}</td>
-                  <td>{game.homeTeam.goalsP3}</td>
-                  <td>{game.homeTeam.goalsOT || 0}</td>
-                  <td className="font-bold text-[#00ff00]">{game.homeTeam.goals}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Games Stats Table */}
-          <div className="border border-white/40 p-2 bg-black">
-            <div className="flex items-center justify-between border-b border-white/30 pb-1 mb-2 px-1">
-              <img src={awayLogo} alt={awayCode} className="w-6 h-6 object-contain" />
-              <span className="font-bold uppercase text-white tracking-wider text-xs">Games Stats</span>
-              <img src={homeLogo} alt={homeCode} className="w-6 h-6 object-contain" />
-            </div>
-
-            <div className="space-y-1 text-[11px]">
-              {[
-                { label: 'Shots', away: game.awayTeam.shots, home: game.homeTeam.shots },
-                { label: '1rst Period', away: game.awayTeam.shotsP1, home: game.homeTeam.shotsP1 },
-                { label: '2nd Period', away: game.awayTeam.shotsP2, home: game.homeTeam.shotsP2 },
-                { label: '3rd Period', away: game.awayTeam.shotsP3, home: game.homeTeam.shotsP3 },
-                { label: 'Overtime', away: game.awayTeam.shotsOT || 0, home: game.homeTeam.shotsOT || 0 },
-                { label: 'Shooting %', away: `${Math.round(game.awayTeam.shootingPct * 100)}%`, home: `${Math.round(game.homeTeam.shootingPct * 100)}%` },
-                { label: 'PowerPlay', away: `${game.awayTeam.ppGoals}/${game.awayTeam.ppTries}`, home: `${game.homeTeam.ppGoals}/${game.homeTeam.ppTries}` },
-                { label: 'PowerPlay Shots', away: game.awayTeam.ppShots, home: game.homeTeam.ppShots },
-                { label: 'Shorthanded G', away: game.awayTeam.shGoals, home: game.homeTeam.shGoals },
-                { label: 'Breakaways', away: `${game.awayTeam.breakawayGoals}/${game.awayTeam.breakawayTries}`, home: `${game.homeTeam.breakawayGoals}/${game.homeTeam.breakawayTries}` },
-                { label: 'One-Timers', away: `${game.awayTeam.oneTimerGoals}/${game.awayTeam.oneTimerTries}`, home: `${game.homeTeam.oneTimerGoals}/${game.homeTeam.oneTimerTries}` },
-                { label: 'Penalty Shots', away: `${game.awayTeam.penaltyShotGoals}/${game.awayTeam.penaltyShotTries}`, home: `${game.homeTeam.penaltyShotGoals}/${game.homeTeam.penaltyShotTries}` },
-                { label: 'Faceoffs', away: `${game.awayTeam.faceoffWins}/${totalFaceoffs}`, home: `${game.homeTeam.faceoffWins}/${totalFaceoffs}` },
-                { label: 'Body Checks', away: game.awayTeam.checks, home: game.homeTeam.checks },
-                { label: 'Penalties', away: game.awayTeam.penalties, home: game.homeTeam.penalties },
-                { label: 'Attack Zone', away: game.awayTeam.attackZoneTime, home: game.homeTeam.attackZoneTime },
-              ].map((row, idx) => (
-                <div key={idx} className="flex justify-between items-center px-1 hover:bg-white/5">
-                  <span className="font-bold text-left w-12">{row.away}</span>
-                  <span className="text-[#00ffff] text-center flex-1">{row.label}</span>
-                  <span className="font-bold text-right w-12">{row.home}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-        </div>
-
-        {/* RIGHT COLUMN: Scoring & Penalty Summaries (Col-span 4) */}
-        <div className="col-span-4 space-y-6">
-          
-          {/* Scoring Summary */}
-          <div>
-            <div className="text-center font-bold text-xs uppercase tracking-wider text-white border-b border-white/40 pb-1 mb-2">
-              Scoring Summary
-            </div>
-            <table className="w-full text-[11px] text-left">
-              <thead>
-                <tr className="border-b border-white/30 text-white">
-                  <th className="font-normal py-0.5">Per.</th>
-                  <th className="font-normal">Time</th>
-                  <th className="font-normal">Team</th>
-                  <th className="font-normal">Goal</th>
-                  <th className="font-normal">Primary</th>
-                  <th className="font-normal">Secondary</th>
-                  <th className="font-normal text-right">Type</th>
-                </tr>
-              </thead>
-              <tbody className="text-white">
-                {game.goals.map((g, i) => (
-                  <tr key={i} className="hover:bg-white/5">
-                    <td className="py-0.5">{g.period}</td>
-                    <td>{g.time}</td>
-                    <td className="font-bold text-[#00ff00]">{g.team}</td>
-                    <td className="truncate max-w-[100px]">{g.scorer}</td>
-                    <td className="truncate max-w-[90px]">{g.assist1 && g.assist1 !== '--' ? g.assist1 : ''}</td>
-                    <td className="truncate max-w-[90px]">{g.assist2 && g.assist2 !== '--' ? g.assist2 : ''}</td>
-                    <td className="text-right">{g.type || 'EV'}</td>
-                  </tr>
-                ))}
-                {game.goals.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center text-slate-500 py-2 italic">No scoring in this match.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Penalty Summary */}
-          <div>
-            <div className="text-center font-bold text-xs uppercase tracking-wider text-white border-b border-white/40 pb-1 mb-2">
-              Penalty Summary
-            </div>
-            <table className="w-full text-[11px] text-left">
-              <thead>
-                <tr className="border-b border-white/30 text-white">
-                  <th className="font-normal py-0.5">Per.</th>
-                  <th className="font-normal">Time</th>
-                  <th className="font-normal">Team</th>
-                  <th className="font-normal">Player</th>
-                  <th className="font-normal text-right">Penalty</th>
-                </tr>
-              </thead>
-              <tbody className="text-white">
-                {game.penalties.map((p, i) => (
-                  <tr key={i} className="hover:bg-white/5">
-                    <td className="py-0.5">{p.period}</td>
-                    <td>{p.time}</td>
-                    <td className="font-bold text-[#00ff00]">{p.team}</td>
-                    <td className="truncate max-w-[130px]">{p.player}</td>
-                    <td className="text-right">{p.type}</td>
-                  </tr>
-                ))}
-                {game.penalties.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="text-center text-slate-500 py-2 italic">No penalties assessed.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-        </div>
-
-      </div>
+      <RetroBoxscore
+        away={{
+          code: awayCode,
+          name: awayCoach ? `${awayName} • ${awayCoach}` : awayName,
+          logoUrl: awayTeam?.logo_url || null,
+          score: at.goals,
+          goalies: mapGoalies(game.awayGoalies),
+          skaters: mapSkaters(game.awaySkaters),
+        }}
+        home={{
+          code: homeCode,
+          name: homeCoach ? `${homeName} • ${homeCoach}` : homeName,
+          logoUrl: homeTeam?.logo_url || null,
+          score: ht.goals,
+          goalies: mapGoalies(game.homeGoalies),
+          skaters: mapSkaters(game.homeSkaters),
+        }}
+        periods={{
+          away: { p1: at.goalsP1, p2: at.goalsP2, p3: at.goalsP3, ot: at.goalsOT || 0, total: at.goals },
+          home: { p1: ht.goalsP1, p2: ht.goalsP2, p3: ht.goalsP3, ot: ht.goalsOT || 0, total: ht.goals },
+        }}
+        statRows={statRows}
+        goals={game.goals}
+        penalties={game.penalties}
+      />
     </div>
   );
 }

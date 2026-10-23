@@ -19,10 +19,12 @@ interface SeasonOption {
   leagueType: string;
   year: number;
   draftDate?: string | null;
+  status?: string | null;
 }
 
 interface DraftData {
   id?: string | number;
+  draftId?: number;
   team: string;
   teamId?: string | number;
   coachId?: string | number | null;
@@ -52,6 +54,7 @@ interface DatabasePlayer {
   team_default: string;
   ratings?: Record<string, any>;
   player_info?: Record<string, any>;
+  star_rating?: number | null;
   ovr: number;
 }
 
@@ -410,13 +413,24 @@ export default function DraftPage() {
   const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
   
   // Top-Level Mode: 'floor' (Draft Central), 'past' (Past Drafts Archive), 'capital' (Draft Capital)
-  const [activeTab, setActiveTab] = useState<'floor' | 'past' | 'capital'>('floor');
+  const [activeTab, setActiveTab] = useState<'floor' | 'past' | 'capital' | 'prospects'>('floor');
 
   // Core Data
   const [data, setData] = useState<DraftData[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
   const [teamsMap, setTeamsMap] = useState<Map<number, TeamInfo>>(new Map());
-  const [dbPlayers, setDbPlayers] = useState<DatabasePlayer[]>([]);
+  // Rookie prospect pool for the active draft (league_player_database where rookie = true)
+  const [rookiePool, setRookiePool] = useState<DatabasePlayer[]>([]);
+  const [rookiePoolLoading, setRookiePoolLoading] = useState(false);
+  const [rookieYearOverride, setRookieYearOverride] = useState<number | null>(null);
+  const [prospectSearch, setProspectSearch] = useState('');
+  const [prospectPos, setProspectPos] = useState<string>('ALL');
+  const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('AVAILABLE');
+
+  // Draft order generator (draft rounds worst -> best, waiver rounds best -> worst)
+  const [draftRoundsInput, setDraftRoundsInput] = useState(2);
+  const [waiverRoundsInput, setWaiverRoundsInput] = useState(3);
+  const [isGeneratingOrder, setIsGeneratingOrder] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Single Draft Selection State
@@ -527,7 +541,8 @@ export default function DraftPage() {
             seasonName: resolved.name,
             leagueType: resolved.prefix,
             year: resolved.year,
-            draftDate
+            draftDate,
+            status: l.status || null
           });
         });
 
@@ -618,6 +633,7 @@ export default function DraftPage() {
 
             return {
               id: d.id || `draft-${resolvedLeagueId}-${d.round}-${d.pick_number}-${index}`,
+              draftId: d.draft_id !== undefined && d.draft_id !== null ? Number(d.draft_id) : undefined,
               team: teamDetails?.team_name || t?.team_name || "Unknown Team",
               teamId: teamIdNum,
               coachId: teamDetails?.coach_id || t?.coach_id || null,
@@ -660,25 +676,6 @@ export default function DraftPage() {
           }
         }
 
-        // Fetch Player Database
-        const { data: rawPlayers } = await supabase
-          .from('league_player_database')
-          .select('*')
-          .limit(350);
-
-        if (rawPlayers) {
-          const formattedPlayers: DatabasePlayer[] = rawPlayers.map((p: any) => ({
-            player_id: p.player_id,
-            player_name: p.player_name,
-            pos: p.pos || 'F',
-            team_default: p.team_default || 'Free Agent',
-            ratings: p.ratings,
-            player_info: p.player_info,
-            ovr: parsePlayerOvr(p.ratings) || 75
-          }));
-          formattedPlayers.sort((a, b) => b.ovr - a.ovr);
-          setDbPlayers(formattedPlayers);
-        }
       } catch (err) {
         console.error("Failed to load draft floor:", err);
       } finally {
@@ -698,6 +695,26 @@ export default function DraftPage() {
     return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
   }, [seasons, pastLeagueType]);
 
+  // Drafts that are live: active leagues, plus any league that still has open pick slots.
+  // Used for the quick-switch buttons so coaches can cycle between concurrent drafts.
+  const activeDrafts = useMemo(() => {
+    const openLeagues = new Set(
+      data.filter(d => !d.player || d.player === 'N/A').map(d => d.leagueId)
+    );
+    return seasons
+      .filter(s => String(s.status || '').toLowerCase() === 'active' || openLeagues.has(s.leagueId))
+      .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
+  }, [seasons, data]);
+
+  const switchToDraft = (s: SeasonOption) => {
+    setFloorLeague(s.leagueType);
+    setFloorLeagueId(s.leagueId);
+    setOverridePickSlot(null);
+    setCoachSelectedPlayer(null);
+    setCoachSearch('');
+    setActiveTab(prev => (prev === 'past' ? 'floor' : prev));
+  };
+
   const activeFloorSeasonMeta = useMemo(() => {
     return seasons.find(s => s.leagueId === floorLeagueId) || seasons[0];
   }, [seasons, floorLeagueId]);
@@ -705,6 +722,88 @@ export default function DraftPage() {
   const activePastSeasonMeta = useMemo(() => {
     return seasons.find(s => s.leagueId === pastLeagueId) || seasons[0];
   }, [seasons, pastLeagueId]);
+
+  // =========================================================================
+  // ROOKIE PROSPECT POOL
+  // The rookie class defaults to the year after the active draft's NHL season
+  // (e.g. W18 = 2013 -> 2014 rookies). It can be changed on the Prospects tab.
+  // =========================================================================
+  const rookieClassYear = rookieYearOverride ?? ((activeFloorSeasonMeta?.year || 2013) + 1);
+
+  useEffect(() => {
+    setRookieYearOverride(null);
+  }, [floorLeagueId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRookies() {
+      setRookiePoolLoading(true);
+      const { data: rows, error } = await supabase
+        .from('league_player_database')
+        .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
+        .eq('rookie', true)
+        .filter('player_info->>source_year', 'eq', String(rookieClassYear))
+        .limit(1000);
+
+      if (cancelled) return;
+      if (error) {
+        console.error('Failed to load rookie pool:', error.message);
+      }
+
+      const pool: DatabasePlayer[] = (rows || []).map((p: any) => ({
+        player_id: p.player_id,
+        player_name: p.player_name,
+        pos: p.pos || 'F',
+        team_default: p.player_info?.source_team || p.team_default || 'Free Agent',
+        ratings: p.ratings,
+        player_info: p.player_info,
+        star_rating: p.star_rating,
+        ovr: parsePlayerOvr(p.ratings) || 0
+      }));
+      pool.sort((a, b) => b.ovr - a.ovr || a.player_name.localeCompare(b.player_name));
+      setRookiePool(pool);
+      setRookiePoolLoading(false);
+    }
+    loadRookies();
+    return () => { cancelled = true; };
+  }, [rookieClassYear]);
+
+  // Rookies already selected in the active draft (player_id -> pick)
+  const draftedPlayerMap = useMemo(() => {
+    const map = new Map<string, DraftData>();
+    data.forEach(d => {
+      if (d.leagueId !== floorLeagueId) return;
+      if (d.playerId === undefined || d.playerId === null) return;
+      if (!d.player || d.player === 'N/A') return;
+      map.set(String(d.playerId), d);
+    });
+    return map;
+  }, [data, floorLeagueId]);
+
+  const availableRookies = useMemo(
+    () => rookiePool.filter(p => !draftedPlayerMap.has(String(p.player_id))),
+    [rookiePool, draftedPlayerMap]
+  );
+
+  const prospectPositions = useMemo(
+    () => ['ALL', ...Array.from(new Set(rookiePool.map(p => p.pos))).sort()],
+    [rookiePool]
+  );
+
+  const prospectRows = useMemo(() => {
+    const q = prospectSearch.toLowerCase().trim();
+    return rookiePool.filter(p => {
+      const drafted = draftedPlayerMap.has(String(p.player_id));
+      if (prospectStatus === 'AVAILABLE' && drafted) return false;
+      if (prospectStatus === 'DRAFTED' && !drafted) return false;
+      if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
+      if (q) {
+        const hay = `${p.player_name} ${p.pos} ${p.team_default}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rookiePool, draftedPlayerMap, prospectSearch, prospectPos, prospectStatus]);
 
   // =========================================================================
   // DRAFT DATE LOCK & COUNTDOWN LOGIC
@@ -914,14 +1013,19 @@ export default function DraftPage() {
   }, [pastDraftsData]);
 
   const filteredDbPlayers = useMemo(() => {
-    if (!coachSearch.trim()) return dbPlayers.slice(0, 8);
+    if (!coachSearch.trim()) return availableRookies.slice(0, 8);
     const q = coachSearch.toLowerCase().trim();
-    return dbPlayers
+    return availableRookies
       .filter(p => p.player_name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q) || p.team_default.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [dbPlayers, coachSearch]);
+  }, [availableRookies, coachSearch]);
 
-  // Handle Coach Pick Submission
+  // Only the coach that owns the pick on the clock may submit it.
+  // (If the franchise has no linked coach, any signed-in coach may submit.)
+  const slotHasCoach = !!(nextEmptyPickSlot.coachId || nextEmptyPickSlot.coachName);
+  const coachMayPickNow = isLoggedIn && !!currentCoach && (!slotHasCoach || isCurrentCoachOnClock);
+
+  // Handle Coach Pick Submission: fills the pre-generated slot in league_drafts
   const handleSubmitPick = async (e: React.FormEvent) => {
     e.preventDefault();
     if (draftLockStatus.isLocked) {
@@ -932,59 +1036,71 @@ export default function DraftPage() {
       openLoginModal('Draft Submissions');
       return;
     }
-    if (!coachSelectedPlayer && !coachSearch.trim()) {
-      alert("Please select or enter a player name to submit.");
+
+    const targetSlot = nextEmptyPickSlot;
+    if (!targetSlot.draftId) {
+      alert('There is no open pick slot. Generate the draft order first.');
+      return;
+    }
+    if (!coachMayPickNow) {
+      alert(`It is ${targetSlot.team}'s pick${targetSlot.coachName ? ` (Coach ${targetSlot.coachName})` : ''}. Only that coach can submit it.`);
+      return;
+    }
+    if (!coachSelectedPlayer) {
+      alert('Please select a rookie from the prospect pool.');
       return;
     }
 
     setIsSubmitting(true);
-    const chosenPlayerName = coachSelectedPlayer ? coachSelectedPlayer.player_name : coachSearch.trim();
-    const chosenPos = coachSelectedPlayer ? coachSelectedPlayer.pos : 'F';
-    const chosenOvr = coachSelectedPlayer ? coachSelectedPlayer.ovr : 75;
-    const targetSlot = nextEmptyPickSlot;
-
     try {
-      const payload: any = {
-        round: targetSlot.rd,
-        pick_number: targetSlot.pk,
-        year: targetSlot.year,
-        league_id: Number(targetSlot.leagueId) || targetSlot.leagueId,
-        transaction_type: coachTransactionNote.trim() || "Official Draft Selection",
-      };
+      const player = coachSelectedPlayer;
 
-      if (coachSelectedPlayer?.player_id) {
-        payload.player_id = coachSelectedPlayer.player_id;
-      }
-      if (targetSlot.teamId) {
-        payload.team_id = targetSlot.teamId;
+      // Make sure nobody else has already taken this rookie in this draft
+      const { data: taken, error: takenErr } = await supabase
+        .from('league_drafts')
+        .select('draft_id')
+        .eq('league_id', Number(targetSlot.leagueId))
+        .eq('player_id', player.player_id)
+        .limit(1);
+      if (takenErr) throw takenErr;
+      if (taken && taken.length > 0) {
+        alert(`${player.player_name} has already been selected in this draft. Please choose another player.`);
+        return;
       }
 
-      await supabase.from('league_drafts').upsert(payload);
+      const isWaiverPick = (targetSlot.transaction || '').toLowerCase().startsWith('waiver');
+      const transaction = coachTransactionNote.trim() || (isWaiverPick ? 'Waiver' : 'Drafted');
+
+      // Update the slot (only if it is still empty so two submits cannot overwrite each other)
+      const { data: updated, error: updateErr } = await supabase
+        .from('league_drafts')
+        .update({ player_id: player.player_id, transaction_type: transaction })
+        .eq('draft_id', targetSlot.draftId)
+        .is('player_id', null)
+        .select();
+      if (updateErr) throw updateErr;
+      if (!updated || updated.length === 0) {
+        alert('This pick was already filled (or the database refused the update). Refresh the page and try again.');
+        return;
+      }
 
       // Update local state immediately
       const newDraftData: DraftData = {
         ...targetSlot,
-        player: chosenPlayerName,
-        pos: chosenPos,
-        ovr: chosenOvr,
-        transaction: coachTransactionNote.trim() || "Official Draft Selection",
-        ratings: coachSelectedPlayer?.ratings || null,
-        playerInfo: coachSelectedPlayer?.player_info || null,
+        player: player.player_name,
+        playerId: player.player_id,
+        pos: player.pos,
+        ovr: player.ovr,
+        transaction,
+        ratings: player.ratings || undefined,
+        playerInfo: player.player_info || undefined,
         isSubmitted: true
       };
 
-      setData(prev => {
-        const index = prev.findIndex(d => d.leagueId === targetSlot.leagueId && d.rd === targetSlot.rd && d.pk === targetSlot.pk);
-        if (index !== -1) {
-          const updated = [...prev];
-          updated[index] = newDraftData;
-          return updated;
-        }
-        return [newDraftData, ...prev];
-      });
+      setData(prev => prev.map(d => (d.draftId === targetSlot.draftId ? newDraftData : d)));
 
       setPodium(newDraftData);
-      setSubmitSuccessMessage(`🎉 SELECTION SUBMITTED: ${targetSlot.team} selects ${chosenPlayerName} with Pick #${targetSlot.pk} (Rd ${targetSlot.rd}) for ${targetSlot.seasonBadge}!`);
+      setSubmitSuccessMessage(`🎉 SELECTION SUBMITTED: ${targetSlot.team} selects ${player.player_name} with Pick #${targetSlot.pk} (Rd ${targetSlot.rd}) for ${targetSlot.seasonBadge}!`);
       setTimeout(() => setSubmitSuccessMessage(null), 6000);
 
       // Reset form
@@ -992,10 +1108,168 @@ export default function DraftPage() {
       setCoachSelectedPlayer(null);
       setCoachTransactionNote('');
       setOverridePickSlot(null);
-    } catch (err) {
-      console.error("Submission failed:", err);
+    } catch (err: any) {
+      console.error('Submission failed:', err);
+      alert(`Could not save the pick: ${err?.message || 'unknown error'}`);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Send a prospect from the Prospects tab into the selection desk
+  const selectProspectForPick = (player: DatabasePlayer) => {
+    setCoachSelectedPlayer(player);
+    setCoachSearch(player.player_name);
+    setPodium({
+      team: nextEmptyPickSlot.team,
+      teamId: nextEmptyPickSlot.teamId,
+      coachId: nextEmptyPickSlot.coachId,
+      coachName: nextEmptyPickSlot.coachName,
+      rd: nextEmptyPickSlot.rd,
+      pk: nextEmptyPickSlot.pk,
+      player: player.player_name,
+      pos: player.pos,
+      ovr: player.ovr,
+      transaction: 'Coach Selection Preview',
+      logo: nextEmptyPickSlot.logo,
+      year: nextEmptyPickSlot.year,
+      leagueId: nextEmptyPickSlot.leagueId,
+      seasonBadge: nextEmptyPickSlot.seasonBadge,
+      seasonName: nextEmptyPickSlot.seasonName,
+      leagueType: nextEmptyPickSlot.leagueType,
+      ratings: player.ratings,
+      playerInfo: player.player_info
+    });
+    setActiveTab('floor');
+    setShowCapital(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Generate the pick order (empty slots) for the active draft in league_drafts.
+  // Draft rounds: worst record picks first. Waiver rounds: reverse (best record first).
+  const handleGenerateDraftOrder = async () => {
+    if (!isLoggedIn) {
+      openLoginModal('Draft Order Setup');
+      return;
+    }
+
+    const leagueIdNum = Number(floorLeagueId);
+    const meta = activeFloorSeasonMeta;
+    const draftRounds = Math.max(1, Math.floor(Number(draftRoundsInput)) || 1);
+    const waiverRounds = Math.max(0, Math.floor(Number(waiverRoundsInput)) || 0);
+
+    const existing = data.filter(d => d.leagueId === floorLeagueId);
+    if (existing.some(d => d.player && d.player !== 'N/A')) {
+      alert('Picks have already been made in this draft, so the order cannot be regenerated.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Create the ${meta?.seasonBadge} draft order?\n\n` +
+      `${draftRounds} draft round(s) (worst record first) + ${waiverRounds} waiver round(s) (best record first).` +
+      (existing.length > 0 ? '\n\nExisting EMPTY pick slots for this draft will be replaced.' : '')
+    );
+    if (!confirmed) return;
+
+    setIsGeneratingOrder(true);
+    try {
+      const teamIds = Array.from(teamsMap.values())
+        .filter(t => t.league_id === leagueIdNum)
+        .map(t => t.team_id);
+      if (teamIds.length === 0) {
+        throw new Error('No teams were found for this league.');
+      }
+
+      const { data: standings, error: standingsErr } = await supabase
+        .from('league_standings')
+        .select('team_id, pts, w, gd, gf')
+        .eq('season_id', leagueIdNum);
+      if (standingsErr) throw standingsErr;
+
+      const standingByTeam = new Map<number, any>((standings || []).map((s: any) => [Number(s.team_id), s]));
+      const num = (v: any) => Number(v) || 0;
+
+      // Worst record first: fewest points, then wins, then goal diff, then goals for, then team_id
+      const worstFirst = [...teamIds].sort((a, b) => {
+        const sa = standingByTeam.get(a);
+        const sb = standingByTeam.get(b);
+        return (
+          (num(sa?.pts) - num(sb?.pts)) ||
+          (num(sa?.w) - num(sb?.w)) ||
+          (num(sa?.gd) - num(sb?.gd)) ||
+          (num(sa?.gf) - num(sb?.gf)) ||
+          (a - b)
+        );
+      });
+      const bestFirst = [...worstFirst].reverse();
+
+      const slotYear = meta?.year || new Date().getFullYear();
+      const rows: any[] = [];
+      let pickNumber = 1;
+      for (let rd = 1; rd <= draftRounds + waiverRounds; rd++) {
+        const isWaiverRound = rd > draftRounds;
+        (isWaiverRound ? bestFirst : worstFirst).forEach(teamId => {
+          rows.push({
+            league_id: leagueIdNum,
+            team_id: teamId,
+            player_id: null,
+            round: rd,
+            pick_number: pickNumber++,
+            year: slotYear,
+            transaction_type: isWaiverRound ? 'Waiver Slot' : 'Draft Slot'
+          });
+        });
+      }
+
+      if (existing.length > 0) {
+        const { error: delErr } = await supabase
+          .from('league_drafts')
+          .delete()
+          .eq('league_id', leagueIdNum)
+          .is('player_id', null);
+        if (delErr) throw delErr;
+      }
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from('league_drafts')
+        .insert(rows)
+        .select();
+      if (insertErr) throw insertErr;
+
+      const built: DraftData[] = (inserted || []).map((d: any) => {
+        const t = teamsMap.get(Number(d.team_id));
+        return {
+          id: `draft-${d.draft_id}`,
+          draftId: Number(d.draft_id),
+          team: t?.team_name || 'Unknown Team',
+          teamId: Number(d.team_id),
+          coachId: t?.coach_id || null,
+          coachName: t?.coach_name || null,
+          rd: Number(d.round),
+          pk: Number(d.pick_number),
+          player: 'N/A',
+          pos: null,
+          ovr: null,
+          transaction: d.transaction_type,
+          logo: t?.logo_url || '',
+          year: slotYear,
+          leagueId: floorLeagueId,
+          seasonBadge: meta?.seasonBadge || `Season ${floorLeagueId}`,
+          seasonName: meta?.seasonName || `Season ${floorLeagueId}`,
+          leagueType: meta?.leagueType || 'W'
+        } as DraftData;
+      });
+      built.sort((a, b) => a.rd - b.rd || a.pk - b.pk);
+
+      setData(prev => [...built, ...prev.filter(d => d.leagueId !== floorLeagueId)]);
+      setOverridePickSlot(null);
+      setSubmitSuccessMessage(`📋 DRAFT ORDER CREATED: ${built.length} picks for ${meta?.seasonBadge}.`);
+      setTimeout(() => setSubmitSuccessMessage(null), 6000);
+    } catch (err: any) {
+      console.error('Draft order generation failed:', err);
+      alert(`Could not create the draft order: ${err?.message || 'unknown error'}`);
+    } finally {
+      setIsGeneratingOrder(false);
     }
   };
 
@@ -1048,6 +1322,18 @@ export default function DraftPage() {
             >
               <Award className="w-3.5 h-3.5" />
               Past Drafts Archive
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('prospects'); setShowCapital(false); }}
+              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'prospects'
+                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                  : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+            >
+              <Star className="w-3.5 h-3.5" />
+              Draft Prospects (Rookie Class)
             </button>
 
             <button
@@ -1110,6 +1396,31 @@ export default function DraftPage() {
                 <div className="text-[8px] uppercase text-neutral-400 font-bold">Secs</div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Quick switch between concurrent drafts */}
+        {activeDrafts.length > 1 && (
+          <div className="bg-[#fdfaf5] border-2 border-black p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center gap-2 flex-wrap font-mono">
+            <span className="text-[10px] font-black uppercase text-slate-700 mr-1">Live Drafts:</span>
+            {activeDrafts.map(s => {
+              const openCount = data.filter(d => d.leagueId === s.leagueId && (!d.player || d.player === 'N/A')).length;
+              const isCurrent = s.leagueId === floorLeagueId;
+              return (
+                <button
+                  key={s.leagueId}
+                  onClick={() => switchToDraft(s)}
+                  className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black cursor-pointer transition-all flex items-center gap-1.5 ${
+                    isCurrent ? 'bg-black text-amber-300 shadow-[2px_2px_0px_rgba(0,0,0,1)]' : 'bg-white text-black hover:bg-yellow-100'
+                  }`}
+                >
+                  {s.seasonBadge}
+                  <span className={`text-[9px] px-1.5 py-0 border ${isCurrent ? 'border-amber-300' : 'border-black/40'}`}>
+                    {openCount > 0 ? `${openCount} open` : 'no order yet'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -1266,11 +1577,65 @@ export default function DraftPage() {
                   </div>
                 </div>
 
+                {/* No open pick: draft order has not been generated yet (or the draft is complete) */}
+                {!loading && !nextEmptyPickSlot.draftId && (
+                  <div className="bg-amber-50 border-2 border-black p-3 mb-4 text-xs font-sans space-y-2">
+                    {data.some(d => d.leagueId === floorLeagueId) ? (
+                      <div className="font-black uppercase font-mono text-emerald-800">
+                        ✓ Draft complete &mdash; no open picks remain for {activeFloorSeasonMeta?.seasonBadge}.
+                      </div>
+                    ) : (
+                      <>
+                        <div className="font-black uppercase font-mono">
+                          No draft order yet for {activeFloorSeasonMeta?.seasonBadge}.
+                        </div>
+                        <p className="text-[11px] text-slate-700">
+                          Creates the empty pick slots in the draft table from the current standings.
+                          Draft rounds go worst record first; waiver rounds run in reverse (best record first).
+                        </p>
+                        <div className="flex items-end gap-3 flex-wrap font-mono">
+                          <label className="text-[10px] font-black uppercase">
+                            Draft Rounds
+                            <input
+                              type="number"
+                              min={1}
+                              max={10}
+                              value={draftRoundsInput}
+                              onChange={(e) => setDraftRoundsInput(Number(e.target.value))}
+                              className="block w-20 mt-0.5 bg-white border-2 border-black px-2 py-1 text-xs font-bold"
+                            />
+                          </label>
+                          <label className="text-[10px] font-black uppercase">
+                            Waiver Rounds
+                            <input
+                              type="number"
+                              min={0}
+                              max={10}
+                              value={waiverRoundsInput}
+                              onChange={(e) => setWaiverRoundsInput(Number(e.target.value))}
+                              className="block w-20 mt-0.5 bg-white border-2 border-black px-2 py-1 text-xs font-bold"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleGenerateDraftOrder}
+                            disabled={isGeneratingOrder}
+                            className="bg-black text-white hover:bg-neutral-800 disabled:opacity-40 border-2 border-black px-3 py-1.5 text-xs font-black uppercase cursor-pointer flex items-center gap-1.5"
+                          >
+                            {isGeneratingOrder ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                            {isLoggedIn ? 'Generate Draft Order' : 'Sign In to Generate Order'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* Coach Pick Form */}
                 <form onSubmit={handleSubmitPick} className="space-y-4">
                   <div>
                     <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-800 flex justify-between items-center">
-                      <span>Search & Select Player from Database:</span>
+                      <span>Search & Select Rookie ({rookieClassYear} Prospect Pool • {availableRookies.length} available):</span>
                       {coachSelectedPlayer && (
                         <span className="text-emerald-700 font-bold">
                           ✓ Selected: {coachSelectedPlayer.player_name} ({coachSelectedPlayer.pos}, OVR {coachSelectedPlayer.ovr})
@@ -1290,7 +1655,7 @@ export default function DraftPage() {
                           }
                         }}
                         disabled={draftLockStatus.isLocked}
-                        placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE PLAYER NAME (e.g. Gretzky, Lemieux, Jagr, Roy)..."}
+                        placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE A ROOKIE NAME OR POSITION..."}
                         className="w-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
                       />
                     </div>
@@ -1300,7 +1665,7 @@ export default function DraftPage() {
                       <div className="mt-1 bg-white border-2 border-black shadow-md max-h-48 overflow-y-auto divide-y divide-black/10">
                         {filteredDbPlayers.length === 0 ? (
                           <div className="p-2.5 text-xs italic text-slate-500">
-                            No player matches in database. You can still submit this custom name.
+                            No available rookies match your search.
                           </div>
                         ) : (
                           filteredDbPlayers.map((player) => (
@@ -1367,7 +1732,7 @@ export default function DraftPage() {
                     <div className="flex items-end">
                       <button
                         type="submit"
-                        disabled={isSubmitting || draftLockStatus.isLocked || (!coachSelectedPlayer && !coachSearch.trim())}
+                        disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.draftId || !coachMayPickNow}
                         className="w-full bg-black text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-4 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
                       >
                         {draftLockStatus.isLocked ? (
@@ -1383,7 +1748,7 @@ export default function DraftPage() {
                         ) : (
                           <>
                             <Send className="w-3.5 h-3.5" />
-                            Submit Official Pick #{nextEmptyPickSlot.pk}
+                            {!nextEmptyPickSlot.draftId ? 'No Open Pick Slot' : !coachMayPickNow && isLoggedIn ? `Waiting on ${nextEmptyPickSlot.team}` : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
                           </>
                         )}
                       </button>
@@ -1608,6 +1973,162 @@ export default function DraftPage() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: DRAFT PROSPECTS (Rookie class available to draft) */}
+        {/* ========================================================================= */}
+        {activeTab === 'prospects' && (
+          <div className="space-y-4">
+            <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b-2 border-black pb-3">
+                <div>
+                  <h2 className="text-base sm:text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                    <Star className="w-4 h-4 text-amber-500" />
+                    Draft Prospects &bull; {rookieClassYear} Rookie Class
+                  </h2>
+                  <p className="text-[11px] font-mono font-bold uppercase text-slate-600 mt-0.5">
+                    Draft: {activeFloorSeasonMeta?.seasonBadge} &bull; {rookiePool.length} rookies &bull;{' '}
+                    {availableRookies.length} available &bull; {rookiePool.length - availableRookies.length} drafted
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 font-mono text-xs font-black uppercase">
+                  <span>Class Year:</span>
+                  <select
+                    value={rookieClassYear}
+                    onChange={(e) => setRookieYearOverride(Number(e.target.value))}
+                    className="bg-yellow-100 text-black px-3 py-1.5 text-xs font-black border-2 border-black cursor-pointer"
+                  >
+                    {[-1, 0, 1, 2, 3].map(offset => {
+                      const y = (activeFloorSeasonMeta?.year || 2013) + offset;
+                      return <option key={y} value={y}>{y}</option>;
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-mono text-xs font-black uppercase mr-1">Show:</span>
+                  {(['AVAILABLE', 'DRAFTED', 'ALL'] as const).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setProspectStatus(s)}
+                      className={`px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition-colors ${
+                        prospectStatus === s ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                    >
+                      {s === 'ALL' ? 'All' : s === 'AVAILABLE' ? 'Available' : 'Drafted'}
+                    </button>
+                  ))}
+                  <span className="font-mono text-xs font-black uppercase ml-3 mr-1">Pos:</span>
+                  {prospectPositions.map(pos => (
+                    <button
+                      key={pos}
+                      onClick={() => setProspectPos(pos)}
+                      className={`px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition-colors ${
+                        prospectPos === pos ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                    >
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative flex-1 lg:max-w-xs">
+                  <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-neutral-400" />
+                  <input
+                    placeholder="SEARCH ROOKIES..."
+                    value={prospectSearch}
+                    onChange={(e) => setProspectSearch(e.target.value)}
+                    className="bg-white text-black pl-8 pr-3 py-1 text-xs font-bold uppercase w-full focus:outline-none border-2 border-black font-sans"
+                  />
+                </div>
+              </div>
+
+              {/* On-the-clock hint */}
+              {nextEmptyPickSlot.draftId && (
+                <div className="bg-black text-amber-300 font-mono text-[11px] font-black uppercase px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap">
+                  <span>On the clock: {nextEmptyPickSlot.team} &bull; Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})</span>
+                  <span className="text-white/80">
+                    {coachMayPickNow && !draftLockStatus.isLocked
+                      ? 'Click SELECT on a rookie to draft him'
+                      : draftLockStatus.isLocked
+                        ? 'Draft is locked until its start date'
+                        : isLoggedIn ? `Waiting on ${nextEmptyPickSlot.coachName || nextEmptyPickSlot.team}` : 'Sign in to draft'}
+                  </span>
+                </div>
+              )}
+
+              <div className="bg-white border-2 border-black overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs min-w-[700px]">
+                  <thead>
+                    <tr className="bg-black text-white text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3 text-center">#</th>
+                      <th className="py-2.5 px-3">PLAYER</th>
+                      <th className="py-2.5 px-3 text-center">POS</th>
+                      <th className="py-2.5 px-3 text-center">OVR</th>
+                      <th className="py-2.5 px-3 text-center">STARS</th>
+                      <th className="py-2.5 px-3">FROM</th>
+                      <th className="py-2.5 px-3">STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {rookiePoolLoading ? (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center italic text-gray-500 font-bold uppercase">
+                          Loading {rookieClassYear} rookie class...
+                        </td>
+                      </tr>
+                    ) : prospectRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center italic text-gray-500 font-bold uppercase">
+                          No rookies found for these filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      prospectRows.map((p, i) => {
+                        const pickedBy = draftedPlayerMap.get(String(p.player_id));
+                        const canSelect = !pickedBy && coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.draftId;
+                        return (
+                          <tr key={p.player_id} className={pickedBy ? 'opacity-60 bg-neutral-50' : 'hover:bg-yellow-50'}>
+                            <td className="py-2 px-3 text-center font-mono text-slate-500">{i + 1}</td>
+                            <td className="py-2 px-3 font-bold uppercase text-black">{p.player_name}</td>
+                            <td className="py-2 px-3 text-center font-mono">
+                              <span className="bg-neutral-100 text-black px-1.5 py-0.5 text-[10px] font-bold border border-black/20">{p.pos}</span>
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono font-black">{p.ovr || '-'}</td>
+                            <td className="py-2 px-3 text-center font-mono">{p.star_rating ?? '-'}</td>
+                            <td className="py-2 px-3 text-gray-600 font-sans text-[11px]">
+                              {p.team_default}
+                              {(p.player_info as any)?.source_league ? ` (${(p.player_info as any).source_league})` : ''}
+                            </td>
+                            <td className="py-2 px-3">
+                              {pickedBy ? (
+                                <span className="font-mono text-[10px] font-black uppercase text-red-800">
+                                  Drafted &mdash; {pickedBy.team} (Rd {pickedBy.rd}, Pk #{pickedBy.pk})
+                                </span>
+                              ) : canSelect ? (
+                                <button
+                                  onClick={() => selectProspectForPick(p)}
+                                  className="bg-red-800 text-white hover:bg-red-900 px-2 py-0.5 text-[10px] font-black uppercase border border-black cursor-pointer"
+                                >
+                                  Select
+                                </button>
+                              ) : (
+                                <span className="font-mono text-[10px] font-black uppercase text-emerald-700">Available</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

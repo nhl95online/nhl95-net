@@ -7,6 +7,7 @@ import {
   ChevronRight, AlertCircle, CheckCircle2, Trophy, Activity, Filter
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import RetroBoxscore, { RetroStatRow } from '@/components/RetroBoxscore';
 
 // ==========================================
 // 1. LEAGUE CONSTANTS & ROSTERS CONFIG
@@ -756,6 +757,74 @@ export default function SchedulePage() {
     };
   }, [selectedGame, homeStatsObj, awayStatsObj]);
 
+  // Normalize DB boxscore data into the shape used by the shared retro boxscore screen
+  const retroBoxscoreProps = useMemo(() => {
+    if (!selectedGame?.isPlayed || !periodSummary) return null;
+
+    const a = awayStatsObj as any;
+    const h = homeStatsObj as any;
+    const awayId = Number(selectedGame.away_team_id);
+    const homeId = Number(selectedGame.home_team_id);
+    const awayCode = (selectedGame.awayTeam?.abbreviation || resolveTeamCode(selectedGame.awayTeam) || 'AWY').toUpperCase();
+    const homeCode = (selectedGame.homeTeam?.abbreviation || resolveTeamCode(selectedGame.homeTeam) || 'HOM').toUpperCase();
+
+    const awayWon = Number(a.away_faceoff_won || 0);
+    const homeWon = Number(h.home_faceoff_won || 0);
+    const totalFaceoffs = Number(selectedGame.stats?.total_faceoffs) || (awayWon + homeWon);
+
+    const awayShots = periodSummary.away.totalS;
+    const homeShots = periodSummary.home.totalS;
+    const pct = (goals: any, shots: number) => `${Math.round(((Number(goals) || 0) / Math.max(1, shots)) * 100)}%`;
+
+    const statRows: RetroStatRow[] = [
+      { label: 'Shots', away: awayShots, home: homeShots },
+      { label: '1rst Period', away: periodSummary.away.s1, home: periodSummary.home.s1 },
+      { label: '2nd Period', away: periodSummary.away.s2, home: periodSummary.home.s2 },
+      { label: '3rd Period', away: periodSummary.away.s3, home: periodSummary.home.s3 },
+      { label: 'Overtime', away: periodSummary.away.sot, home: periodSummary.home.sot },
+      { label: 'Shooting %', away: pct(selectedGame.awayScore, awayShots), home: pct(selectedGame.homeScore, homeShots) },
+      { label: 'PowerPlay', away: `${a.away_pp_goals || 0}/${a.away_pp_opps || 0}`, home: `${h.home_pp_goals || 0}/${h.home_pp_opps || 0}` },
+      { label: 'PowerPlay Shots', away: a.away_pp_shots || 0, home: h.home_pp_shots || 0 },
+      { label: 'Shorthanded G', away: a.away_sh_goals || 0, home: h.home_sh_goals || 0 },
+      { label: 'Breakaways', away: `${a.away_breakaway_goals || 0}/${a.away_breakaways || 0}`, home: `${h.home_breakaway_goals || 0}/${h.home_breakaways || 0}` },
+      { label: 'One-Timers', away: `${a.away_onetimer_goals || 0}/${a.away_onetimers || 0}`, home: `${h.home_onetimer_goals || 0}/${h.home_onetimers || 0}` },
+      { label: 'Penalty Shots', away: `${a.away_penalty_shot_goals || 0}/${a.away_penalty_shots || 0}`, home: `${h.home_penalty_shot_goals || 0}/${h.home_penalty_shots || 0}` },
+      { label: 'Faceoffs', away: `${awayWon}/${totalFaceoffs}`, home: `${homeWon}/${totalFaceoffs}` },
+      { label: 'Body Checks', away: a.away_bodychecks || 0, home: h.home_bodychecks || 0 },
+      { label: 'Penalties', away: a.away_pen || 0, home: h.home_pen || 0 },
+      { label: 'Attack Zone', away: formatDayFractionOrTime(a.away_atk), home: formatDayFractionOrTime(h.home_atk) },
+    ];
+
+    const teamRoster = (teamId: number) => ({
+      goalies: gameBoxscore.goalies.filter((g: any) => Number(g.team_id) === teamId),
+      skaters: gameBoxscore.skaters.filter((s: any) => Number(s.team_id) === teamId),
+    });
+
+    return {
+      away: {
+        code: awayCode,
+        name: selectedGame.awayTeam?.team_name || awayCode,
+        logoUrl: selectedGame.awayTeam?.logo_url,
+        score: selectedGame.awayScore ?? periodSummary.away.totalG,
+        ...teamRoster(awayId),
+      },
+      home: {
+        code: homeCode,
+        name: selectedGame.homeTeam?.team_name || homeCode,
+        logoUrl: selectedGame.homeTeam?.logo_url,
+        score: selectedGame.homeScore ?? periodSummary.home.totalG,
+        ...teamRoster(homeId),
+      },
+      periods: {
+        away: { p1: periodSummary.away.g1, p2: periodSummary.away.g2, p3: periodSummary.away.g3, ot: periodSummary.away.got, total: periodSummary.away.totalG },
+        home: { p1: periodSummary.home.g1, p2: periodSummary.home.g2, p3: periodSummary.home.g3, ot: periodSummary.home.got, total: periodSummary.home.totalG },
+      },
+      statRows,
+      goals: gameBoxscore.scoring,
+      penalties: gameBoxscore.penalties,
+    };
+  }, [selectedGame, periodSummary, homeStatsObj, awayStatsObj, gameBoxscore]);
+
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif pb-16">
       {/* Header Banner */}
@@ -1016,533 +1085,26 @@ export default function SchedulePage() {
               {selectedGame ? (
                 selectedGame.isPlayed ? (
                   /* ==================================================== */
-                  /* PLAYED GAME: FULL SAVE-STATE PARSER BOXSCORE TABS     */
+                  /* PLAYED GAME: RETRO NHL95 BOXSCORE SCREEN              */
                   /* ==================================================== */
-                  <div className="bg-white border-2 border-black shadow-sm">
-                    {/* Scoreboard Header */}
-                    <div className="bg-black text-white p-5 md:p-6">
-                      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                        {/* Away Team */}
-                        <div className="text-center md:text-left flex items-center gap-3">
-                          {selectedGame.awayTeam?.logo_url && (
-                            <img
-                              src={selectedGame.awayTeam.logo_url}
-                              className="w-12 h-12 md:w-14 md:h-14 object-contain"
-                              alt="Away Team Logo"
-                            />
-                          )}
-                          <div>
-                            <div className="text-[10px] uppercase font-sans font-bold text-slate-400">Away Team</div>
-                            <div className="text-2xl md:text-3xl font-black">{selectedGame.awayTeam?.team_name}</div>
-                            <div className="text-xs text-slate-300 font-mono">
-                              {selectedGame.stats?.away_coach ? `Coach: ${selectedGame.stats.away_coach}` : ''}
-                            </div>
-                            <div className="text-xs text-yellow-300 font-mono">
-                              {periodSummary?.away.totalS || 0} SOG
-                            </div>
-                          </div>
-                          <div className="text-4xl md:text-5xl font-black font-mono ml-3 text-yellow-400">
-                            {selectedGame.awayScore}
-                          </div>
-                        </div>
-
-                        {/* Center Matchup & Game Meta */}
-                        <div className="text-center px-4 border-y md:border-y-0 md:border-x border-white/20 py-2">
-                          <div className="text-xs uppercase tracking-widest font-black text-yellow-400">
-                            {selectedGame.statusBadge}
-                          </div>
-                          <div className="text-lg md:text-xl font-black tracking-tight my-1">
-                            {selectedGame.awayTeam?.abbreviation || 'AWY'} @ {selectedGame.homeTeam?.abbreviation || 'HOM'}
-                          </div>
-                          <div className="text-[11px] text-slate-300 font-mono flex items-center justify-center gap-2 flex-wrap">
-                            <span>Game #{selectedGame.game_id}</span>
-                            <span>•</span>
-                            <span>Time: {selectedGame.stats?.game_length ? formatDayFractionOrTime(selectedGame.stats.game_length) : '15:00'}</span>
-                            <span>•</span>
-                            <span>FO: {selectedGame.stats?.total_faceoffs || 0}</span>
-                          </div>
-                        </div>
-
-                        {/* Home Team */}
-                        <div className="text-center md:text-right flex items-center gap-3 flex-row-reverse md:flex-row">
-                          <div className="text-4xl md:text-5xl font-black font-mono mr-3 text-yellow-400">
-                            {selectedGame.homeScore}
-                          </div>
-                          <div>
-                            <div className="text-[10px] uppercase font-sans font-bold text-slate-400">Home Team</div>
-                            <div className="text-2xl md:text-3xl font-black">{selectedGame.homeTeam?.team_name}</div>
-                            <div className="text-xs text-slate-300 font-mono">
-                              {selectedGame.stats?.home_coach ? `Coach: ${selectedGame.stats.home_coach}` : ''}
-                            </div>
-                            <div className="text-xs text-yellow-300 font-mono">
-                              {periodSummary?.home.totalS || 0} SOG
-                            </div>
-                          </div>
-                          {selectedGame.homeTeam?.logo_url && (
-                            <img
-                              src={selectedGame.homeTeam.logo_url}
-                              className="w-12 h-12 md:w-14 md:h-14 object-contain"
-                              alt="Home Team Logo"
-                            />
-                          )}
-                        </div>
-                      </div>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 bg-black text-white px-3 py-1.5 border-2 border-black text-[11px] font-mono">
+                      <span className="font-black uppercase tracking-widest text-yellow-400">{selectedGame.statusBadge}</span>
+                      <span className="text-slate-300">
+                        Game #{selectedGame.game_id}
+                        {' • '}Time: {selectedGame.stats?.game_length ? formatDayFractionOrTime(selectedGame.stats.game_length) : '15:00'}
+                        {selectedGame.stats?.away_coach ? ` • ${selectedGame.stats.away_coach}` : ''}
+                        {selectedGame.stats?.home_coach ? ` vs ${selectedGame.stats.home_coach}` : ''}
+                      </span>
                     </div>
 
-                    {/* Period by Period Summary Table */}
-                    {periodSummary && (
-                      <div className="bg-[#f4f1ea] border-b-2 border-black p-3 overflow-x-auto">
-                        <table className="w-full text-xs font-mono text-center">
-                          <thead>
-                            <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                              <th className="text-left font-bold py-1">Team</th>
-                              <th>1st</th>
-                              <th>2nd</th>
-                              <th>3rd</th>
-                              {selectedGame.isOT && <th>OT</th>}
-                              <th className="font-bold">Total</th>
-                              <th className="font-bold">Shots</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="border-b border-black/10">
-                              <td className="text-left font-bold font-sans py-1">{selectedGame.awayTeam?.team_name}</td>
-                              <td>{periodSummary.away.g1}</td>
-                              <td>{periodSummary.away.g2}</td>
-                              <td>{periodSummary.away.g3}</td>
-                              {selectedGame.isOT && <td>{periodSummary.away.got}</td>}
-                              <td className="font-bold text-sm bg-yellow-50">{periodSummary.away.totalG}</td>
-                              <td className="text-slate-600">{periodSummary.away.totalS}</td>
-                            </tr>
-                            <tr>
-                              <td className="text-left font-bold font-sans py-1">{selectedGame.homeTeam?.team_name}</td>
-                              <td>{periodSummary.home.g1}</td>
-                              <td>{periodSummary.home.g2}</td>
-                              <td>{periodSummary.home.g3}</td>
-                              {selectedGame.isOT && <td>{periodSummary.home.got}</td>}
-                              <td className="font-bold text-sm bg-yellow-50">{periodSummary.home.totalG}</td>
-                              <td className="text-slate-600">{periodSummary.home.totalS}</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                    {gameBoxscore.loading || !retroBoxscoreProps ? (
+                      <div className="bg-black text-[#00ff00] border-4 border-neutral-900 p-8 text-center text-xs font-mono uppercase animate-pulse">
+                        Fetching player statistics and game logs from database...
                       </div>
+                    ) : (
+                      <RetroBoxscore {...retroBoxscoreProps} />
                     )}
-
-                    {/* Navigation Tabs */}
-                    <div className="flex border-b-2 border-black bg-white overflow-x-auto text-xs font-bold uppercase">
-                      {[
-                        { id: 'summary', label: 'Summary' },
-                        { id: 'team_stats', label: 'Team Stats' },
-                        { id: 'skaters', label: `Skaters (${gameBoxscore.skaters.length})` },
-                        { id: 'goalies', label: `Goalies (${gameBoxscore.goalies.length})` },
-                        { id: 'scoring', label: `Goals (${gameBoxscore.scoring.length})` },
-                        { id: 'penalties', label: `Penalties (${gameBoxscore.penalties.length})` }
-                      ].map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => setActiveTab(t.id as any)}
-                          className={`px-4 py-2.5 transition whitespace-nowrap border-r border-black/20 cursor-pointer ${
-                            activeTab === t.id ? 'bg-black text-white' : 'hover:bg-slate-100 text-black'
-                          }`}
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Tab Content Area */}
-                    <div className="p-5">
-                      {gameBoxscore.loading ? (
-                        <div className="p-8 text-center text-xs font-bold uppercase text-slate-500 animate-pulse">
-                          Fetching player statistics and game logs from database...
-                        </div>
-                      ) : (
-                        <>
-                          {/* 1. Summary Tab */}
-                          {activeTab === 'summary' && (
-                            <div className="space-y-6">
-                              <div>
-                                <h3 className="font-bold text-xs uppercase border-b border-black pb-1 mb-3 flex items-center gap-1.5">
-                                  <Activity className="w-3.5 h-3.5" /> Game Recap
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                                  <div className="p-3 bg-[#faf8f5] border border-black/20">
-                                    <span className="font-bold text-slate-600 uppercase">Powerplay Efficiency:</span>
-                                    <p className="mt-1 font-mono">
-                                      <strong>{selectedGame.awayTeam?.abbreviation || 'AWAY'}:</strong> {awayStatsObj.away_pp_goals || 0}/{awayStatsObj.away_pp_opps || 0} ({formatDayFractionOrTime(awayStatsObj.away_pp_minutes)} TOI)
-                                    </p>
-                                    <p className="mt-1 font-mono">
-                                      <strong>{selectedGame.homeTeam?.abbreviation || 'HOME'}:</strong> {homeStatsObj.home_pp_goals || 0}/{homeStatsObj.home_pp_opps || 0} ({formatDayFractionOrTime(homeStatsObj.home_pp_minutes)} TOI)
-                                    </p>
-                                  </div>
-                                  <div className="p-3 bg-[#faf8f5] border border-black/20">
-                                    <span className="font-bold text-slate-600 uppercase">Zone Time & Physicality:</span>
-                                    <p className="mt-1 font-mono">
-                                      <strong>Attack Zone:</strong> {formatDayFractionOrTime(awayStatsObj.away_atk)} vs {formatDayFractionOrTime(homeStatsObj.home_atk)}
-                                    </p>
-                                    <p className="mt-1 font-mono">
-                                      <strong>Body Checks:</strong> {awayStatsObj.away_bodychecks || 0} vs {homeStatsObj.home_bodychecks || 0}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Top Performers */}
-                              <div>
-                                <h3 className="font-bold text-xs uppercase border-b border-black pb-1 mb-3 flex items-center gap-1.5">
-                                  <Trophy className="w-3.5 h-3.5" /> Top Performers
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  {/* Away Leaders */}
-                                  <div className="border border-black p-3 bg-white">
-                                    <div className="font-bold text-xs uppercase mb-2 text-red-700">
-                                      {selectedGame.awayTeam?.team_name} Leaders
-                                    </div>
-                                    <div className="space-y-1 text-xs">
-                                      {gameBoxscore.skaters
-                                        .filter(s => Number(s.team_id) === Number(selectedGame.away_team_id))
-                                        .sort((a, b) => b.points - a.points || b.goals - a.goals)
-                                        .slice(0, 3)
-                                        .map((s, i) => (
-                                          <div key={i} className="flex justify-between font-mono py-0.5 border-b border-slate-100">
-                                            <span>{s.name} ({s.pos})</span>
-                                            <span className="font-bold">{s.goals}G, {s.assists}A ({s.points} PTS)</span>
-                                          </div>
-                                        ))}
-                                      {gameBoxscore.skaters.filter(s => Number(s.team_id) === Number(selectedGame.away_team_id)).length === 0 && (
-                                        <p className="text-slate-400 italic text-[11px]">No skater stats logged.</p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* Home Leaders */}
-                                  <div className="border border-black p-3 bg-white">
-                                    <div className="font-bold text-xs uppercase mb-2 text-blue-700">
-                                      {selectedGame.homeTeam?.team_name} Leaders
-                                    </div>
-                                    <div className="space-y-1 text-xs">
-                                      {gameBoxscore.skaters
-                                        .filter(s => Number(s.team_id) === Number(selectedGame.home_team_id))
-                                        .sort((a, b) => b.points - a.points || b.goals - a.goals)
-                                        .slice(0, 3)
-                                        .map((s, i) => (
-                                          <div key={i} className="flex justify-between font-mono py-0.5 border-b border-slate-100">
-                                            <span>{s.name} ({s.pos})</span>
-                                            <span className="font-bold">{s.goals}G, {s.assists}A ({s.points} PTS)</span>
-                                          </div>
-                                        ))}
-                                      {gameBoxscore.skaters.filter(s => Number(s.team_id) === Number(selectedGame.home_team_id)).length === 0 && (
-                                        <p className="text-slate-400 italic text-[11px]">No skater stats logged.</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 2. Team Stats Comparison Tab */}
-                          {activeTab === 'team_stats' && (
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-xs font-mono">
-                                <thead>
-                                  <tr className="border-b-2 border-black font-sans uppercase text-slate-600">
-                                    <th className="text-left py-2 font-bold">{selectedGame.awayTeam?.team_name} (Away)</th>
-                                    <th className="text-center py-2 font-bold text-black">Metric</th>
-                                    <th className="text-right py-2 font-bold">{selectedGame.homeTeam?.team_name} (Home)</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-black/10">
-                                  {[
-                                    { label: 'Total Goals', away: selectedGame.awayScore, home: selectedGame.homeScore },
-                                    { label: 'Shots on Goal', away: awayStatsObj.away_shots || periodSummary?.away.totalS || 0, home: homeStatsObj.home_shots || periodSummary?.home.totalS || 0 },
-                                    { 
-                                      label: 'Shooting %', 
-                                      away: `${(((Number(selectedGame.awayScore) || 0) / Math.max(1, Number(awayStatsObj.away_shots) || Number(periodSummary?.away.totalS) || 1)) * 100).toFixed(1)}%`, 
-                                      home: `${(((Number(selectedGame.homeScore) || 0) / Math.max(1, Number(homeStatsObj.home_shots) || Number(periodSummary?.home.totalS) || 1)) * 100).toFixed(1)}%` 
-                                    },
-                                    { label: 'Power Play Goals / Opps', away: `${awayStatsObj.away_pp_goals || 0} / ${awayStatsObj.away_pp_opps || 0}`, home: `${homeStatsObj.home_pp_goals || 0} / ${homeStatsObj.home_pp_opps || 0}` },
-                                    { label: 'Power Play Time', away: formatDayFractionOrTime(awayStatsObj.away_pp_minutes), home: formatDayFractionOrTime(homeStatsObj.home_pp_minutes) },
-                                    { label: 'Power Play Shots', away: awayStatsObj.away_pp_shots || 0, home: homeStatsObj.home_pp_shots || 0 },
-                                    { label: 'Short Handed Goals', away: awayStatsObj.away_sh_goals || 0, home: homeStatsObj.home_sh_goals || 0 },
-                                    { label: 'Faceoffs Won', away: awayStatsObj.away_faceoff_won || 0, home: homeStatsObj.home_faceoff_won || 0 },
-                                    { label: 'Body Checks', away: awayStatsObj.away_bodychecks || 0, home: homeStatsObj.home_bodychecks || 0 },
-                                    { label: 'Penalties / PIM', away: `${awayStatsObj.away_pen || 0} (${awayStatsObj.away_pim || 0} min)`, home: `${homeStatsObj.home_pen || 0} (${homeStatsObj.home_pim || 0} min)` },
-                                    { label: 'Attack Zone Time', away: formatDayFractionOrTime(awayStatsObj.away_atk), home: formatDayFractionOrTime(homeStatsObj.home_atk) },
-                                    { label: 'Pass Comps / Attempts', away: `${awayStatsObj.away_pass_completions || 0} / ${awayStatsObj.away_pass_attempts || 0}`, home: `${homeStatsObj.home_pass_completions || 0} / ${homeStatsObj.home_pass_attempts || 0}` },
-                                    { label: 'Breakaway Goals / Tries', away: `${awayStatsObj.away_breakaway_goals || 0} / ${awayStatsObj.away_breakaways || 0}`, home: `${homeStatsObj.home_breakaway_goals || 0} / ${homeStatsObj.home_breakaways || 0}` },
-                                    { label: 'One-Timer Goals / Tries', away: `${awayStatsObj.away_onetimer_goals || 0} / ${awayStatsObj.away_onetimers || 0}`, home: `${homeStatsObj.home_onetimer_goals || 0} / ${homeStatsObj.home_onetimers || 0}` },
-                                    { label: 'Penalty Shot Goals / Tries', away: `${awayStatsObj.away_penalty_shot_goals || 0} / ${awayStatsObj.away_penalty_shots || 0}`, home: `${homeStatsObj.home_penalty_shot_goals || 0} / ${homeStatsObj.home_penalty_shots || 0}` }
-                                  ].map((m, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                      <td className="py-2 text-left font-bold">{m.away}</td>
-                                      <td className="py-2 text-center font-sans text-slate-700">{m.label}</td>
-                                      <td className="py-2 text-right font-bold">{m.home}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-
-                          {/* 3. Skaters Tab */}
-                          {activeTab === 'skaters' && (
-                            <div className="space-y-6">
-                              {/* Away Skaters */}
-                              <div>
-                                <h4 className="font-bold text-xs uppercase border-b-2 border-black pb-1 mb-2 text-red-800">
-                                  {selectedGame.awayTeam?.team_name} Skaters (Away)
-                                </h4>
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-xs font-mono text-center">
-                                    <thead>
-                                      <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                                        <th className="text-left py-1">Player</th>
-                                        <th>Pos</th>
-                                        <th className="font-bold">G</th>
-                                        <th className="font-bold">A</th>
-                                        <th className="font-bold">PTS</th>
-                                        <th>SOG</th>
-                                        <th>CHK</th>
-                                        <th>PIM</th>
-                                        <th>PPP</th>
-                                        <th>SHP</th>
-                                        <th>TOI</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-black/10">
-                                      {gameBoxscore.skaters
-                                        .filter(s => Number(s.team_id) === Number(selectedGame.away_team_id))
-                                        .map((s, i) => (
-                                          <tr key={i} className={s.toi === '0:00' ? 'opacity-40' : 'hover:bg-slate-50'}>
-                                            <td className="text-left font-bold font-sans py-1">{s.name}</td>
-                                            <td>{s.pos}</td>
-                                            <td className="font-bold">{s.goals}</td>
-                                            <td className="font-bold">{s.assists}</td>
-                                            <td className="font-bold text-sm bg-yellow-50">{s.points}</td>
-                                            <td>{s.sog}</td>
-                                            <td>{s.checks}</td>
-                                            <td>{s.pim}</td>
-                                            <td>{s.ppp}</td>
-                                            <td>{s.shp}</td>
-                                            <td>{s.toi}</td>
-                                          </tr>
-                                        ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-
-                              {/* Home Skaters */}
-                              <div>
-                                <h4 className="font-bold text-xs uppercase border-b-2 border-black pb-1 mb-2 text-blue-800">
-                                  {selectedGame.homeTeam?.team_name} Skaters (Home)
-                                </h4>
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-xs font-mono text-center">
-                                    <thead>
-                                      <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                                        <th className="text-left py-1">Player</th>
-                                        <th>Pos</th>
-                                        <th className="font-bold">G</th>
-                                        <th className="font-bold">A</th>
-                                        <th className="font-bold">PTS</th>
-                                        <th>SOG</th>
-                                        <th>CHK</th>
-                                        <th>PIM</th>
-                                        <th>PPP</th>
-                                        <th>SHP</th>
-                                        <th>TOI</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-black/10">
-                                      {gameBoxscore.skaters
-                                        .filter(s => Number(s.team_id) === Number(selectedGame.home_team_id))
-                                        .map((s, i) => (
-                                          <tr key={i} className={s.toi === '0:00' ? 'opacity-40' : 'hover:bg-slate-50'}>
-                                            <td className="text-left font-bold font-sans py-1">{s.name}</td>
-                                            <td>{s.pos}</td>
-                                            <td className="font-bold">{s.goals}</td>
-                                            <td className="font-bold">{s.assists}</td>
-                                            <td className="font-bold text-sm bg-yellow-50">{s.points}</td>
-                                            <td>{s.sog}</td>
-                                            <td>{s.checks}</td>
-                                            <td>{s.pim}</td>
-                                            <td>{s.ppp}</td>
-                                            <td>{s.shp}</td>
-                                            <td>{s.toi}</td>
-                                          </tr>
-                                        ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 4. Goalies Tab */}
-                          {activeTab === 'goalies' && (
-                            <div className="space-y-6">
-                              {/* Away Goalies */}
-                              <div>
-                                <h4 className="font-bold text-xs uppercase border-b-2 border-black pb-1 mb-2 text-red-800">
-                                  {selectedGame.awayTeam?.team_name} Goaltenders (Away)
-                                </h4>
-                                <table className="w-full text-xs font-mono text-center">
-                                  <thead>
-                                    <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                                      <th className="text-left py-1">Goalie</th>
-                                      <th>GA</th>
-                                      <th>Saves</th>
-                                      <th>Shots</th>
-                                      <th>SV%</th>
-                                      <th>SO</th>
-                                      <th>Dec</th>
-                                      <th>TOI</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-black/10">
-                                    {gameBoxscore.goalies
-                                      .filter(g => Number(g.team_id) === Number(selectedGame.away_team_id))
-                                      .map((g, i) => (
-                                        <tr key={i} className={g.toi === '0:00' ? 'opacity-40' : 'hover:bg-slate-50'}>
-                                          <td className="text-left font-bold font-sans py-1">{g.name}</td>
-                                          <td className="font-bold text-red-700">{g.ga}</td>
-                                          <td className="font-bold">{g.saves}</td>
-                                          <td>{g.shots}</td>
-                                          <td className="font-bold font-mono">{(g.savePct * 100).toFixed(1)}%</td>
-                                          <td>{g.so}</td>
-                                          <td className="font-bold">{g.decision}</td>
-                                          <td>{g.toi}</td>
-                                        </tr>
-                                      ))}
-                                  </tbody>
-                                </table>
-                              </div>
-
-                              {/* Home Goalies */}
-                              <div>
-                                <h4 className="font-bold text-xs uppercase border-b-2 border-black pb-1 mb-2 text-blue-800">
-                                  {selectedGame.homeTeam?.team_name} Goaltenders (Home)
-                                </h4>
-                                <table className="w-full text-xs font-mono text-center">
-                                  <thead>
-                                    <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                                      <th className="text-left py-1">Goalie</th>
-                                      <th>GA</th>
-                                      <th>Saves</th>
-                                      <th>Shots</th>
-                                      <th>SV%</th>
-                                      <th>SO</th>
-                                      <th>Dec</th>
-                                      <th>TOI</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-black/10">
-                                    {gameBoxscore.goalies
-                                      .filter(g => Number(g.team_id) === Number(selectedGame.home_team_id))
-                                      .map((g, i) => (
-                                        <tr key={i} className={g.toi === '0:00' ? 'opacity-40' : 'hover:bg-slate-50'}>
-                                          <td className="text-left font-bold font-sans py-1">{g.name}</td>
-                                          <td className="font-bold text-red-700">{g.ga}</td>
-                                          <td className="font-bold">{g.saves}</td>
-                                          <td>{g.shots}</td>
-                                          <td className="font-bold font-mono">{(g.savePct * 100).toFixed(1)}%</td>
-                                          <td>{g.so}</td>
-                                          <td className="font-bold">{g.decision}</td>
-                                          <td>{g.toi}</td>
-                                        </tr>
-                                      ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* 5. Scoring Log Tab */}
-                          {activeTab === 'scoring' && (
-                            <div>
-                              <h4 className="font-bold text-xs uppercase border-b-2 border-black pb-1 mb-3">Scoring Log</h4>
-                              {gameBoxscore.scoring.length > 0 ? (
-                                <table className="w-full text-xs font-mono text-left">
-                                  <thead>
-                                    <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                                      <th className="py-1">#</th>
-                                      <th>Per</th>
-                                      <th>Time</th>
-                                      <th>Team</th>
-                                      <th>Goal Scorer</th>
-                                      <th>Assist 1</th>
-                                      <th>Assist 2</th>
-                                      <th>Type</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-black/10">
-                                    {gameBoxscore.scoring.map((g, i) => (
-                                      <tr key={i} className="hover:bg-slate-50">
-                                        <td className="py-1">{g.goalNum}</td>
-                                        <td className="font-bold">{g.period}</td>
-                                        <td>{g.time}</td>
-                                        <td className="font-bold font-sans">{g.team}</td>
-                                        <td className="font-bold text-green-900">{g.scorer}</td>
-                                        <td className="text-slate-600">{g.assist1}</td>
-                                        <td className="text-slate-600">{g.assist2}</td>
-                                        <td>
-                                          <span className="px-1.5 py-0.5 bg-black text-white text-[10px] uppercase font-sans font-bold">
-                                            {g.type}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              ) : (
-                                <p className="text-xs italic text-slate-500">No scoring events recorded in database.</p>
-                              )}
-                            </div>
-                          )}
-
-                          {/* 6. Penalties Log Tab */}
-                          {activeTab === 'penalties' && (
-                            <div>
-                              <h4 className="font-bold text-xs uppercase border-b-2 border-black pb-1 mb-3">Penalty Log</h4>
-                              {gameBoxscore.penalties.length > 0 ? (
-                                <table className="w-full text-xs font-mono text-left">
-                                  <thead>
-                                    <tr className="border-b border-black/20 text-slate-600 font-sans uppercase">
-                                      <th className="py-1">#</th>
-                                      <th>Per</th>
-                                      <th>Time</th>
-                                      <th>Team</th>
-                                      <th>Player</th>
-                                      <th>Infraction</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-black/10">
-                                    {gameBoxscore.penalties.map((p, i) => (
-                                      <tr key={i} className="hover:bg-slate-50">
-                                        <td className="py-1">{p.penNum}</td>
-                                        <td className="font-bold">{p.period}</td>
-                                        <td>{p.time}</td>
-                                        <td className="font-bold font-sans">{p.team}</td>
-                                        <td className="font-bold">{p.player}</td>
-                                        <td>
-                                          <span className="px-1.5 py-0.5 bg-red-100 text-red-800 border border-red-300 text-[10px] uppercase font-sans font-bold">
-                                            {p.type}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              ) : (
-                                <p className="text-xs italic text-slate-500">No penalties recorded in database.</p>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
                   </div>
                 ) : (
                   /* ==================================================== */
