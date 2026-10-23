@@ -142,7 +142,18 @@ export const KNOWN_LEAGUE_SEASON_MAP: Record<number | string, { badge: string; p
   39: { badge: 'O01 (1927)', prefix: 'O', year: 1927, name: 'Original 6 (1927)' },
   40: { badge: 'W18 (2013)', prefix: 'W', year: 2013, name: 'W League - Season 18 (2013)' },
   41: { badge: 'W19 (2014)', prefix: 'W', year: 2014, name: 'W League - Season 19 (2014)' },
-  42: { badge: 'W20 (2015)', prefix: 'W', year: 2015, name: 'W League - Season 20 (2015)' }
+  42: { badge: 'W20 (2015)', prefix: 'W', year: 2015, name: 'W League - Season 20 (2015)' },
+  43: { badge: 'W21 (2016)', prefix: 'W', year: 2016, name: 'W League - Season 21 (2016)' },
+  44: { badge: 'W22 (2017)', prefix: 'W', year: 2017, name: 'W League - Season 22 (2017)' },
+  45: { badge: 'W23 (2018)', prefix: 'W', year: 2018, name: 'W League - Season 23 (2018)' },
+  46: { badge: 'W24 (2019)', prefix: 'W', year: 2019, name: 'W League - Season 24 (2019)' },
+  47: { badge: 'W25 (2020)', prefix: 'W', year: 2020, name: 'W League - Season 25 (2020)' },
+  48: { badge: 'W26 (2021)', prefix: 'W', year: 2021, name: 'W League - Season 26 (2021)' },
+  49: { badge: 'W27 (2022)', prefix: 'W', year: 2022, name: 'W League - Season 27 (2022)' },
+  50: { badge: 'W28 (2023)', prefix: 'W', year: 2023, name: 'W League - Season 28 (2023)' },
+  51: { badge: 'W29 (2024)', prefix: 'W', year: 2024, name: 'W League - Season 29 (2024)' },
+  52: { badge: 'W30 (2025)', prefix: 'W', year: 2025, name: 'W League - Season 30 (2025)' },
+  53: { badge: 'W31 (2026)', prefix: 'W', year: 2026, name: 'W League - Season 31 (2026)' }
 };
 
 // Helper: Dynamically resolve accurate season badge, prefix, and year for ANY league_id (including 41+, O02, etc.)
@@ -2198,17 +2209,39 @@ export default function DraftPage() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 font-mono text-xs font-black uppercase">
-                  <span>Class Year:</span>
+                <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs font-black uppercase">
+                  <span>Upcoming Classes:</span>
+                  {[2014, 2015, 2016, 2017, 2018, 2019, 2020].map((yr, idx) => (
+                    <button
+                      key={yr}
+                      onClick={() => setRookieYearOverride(yr)}
+                      className={`px-2 py-1 text-[11px] font-black border border-black cursor-pointer transition-colors ${
+                        rookieClassYear === yr
+                          ? 'bg-amber-300 text-black'
+                          : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                      title={`View ${yr} Rookie Class (W${19 + idx})`}
+                    >
+                      {yr} (W{19 + idx})
+                    </button>
+                  ))}
                   <select
                     value={rookieClassYear}
                     onChange={(e) => setRookieYearOverride(Number(e.target.value))}
-                    className="bg-yellow-100 text-black px-3 py-1.5 text-xs font-black border-2 border-black cursor-pointer"
+                    className="bg-yellow-100 text-black px-2.5 py-1 text-xs font-black border-2 border-black cursor-pointer ml-1"
                   >
-                    {[-2, -1, 0, 1, 2].map(offset => {
-                      const y = (activeFloorSeasonMeta?.year || 2014) + offset;
-                      return <option key={y} value={y}>{y}</option>;
-                    })}
+                    {Array.from(
+                      new Set([
+                        activeFloorSeasonMeta?.year || 2014,
+                        ...Array.from({ length: 14 }, (_, i) => 2013 + i) // 2013 through 2026
+                      ])
+                    )
+                      .sort((a, b) => a - b)
+                      .map(y => (
+                        <option key={y} value={y}>
+                          {y} Class {y >= 2014 ? `(W${19 + (y - 2014)})` : ''}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
