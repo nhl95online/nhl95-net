@@ -186,12 +186,9 @@ export function CoachAuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!foundCoach) {
-      // Create a helpful hint if coaches exist
-      const suggestions = currentList.slice(0, 5).map(c => c.coach_name).join(', ');
-      const suggestionText = suggestions ? ` (Available coaches: ${suggestions}...)` : '';
-      return { 
-        success: false, 
-        error: `Coach "${cleanInput}" was not found in league_coaches.${suggestionText}` 
+      return {
+        success: false,
+        error: 'No coach account found for that email. Please check your email and PIN.'
       };
     }
 

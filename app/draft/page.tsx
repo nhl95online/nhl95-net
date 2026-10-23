@@ -421,6 +421,7 @@ export default function DraftPage() {
   const [data, setData] = useState<DraftData[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
   const [teamsMap, setTeamsMap] = useState<Map<number, TeamInfo>>(new Map());
+  const [standingsRows, setStandingsRows] = useState<any[]>([]);
   // Rookie prospect pool for the active draft (league_player_database where rookie = true)
   const [rookiePool, setRookiePool] = useState<DatabasePlayer[]>([]);
   const [rookiePoolLoading, setRookiePoolLoading] = useState(false);
@@ -471,12 +472,13 @@ export default function DraftPage() {
       setLoading(true);
       try {
         // Fetch all relevant tables in parallel
-        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes] = await Promise.all([
+        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes, standingsRes] = await Promise.all([
           supabase.from('league_drafts').select('*, league_player_database (*), league_teams (*)'),
           supabase.from('league_teams').select('*'),
           supabase.from('league_coaches').select('*'),
           supabase.from('leagues').select('*'),
-          supabase.from('league_seasons').select('*')
+          supabase.from('league_seasons').select('*'),
+          supabase.from('league_standings').select('season_id, team_id, pts, w, gd, gf')
         ]);
 
         const rawDrafts = draftsRes.data || [];
@@ -484,6 +486,7 @@ export default function DraftPage() {
         const rawCoaches = coachesRes.data || [];
         const rawLeagues = leaguesRes.data || [];
         const rawSeasons = seasonsRes.data || [];
+        setStandingsRows(standingsRes.data || []);
 
         // Build coaches map (ID -> Name)
         const coachMap = new Map<number, string>();
@@ -630,7 +633,8 @@ export default function DraftPage() {
             }
 
             const seasonMeta = combinedSeasonMap.get(resolvedLeagueId) || resolveSeasonInfo(resolvedLeagueId, "", rawYear);
-            const teamIdNum = t?.team_id ? Number(t.team_id) : undefined;
+            const rawTeamId = d.team_id ?? t?.team_id;
+            const teamIdNum = rawTeamId !== undefined && rawTeamId !== null ? Number(rawTeamId) : undefined;
             const teamDetails = teamIdNum ? compiledTeamsMap.get(teamIdNum) : undefined;
 
             return {
@@ -876,13 +880,97 @@ export default function DraftPage() {
     }
   }, [floorLeagueId, pastLeagueId, activeTab, data]);
 
+  // Auto-computed draft order (from standings & teams of the active/previous season) when the draft table doesn't have rows for this draft yet
+  const projectedFloorRows = useMemo<DraftData[]>(() => {
+    const existingForLeague = data.filter(d => d.leagueId === floorLeagueId);
+    if (existingForLeague.length > 0) return existingForLeague;
+    if (teamsMap.size === 0) return [];
+
+    const leagueIdNum = Number(floorLeagueId);
+    const meta = activeFloorSeasonMeta;
+    const targetType = meta?.leagueType || 'W';
+
+    let sourceLeagueId = leagueIdNum;
+    let teamIds = Array.from(teamsMap.values())
+      .filter(t => t.league_id === sourceLeagueId)
+      .map(t => t.team_id);
+
+    if (teamIds.length === 0) {
+      const prevSeasons = seasons
+        .filter(s => s.leagueType === targetType && Number(s.leagueId) < leagueIdNum)
+        .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
+      for (const ps of prevSeasons) {
+        const candidateIds = Array.from(teamsMap.values())
+          .filter(t => t.league_id === Number(ps.leagueId))
+          .map(t => t.team_id);
+        if (candidateIds.length > 0) {
+          sourceLeagueId = Number(ps.leagueId);
+          teamIds = candidateIds;
+          break;
+        }
+      }
+    }
+    if (teamIds.length === 0) return [];
+
+    let seasonStandings = standingsRows.filter(s => Number(s.season_id) === leagueIdNum);
+    if (seasonStandings.length === 0 && sourceLeagueId !== leagueIdNum) {
+      seasonStandings = standingsRows.filter(s => Number(s.season_id) === sourceLeagueId);
+    }
+    const standingByTeam = new Map<number, any>(seasonStandings.map((s: any) => [Number(s.team_id), s]));
+    const num = (v: any) => Number(v) || 0;
+
+    const worstFirst = [...teamIds].sort((a, b) => {
+      const sa = standingByTeam.get(a);
+      const sb = standingByTeam.get(b);
+      return (
+        (num(sa?.pts) - num(sb?.pts)) ||
+        (num(sa?.w) - num(sb?.w)) ||
+        (num(sa?.gd) - num(sb?.gd)) ||
+        (num(sa?.gf) - num(sb?.gf)) ||
+        (a - b)
+      );
+    });
+    const bestFirst = [...worstFirst].reverse();
+
+    const draftRounds = Math.max(1, Math.floor(Number(draftRoundsInput)) || 2);
+    const waiverRounds = Math.max(0, Math.floor(Number(waiverRoundsInput)) || 3);
+    const slotYear = meta?.year || 2014;
+    const out: DraftData[] = [];
+    let pk = 1;
+    for (let rd = 1; rd <= draftRounds + waiverRounds; rd++) {
+      const isWaiver = rd > draftRounds;
+      (isWaiver ? bestFirst : worstFirst).forEach(tId => {
+        const t = teamsMap.get(tId);
+        out.push({
+          id: `proj-${floorLeagueId}-${rd}-${pk}`,
+          team: t?.team_name || `Team #${tId}`,
+          teamId: tId,
+          coachId: t?.coach_id || null,
+          coachName: t?.coach_name || null,
+          rd,
+          pk: pk++,
+          player: 'N/A',
+          pos: null,
+          ovr: null,
+          transaction: isWaiver ? 'Waiver Slot' : 'Draft Slot',
+          logo: t?.logo_url || '',
+          year: slotYear,
+          leagueId: floorLeagueId,
+          seasonBadge: meta?.seasonBadge || `Season ${floorLeagueId}`,
+          seasonName: meta?.seasonName || `Season ${floorLeagueId}`,
+          leagueType: targetType
+        });
+      });
+    }
+    return out;
+  }, [data, floorLeagueId, teamsMap, seasons, standingsRows, activeFloorSeasonMeta, draftRoundsInput, waiverRoundsInput]);
+
   // Filtered Draft Floor Data (1 Draft at a time)
   const filteredData = useMemo(() => {
-    return data.filter(d => {
-      if (d.leagueId !== floorLeagueId) return false;
-
+    const hasSubmitted = projectedFloorRows.some(d => d.player && d.player !== 'N/A');
+    return projectedFloorRows.filter(d => {
       const isCapitalRow = (!d.player || d.player === "N/A");
-      const viewMatch = showCapital ? isCapitalRow : !isCapitalRow;
+      const viewMatch = showCapital ? isCapitalRow : (hasSubmitted ? !isCapitalRow : true);
       if (!viewMatch) return false;
       
       if (searchQuery.trim()) {
@@ -903,7 +991,7 @@ export default function DraftPage() {
 
       return true;
     });
-  }, [data, floorLeagueId, showCapital, searchQuery, selectedRoundFilter]);
+  }, [projectedFloorRows, showCapital, searchQuery, selectedRoundFilter]);
 
   // =========================================================================
   // 1ST OVERALL PICK & ON-THE-CLOCK SELECTION LINKED BY TEAM_ID & COACH_ID
@@ -911,17 +999,16 @@ export default function DraftPage() {
 
   // Round 1 Pick 1 (First Overall Selection)
   const firstOverallPick = useMemo(() => {
-    const singleDraftRows = data.filter(d => d.leagueId === floorLeagueId);
-    return singleDraftRows.find(d => d.rd === 1 && d.pk === 1) || null;
-  }, [data, floorLeagueId]);
+    return projectedFloorRows.find(d => d.rd === 1 && d.pk === 1) || null;
+  }, [projectedFloorRows]);
 
   // Identify Current "On The Clock" Pick Slot
   const nextEmptyPickSlot = useMemo(() => {
     if (overridePickSlot && overridePickSlot.leagueId === floorLeagueId) return overridePickSlot;
     
-    const singleDraftRows = data.filter(d => d.leagueId === floorLeagueId);
-    const emptySlot = singleDraftRows.find(d => !d.player || d.player === "N/A" || d.player.trim() === "");
+    const emptySlot = projectedFloorRows.find(d => !d.player || d.player === "N/A" || d.player.trim() === "");
     if (emptySlot) return emptySlot;
+    const singleDraftRows = projectedFloorRows;
 
     const currentMeta = activeFloorSeasonMeta;
     const maxPick = singleDraftRows.reduce((max, d) => Math.max(max, d.pk), 0);
@@ -942,7 +1029,7 @@ export default function DraftPage() {
       seasonName: currentMeta?.seasonName || `Season ${floorLeagueId}`,
       leagueType: currentMeta?.leagueType || 'W'
     } as DraftData;
-  }, [data, floorLeagueId, overridePickSlot, activeFloorSeasonMeta]);
+  }, [projectedFloorRows, floorLeagueId, overridePickSlot, activeFloorSeasonMeta]);
 
   // Check if Currently Logged-in Coach is On The Clock
   const isCurrentCoachOnClock = useMemo(() => {
@@ -1040,10 +1127,6 @@ export default function DraftPage() {
     }
 
     const targetSlot = nextEmptyPickSlot;
-    if (!targetSlot.draftId) {
-      alert('There is no open pick slot. Generate the draft order first.');
-      return;
-    }
     if (!coachMayPickNow) {
       alert(`It is ${targetSlot.team}'s pick${targetSlot.coachName ? ` (Coach ${targetSlot.coachName})` : ''}. Only that coach can submit it.`);
       return;
@@ -1073,22 +1156,72 @@ export default function DraftPage() {
       const isWaiverPick = (targetSlot.transaction || '').toLowerCase().startsWith('waiver');
       const transaction = coachTransactionNote.trim() || (isWaiverPick ? 'Waiver' : 'Drafted');
 
-      // Update the slot (only if it is still empty so two submits cannot overwrite each other)
-      const { data: updated, error: updateErr } = await supabase
-        .from('league_drafts')
-        .update({ player_id: player.player_id, transaction_type: transaction })
-        .eq('draft_id', targetSlot.draftId)
-        .is('player_id', null)
-        .select();
-      if (updateErr) throw updateErr;
-      if (!updated || updated.length === 0) {
-        alert('This pick was already filled (or the database refused the update). Refresh the page and try again.');
-        return;
+      let savedDraftId = targetSlot.draftId;
+      if (savedDraftId) {
+        const { data: updated, error: updateErr } = await supabase
+          .from('league_drafts')
+          .update({ player_id: player.player_id, transaction_type: transaction })
+          .eq('draft_id', savedDraftId)
+          .is('player_id', null)
+          .select();
+        if (updateErr) throw updateErr;
+        if (!updated || updated.length === 0) {
+          alert('This pick was already filled (or the database refused the update). Refresh the page and try again.');
+          return;
+        }
+      } else {
+        // Materialize the projected draft order in league_drafts with this pick filled
+        const rowsToInsert = projectedFloorRows.map(slot => ({
+          league_id: Number(slot.leagueId),
+          team_id: slot.teamId,
+          player_id: slot.rd === targetSlot.rd && slot.pk === targetSlot.pk ? player.player_id : null,
+          round: slot.rd,
+          pick_number: slot.pk,
+          year: slot.year,
+          transaction_type: slot.rd === targetSlot.rd && slot.pk === targetSlot.pk ? transaction : slot.transaction
+        }));
+        const { data: insertedAll, error: insErr } = await supabase
+          .from('league_drafts')
+          .insert(rowsToInsert)
+          .select();
+        if (insErr) throw insErr;
+        const builtAll: DraftData[] = (insertedAll || []).map((d: any) => {
+          const t = teamsMap.get(Number(d.team_id));
+          const isThisPick = Number(d.round) === targetSlot.rd && Number(d.pick_number) === targetSlot.pk;
+          return {
+            id: `draft-${d.draft_id}`,
+            draftId: Number(d.draft_id),
+            team: t?.team_name || targetSlot.team,
+            teamId: Number(d.team_id),
+            coachId: t?.coach_id || null,
+            coachName: t?.coach_name || null,
+            rd: Number(d.round),
+            pk: Number(d.pick_number),
+            player: isThisPick ? player.player_name : 'N/A',
+            playerId: isThisPick ? player.player_id : undefined,
+            pos: isThisPick ? player.pos : null,
+            ovr: isThisPick ? player.ovr : null,
+            transaction: d.transaction_type,
+            logo: t?.logo_url || '',
+            year: Number(d.year),
+            leagueId: floorLeagueId,
+            seasonBadge: targetSlot.seasonBadge,
+            seasonName: targetSlot.seasonName,
+            leagueType: targetSlot.leagueType,
+            ratings: isThisPick ? (player.ratings || undefined) : undefined,
+            playerInfo: isThisPick ? (player.player_info || undefined) : undefined,
+            isSubmitted: isThisPick
+          };
+        });
+        builtAll.sort((a, b) => a.rd - b.rd || a.pk - b.pk);
+        const chosenRow = builtAll.find(b => b.rd === targetSlot.rd && b.pk === targetSlot.pk);
+        savedDraftId = chosenRow?.draftId;
+        setData(prev => [...builtAll, ...prev.filter(d => d.leagueId !== floorLeagueId)]);
       }
 
-      // Update local state immediately
       const newDraftData: DraftData = {
         ...targetSlot,
+        draftId: savedDraftId,
         player: player.player_name,
         playerId: player.player_id,
         pos: player.pos,
@@ -1099,7 +1232,9 @@ export default function DraftPage() {
         isSubmitted: true
       };
 
-      setData(prev => prev.map(d => (d.draftId === targetSlot.draftId ? newDraftData : d)));
+      if (targetSlot.draftId) {
+        setData(prev => prev.map(d => (d.draftId === targetSlot.draftId ? newDraftData : d)));
+      }
 
       setPodium(newDraftData);
       setSubmitSuccessMessage(`🎉 SELECTION SUBMITTED: ${targetSlot.team} selects ${player.player_name} with Pick #${targetSlot.pk} (Rd ${targetSlot.rd}) for ${targetSlot.seasonBadge}!`);
@@ -1761,7 +1896,7 @@ export default function DraftPage() {
                     <div className="flex items-end">
                       <button
                         type="submit"
-                        disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.draftId || !coachMayPickNow}
+                        disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.teamId || !coachMayPickNow}
                         className="w-full bg-black text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-4 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
                       >
                         {draftLockStatus.isLocked ? (
@@ -1777,7 +1912,7 @@ export default function DraftPage() {
                         ) : (
                           <>
                             <Send className="w-3.5 h-3.5" />
-                            {!nextEmptyPickSlot.draftId ? 'No Open Pick Slot' : !coachMayPickNow && isLoggedIn ? `Waiting on ${nextEmptyPickSlot.team}` : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
+                            {!nextEmptyPickSlot.teamId ? 'No Open Pick Slot' : !coachMayPickNow && isLoggedIn ? `Waiting on ${nextEmptyPickSlot.team}` : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
                           </>
                         )}
                       </button>
@@ -2078,7 +2213,7 @@ export default function DraftPage() {
               </div>
 
               {/* On-the-clock hint */}
-              {nextEmptyPickSlot.draftId && (
+              {nextEmptyPickSlot.teamId && (
                 <div className="bg-black text-amber-300 font-mono text-[11px] font-black uppercase px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap">
                   <span>On the clock: {nextEmptyPickSlot.team} &bull; Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})</span>
                   <span className="text-white/80">
@@ -2120,7 +2255,7 @@ export default function DraftPage() {
                     ) : (
                       prospectRows.map((p, i) => {
                         const pickedBy = draftedPlayerMap.get(String(p.player_id));
-                        const canSelect = !pickedBy && coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.draftId;
+                        const canSelect = !pickedBy && coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
                         return (
                           <tr key={p.player_id} className={pickedBy ? 'opacity-60 bg-neutral-50' : 'hover:bg-yellow-50'}>
                             <td className="py-2 px-3 text-center font-mono text-slate-500">{i + 1}</td>

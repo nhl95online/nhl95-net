@@ -1,22 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCoachAuth } from '@/lib/coach-auth';
-import { 
-  Lock, ShieldCheck, UserCheck, X, KeyRound, Eye, EyeOff, 
-  AlertCircle, CheckCircle2, RotateCcw, User, Mail, Sparkles, ChevronDown
+import {
+  Lock, ShieldCheck, X, KeyRound, Eye, EyeOff,
+  AlertCircle, CheckCircle2, RotateCcw, Mail
 } from 'lucide-react';
-
-function normalize(s: string | number | undefined | null): string {
-  if (!s) return '';
-  return String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-}
 
 export default function CoachAuthModal() {
   const {
     isLoggedIn,
     currentCoach,
-    coachesList,
     isLoginModalOpen,
     closeLoginModal,
     login,
@@ -27,13 +21,13 @@ export default function CoachAuthModal() {
   } = useCoachAuth();
 
   const [mode, setMode] = useState<'login' | 'reset'>('login');
-  const [identifier, setIdentifier] = useState<string>(''); // Coach Email or Coach Name
-  const [passkey, setPasskey] = useState<string>(''); // Coach PIN or master passkey
+  const [identifier, setIdentifier] = useState<string>('');
+  const [passkey, setPasskey] = useState<string>('');
   const [showPasskey, setShowPasskey] = useState<boolean>(false);
 
   // Reset PIN form states
   const [resetIdentifier, setResetIdentifier] = useState<string>('');
-  const [authKey, setAuthKey] = useState<string>(''); // Current PIN or master passkey
+  const [authKey, setAuthKey] = useState<string>('');
   const [newPin, setNewPin] = useState<string>('');
   const [confirmPin, setConfirmPin] = useState<string>('');
   const [showNewPin, setShowNewPin] = useState<boolean>(false);
@@ -42,7 +36,6 @@ export default function CoachAuthModal() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Reset modal states on open
   useEffect(() => {
     if (isLoginModalOpen) {
       setError(null);
@@ -65,47 +58,17 @@ export default function CoachAuthModal() {
     }
   }, [isLoginModalOpen, currentCoach, refreshCoaches]);
 
-  // Real-time match against coachesList with flexible normalized matching (e.g. UltraMagnus vs Ultra Magnus)
-  const matchedLoginCoach = useMemo(() => {
-    const clean = identifier.trim().toLowerCase();
-    const norm = normalize(clean);
-    if (!clean && !norm) return null;
-
-    return coachesList.find(c => 
-      (c.email && c.email.trim().toLowerCase() === clean) ||
-      c.coach_name.trim().toLowerCase() === clean || 
-      String(c.coach_id) === clean ||
-      (norm && normalize(c.coach_name) === norm) ||
-      (norm && c.email && normalize(c.email) === norm) ||
-      (norm && c.email && normalize(c.email.split('@')[0]) === norm)
-    );
-  }, [identifier, coachesList]);
-
-  const matchedResetCoach = useMemo(() => {
-    const clean = resetIdentifier.trim().toLowerCase();
-    const norm = normalize(clean);
-    if (!clean && !norm) return null;
-
-    return coachesList.find(c => 
-      (c.email && c.email.trim().toLowerCase() === clean) ||
-      c.coach_name.trim().toLowerCase() === clean || 
-      String(c.coach_id) === clean ||
-      (norm && normalize(c.coach_name) === norm) ||
-      (norm && c.email && normalize(c.email) === norm)
-    );
-  }, [resetIdentifier, coachesList]);
-
   if (!isLoginModalOpen) return null;
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanId = identifier.trim();
     if (!cleanId) {
-      setError("Please enter your coach name or email.");
+      setError("Please enter your email.");
       return;
     }
     if (!passkey.trim()) {
-      setError("Please enter your coach PIN.");
+      setError("Please enter your PIN.");
       return;
     }
 
@@ -116,7 +79,7 @@ export default function CoachAuthModal() {
     setIsSubmitting(false);
 
     if (!result.success) {
-      setError(result.error || "Authentication failed. Check your name/email and PIN.");
+      setError(result.error || "Authentication failed. Check your email and PIN.");
     }
   };
 
@@ -124,7 +87,7 @@ export default function CoachAuthModal() {
     e.preventDefault();
     const cleanId = resetIdentifier.trim();
     if (!cleanId) {
-      setError("Please enter your coach name or email.");
+      setError("Please enter your email.");
       return;
     }
     if (!authKey.trim()) {
@@ -137,7 +100,6 @@ export default function CoachAuthModal() {
     }
     if (newPin.trim() !== confirmPin.trim()) {
       setError("The new PIN and confirmation PIN do not match.");
-      return;
     }
 
     setIsSubmitting(true);
@@ -150,7 +112,7 @@ export default function CoachAuthModal() {
     if (!result.success) {
       setError(result.error || "Failed to reset PIN. Check your authorization.");
     } else {
-      setSuccessMessage("✅ PIN successfully updated! You can now log in with your new PIN.");
+      setSuccessMessage("✅ PIN successfully updated! You can now sign in with your new PIN.");
       setPasskey(newPin.trim());
       setIdentifier(cleanId);
       setTimeout(() => {
@@ -163,7 +125,6 @@ export default function CoachAuthModal() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-200">
       <div className="bg-[#fdfaf5] text-black w-full max-w-md border-4 border-black p-5 sm:p-6 shadow-[8px_8px_0px_rgba(0,0,0,1)] relative font-serif">
-        
         {/* Close Button */}
         <button
           onClick={closeLoginModal}
@@ -182,34 +143,18 @@ export default function CoachAuthModal() {
             Gazette League Security
           </span>
           <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight">
-            {mode === 'reset' ? 'Reset / Set Coach PIN' : 'Coach Verification'}
+            {mode === 'reset' ? 'Reset / Set Coach PIN' : 'Coach Sign In'}
           </h2>
           <p className="text-xs text-slate-700 font-sans mt-1">
             {mode === 'reset' ? (
               <span>Update your personal coach PIN in league records.</span>
             ) : loginContext ? (
-              <span>Authentication required to access <strong>{loginContext}</strong></span>
+              <span>Sign in with your email and PIN to access <strong>{loginContext}</strong></span>
             ) : (
-              <span>Sign in with your coach name/email and PIN to manage uploads & draft picks.</span>
+              <span>Enter your email and PIN to sign in.</span>
             )}
           </p>
         </div>
-
-        {/* Datalist for coach name & email suggestions */}
-        <datalist id="coach-identity-list">
-          {coachesList.map((c) => (
-            <React.Fragment key={c.coach_id}>
-              <option value={c.coach_name}>
-                {c.email ? `${c.coach_name} • ${c.email}` : c.coach_name}
-              </option>
-              {c.email && (
-                <option value={c.email}>
-                  {c.coach_name} (Email)
-                </option>
-              )}
-            </React.Fragment>
-          ))}
-        </datalist>
 
         {/* Already Logged In Prompt */}
         {isLoggedIn && currentCoach && mode === 'login' ? (
@@ -218,16 +163,13 @@ export default function CoachAuthModal() {
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0" />
                 <div>
-                  <span className="block text-[10px] text-emerald-800">Currently Logged In:</span>
+                  <span className="block text-[10px] text-emerald-800">Signed In:</span>
                   <span className="text-sm font-black">{currentCoach.coach_name}</span>
                   {currentCoach.email && (
                     <span className="block text-[10px] text-emerald-700 lowercase font-mono">{currentCoach.email}</span>
                   )}
                 </div>
               </div>
-              <span className="text-[10px] font-mono bg-emerald-200 text-emerald-900 px-2 py-0.5 border border-emerald-600 font-bold shrink-0">
-                ID #{currentCoach.coach_id}
-              </span>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -256,7 +198,7 @@ export default function CoachAuthModal() {
                 type="button"
                 onClick={() => {
                   setMode('reset');
-                  setResetIdentifier(currentCoach.coach_name || currentCoach.email || '');
+                  setResetIdentifier(currentCoach.email || currentCoach.coach_name || '');
                   setError(null);
                 }}
                 className="w-full text-center text-xs font-bold uppercase py-1.5 border border-black/30 hover:bg-neutral-100 transition text-slate-700 cursor-pointer"
@@ -282,52 +224,29 @@ export default function CoachAuthModal() {
               </div>
             )}
 
-            {/* Coach Name or Email Input */}
             <div>
               <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-900">
-                1. Coach Name or Email:
+                1. Email:
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  list="coach-identity-list"
-                  value={resetIdentifier}
-                  onChange={(e) => setResetIdentifier(e.target.value)}
-                  placeholder="Type your coach name or email..."
-                  autoComplete="off"
-                  className="w-full bg-white border-2 border-black py-2 pl-3 pr-8 text-xs font-bold font-sans focus:outline-none focus:bg-yellow-50"
-                />
-                {resetIdentifier && (
-                  <button
-                    type="button"
-                    onClick={() => setResetIdentifier('')}
-                    className="absolute right-2 top-2 text-slate-500 hover:text-black text-xs font-bold"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-              {matchedResetCoach ? (
-                <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-800 font-mono font-bold">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>Found: {matchedResetCoach.coach_name} {matchedResetCoach.email ? `(${matchedResetCoach.email})` : `(ID #${matchedResetCoach.coach_id})`}</span>
-                </div>
-              ) : (
-                <p className="text-[10px] text-slate-500 mt-1 font-serif">
-                  Type your coach name or email from the league_coaches table.
-                </p>
-              )}
+              <input
+                type="email"
+                value={resetIdentifier}
+                onChange={(e) => setResetIdentifier(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                className="w-full bg-white border-2 border-black py-2 px-3 text-xs font-bold font-sans focus:outline-none focus:bg-yellow-50"
+              />
             </div>
 
             <div>
               <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-900">
-                2. Current PIN or Master League Key:
+                2. Current PIN or Master Key:
               </label>
               <input
                 type="password"
                 value={authKey}
                 onChange={(e) => setAuthKey(e.target.value)}
-                placeholder="Enter current PIN or master league key..."
+                placeholder="Enter current PIN or master key..."
                 className="w-full bg-white border-2 border-black py-2 px-3 text-xs font-mono font-bold focus:outline-none focus:bg-yellow-50"
               />
             </div>
@@ -393,7 +312,7 @@ export default function CoachAuthModal() {
             </div>
           </form>
         ) : (
-          /* Sign In Form */
+          /* Sign In Form: strictly Email + PIN */
           <form onSubmit={handleLoginSubmit} className="space-y-4 font-sans text-xs">
             {error && (
               <div className="p-2.5 bg-red-100 border-2 border-red-700 text-red-900 font-bold flex items-center gap-2">
@@ -402,69 +321,30 @@ export default function CoachAuthModal() {
               </div>
             )}
 
-            {/* Coach Name / Email Input */}
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-[11px] font-black uppercase font-mono text-slate-900">
-                  1. Coach Name or Email:
-                </label>
-                <span className="text-[9.5px] font-mono text-neutral-500 font-bold">
-                  (league_coaches table)
-                </span>
-              </div>
-
+              <label className="block text-[11px] font-black uppercase font-mono text-slate-900 mb-1">
+                Email:
+              </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-600">
-                  {identifier.includes('@') ? <Mail className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                  <Mail className="w-4 h-4" />
                 </div>
                 <input
                   type="text"
-                  list="coach-identity-list"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Type your coach name or email..."
-                  autoComplete="off"
+                  placeholder="you@example.com"
+                  autoComplete="email"
                   autoFocus
-                  className="w-full bg-white border-2 border-black py-2.5 pl-8 pr-8 text-xs font-bold font-sans focus:outline-none focus:bg-yellow-50 focus:border-black"
+                  className="w-full bg-white border-2 border-black py-2.5 pl-8 pr-3 text-xs font-bold font-sans focus:outline-none focus:bg-yellow-50 focus:border-black"
                 />
-                {identifier && (
-                  <button
-                    type="button"
-                    onClick={() => setIdentifier('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-black text-xs font-bold p-1 cursor-pointer"
-                    title="Clear"
-                  >
-                    ✕
-                  </button>
-                )}
               </div>
-
-              {/* Real-time matched coach badge */}
-              {matchedLoginCoach ? (
-                <div className="mt-1.5 flex items-center justify-between gap-1.5 text-[10px] text-emerald-900 font-mono font-bold bg-emerald-50 px-2 py-1 border border-emerald-300">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="truncate">Coach: <strong>{matchedLoginCoach.coach_name}</strong></span>
-                    {matchedLoginCoach.email && (
-                      <span className="text-emerald-700 opacity-80 truncate">({matchedLoginCoach.email})</span>
-                    )}
-                  </div>
-                  <span className="text-[9px] bg-emerald-200 text-emerald-950 px-1 py-0 border border-emerald-600 shrink-0">
-                    ID #{matchedLoginCoach.coach_id}
-                  </span>
-                </div>
-              ) : (
-                <p className="text-[10px] text-slate-500 italic mt-1 font-serif">
-                  Type your coach name (e.g. Ultra Magnus) or email. Auto-suggestions will appear as you type.
-                </p>
-              )}
             </div>
 
-            {/* Coach PIN Input */}
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label className="text-[11px] font-black uppercase font-mono text-slate-900">
-                  2. Coach Passkey / PIN:
+                  PIN:
                 </label>
                 <button
                   type="button"
@@ -484,7 +364,8 @@ export default function CoachAuthModal() {
                   type={showPasskey ? "text" : "password"}
                   value={passkey}
                   onChange={(e) => setPasskey(e.target.value)}
-                  placeholder="Enter Coach PIN or Master Passkey..."
+                  placeholder="Enter your PIN..."
+                  autoComplete="current-password"
                   className="w-full bg-white border-2 border-black py-2 pl-3 pr-10 text-xs font-mono font-bold focus:outline-none focus:bg-yellow-50"
                 />
                 <button
@@ -496,9 +377,6 @@ export default function CoachAuthModal() {
                   {showPasskey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500 italic mt-1 font-serif">
-                Enter your coach PIN or league master passkey.
-              </p>
             </div>
 
             <div className="pt-2 flex items-center justify-between gap-3">
@@ -516,12 +394,11 @@ export default function CoachAuthModal() {
                 className="flex-1 bg-black text-white hover:bg-neutral-800 py-2.5 px-4 font-black uppercase border-2 border-black transition cursor-pointer text-xs shadow-[3px_3px_0px_rgba(0,0,0,1)] active:translate-y-0.5 disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 <KeyRound className="w-3.5 h-3.5" />
-                <span>{isSubmitting ? "Verifying..." : "Sign In as Coach"}</span>
+                <span>{isSubmitting ? "Signing In..." : "Sign In"}</span>
               </button>
             </div>
           </form>
         )}
-
       </div>
     </div>
   );
