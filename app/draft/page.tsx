@@ -140,7 +140,9 @@ export const KNOWN_LEAGUE_SEASON_MAP: Record<number | string, { badge: string; p
   37: { badge: 'W16 (2010)', prefix: 'W', year: 2010, name: 'W League - Season 16 (2010)' },
   38: { badge: 'W17 (2012)', prefix: 'W', year: 2012, name: 'W League - Season 17 (2012)' },
   39: { badge: 'O01 (1927)', prefix: 'O', year: 1927, name: 'Original 6 (1927)' },
-  40: { badge: 'W18 (2013)', prefix: 'W', year: 2013, name: 'W League - Season 18 (2013)' }
+  40: { badge: 'W18 (2013)', prefix: 'W', year: 2013, name: 'W League - Season 18 (2013)' },
+  41: { badge: 'W19 (2014)', prefix: 'W', year: 2014, name: 'W League - Season 19 (2014)' },
+  42: { badge: 'W20 (2015)', prefix: 'W', year: 2015, name: 'W League - Season 20 (2015)' }
 };
 
 // Helper: Dynamically resolve accurate season badge, prefix, and year for ANY league_id (including 41+, O02, etc.)
@@ -435,7 +437,7 @@ export default function DraftPage() {
 
   // Single Draft Selection State
   const [floorLeague, setFloorLeague] = useState<string>('W');
-  const [floorLeagueId, setFloorLeagueId] = useState<string>('40'); // Automatically updated to highest available draft
+  const [floorLeagueId, setFloorLeagueId] = useState<string>('41'); // Defaults to upcoming W19 (2014) draft
   const [showCapital, setShowCapital] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoundFilter, setSelectedRoundFilter] = useState<'ALL' | '1' | '2' | '3' | '4+'>('ALL');
@@ -588,11 +590,11 @@ export default function DraftPage() {
         });
         setSeasons(seasonList);
 
-        // Auto-select newest available draft for Draft Floor (e.g. 41 if exists, or 40)
+        // Auto-select upcoming W19 (41) draft by default, or newest available draft
         if (seasonList.length > 0) {
-          const newest = seasonList[0];
-          setFloorLeague(newest.leagueType);
-          setFloorLeagueId(newest.leagueId);
+          const w19 = seasonList.find(s => s.leagueId === '41') || seasonList[0];
+          setFloorLeague(w19.leagueType);
+          setFloorLeagueId(w19.leagueId);
         }
 
         const w01 = seasonList.find(s => s.leagueId === '1') || seasonList[seasonList.length - 1];
@@ -702,7 +704,7 @@ export default function DraftPage() {
       data.filter(d => !d.player || d.player === 'N/A').map(d => d.leagueId)
     );
     return seasons
-      .filter(s => String(s.status || '').toLowerCase() === 'active' || openLeagues.has(s.leagueId))
+      .filter(s => String(s.status || '').toLowerCase() === 'active' || openLeagues.has(s.leagueId) || s.leagueId === '41')
       .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
   }, [seasons, data]);
 
@@ -725,10 +727,10 @@ export default function DraftPage() {
 
   // =========================================================================
   // ROOKIE PROSPECT POOL
-  // The rookie class defaults to the year after the active draft's NHL season
-  // (e.g. W18 = 2013 -> 2014 rookies). It can be changed on the Prospects tab.
+  // The rookie class defaults to the draft season's NHL year
+  // (e.g. W19 = 2014 -> 2014 rookies, W20 = 2015 -> 2015 rookies). It can be changed on the Prospects tab.
   // =========================================================================
-  const rookieClassYear = rookieYearOverride ?? ((activeFloorSeasonMeta?.year || 2013) + 1);
+  const rookieClassYear = rookieYearOverride ?? (activeFloorSeasonMeta?.year || 2014);
 
   useEffect(() => {
     setRookieYearOverride(null);
@@ -1173,18 +1175,45 @@ export default function DraftPage() {
 
     setIsGeneratingOrder(true);
     try {
-      const teamIds = Array.from(teamsMap.values())
-        .filter(t => t.league_id === leagueIdNum)
+      const targetType = meta?.leagueType || 'W';
+      let sourceLeagueId = leagueIdNum;
+      let teamIds = Array.from(teamsMap.values())
+        .filter(t => t.league_id === sourceLeagueId)
         .map(t => t.team_id);
+
+      // If this is a future season (e.g. W19 = 41) whose teams aren't created yet, pull from the active/previous season of the same tier (e.g. W18 = 40)
+      if (teamIds.length === 0) {
+        const prevSeasons = seasons
+          .filter(s => s.leagueType === targetType && Number(s.leagueId) < leagueIdNum)
+          .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
+        for (const ps of prevSeasons) {
+          const candidateIds = Array.from(teamsMap.values())
+            .filter(t => t.league_id === Number(ps.leagueId))
+            .map(t => t.team_id);
+          if (candidateIds.length > 0) {
+            sourceLeagueId = Number(ps.leagueId);
+            teamIds = candidateIds;
+            break;
+          }
+        }
+      }
       if (teamIds.length === 0) {
         throw new Error('No teams were found for this league.');
       }
 
-      const { data: standings, error: standingsErr } = await supabase
+      let { data: standings, error: standingsErr } = await supabase
         .from('league_standings')
         .select('team_id, pts, w, gd, gf')
         .eq('season_id', leagueIdNum);
       if (standingsErr) throw standingsErr;
+      if ((!standings || standings.length === 0) && sourceLeagueId !== leagueIdNum) {
+        const fallbackRes = await supabase
+          .from('league_standings')
+          .select('team_id, pts, w, gd, gf')
+          .eq('season_id', sourceLeagueId);
+        if (fallbackRes.error) throw fallbackRes.error;
+        standings = fallbackRes.data;
+      }
 
       const standingByTeam = new Map<number, any>((standings || []).map((s: any) => [Number(s.team_id), s]));
       const num = (v: any) => Number(v) || 0;
@@ -2001,8 +2030,8 @@ export default function DraftPage() {
                     onChange={(e) => setRookieYearOverride(Number(e.target.value))}
                     className="bg-yellow-100 text-black px-3 py-1.5 text-xs font-black border-2 border-black cursor-pointer"
                   >
-                    {[-1, 0, 1, 2, 3].map(offset => {
-                      const y = (activeFloorSeasonMeta?.year || 2013) + offset;
+                    {[-2, -1, 0, 1, 2].map(offset => {
+                      const y = (activeFloorSeasonMeta?.year || 2014) + offset;
                       return <option key={y} value={y}>{y}</option>;
                     })}
                   </select>
