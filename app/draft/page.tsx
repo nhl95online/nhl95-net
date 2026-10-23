@@ -692,25 +692,65 @@ export default function DraftPage() {
     fetchData();
   }, []);
 
+  // Track which leagues have draft rows and which still have open pick slots
+  const { completedDraftLeagues, openDraftLeagues } = useMemo(() => {
+    const withRows = new Set<string>();
+    const open = new Set<string>();
+    data.forEach(d => {
+      withRows.add(d.leagueId);
+      if (!d.player || d.player === 'N/A' || d.player.trim() === '') {
+        open.add(d.leagueId);
+      }
+    });
+    const completed = new Set<string>();
+    withRows.forEach(lId => {
+      if (!open.has(lId)) completed.add(lId);
+    });
+    return { completedDraftLeagues: completed, openDraftLeagues: open };
+  }, [data]);
+
   // Filtered Season Options for Draft Floor & Past
   const availableFloorSeasons = useMemo(() => {
-    return seasons.filter(s => floorLeague === 'ALL' || s.leagueType === floorLeague);
-  }, [seasons, floorLeague]);
+    const nonCompleted = seasons.filter(
+      s => !completedDraftLeagues.has(s.leagueId) && (floorLeague === 'ALL' || s.leagueType === floorLeague)
+    );
+    return nonCompleted.length > 0
+      ? nonCompleted
+      : seasons.filter(s => floorLeague === 'ALL' || s.leagueType === floorLeague);
+  }, [seasons, floorLeague, completedDraftLeagues]);
 
   const availablePastSeasons = useMemo(() => {
     return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
   }, [seasons, pastLeagueType]);
 
-  // Drafts that are live: active leagues, plus any league that still has open pick slots.
-  // Used for the quick-switch buttons so coaches can cycle between concurrent drafts.
+  // Drafts that are live: active leagues or open drafts that have NOT already completed their draft.
+  // Once a previous draft is loaded with all picks filled, it is automatically removed from Live Drafts.
   const activeDrafts = useMemo(() => {
-    const openLeagues = new Set(
-      data.filter(d => !d.player || d.player === 'N/A').map(d => d.leagueId)
-    );
     return seasons
-      .filter(s => String(s.status || '').toLowerCase() === 'active' || openLeagues.has(s.leagueId) || s.leagueId === '41')
+      .filter(s => {
+        if (completedDraftLeagues.has(s.leagueId)) return false;
+        return (
+          String(s.status || '').toLowerCase() === 'active' ||
+          openDraftLeagues.has(s.leagueId) ||
+          s.leagueId === '41'
+        );
+      })
       .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
-  }, [seasons, data]);
+  }, [seasons, completedDraftLeagues, openDraftLeagues]);
+
+  useEffect(() => {
+    if (completedDraftLeagues.has(floorLeagueId) && activeDrafts.length > 0) {
+      setFloorLeague(activeDrafts[0].leagueType);
+      setFloorLeagueId(activeDrafts[0].leagueId);
+    }
+    if (!completedDraftLeagues.has(pastLeagueId) && completedDraftLeagues.size > 0) {
+      const newestCompleted = seasons.find(s => completedDraftLeagues.has(s.leagueId));
+      if (newestCompleted) {
+        setPastLeagueType(newestCompleted.leagueType);
+        setPastLeagueId(newestCompleted.leagueId);
+      }
+    }
+  }, [completedDraftLeagues, activeDrafts, floorLeagueId, pastLeagueId, seasons]);
 
   const switchToDraft = (s: SeasonOption) => {
     setFloorLeague(s.leagueType);
@@ -919,18 +959,18 @@ export default function DraftPage() {
     const standingByTeam = new Map<number, any>(seasonStandings.map((s: any) => [Number(s.team_id), s]));
     const num = (v: any) => Number(v) || 0;
 
-    const worstFirst = [...teamIds].sort((a, b) => {
+    const bestFirst = [...teamIds].sort((a, b) => {
       const sa = standingByTeam.get(a);
       const sb = standingByTeam.get(b);
       return (
-        (num(sa?.pts) - num(sb?.pts)) ||
-        (num(sa?.w) - num(sb?.w)) ||
-        (num(sa?.gd) - num(sb?.gd)) ||
-        (num(sa?.gf) - num(sb?.gf)) ||
+        (num(sb?.pts) - num(sa?.pts)) ||
+        (num(sb?.w) - num(sa?.w)) ||
+        (num(sb?.gd) - num(sa?.gd)) ||
+        (num(sb?.gf) - num(sa?.gf)) ||
         (a - b)
       );
     });
-    const bestFirst = [...worstFirst].reverse();
+    const worstFirst = [...bestFirst].reverse();
 
     const draftRounds = Math.max(1, Math.floor(Number(draftRoundsInput)) || 2);
     const waiverRounds = Math.max(0, Math.floor(Number(waiverRoundsInput)) || 3);
@@ -1353,19 +1393,19 @@ export default function DraftPage() {
       const standingByTeam = new Map<number, any>((standings || []).map((s: any) => [Number(s.team_id), s]));
       const num = (v: any) => Number(v) || 0;
 
-      // Worst record first: fewest points, then wins, then goal diff, then goals for, then team_id
-      const worstFirst = [...teamIds].sort((a, b) => {
+      // Standings order (best record first, identical to /standings): points, wins, goal diff, goals for, then team_id
+      const bestFirst = [...teamIds].sort((a, b) => {
         const sa = standingByTeam.get(a);
         const sb = standingByTeam.get(b);
         return (
-          (num(sa?.pts) - num(sb?.pts)) ||
-          (num(sa?.w) - num(sb?.w)) ||
-          (num(sa?.gd) - num(sb?.gd)) ||
-          (num(sa?.gf) - num(sb?.gf)) ||
+          (num(sb?.pts) - num(sa?.pts)) ||
+          (num(sb?.w) - num(sa?.w)) ||
+          (num(sb?.gd) - num(sa?.gd)) ||
+          (num(sb?.gf) - num(sa?.gf)) ||
           (a - b)
         );
       });
-      const bestFirst = [...worstFirst].reverse();
+      const worstFirst = [...bestFirst].reverse();
 
       const slotYear = meta?.year || new Date().getFullYear();
       const rows: any[] = [];
