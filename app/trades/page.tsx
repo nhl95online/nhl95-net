@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useCoachAuth } from '@/lib/coach-auth';
 import Link from 'next/link';
 import { 
   ArrowLeftRight, Check, Copy, RotateCcw, AlertTriangle, ShieldCheck, 
@@ -148,7 +149,10 @@ export default function TradesPage() {
   const [teamBSendingPlayers, setTeamBSendingPlayers] = useState<PlayerAsset[]>([]);
   const [teamBSendingPicks, setTeamBSendingPicks] = useState<PickAsset[]>([]);
 
+  const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
   const [copied, setCopied] = useState(false);
+  const [isConfirmingTrade, setIsConfirmingTrade] = useState(false);
+  const [confirmTradeBanner, setConfirmTradeBanner] = useState<string | null>(null);
 
   // Archive / History State
   const [seasons, setSeasons] = useState<any[]>([]);
@@ -625,6 +629,120 @@ export default function TradesPage() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
+  };
+
+  // Confirm & log trade directly into the league_trades database table
+  const handleConfirmTrade = async () => {
+    if (!isLoggedIn || !currentCoach) {
+      openLoginModal('Trade Confirmation');
+      return;
+    }
+    if (!teamA || !teamB) {
+      alert('Please select both Team A and Team B.');
+      return;
+    }
+    const hasSideA = teamASendingPlayers.length > 0 || teamASendingPicks.length > 0;
+    const hasSideB = teamBSendingPlayers.length > 0 || teamBSendingPicks.length > 0;
+    if (!hasSideA || !hasSideB) {
+      alert('Both teams must include at least one player or draft pick in a confirmed trade.');
+      return;
+    }
+
+    const formatLedgerAssets = (players: PlayerAsset[], picks: PickAsset[]) => {
+      const pItems = players.map(p => `${p.pos || 'F'} ${p.name}`);
+      const pkItems = picks.map(pk => `${pk.year} ${pk.round} RdPk`);
+      return [...pItems, ...pkItems].join(', ');
+    };
+
+    const tradeAString = formatLedgerAssets(teamASendingPlayers, teamASendingPicks);
+    const tradeBString = formatLedgerAssets(teamBSendingPlayers, teamBSendingPicks);
+    const lgCode = activeSimConfig.currentSeasonName.split(' ')[0] || 'W18';
+
+    const now = new Date();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mmm = months[now.getMonth()];
+    const yy = String(now.getFullYear()).slice(-2);
+    const formattedDate = `${dd}-${mmm}-${yy}`;
+
+    const confirmed = window.confirm(
+      `Confirm and log this official trade in [${lgCode}]?\n\n` +
+      `${teamA.abbreviation} sends: ${tradeAString}\n` +
+      `${teamB.abbreviation} sends: ${tradeBString}`
+    );
+    if (!confirmed) return;
+
+    setIsConfirmingTrade(true);
+    try {
+      const maxExistingId = trades.reduce((max, t) => Math.max(max, Number(t['trade id']) || 0), 0);
+      const nextTradeId = maxExistingId + 1;
+
+      const payload: Record<string, any> = {
+        'trade id': nextTradeId,
+        lg: lgCode,
+        date: formattedDate,
+        team: teamA.abbreviation,
+        trade: tradeAString,
+        team_1: teamB.abbreviation,
+        trade_1: tradeBString
+      };
+
+      const { data: insertedRows, error } = await supabase
+        .from('league_trades')
+        .insert([payload])
+        .select();
+
+      if (error) throw error;
+
+      // Also transfer any traded open draft pick slots in league_drafts if already generated
+      const roundToNum = (rd: string) => {
+        if (rd.startsWith('1')) return 1;
+        if (rd.startsWith('2')) return 2;
+        if (rd.startsWith('3')) return 3;
+        if (rd.startsWith('4')) return 4;
+        if (rd.startsWith('5')) return 5;
+        return 1;
+      };
+
+      for (const pk of teamASendingPicks) {
+        await supabase
+          .from('league_drafts')
+          .update({
+            team_id: Number(teamB.team_id),
+            transaction_type: `Traded from ${teamA.abbreviation}`
+          })
+          .eq('team_id', Number(teamA.team_id))
+          .eq('year', Number(pk.year))
+          .eq('round', roundToNum(pk.round))
+          .is('player_id', null);
+      }
+
+      for (const pk of teamBSendingPicks) {
+        await supabase
+          .from('league_drafts')
+          .update({
+            team_id: Number(teamA.team_id),
+            transaction_type: `Traded from ${teamB.abbreviation}`
+          })
+          .eq('team_id', Number(teamB.team_id))
+          .eq('year', Number(pk.year))
+          .eq('round', roundToNum(pk.round))
+          .is('player_id', null);
+      }
+
+      const savedRow = (insertedRows && insertedRows[0]) || payload;
+      setTrades(prev => [savedRow, ...prev]);
+      setConfirmTradeBanner(
+        `✅ TRADE #${nextTradeId} CONFIRMED (${lgCode} • ${formattedDate}): ${teamA.abbreviation} (${tradeAString}) ⇄ ${teamB.abbreviation} (${tradeBString})`
+      );
+      setTimeout(() => setConfirmTradeBanner(null), 8000);
+      handleResetTrade();
+    } catch (err: any) {
+      console.error('Failed to confirm trade:', err);
+      alert(`Failed to save trade to league_trades: ${err?.message || 'unknown error'}`);
+    } finally {
+      setIsConfirmingTrade(false);
+    }
   };
 
   // Helper to parse individual asset items (players vs draft picks) and resolve drafted players
@@ -1115,7 +1233,16 @@ export default function TradesPage() {
                 </div>
 
                 {/* Right Action Buttons */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleConfirmTrade}
+                    disabled={isConfirmingTrade}
+                    className="flex items-center gap-1.5 bg-emerald-700 text-white border border-black text-xs font-black uppercase px-3.5 py-1.5 hover:bg-emerald-800 disabled:opacity-50 transition cursor-pointer shadow-2xs"
+                    title="Confirm trade and save to league_trades database table"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{isConfirmingTrade ? "LOGGING TRADE..." : "CONFIRM & LOG TRADE"}</span>
+                  </button>
                   <button
                     onClick={copyTradeForDiscord}
                     className="flex items-center gap-1.5 bg-black text-white border border-black text-xs font-bold uppercase px-3.5 py-1.5 hover:bg-neutral-800 transition cursor-pointer"
@@ -1134,6 +1261,13 @@ export default function TradesPage() {
                   </button>
                 </div>
               </div>
+
+              {confirmTradeBanner && (
+                <div className="border-2 border-emerald-700 bg-emerald-50 text-emerald-950 px-3 py-2 text-xs font-mono font-bold flex items-center justify-between gap-2">
+                  <span>{confirmTradeBanner}</span>
+                  <button onClick={() => setConfirmTradeBanner(null)} className="text-emerald-900 hover:text-black font-black cursor-pointer">✕</button>
+                </div>
+              )}
 
               {/* FIVE-SECTION HORIZONTAL DECK (AS SHOWN IN USER MOCKUP) */}
               <div className="border border-black bg-[#f4f1ea] p-3 md:p-4">
