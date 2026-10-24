@@ -1450,13 +1450,18 @@ export default function DraftPage() {
 
       let savedDraftId = targetSlot.draftId;
       if (savedDraftId) {
-        const { data: updated, error: updateErr } = await supabase
-          .from('league_drafts')
-          .update({ player_id: player.player_id, transaction_type: transaction })
-          .eq('draft_id', savedDraftId)
-          .is('player_id', null)
-          .select();
-        if (updateErr) throw updateErr;
+        const res = await fetch('/api/draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'submit_pick',
+            draftId: savedDraftId,
+            updatePayload: { player_id: player.player_id, transaction_type: transaction }
+          })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to update pick');
+        const updated = json.data;
         if (!updated || updated.length === 0) {
           alert('This pick was already filled (or the database refused the update). Refresh the page and try again.');
           return;
@@ -1472,11 +1477,17 @@ export default function DraftPage() {
           year: slot.year,
           transaction_type: slot.rd === targetSlot.rd && slot.pk === targetSlot.pk ? transaction : slot.transaction
         }));
-        const { data: insertedAll, error: insErr } = await supabase
-          .from('league_drafts')
-          .insert(rowsToInsert)
-          .select();
-        if (insErr) throw insErr;
+        const res = await fetch('/api/draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'submit_pick',
+            rowsToInsert
+          })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Failed to insert draft order & pick');
+        const insertedAll = json.data;
         const builtAll: DraftData[] = (insertedAll || []).map((d: any) => {
           const t = teamsMap.get(Number(d.team_id));
           const isThisPick = Number(d.round) === targetSlot.rd && Number(d.pick_number) === targetSlot.pk;
@@ -1616,20 +1627,19 @@ export default function DraftPage() {
         transaction_type: slot.transaction
       }));
 
-      if (existing.length > 0) {
-        const { error: delErr } = await supabase
-          .from('league_drafts')
-          .delete()
-          .eq('league_id', leagueIdNum)
-          .is('player_id', null);
-        if (delErr) throw delErr;
-      }
-
-      const { data: inserted, error: insertErr } = await supabase
-        .from('league_drafts')
-        .insert(rows)
-        .select();
-      if (insertErr) throw insertErr;
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_order',
+          leagueId: leagueIdNum,
+          rows,
+          hasExisting: existing.length > 0
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to generate draft order');
+      const inserted = json.data;
 
       const built: DraftData[] = (inserted || []).map((d: any) => {
         const t = teamsMap.get(Number(d.team_id));
@@ -1682,10 +1692,7 @@ export default function DraftPage() {
 
     setIsUploadingCapital(true);
     try {
-      let totalUploaded = 0;
-      const allNewDraftData: DraftData[] = [];
-      const replacedLeagueIds = new Set<string>();
-
+      const batches: Array<{ leagueId: number; rows: any[]; hasExisting: boolean }> = [];
       for (const lId of targetLeagueIds) {
         const existing = data.filter(d => d.leagueId === lId);
         if (existing.some(d => d.player && d.player !== 'N/A')) {
@@ -1693,17 +1700,7 @@ export default function DraftPage() {
         }
         const slots = buildDraftSlotsForLeague(lId);
         if (slots.length === 0) continue;
-
         const leagueIdNum = Number(lId);
-        if (existing.length > 0) {
-          const { error: delErr } = await supabase
-            .from('league_drafts')
-            .delete()
-            .eq('league_id', leagueIdNum)
-            .is('player_id', null);
-          if (delErr) throw delErr;
-        }
-
         const rows = slots.map(slot => ({
           league_id: leagueIdNum,
           team_id: slot.teamId,
@@ -1713,19 +1710,37 @@ export default function DraftPage() {
           year: slot.year,
           transaction_type: slot.transaction
         }));
+        batches.push({ leagueId: leagueIdNum, rows, hasExisting: existing.length > 0 });
+      }
 
-        const { data: inserted, error: insertErr } = await supabase
-          .from('league_drafts')
-          .insert(rows)
-          .select();
-        if (insertErr) throw insertErr;
+      if (batches.length === 0) {
+        alert('No eligible draft capital slots to upload.');
+        return;
+      }
 
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upload_capital',
+          batches
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to upload draft capital');
+
+      let totalUploaded = 0;
+      const allNewDraftData: DraftData[] = [];
+      const replacedLeagueIds = new Set<string>();
+      const results = json.results || {};
+
+      for (const [lId, inserted] of Object.entries(results)) {
         const meta = seasons.find(s => s.leagueId === lId) || resolveSeasonInfo(lId);
         const sBadge = (meta as any)?.seasonBadge || (meta as any)?.badge || `Season ${lId}`;
         const sName = (meta as any)?.seasonName || (meta as any)?.name || `Season ${lId}`;
         const sType = (meta as any)?.leagueType || (meta as any)?.prefix || 'W';
 
-        const built: DraftData[] = (inserted || []).map((d: any) => {
+        const built: DraftData[] = ((inserted as any[]) || []).map((d: any) => {
           const t = teamsMap.get(Number(d.team_id));
           return {
             id: `draft-${d.draft_id}`,

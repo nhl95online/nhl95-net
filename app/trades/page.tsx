@@ -687,14 +687,6 @@ export default function TradesPage() {
         trade_1: tradeBString
       };
 
-      const { data: insertedRows, error } = await supabase
-        .from('league_trades')
-        .insert([payload])
-        .select();
-
-      if (error) throw error;
-
-      // Also transfer any traded open draft pick slots in league_drafts if already generated
       const roundToNum = (rd: string) => {
         if (rd.startsWith('1')) return 1;
         if (rd.startsWith('2')) return 2;
@@ -704,31 +696,35 @@ export default function TradesPage() {
         return 1;
       };
 
-      for (const pk of teamASendingPicks) {
-        await supabase
-          .from('league_drafts')
-          .update({
-            team_id: Number(teamB.team_id),
-            transaction_type: `Traded from ${teamA.abbreviation}`
-          })
-          .eq('team_id', Number(teamA.team_id))
-          .eq('year', Number(pk.year))
-          .eq('round', roundToNum(pk.round))
-          .is('player_id', null);
-      }
+      const pickTransfers = [
+        ...teamASendingPicks.map(pk => ({
+          fromTeamId: Number(teamA.team_id),
+          toTeamId: Number(teamB.team_id),
+          year: Number(pk.year),
+          round: roundToNum(pk.round),
+          transactionType: `Traded from ${teamA.abbreviation}`
+        })),
+        ...teamBSendingPicks.map(pk => ({
+          fromTeamId: Number(teamB.team_id),
+          toTeamId: Number(teamA.team_id),
+          year: Number(pk.year),
+          round: roundToNum(pk.round),
+          transactionType: `Traded from ${teamB.abbreviation}`
+        }))
+      ];
 
-      for (const pk of teamBSendingPicks) {
-        await supabase
-          .from('league_drafts')
-          .update({
-            team_id: Number(teamA.team_id),
-            transaction_type: `Traded from ${teamB.abbreviation}`
-          })
-          .eq('team_id', Number(teamB.team_id))
-          .eq('year', Number(pk.year))
-          .eq('round', roundToNum(pk.round))
-          .is('player_id', null);
-      }
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'confirm_trade',
+          tradePayload: payload,
+          pickTransfers
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save trade');
+      const insertedRows = json.data;
 
       const savedRow = (insertedRows && insertedRows[0]) || payload;
       setTrades(prev => [savedRow, ...prev]);
