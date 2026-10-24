@@ -377,14 +377,18 @@ function HockeyCardSpotlight({ draftItem, title = "OFFICIAL DRAFT CARD" }: { dra
         {/* Card Quick Action Links */}
         <div className="flex items-center justify-between gap-1.5 text-[10px] font-sans font-bold pt-0.5">
           <Link
-            href={`/players?q=${encodeURIComponent(draftItem.player)}`}
+            href={
+              draftItem.player && draftItem.player !== 'N/A'
+                ? `/players?q=${encodeURIComponent(draftItem.player)}${draftItem.playerId ? `&id=${encodeURIComponent(String(draftItem.playerId))}` : ''}`
+                : '/players'
+            }
             className="flex-1 bg-gradient-to-r from-amber-400 to-yellow-300 text-black py-1.5 px-2 text-center uppercase font-black hover:brightness-110 border border-black rounded-xs shadow-2xs flex items-center justify-center gap-1"
           >
             <Search className="w-3 h-3" />
             Player Profile
           </Link>
           <Link
-            href={`/team`}
+            href={draftItem.teamId ? `/team/${draftItem.teamId}` : `/team`}
             className="flex-1 bg-neutral-800 text-white py-1.5 px-2 text-center uppercase font-bold hover:bg-neutral-700 border border-neutral-600 rounded-xs flex items-center justify-center gap-1"
           >
             <Shield className="w-3 h-3" />
@@ -1323,6 +1327,42 @@ export default function DraftPage() {
     } as DraftData;
   }, [projectedFloorRows, floorLeagueId, overridePickSlot, activeFloorSeasonMeta]);
 
+  // Keep Spotlight Card synced to active draft class (either first pick made, or #1 available prospect for the team on the clock)
+  useEffect(() => {
+    if (activeTab !== 'floor') return;
+    const currentDraftPicks = data.filter(d => d.leagueId === floorLeagueId && d.player && d.player !== 'N/A');
+    if (currentDraftPicks.length > 0) {
+      if (!podium || podium.leagueId !== floorLeagueId) {
+        setPodium(currentDraftPicks[0]);
+      }
+      return;
+    }
+    if (availableRookies.length > 0 && (!podium || podium.leagueId !== floorLeagueId || podium.player === 'N/A')) {
+      const topProspect = availableRookies[0];
+      setPodium({
+        team: nextEmptyPickSlot.team,
+        teamId: nextEmptyPickSlot.teamId,
+        coachId: nextEmptyPickSlot.coachId,
+        coachName: nextEmptyPickSlot.coachName,
+        rd: nextEmptyPickSlot.rd,
+        pk: nextEmptyPickSlot.pk,
+        player: topProspect.player_name,
+        playerId: topProspect.player_id,
+        pos: topProspect.pos,
+        ovr: topProspect.ovr,
+        transaction: 'Top Available Prospect',
+        logo: nextEmptyPickSlot.logo,
+        year: nextEmptyPickSlot.year,
+        leagueId: floorLeagueId,
+        seasonBadge: nextEmptyPickSlot.seasonBadge,
+        seasonName: nextEmptyPickSlot.seasonName,
+        leagueType: nextEmptyPickSlot.leagueType,
+        ratings: topProspect.ratings,
+        playerInfo: topProspect.player_info
+      });
+    }
+  }, [activeTab, floorLeagueId, data, availableRookies, nextEmptyPickSlot, podium]);
+
   // Check if Currently Logged-in Coach is On The Clock
   const isCurrentCoachOnClock = useMemo(() => {
     if (!isLoggedIn || !currentCoach) return false;
@@ -1568,6 +1608,7 @@ export default function DraftPage() {
       rd: nextEmptyPickSlot.rd,
       pk: nextEmptyPickSlot.pk,
       player: player.player_name,
+      playerId: player.player_id,
       pos: player.pos,
       ovr: player.ovr,
       transaction: 'Coach Selection Preview',
@@ -2187,6 +2228,7 @@ export default function DraftPage() {
                                   rd: nextEmptyPickSlot.rd,
                                   pk: nextEmptyPickSlot.pk,
                                   player: player.player_name,
+                                  playerId: player.player_id,
                                   pos: player.pos,
                                   ovr: player.ovr,
                                   transaction: "Coach Selection Preview",
@@ -2621,7 +2663,16 @@ export default function DraftPage() {
                         return (
                           <tr key={p.player_id} className={pickedBy ? 'opacity-60 bg-neutral-50' : 'hover:bg-yellow-50'}>
                             <td className="py-2 px-3 text-center font-mono text-slate-500">{i + 1}</td>
-                            <td className="py-2 px-3 font-bold uppercase text-black">{p.player_name}</td>
+                            <td className="py-2 px-3 font-bold uppercase text-black">
+                              <Link
+                                href={`/players?q=${encodeURIComponent(p.player_name)}&id=${encodeURIComponent(String(p.player_id))}`}
+                                className="hover:underline flex items-center gap-1.5"
+                                title="Open in Player Database"
+                              >
+                                <span>{p.player_name}</span>
+                                <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+                              </Link>
+                            </td>
                             <td className="py-2 px-3 text-center font-mono">
                               <span className="bg-neutral-100 text-black px-1.5 py-0.5 text-[10px] font-bold border border-black/20">{p.pos}</span>
                             </td>
@@ -2632,20 +2683,28 @@ export default function DraftPage() {
                               {(p.player_info as any)?.source_league ? ` (${(p.player_info as any).source_league})` : ''}
                             </td>
                             <td className="py-2 px-3">
-                              {pickedBy ? (
-                                <span className="font-mono text-[10px] font-black uppercase text-red-800">
-                                  Drafted &mdash; {pickedBy.team} (Rd {pickedBy.rd}, Pk #{pickedBy.pk})
-                                </span>
-                              ) : canSelect ? (
-                                <button
-                                  onClick={() => selectProspectForPick(p)}
-                                  className="bg-red-800 text-white hover:bg-red-900 px-2 py-0.5 text-[10px] font-black uppercase border border-black cursor-pointer"
+                              <div className="flex items-center gap-2">
+                                {pickedBy ? (
+                                  <span className="font-mono text-[10px] font-black uppercase text-red-800">
+                                    Drafted &mdash; {pickedBy.team} (Rd {pickedBy.rd}, Pk #{pickedBy.pk})
+                                  </span>
+                                ) : canSelect ? (
+                                  <button
+                                    onClick={() => selectProspectForPick(p)}
+                                    className="bg-red-800 text-white hover:bg-red-900 px-2 py-0.5 text-[10px] font-black uppercase border border-black cursor-pointer"
+                                  >
+                                    Select
+                                  </button>
+                                ) : (
+                                  <span className="font-mono text-[10px] font-black uppercase text-emerald-700">Available</span>
+                                )}
+                                <Link
+                                  href={`/players?q=${encodeURIComponent(p.player_name)}&id=${encodeURIComponent(String(p.player_id))}`}
+                                  className="bg-amber-300 hover:bg-amber-400 text-black px-2 py-0.5 text-[10px] font-black uppercase border border-black inline-flex items-center gap-1"
                                 >
-                                  Select
-                                </button>
-                              ) : (
-                                <span className="font-mono text-[10px] font-black uppercase text-emerald-700">Available</span>
-                              )}
+                                  Profile
+                                </Link>
+                              </div>
                             </td>
                           </tr>
                         );

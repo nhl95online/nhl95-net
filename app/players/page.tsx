@@ -1798,6 +1798,98 @@ export default function PlayersPage() {
 
   const LOGO_URL = "https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/NHL95.net_banner.png";
 
+  // 0. Automatically load player profile when navigated via URL query (?q=, ?player=, ?id=)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const rawQuery = (params.get('q') || params.get('player') || params.get('search') || '').trim();
+    const rawId = params.get('id');
+    const rawYear = params.get('year');
+
+    const cleanQuery = rawQuery && rawQuery.toUpperCase() !== 'N/A' ? rawQuery : '';
+    if (cleanQuery) {
+      setSearch(cleanQuery);
+      setPage(0);
+    }
+
+    if (!cleanQuery && !rawId) return;
+
+    let cancelled = false;
+    async function loadInitialPlayerProfile() {
+      try {
+        let data: any[] | null = null;
+        if (cleanQuery) {
+          const resExact = await supabase
+            .from('league_player_database')
+            .select('*')
+            .ilike('player_name', cleanQuery);
+          if (resExact.data && resExact.data.length > 0) {
+            data = resExact.data;
+          } else {
+            const resPartial = await supabase
+              .from('league_player_database')
+              .select('*')
+              .ilike('player_name', `%${cleanQuery}%`)
+              .limit(50);
+            data = resPartial.data;
+          }
+        } else if (rawId) {
+          const resById = await supabase
+            .from('league_player_database')
+            .select('*')
+            .eq('player_id', Number(rawId));
+          if (resById.data && resById.data.length > 0) {
+            const pName = resById.data[0].player_name;
+            if (pName) {
+              setSearch(pName);
+              const resCareer = await supabase
+                .from('league_player_database')
+                .select('*')
+                .ilike('player_name', pName);
+              data = resCareer.data && resCareer.data.length > 0 ? resCareer.data : resById.data;
+            } else {
+              data = resById.data;
+            }
+          }
+        }
+
+        if (cancelled || !data || data.length === 0) return;
+
+        // Group by matched player name
+        const targetName = (cleanQuery
+          ? (data.find(r => r.player_name?.toLowerCase() === cleanQuery.toLowerCase())?.player_name || data[0].player_name)
+          : data[0].player_name) || '';
+
+        const careerRows = data
+          .filter(r => r.player_name?.toLowerCase() === targetName.toLowerCase())
+          .sort((a, b) => {
+            const yrA = Number(parseJson(a.player_info)?.source_year || a.year || 0);
+            const yrB = Number(parseJson(b.player_info)?.source_year || b.year || 0);
+            return yrA - yrB;
+          });
+
+        const chosenRecord =
+          (rawId && careerRows.find(r => String(r.player_id) === String(rawId))) ||
+          (rawYear && careerRows.find(r => String(parseJson(r.player_info)?.source_year || r.year || '') === String(rawYear))) ||
+          careerRows[careerRows.length - 1] ||
+          data[0];
+
+        setSelected(chosenRecord);
+        setSelectedCareerData(careerRows.length > 0 ? careerRows : [chosenRecord]);
+        if (targetName) {
+          setExpandedPlayers(new Set([targetName]));
+        }
+      } catch (err) {
+        console.error('Error preloading player profile from query:', err);
+      }
+    }
+
+    loadInitialPlayerProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // 1. Parallel Batch Ingestion of ALL Database Records (Pulling 100% of 9500+ rows)
   useEffect(() => {
     async function loadAllDatabaseRecords() {
@@ -1999,15 +2091,29 @@ export default function PlayersPage() {
     setPlayerGroups(paginated);
 
     if (paginated.length > 0) {
+      const exactGroup = s ? groups.find((g) => g.player_name.toLowerCase() === s) : undefined;
+      const defaultGroup = exactGroup || paginated[0];
+
       setSelected((prev: any) => {
+        if (exactGroup) {
+          if (prev && prev.player_name?.toLowerCase() === exactGroup.player_name.toLowerCase()) {
+            return prev;
+          }
+          return exactGroup.latest_record;
+        }
         if (prev && groups.some((g) => g.player_name.toLowerCase() === prev.player_name?.toLowerCase())) {
           return prev;
         }
-        return paginated[0].latest_record;
+        return defaultGroup.latest_record;
       });
       setSelectedCareerData((prev: any[]) => {
-        if (prev && prev.length > 0) return prev;
-        return paginated[0].seasons;
+        if (exactGroup) {
+          return exactGroup.seasons;
+        }
+        if (prev && prev.length > 0 && groups.some((g) => g.player_name.toLowerCase() === prev[0]?.player_name?.toLowerCase())) {
+          return prev;
+        }
+        return defaultGroup.seasons;
       });
     } else {
       setSelected(null);
