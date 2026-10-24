@@ -445,6 +445,10 @@ export default function DraftPage() {
   const [draftRoundsInput, setDraftRoundsInput] = useState(2);
   const [waiverRoundsInput, setWaiverRoundsInput] = useState(3);
   const [isGeneratingOrder, setIsGeneratingOrder] = useState(false);
+  const [tradesRows, setTradesRows] = useState<any[]>([]);
+  const [pickOwnerOverrides, setPickOwnerOverrides] = useState<Record<string, number>>({});
+  const [capitalLeagueId, setCapitalLeagueId] = useState<string>('41');
+  const [isUploadingCapital, setIsUploadingCapital] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Single Draft Selection State
@@ -483,13 +487,14 @@ export default function DraftPage() {
       setLoading(true);
       try {
         // Fetch all relevant tables in parallel
-        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes, standingsRes] = await Promise.all([
+        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes, standingsRes, tradesRes] = await Promise.all([
           supabase.from('league_drafts').select('*, league_player_database (*), league_teams (*)'),
           supabase.from('league_teams').select('*'),
           supabase.from('league_coaches').select('*'),
           supabase.from('leagues').select('*'),
           supabase.from('league_seasons').select('*'),
-          supabase.from('league_standings').select('season_id, team_id, pts, w, gd, gf')
+          supabase.from('league_standings').select('season_id, team_id, pts, w, gd, gf'),
+          supabase.from('league_trades').select('*')
         ]);
 
         const rawDrafts = draftsRes.data || [];
@@ -498,6 +503,7 @@ export default function DraftPage() {
         const rawLeagues = leaguesRes.data || [];
         const rawSeasons = seasonsRes.data || [];
         setStandingsRows(standingsRes.data || []);
+        setTradesRows(tradesRes.data || []);
 
         // Build coaches map (ID -> Name)
         const coachMap = new Map<number, string>();
@@ -706,19 +712,100 @@ export default function DraftPage() {
   // Track which leagues have draft rows and which still have open pick slots
   const { completedDraftLeagues, openDraftLeagues } = useMemo(() => {
     const withRows = new Set<string>();
+    const withFilled = new Set<string>();
     const open = new Set<string>();
     data.forEach(d => {
       withRows.add(d.leagueId);
-      if (!d.player || d.player === 'N/A' || d.player.trim() === '') {
+      const isEmpty = !d.player || d.player === 'N/A' || d.player.trim() === '';
+      if (isEmpty) {
         open.add(d.leagueId);
+      } else {
+        withFilled.add(d.leagueId);
       }
     });
     const completed = new Set<string>();
     withRows.forEach(lId => {
-      if (!open.has(lId)) completed.add(lId);
+      const numId = Number(lId);
+      const isHistoricalArchiveSeason = numId <= 38 && !['16', '20', '36', '39'].includes(String(lId));
+      if (!open.has(lId) || (isHistoricalArchiveSeason && withFilled.has(lId))) {
+        completed.add(lId);
+      }
     });
     return { completedDraftLeagues: completed, openDraftLeagues: open };
   }, [data]);
+
+  // Parse traded future draft picks from league_trades (chronological by 'trade id')
+  // Key: `${year}-${round}-${ORIG_TEAM_ABBR}` -> Value: `${CURRENT_OWNER_ABBR}`
+  const tradedPickOwnersByAbbr = useMemo(() => {
+    const map = new Map<string, { currentOwnerAbbr: string; origAbbr: string; year: number; round: number; tradeId: any }>();
+    const sortedTrades = [...tradesRows].sort((a, b) => (Number(a['trade id']) || 0) - (Number(b['trade id']) || 0));
+
+    const processSide = (senderAbbrRaw: any, receiverAbbrRaw: any, assetsStrRaw: any, tradeId: any) => {
+      const sender = String(senderAbbrRaw || '').trim().toUpperCase();
+      const receiver = String(receiverAbbrRaw || '').trim().toUpperCase();
+      const assetsStr = String(assetsStrRaw || '');
+      if (!sender || !receiver || !assetsStr || assetsStr === 'NULL') return;
+
+      const items = assetsStr.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+      items.forEach(item => {
+        const lower = item.toLowerCase();
+        const isPick =
+          lower.includes('rdpk') ||
+          lower.includes('round') ||
+          lower.includes('pick') ||
+          /\b(19\d\d|20\d\d)\s+(1st|2nd|3rd|4th|5th)\b/i.test(item);
+        if (!isPick) return;
+
+        const yrMatch = item.match(/\b(19\d\d|20\d\d)\b/);
+        if (!yrMatch) return;
+        const yr = parseInt(yrMatch[1], 10);
+
+        let rd = 0;
+        if (lower.includes('1st')) rd = 1;
+        else if (lower.includes('2nd')) rd = 2;
+        else if (lower.includes('3rd')) rd = 3;
+        else if (lower.includes('4th')) rd = 4;
+        else if (lower.includes('5th')) rd = 5;
+        if (!rd) return;
+
+        // Check if pick originated from another team: e.g. "(fromSAS)" or "(from BOS)"
+        let origAbbr = sender;
+        const fromMatch = item.match(/from\s*([A-Za-z]{2,4})/i);
+        if (fromMatch) {
+          origAbbr = fromMatch[1].toUpperCase();
+        } else {
+          // Or if sender had previously acquired a pick in that (yr, rd) and didn't specify, check if sender owns their own pick first
+          const ownKey = `${yr}-${rd}-${sender}`;
+          const existingOwn = map.get(ownKey);
+          if (existingOwn && existingOwn.currentOwnerAbbr !== sender) {
+            // Sender already traded their own pick; check if they hold another team's pick for this (yr, rd)
+            for (const [, val] of map.entries()) {
+              if (val.year === yr && val.round === rd && val.currentOwnerAbbr === sender) {
+                origAbbr = val.origAbbr;
+                break;
+              }
+            }
+          }
+        }
+
+        const key = `${yr}-${rd}-${origAbbr}`;
+        map.set(key, {
+          currentOwnerAbbr: receiver,
+          origAbbr,
+          year: yr,
+          round: rd,
+          tradeId
+        });
+      });
+    };
+
+    sortedTrades.forEach(t => {
+      processSide(t.team, t.team_1, t.trade, t['trade id']);
+      processSide(t.team_1, t.team, t.trade_1, t['trade id']);
+    });
+
+    return map;
+  }, [tradesRows]);
 
   // Filtered Season Options for Draft Floor & Past
   const availableFloorSeasons = useMemo(() => {
@@ -734,16 +821,20 @@ export default function DraftPage() {
     return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
   }, [seasons, pastLeagueType]);
 
-  // Drafts that are live: active leagues or open drafts that have NOT already completed their draft.
-  // Once a previous draft is loaded with all picks filled, it is automatically removed from Live Drafts.
+  // Drafts that are live: upcoming/current drafts (e.g. W19 = 41, O01 = 39, Q19 = 36, V01 = 20, G01 = 16, or 42+ when opened)
+  // Historical archive seasons (W01-W18 and Q01-Q18) are excluded so they never clutter Live Drafts.
   const activeDrafts = useMemo(() => {
     return seasons
       .filter(s => {
         if (completedDraftLeagues.has(s.leagueId)) return false;
+        const numId = Number(s.leagueId);
+        // W01-W18 (<=40 in W) and Q01-Q18 (<=34 in Q) are completed seasons whose drafts belong in Past Drafts
+        if (s.leagueType === 'W' && numId <= 40) return false;
+        if (s.leagueType === 'Q' && numId < 36) return false;
         return (
+          s.leagueId === '41' ||
           String(s.status || '').toLowerCase() === 'active' ||
-          openDraftLeagues.has(s.leagueId) ||
-          s.leagueId === '41'
+          (numId >= 41 && openDraftLeagues.has(s.leagueId))
         );
       })
       .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
@@ -931,14 +1022,11 @@ export default function DraftPage() {
     }
   }, [floorLeagueId, pastLeagueId, activeTab, data]);
 
-  // Auto-computed draft order (from standings & teams of the active/previous season) when the draft table doesn't have rows for this draft yet
-  const projectedFloorRows = useMemo<DraftData[]>(() => {
-    const existingForLeague = data.filter(d => d.leagueId === floorLeagueId);
-    if (existingForLeague.length > 0) return existingForLeague;
+  // Helper to compute projected draft/capital slots (including traded picks from league_trades & manual overrides) for any leagueId
+  const buildDraftSlotsForLeague = React.useCallback((targetLeagueId: string): Array<DraftData & { origTeamId?: number; origTeamAbbr?: string; origTeamName?: string }> => {
     if (teamsMap.size === 0) return [];
-
-    const leagueIdNum = Number(floorLeagueId);
-    const meta = activeFloorSeasonMeta;
+    const leagueIdNum = Number(targetLeagueId);
+    const meta = seasons.find(s => s.leagueId === targetLeagueId) || resolveSeasonInfo(targetLeagueId);
     const targetType = meta?.leagueType || 'W';
 
     let sourceLeagueId = leagueIdNum;
@@ -963,6 +1051,12 @@ export default function DraftPage() {
     }
     if (teamIds.length === 0) return [];
 
+    const activeLeagueTeams = teamIds.map(id => teamsMap.get(id)).filter(Boolean) as TeamInfo[];
+    const teamByAbbr = new Map<string, TeamInfo>();
+    activeLeagueTeams.forEach(t => {
+      if (t.abbreviation) teamByAbbr.set(t.abbreviation.trim().toUpperCase(), t);
+    });
+
     let seasonStandings = standingsRows.filter(s => Number(s.season_id) === leagueIdNum);
     if (seasonStandings.length === 0 && sourceLeagueId !== leagueIdNum) {
       seasonStandings = standingsRows.filter(s => Number(s.season_id) === sourceLeagueId);
@@ -986,35 +1080,74 @@ export default function DraftPage() {
     const draftRounds = Math.max(1, Math.floor(Number(draftRoundsInput)) || 2);
     const waiverRounds = Math.max(0, Math.floor(Number(waiverRoundsInput)) || 3);
     const slotYear = meta?.year || 2014;
-    const out: DraftData[] = [];
+    const sBadge = (meta as any)?.seasonBadge || (meta as any)?.badge || `Season ${targetLeagueId}`;
+    const sName = (meta as any)?.seasonName || (meta as any)?.name || `Season ${targetLeagueId}`;
+
+    const out: Array<DraftData & { origTeamId?: number; origTeamAbbr?: string; origTeamName?: string }> = [];
     let pk = 1;
     for (let rd = 1; rd <= draftRounds + waiverRounds; rd++) {
       const isWaiver = rd > draftRounds;
-      (isWaiver ? bestFirst : worstFirst).forEach(tId => {
-        const t = teamsMap.get(tId);
+      (isWaiver ? bestFirst : worstFirst).forEach(origId => {
+        const origTeam = teamsMap.get(origId);
+        const origAbbr = (origTeam?.abbreviation || '').trim().toUpperCase();
+        let ownerTeam = origTeam;
+        let txNote = isWaiver ? 'Waiver Slot' : 'Draft Slot';
+
+        if (!isWaiver) {
+          const overrideKey = `${slotYear}-${rd}-${origId}`;
+          if (pickOwnerOverrides[overrideKey]) {
+            const overTeam = teamsMap.get(pickOwnerOverrides[overrideKey]);
+            if (overTeam) {
+              ownerTeam = overTeam;
+              if (overTeam.team_id !== origId) {
+                txNote = `Traded from ${origAbbr || origTeam?.team_name}`;
+              }
+            }
+          } else if (origAbbr) {
+            const tradeMatch = tradedPickOwnersByAbbr.get(`${slotYear}-${rd}-${origAbbr}`);
+            if (tradeMatch && tradeMatch.currentOwnerAbbr !== origAbbr) {
+              const matchedOwner = teamByAbbr.get(tradeMatch.currentOwnerAbbr);
+              if (matchedOwner) {
+                ownerTeam = matchedOwner;
+                txNote = `Traded from ${origAbbr}`;
+              }
+            }
+          }
+        }
+
         out.push({
-          id: `proj-${floorLeagueId}-${rd}-${pk}`,
-          team: t?.team_name || `Team #${tId}`,
-          teamId: tId,
-          coachId: t?.coach_id || null,
-          coachName: t?.coach_name || null,
+          id: `proj-${targetLeagueId}-${rd}-${pk}`,
+          team: ownerTeam?.team_name || `Team #${origId}`,
+          teamId: ownerTeam?.team_id ?? origId,
+          coachId: ownerTeam?.coach_id || null,
+          coachName: ownerTeam?.coach_name || null,
+          origTeamId: origId,
+          origTeamAbbr: origAbbr,
+          origTeamName: origTeam?.team_name,
           rd,
           pk: pk++,
           player: 'N/A',
           pos: null,
           ovr: null,
-          transaction: isWaiver ? 'Waiver Slot' : 'Draft Slot',
-          logo: t?.logo_url || '',
+          transaction: txNote,
+          logo: ownerTeam?.logo_url || '',
           year: slotYear,
-          leagueId: floorLeagueId,
-          seasonBadge: meta?.seasonBadge || `Season ${floorLeagueId}`,
-          seasonName: meta?.seasonName || `Season ${floorLeagueId}`,
+          leagueId: targetLeagueId,
+          seasonBadge: sBadge,
+          seasonName: sName,
           leagueType: targetType
         });
       });
     }
     return out;
-  }, [data, floorLeagueId, teamsMap, seasons, standingsRows, activeFloorSeasonMeta, draftRoundsInput, waiverRoundsInput]);
+  }, [teamsMap, seasons, standingsRows, draftRoundsInput, waiverRoundsInput, pickOwnerOverrides, tradedPickOwnersByAbbr]);
+
+  // Auto-computed draft order (from standings & teams of the active/previous season) when the draft table doesn't have rows for this draft yet
+  const projectedFloorRows = useMemo<DraftData[]>(() => {
+    const existingForLeague = data.filter(d => d.leagueId === floorLeagueId);
+    if (existingForLeague.length > 0) return existingForLeague;
+    return buildDraftSlotsForLeague(floorLeagueId);
+  }, [data, floorLeagueId, buildDraftSlotsForLeague]);
 
   // Filtered Draft Floor Data (1 Draft at a time)
   const filteredData = useMemo(() => {
@@ -1333,8 +1466,7 @@ export default function DraftPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Generate the pick order (empty slots) for the active draft in league_drafts.
-  // Draft rounds: worst record picks first. Waiver rounds: reverse (best record first).
+  // Generate the pick order (empty slots, with traded pick ownership applied) for the active draft in league_drafts.
   const handleGenerateDraftOrder = async () => {
     if (!isLoggedIn) {
       openLoginModal('Draft Order Setup');
@@ -1354,87 +1486,27 @@ export default function DraftPage() {
 
     const confirmed = window.confirm(
       `Create the ${meta?.seasonBadge} draft order?\n\n` +
-      `${draftRounds} draft round(s) (worst record first) + ${waiverRounds} waiver round(s) (best record first).` +
+      `${draftRounds} draft round(s) (worst record first, with traded picks applied) + ${waiverRounds} waiver round(s) (best record first).` +
       (existing.length > 0 ? '\n\nExisting EMPTY pick slots for this draft will be replaced.' : '')
     );
     if (!confirmed) return;
 
     setIsGeneratingOrder(true);
     try {
-      const targetType = meta?.leagueType || 'W';
-      let sourceLeagueId = leagueIdNum;
-      let teamIds = Array.from(teamsMap.values())
-        .filter(t => t.league_id === sourceLeagueId)
-        .map(t => t.team_id);
-
-      // If this is a future season (e.g. W19 = 41) whose teams aren't created yet, pull from the active/previous season of the same tier (e.g. W18 = 40)
-      if (teamIds.length === 0) {
-        const prevSeasons = seasons
-          .filter(s => s.leagueType === targetType && Number(s.leagueId) < leagueIdNum)
-          .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
-        for (const ps of prevSeasons) {
-          const candidateIds = Array.from(teamsMap.values())
-            .filter(t => t.league_id === Number(ps.leagueId))
-            .map(t => t.team_id);
-          if (candidateIds.length > 0) {
-            sourceLeagueId = Number(ps.leagueId);
-            teamIds = candidateIds;
-            break;
-          }
-        }
-      }
-      if (teamIds.length === 0) {
+      const slots = buildDraftSlotsForLeague(floorLeagueId);
+      if (slots.length === 0) {
         throw new Error('No teams were found for this league.');
       }
 
-      let { data: standings, error: standingsErr } = await supabase
-        .from('league_standings')
-        .select('team_id, pts, w, gd, gf')
-        .eq('season_id', leagueIdNum);
-      if (standingsErr) throw standingsErr;
-      if ((!standings || standings.length === 0) && sourceLeagueId !== leagueIdNum) {
-        const fallbackRes = await supabase
-          .from('league_standings')
-          .select('team_id, pts, w, gd, gf')
-          .eq('season_id', sourceLeagueId);
-        if (fallbackRes.error) throw fallbackRes.error;
-        standings = fallbackRes.data;
-      }
-
-      const standingByTeam = new Map<number, any>((standings || []).map((s: any) => [Number(s.team_id), s]));
-      const num = (v: any) => Number(v) || 0;
-
-      // Standings order (best record first, identical to /standings): points, wins, goal diff, goals for, then team_id
-      const bestFirst = [...teamIds].sort((a, b) => {
-        const sa = standingByTeam.get(a);
-        const sb = standingByTeam.get(b);
-        return (
-          (num(sb?.pts) - num(sa?.pts)) ||
-          (num(sb?.w) - num(sa?.w)) ||
-          (num(sb?.gd) - num(sa?.gd)) ||
-          (num(sb?.gf) - num(sa?.gf)) ||
-          (a - b)
-        );
-      });
-      const worstFirst = [...bestFirst].reverse();
-
-      const slotYear = meta?.year || new Date().getFullYear();
-      const rows: any[] = [];
-      let pickNumber = 1;
-      for (let rd = 1; rd <= draftRounds + waiverRounds; rd++) {
-        const isWaiverRound = rd > draftRounds;
-        (isWaiverRound ? bestFirst : worstFirst).forEach(teamId => {
-          rows.push({
-            league_id: leagueIdNum,
-            team_id: teamId,
-            player_id: null,
-            round: rd,
-            pick_number: pickNumber++,
-            year: slotYear,
-            transaction_type: isWaiverRound ? 'Waiver Slot' : 'Draft Slot'
-          });
-        });
-      }
+      const rows = slots.map(slot => ({
+        league_id: leagueIdNum,
+        team_id: slot.teamId,
+        player_id: null,
+        round: slot.rd,
+        pick_number: slot.pk,
+        year: slot.year,
+        transaction_type: slot.transaction
+      }));
 
       if (existing.length > 0) {
         const { error: delErr } = await supabase
@@ -1467,7 +1539,7 @@ export default function DraftPage() {
           ovr: null,
           transaction: d.transaction_type,
           logo: t?.logo_url || '',
-          year: slotYear,
+          year: Number(d.year) || meta?.year || 2014,
           leagueId: floorLeagueId,
           seasonBadge: meta?.seasonBadge || `Season ${floorLeagueId}`,
           seasonName: meta?.seasonName || `Season ${floorLeagueId}`,
@@ -1478,7 +1550,7 @@ export default function DraftPage() {
 
       setData(prev => [...built, ...prev.filter(d => d.leagueId !== floorLeagueId)]);
       setOverridePickSlot(null);
-      setSubmitSuccessMessage(`📋 DRAFT ORDER CREATED: ${built.length} picks for ${meta?.seasonBadge}.`);
+      setSubmitSuccessMessage(`📋 DRAFT ORDER CREATED: ${built.length} picks for ${meta?.seasonBadge} (including traded picks).`);
       setTimeout(() => setSubmitSuccessMessage(null), 6000);
     } catch (err: any) {
       console.error('Draft order generation failed:', err);
@@ -1488,80 +1560,199 @@ export default function DraftPage() {
     }
   };
 
+  // Upload / Sync Draft Capital (including traded future picks) for one or more future seasons to league_drafts
+  const handleUploadDraftCapital = async (targetLeagueIds: string[]) => {
+    if (!isLoggedIn) {
+      openLoginModal('Upload Draft Capital');
+      return;
+    }
+    const labels = targetLeagueIds.map(id => seasons.find(s => s.leagueId === id)?.seasonBadge || resolveSeasonInfo(id).badge).join(', ');
+    const confirmed = window.confirm(
+      `Upload & sync future Draft Capital (including traded picks) to the database for:\n${labels}?`
+    );
+    if (!confirmed) return;
+
+    setIsUploadingCapital(true);
+    try {
+      let totalUploaded = 0;
+      const allNewDraftData: DraftData[] = [];
+      const replacedLeagueIds = new Set<string>();
+
+      for (const lId of targetLeagueIds) {
+        const existing = data.filter(d => d.leagueId === lId);
+        if (existing.some(d => d.player && d.player !== 'N/A')) {
+          continue; // Do not overwrite drafts that already have selected players
+        }
+        const slots = buildDraftSlotsForLeague(lId);
+        if (slots.length === 0) continue;
+
+        const leagueIdNum = Number(lId);
+        if (existing.length > 0) {
+          const { error: delErr } = await supabase
+            .from('league_drafts')
+            .delete()
+            .eq('league_id', leagueIdNum)
+            .is('player_id', null);
+          if (delErr) throw delErr;
+        }
+
+        const rows = slots.map(slot => ({
+          league_id: leagueIdNum,
+          team_id: slot.teamId,
+          player_id: null,
+          round: slot.rd,
+          pick_number: slot.pk,
+          year: slot.year,
+          transaction_type: slot.transaction
+        }));
+
+        const { data: inserted, error: insertErr } = await supabase
+          .from('league_drafts')
+          .insert(rows)
+          .select();
+        if (insertErr) throw insertErr;
+
+        const meta = seasons.find(s => s.leagueId === lId) || resolveSeasonInfo(lId);
+        const sBadge = (meta as any)?.seasonBadge || (meta as any)?.badge || `Season ${lId}`;
+        const sName = (meta as any)?.seasonName || (meta as any)?.name || `Season ${lId}`;
+        const sType = (meta as any)?.leagueType || (meta as any)?.prefix || 'W';
+
+        const built: DraftData[] = (inserted || []).map((d: any) => {
+          const t = teamsMap.get(Number(d.team_id));
+          return {
+            id: `draft-${d.draft_id}`,
+            draftId: Number(d.draft_id),
+            team: t?.team_name || 'Unknown Team',
+            teamId: Number(d.team_id),
+            coachId: t?.coach_id || null,
+            coachName: t?.coach_name || null,
+            rd: Number(d.round),
+            pk: Number(d.pick_number),
+            player: 'N/A',
+            pos: null,
+            ovr: null,
+            transaction: d.transaction_type,
+            logo: t?.logo_url || '',
+            year: Number(d.year) || meta?.year || 2014,
+            leagueId: lId,
+            seasonBadge: sBadge,
+            seasonName: sName,
+            leagueType: sType
+          } as DraftData;
+        });
+        built.sort((a, b) => a.rd - b.rd || a.pk - b.pk);
+        allNewDraftData.push(...built);
+        replacedLeagueIds.add(lId);
+        totalUploaded += built.length;
+      }
+
+      if (replacedLeagueIds.size > 0) {
+        setData(prev => [...allNewDraftData, ...prev.filter(d => !replacedLeagueIds.has(d.leagueId))]);
+      }
+      setSubmitSuccessMessage(`✅ DRAFT CAPITAL UPLOADED: ${totalUploaded} pick slots synced to league_drafts for ${labels}.`);
+      setTimeout(() => setSubmitSuccessMessage(null), 6000);
+    } catch (err: any) {
+      console.error('Upload draft capital failed:', err);
+      alert(`Could not upload draft capital: ${err?.message || 'unknown error'}`);
+    } finally {
+      setIsUploadingCapital(false);
+    }
+  };
+
   return (
     <div className="bg-[#f4f1ea] text-black min-h-screen p-3 sm:p-6 lg:p-8 font-serif text-sm">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-5">
 
         {/* ========================================================================= */}
-        {/* HEADER: Draft Central Command */}
+        {/* CLEAN TOP HEADER: Title on Left, Action Buttons & Live Drafts Off to Right */}
         {/* ========================================================================= */}
-        <header className="border-b-4 border-black pb-4 text-center relative bg-[#fdfaf5] p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)] border-2">
-          <div className="flex items-center justify-center gap-2 mb-2 flex-wrap">
-            <span className="bg-red-800 text-white font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
-              Official League Draft Headquarters
-            </span>
-            <span className="bg-black text-amber-300 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest border border-amber-300">
-              Active: {activeFloorSeasonMeta?.seasonBadge || 'Draft Floor'}
-            </span>
+        <header className="bg-[#fdfaf5] border-2 border-black border-b-4 px-4 sm:px-6 py-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left: Title & Active Draft Badge */}
+          <div className="text-left">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-none">
+                The Draft Floor
+              </h1>
+              <span className="bg-black text-amber-300 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest border border-black">
+                Active: {activeFloorSeasonMeta?.seasonBadge || 'W19 (2014)'}
+              </span>
+            </div>
+            <p className="text-[11px] uppercase tracking-wider font-sans font-bold text-neutral-600 mt-1">
+              Official War Room, Rookie Prospects & Franchise Future Draft Capital
+            </p>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">
-            The Draft Floor
-          </h1>
-          <p className="text-xs uppercase tracking-widest font-sans font-bold text-gray-700 mt-1 max-w-2xl mx-auto">
-            Live War Room, Official Coach Selections, Draft Date Locking & Single Draft Viewport
-          </p>
+          {/* Right: Navigation Buttons & Concurrent Live Draft Switcher */}
+          <div className="flex flex-col lg:items-end gap-2">
+            <div className="flex items-center lg:justify-end gap-1.5 flex-wrap">
+              <button
+                onClick={() => { setActiveTab('floor'); setShowCapital(false); }}
+                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'floor' && !showCapital
+                    ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                    : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+              >
+                <Trophy className="w-3.5 h-3.5" />
+                Draft Floor
+              </button>
 
-          {/* Navigation Tabs */}
-          <div className="flex items-center justify-center gap-2 mt-5 flex-wrap">
-            <button
-              onClick={() => { setActiveTab('floor'); setShowCapital(false); }}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'floor' && !showCapital
-                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-neutral-100'
-              }`}
-            >
-              <Trophy className="w-3.5 h-3.5" />
-              Draft Floor (Live Central)
-            </button>
+              <button
+                onClick={() => { setActiveTab('prospects'); setShowCapital(false); }}
+                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'prospects'
+                    ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                    : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+              >
+                <Star className="w-3.5 h-3.5" />
+                Draft Prospects
+              </button>
 
-            <button
-              onClick={() => setActiveTab('past')}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'past'
-                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-neutral-100'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5" />
-              Past Drafts Archive
-            </button>
+              <button
+                onClick={() => { setActiveTab('capital'); setShowCapital(false); }}
+                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'capital'
+                    ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                    : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                Draft Capital
+              </button>
 
-            <button
-              onClick={() => { setActiveTab('prospects'); setShowCapital(false); }}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'prospects'
-                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-neutral-100'
-              }`}
-            >
-              <Star className="w-3.5 h-3.5" />
-              Draft Prospects (Rookie Class)
-            </button>
+              <button
+                onClick={() => { setActiveTab('past'); setShowCapital(false); }}
+                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'past'
+                    ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                    : 'bg-white text-black hover:bg-neutral-100'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                Past Drafts
+              </button>
+            </div>
 
-            <button
-              onClick={() => { setActiveTab('floor'); setShowCapital(true); }}
-              className={`px-4 py-2 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'floor' && showCapital
-                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-neutral-100'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              Draft Capital & Empty Picks
-            </button>
+            {activeDrafts.length > 1 && (
+              <div className="flex items-center lg:justify-end gap-1.5 flex-wrap font-mono">
+                <span className="text-[10px] font-black uppercase text-slate-600">Live Drafts:</span>
+                {activeDrafts.map(s => {
+                  const isCurrent = s.leagueId === floorLeagueId;
+                  return (
+                    <button
+                      key={s.leagueId}
+                      onClick={() => switchToDraft(s)}
+                      className={`px-2 py-0.5 text-[11px] font-black uppercase border border-black cursor-pointer transition-all ${
+                        isCurrent ? 'bg-amber-300 text-black font-black' : 'bg-white text-black hover:bg-yellow-100'
+                      }`}
+                    >
+                      {s.seasonBadge}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </header>
 
@@ -1611,31 +1802,6 @@ export default function DraftPage() {
                 <div className="text-[8px] uppercase text-neutral-400 font-bold">Secs</div>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Quick switch between concurrent drafts */}
-        {activeDrafts.length > 1 && (
-          <div className="bg-[#fdfaf5] border-2 border-black p-3 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center gap-2 flex-wrap font-mono">
-            <span className="text-[10px] font-black uppercase text-slate-700 mr-1">Live Drafts:</span>
-            {activeDrafts.map(s => {
-              const openCount = data.filter(d => d.leagueId === s.leagueId && (!d.player || d.player === 'N/A')).length;
-              const isCurrent = s.leagueId === floorLeagueId;
-              return (
-                <button
-                  key={s.leagueId}
-                  onClick={() => switchToDraft(s)}
-                  className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black cursor-pointer transition-all flex items-center gap-1.5 ${
-                    isCurrent ? 'bg-black text-amber-300 shadow-[2px_2px_0px_rgba(0,0,0,1)]' : 'bg-white text-black hover:bg-yellow-100'
-                  }`}
-                >
-                  {s.seasonBadge}
-                  <span className={`text-[9px] px-1.5 py-0 border ${isCurrent ? 'border-amber-300' : 'border-black/40'}`}>
-                    {openCount > 0 ? `${openCount} open` : 'no order yet'}
-                  </span>
-                </button>
-              );
-            })}
           </div>
         )}
 
@@ -2368,6 +2534,290 @@ export default function DraftPage() {
             </div>
           </div>
         )}
+
+        {/* ========================================================================= */}
+        {/* TAB: DRAFT CAPITAL (Active Franchises Future Picks, Traded Picks & Upload) */}
+        {/* ========================================================================= */}
+        {activeTab === 'capital' && (() => {
+          const capSlots = buildDraftSlotsForLeague(capitalLeagueId);
+          const capMeta = seasons.find(s => s.leagueId === capitalLeagueId) || resolveSeasonInfo(capitalLeagueId);
+          const capBadge = (capMeta as any)?.seasonBadge || (capMeta as any)?.badge || `Season ${capitalLeagueId}`;
+          const capYear = capMeta?.year || 2014;
+
+          // Active teams in this league tier
+          const uniqueOrigTeamIds = Array.from(new Set(capSlots.map(s => s.origTeamId ?? s.teamId).filter(Boolean))) as number[];
+          const activeFranchises = uniqueOrigTeamIds
+            .map(id => teamsMap.get(id))
+            .filter(Boolean)
+            .sort((a, b) => (a!.team_name || '').localeCompare(b!.team_name || '')) as TeamInfo[];
+
+          // 3-year future horizon for W League (W19 2014, W20 2015, W21 2016) or selected tier
+          const horizonLeagueIds = ['41', '42', '43'];
+          const horizonSlotsByLeague = horizonLeagueIds.map(lId => ({
+            leagueId: lId,
+            badge: resolveSeasonInfo(lId).badge,
+            year: resolveSeasonInfo(lId).year,
+            slots: buildDraftSlotsForLeague(lId).filter(s => s.rd <= 2)
+          }));
+
+          const tradedSlotsCount = capSlots.filter(s => s.origTeamId && s.teamId && s.origTeamId !== s.teamId).length;
+          const dbSavedCount = data.filter(d => d.leagueId === capitalLeagueId).length;
+
+          return (
+            <div className="space-y-5">
+              {/* Top Control Bar: Select Future Draft & Upload Capital to Database */}
+              <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b-2 border-black pb-3">
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-amber-600" />
+                      Active Franchise Draft Capital &bull; {capBadge}
+                    </h2>
+                    <p className="text-[11px] font-mono font-bold uppercase text-slate-600 mt-0.5">
+                      {activeFranchises.length} Active Franchises &bull; {capSlots.length} Total Slots &bull;{' '}
+                      {tradedSlotsCount} Traded Pick(s) Applied &bull;{' '}
+                      {dbSavedCount > 0 ? `${dbSavedCount} Slots Saved in DB` : 'Projected (Ready to Upload)'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleUploadDraftCapital([capitalLeagueId])}
+                      disabled={isUploadingCapital}
+                      className="bg-black text-amber-300 hover:bg-neutral-800 disabled:opacity-50 px-3.5 py-2 text-xs font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      {isUploadingCapital ? 'Uploading...' : `Upload ${capBadge} Capital to DB`}
+                    </button>
+                    <button
+                      onClick={() => handleUploadDraftCapital(['41', '42', '43'])}
+                      disabled={isUploadingCapital}
+                      className="bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50 px-3.5 py-2 text-xs font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Upload 2014–2016 Capital (W19–W21)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Future Season Selector Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs font-black uppercase">
+                  <span className="text-slate-700 mr-1">Select Draft Season:</span>
+                  {['41', '42', '43', '44', '45', '39', '36', '20', '16'].map(lId => {
+                    const info = seasons.find(s => s.leagueId === lId) || resolveSeasonInfo(lId);
+                    const badge = (info as any)?.seasonBadge || (info as any)?.badge;
+                    const isSelected = capitalLeagueId === lId;
+                    return (
+                      <button
+                        key={lId}
+                        onClick={() => setCapitalLeagueId(lId)}
+                        className={`px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition-colors ${
+                          isSelected ? 'bg-amber-300 text-black font-black' : 'bg-white text-black hover:bg-neutral-100'
+                        }`}
+                      >
+                        {badge}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 1: Active Teams 3-Year Future Draft Capital Portfolio (W19 2014 - W21 2016) */}
+              <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/20 pb-2">
+                  <h3 className="font-mono text-xs font-black uppercase tracking-wider">
+                    Active Franchises Future Pick Portfolio (W19 2014 &bull; W20 2015 &bull; W21 2016)
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold text-slate-600 uppercase">
+                    Automatically synced with confirmed trades in league_trades
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {activeFranchises.map(team => {
+                    // Collect picks owned by this team and picks traded away across 2014-2016
+                    const ownedPicks: Array<{ year: number; badge: string; rd: number; pk: number; viaAbbr?: string }> = [];
+                    const tradedAwayPicks: Array<{ year: number; rd: number; toAbbr: string }> = [];
+
+                    horizonSlotsByLeague.forEach(h => {
+                      h.slots.forEach(s => {
+                        if (Number(s.teamId) === team.team_id) {
+                          const isVia = s.origTeamId && s.origTeamId !== team.team_id;
+                          ownedPicks.push({
+                            year: h.year,
+                            badge: h.badge.split(' ')[0],
+                            rd: s.rd,
+                            pk: s.pk,
+                            viaAbbr: isVia ? s.origTeamAbbr : undefined
+                          });
+                        } else if (Number(s.origTeamId) === team.team_id && Number(s.teamId) !== team.team_id) {
+                          const destTeam = teamsMap.get(Number(s.teamId));
+                          tradedAwayPicks.push({
+                            year: h.year,
+                            rd: s.rd,
+                            toAbbr: destTeam?.abbreviation || s.team
+                          });
+                        }
+                      });
+                    });
+
+                    return (
+                      <div key={team.team_id} className="bg-white border-2 border-black p-3 flex flex-col justify-between shadow-2xs">
+                        <div>
+                          <div className="flex items-center gap-2.5 border-b border-black/15 pb-2 mb-2">
+                            {team.logo_url ? (
+                              <img src={team.logo_url} alt={team.team_name} className="w-9 h-9 object-contain border border-black p-0.5 bg-[#fdfaf5] shrink-0" />
+                            ) : (
+                              <div className="w-9 h-9 bg-neutral-100 border border-black flex items-center justify-center font-mono font-black text-xs shrink-0">
+                                {team.abbreviation}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-black text-xs uppercase truncate text-black">{team.team_name}</div>
+                              <div className="text-[10px] font-mono text-slate-600 truncate">
+                                {team.abbreviation} &bull; Coach: {team.coach_name || 'TBD'}
+                              </div>
+                            </div>
+                            <span className="bg-black text-amber-300 font-mono text-[10px] font-black px-1.5 py-0.5 shrink-0">
+                              {ownedPicks.length} Picks
+                            </span>
+                          </div>
+
+                          <div className="space-y-1">
+                            {ownedPicks.map((pk, idx) => (
+                              <div
+                                key={idx}
+                                className={`px-2 py-1 text-[10px] font-mono font-bold border flex items-center justify-between ${
+                                  pk.viaAbbr
+                                    ? 'bg-amber-100 border-amber-600 text-amber-950 font-black'
+                                    : 'bg-neutral-50 border-black/20 text-black'
+                                }`}
+                              >
+                                <span>
+                                  {pk.year} ({pk.badge}) &bull; Rd {pk.rd} (#{pk.pk})
+                                </span>
+                                {pk.viaAbbr ? (
+                                  <span className="bg-black text-amber-300 px-1 py-0 text-[9px] uppercase">
+                                    via {pk.viaAbbr}
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-slate-500 uppercase">Own</span>
+                                )}
+                              </div>
+                            ))}
+                            {tradedAwayPicks.map((tp, idx) => (
+                              <div
+                                key={`tr-${idx}`}
+                                className="px-2 py-0.5 text-[9.5px] font-mono text-red-800 bg-red-50/70 border border-red-200 flex items-center justify-between line-through opacity-80"
+                              >
+                                <span>{tp.year} &bull; Rd {tp.rd}</span>
+                                <span className="no-underline font-bold">→ {tp.toAbbr}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 2: Pick Slot Ownership & Traded Pick Reassignment Table */}
+              <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="font-mono text-xs font-black uppercase tracking-wider">
+                      {capBadge} Draft Slot Order &amp; Traded Pick Ownership ({capSlots.length} Slots)
+                    </h3>
+                    <p className="text-[10px] font-sans text-slate-600">
+                      Rounds 1–{draftRoundsInput} use reverse standings (Worst → Best); Rounds {draftRoundsInput + 1}+ are Waiver rounds (Best → Worst). Use the Owner dropdown to assign any traded pick before uploading.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-white border-2 border-black overflow-x-auto max-h-[540px] overflow-y-auto">
+                  <table className="w-full text-left border-collapse text-xs min-w-[720px]">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-black text-white text-[10px] uppercase tracking-wider font-mono">
+                        <th className="py-2.5 px-3 text-center">RD</th>
+                        <th className="py-2.5 px-3 text-center">PICK</th>
+                        <th className="py-2.5 px-3">ORIGINAL FRANCHISE (STANDINGS SEED)</th>
+                        <th className="py-2.5 px-3">CURRENT PICK OWNER (ASSIGN TRADED PICK)</th>
+                        <th className="py-2.5 px-3">COACH ON CLOCK</th>
+                        <th className="py-2.5 px-3">CAPITAL STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {capSlots.map(slot => {
+                        const origId = slot.origTeamId ?? slot.teamId ?? 0;
+                        const origTeam = teamsMap.get(Number(origId));
+                        const isTraded = Number(slot.teamId) !== Number(origId);
+                        const isWaiver = slot.rd > draftRoundsInput;
+
+                        return (
+                          <tr key={slot.id} className={isTraded ? 'bg-amber-50/70 font-bold' : 'hover:bg-neutral-50'}>
+                            <td className="py-2 px-3 text-center font-mono font-bold">Rd {slot.rd}</td>
+                            <td className="py-2 px-3 text-center font-mono font-black">#{slot.pk}</td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                {origTeam?.logo_url && <img src={origTeam.logo_url} className="w-5 h-5 object-contain" alt="" />}
+                                <span className="font-bold uppercase text-slate-800">
+                                  {origTeam?.team_name || slot.origTeamName} ({origTeam?.abbreviation || slot.origTeamAbbr})
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                {slot.logo && <img src={slot.logo} className="w-5 h-5 object-contain" alt="" />}
+                                {!isWaiver ? (
+                                  <select
+                                    value={slot.teamId}
+                                    onChange={(e) => {
+                                      const newTeamId = Number(e.target.value);
+                                      setPickOwnerOverrides(prev => ({
+                                        ...prev,
+                                        [`${capYear}-${slot.rd}-${origId}`]: newTeamId
+                                      }));
+                                    }}
+                                    className={`border border-black px-2 py-1 text-xs font-black uppercase cursor-pointer ${
+                                      isTraded ? 'bg-amber-200 text-black' : 'bg-white text-black'
+                                    }`}
+                                  >
+                                    {activeFranchises.map(tf => (
+                                      <option key={tf.team_id} value={tf.team_id}>
+                                        {tf.team_name} ({tf.abbreviation})
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span className="font-bold uppercase text-black">{slot.team}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 font-mono text-[11px] text-slate-700">
+                              {slot.coachName || 'TBD'}
+                            </td>
+                            <td className="py-2 px-3">
+                              {isTraded ? (
+                                <span className="bg-amber-300 text-black border border-black px-2 py-0.5 font-mono text-[10px] font-black uppercase">
+                                  {slot.transaction}
+                                </span>
+                              ) : (
+                                <span className="bg-neutral-100 text-slate-700 border border-black/20 px-2 py-0.5 font-mono text-[10px] font-bold uppercase">
+                                  {slot.transaction}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ========================================================================= */}
         {/* TAB 2: PAST DRAFTS ARCHIVE (Strictly 1 Draft Viewport) */}
