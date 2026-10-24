@@ -487,14 +487,16 @@ export default function DraftPage() {
       setLoading(true);
       try {
         // Fetch all relevant tables in parallel
-        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes, standingsRes, tradesRes] = await Promise.all([
+        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes, standingsRes, tradesRes, statsRes, schedRes] = await Promise.all([
           supabase.from('league_drafts').select('*, league_player_database (*), league_teams (*)'),
           supabase.from('league_teams').select('*'),
           supabase.from('league_coaches').select('*'),
           supabase.from('leagues').select('*'),
           supabase.from('league_seasons').select('*'),
           supabase.from('league_standings').select('season_id, team_id, pts, w, gd, gf'),
-          supabase.from('league_trades').select('*')
+          supabase.from('league_trades').select('*'),
+          supabase.from('league_gamestats').select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats'),
+          supabase.from('league_schedule').select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, played')
         ]);
 
         const rawDrafts = draftsRes.data || [];
@@ -502,8 +504,114 @@ export default function DraftPage() {
         const rawCoaches = coachesRes.data || [];
         const rawLeagues = leaguesRes.data || [];
         const rawSeasons = seasonsRes.data || [];
-        setStandingsRows(standingsRes.data || []);
+        const rawStandings = standingsRes.data || [];
+        const rawStats = statsRes.data || [];
+        const rawSched = schedRes.data || [];
         setTradesRows(tradesRes.data || []);
+
+        // Compute live standings from league_gamestats & league_schedule (same formula as /standings), falling back to league_standings
+        const liveBySeasonTeam = new Map<string, { season_id: number; team_id: number; gp: number; w: number; pts: number; gf: number; ga: number; gd: number }>();
+        const ensureRec = (sId: number, tId: number) => {
+          const key = `${sId}-${tId}`;
+          let r = liveBySeasonTeam.get(key);
+          if (!r) {
+            r = { season_id: sId, team_id: tId, gp: 0, w: 0, pts: 0, gf: 0, ga: 0, gd: 0 };
+            liveBySeasonTeam.set(key, r);
+          }
+          return r;
+        };
+        const resolveSeasonTeam = (rawId: any, sId: number): number | null => {
+          const num = Number(rawId);
+          if (!num || num === 999 || num === 0 || num === 68) return null;
+          const direct = rawTeams.find((t: any) => Number(t.team_id) === num && Number(t.league_id) === sId);
+          if (direct) return Number(direct.team_id);
+          const matchTeam = rawTeams.find((t: any) => Number(t.team_id) === num || Number(t.coach_id) === num);
+          if (matchTeam) {
+            const seasonMatch = rawTeams.find((t: any) =>
+              Number(t.league_id) === sId &&
+              (
+                (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
+                (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
+                (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id))
+              )
+            );
+            if (seasonMatch) return Number(seasonMatch.team_id);
+          }
+          return num;
+        };
+        const applyGameToStandings = (sId: number, rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any, statsObj?: any) => {
+          if (!sId) return;
+          const hId = resolveSeasonTeam(rawHId, sId);
+          const aId = resolveSeasonTeam(rawAId, sId);
+          if (!hId || !aId || hId === aId) return;
+          let isOT = false;
+          let isTie = false;
+          if (gameMeta) {
+            try {
+              const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
+              isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' || meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+              isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
+            } catch {
+              const lowStr = String(gameMeta || '').toLowerCase();
+              isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') || lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+              isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
+            }
+          }
+          if (!isOT && statsObj) {
+            try {
+              const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
+              const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
+              if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 || Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+                isOT = true;
+              }
+            } catch {}
+          }
+          if (homeScore === awayScore && !isOT) isTie = true;
+          const hRec = ensureRec(sId, hId);
+          const aRec = ensureRec(sId, aId);
+          hRec.gp += 1;
+          aRec.gp += 1;
+          hRec.gf += homeScore;
+          hRec.ga += awayScore;
+          hRec.gd = hRec.gf - hRec.ga;
+          aRec.gf += awayScore;
+          aRec.ga += homeScore;
+          aRec.gd = aRec.gf - aRec.ga;
+          if (isTie) {
+            hRec.pts += 1;
+            aRec.pts += 1;
+          } else if (homeScore > awayScore) {
+            hRec.w += 1;
+            hRec.pts += 2;
+            if (isOT) aRec.pts += 1;
+          } else if (awayScore > homeScore) {
+            aRec.w += 1;
+            aRec.pts += 2;
+            if (isOT) hRec.pts += 1;
+          }
+        };
+        const seenGameIds = new Set<string>();
+        rawStats.forEach((st: any) => {
+          seenGameIds.add(`${st.league_id}-${String(st.game_id).trim()}`);
+          applyGameToStandings(Number(st.league_id), st.home_team_id, st.away_team_id, Number(st.home_score) || 0, Number(st.away_score) || 0, st.game_meta, st);
+        });
+        rawSched.forEach((gm: any) => {
+          const gKey = `${gm.league_id}-${String(gm.game_id).trim()}`;
+          const rawPlayed = String(gm.played || '').trim().toLowerCase();
+          const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
+          if (isPlayed && !seenGameIds.has(gKey) && gm.game_meta) {
+            applyGameToStandings(Number(gm.league_id), gm.home_team_id, gm.away_team_id, Number(gm.home_score) || 0, Number(gm.away_score) || 0, gm.game_meta, gm);
+          }
+        });
+        const seasonsWithLive = new Set<number>();
+        liveBySeasonTeam.forEach(r => {
+          if (r.gp > 0) seasonsWithLive.add(r.season_id);
+        });
+        const mergedStandings = [
+          ...rawStandings.filter((s: any) => !seasonsWithLive.has(Number(s.season_id))),
+          ...Array.from(liveBySeasonTeam.values())
+        ];
+        setStandingsRows(mergedStandings);
 
         // Build coaches map (ID -> Name)
         const coachMap = new Map<number, string>();

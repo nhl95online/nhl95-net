@@ -122,58 +122,213 @@ export default function AllTeamsContent() {
     async function fetchTeams() {
       setLoading(true);
       try {
-        let queryBuilder = supabase
+        const { data: allTeamsData, error: teamsError } = await supabase
           .from('league_teams')
           .select('*');
-
-        if (selectedSeason !== 0) {
-          queryBuilder = queryBuilder.eq('league_id', selectedSeason);
-        }
-
-        const { data: teamsData, error: teamsError } = await queryBuilder;
         if (teamsError) {
           console.error("Teams Error:", teamsError.message || teamsError);
         }
 
-        // Fetch coaches separately for resilient mapping without relying on Supabase relationship joins
-        const { data: coachesData, error: coachesError } = await supabase
-          .from('league_coaches')
-          .select('coach_id, coach_name');
+        const teamsData = selectedSeason !== 0
+          ? (allTeamsData || []).filter((t: any) => Number(t.league_id) === Number(selectedSeason))
+          : (allTeamsData || []);
 
-        if (coachesError) {
-          console.error("Coaches Error:", coachesError.message || coachesError);
+        let standingsQuery = supabase.from('league_standings').select('*');
+        let statsQuery = supabase
+          .from('league_gamestats')
+          .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats');
+        let schedQuery = supabase
+          .from('league_schedule')
+          .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, played');
+
+        if (selectedSeason !== 0) {
+          standingsQuery = standingsQuery.eq('season_id', selectedSeason);
+          statsQuery = statsQuery.eq('league_id', selectedSeason);
+          schedQuery = schedQuery.eq('league_id', selectedSeason);
         }
 
+        const [coachesRes, standingsRes, statsRes, schedRes] = await Promise.all([
+          supabase.from('league_coaches').select('coach_id, coach_name'),
+          standingsQuery,
+          statsQuery,
+          schedQuery
+        ]);
+
+        const coachesData = coachesRes.data || [];
+        const standingsData = standingsRes.data || [];
+        const statsData = statsRes.data || [];
+        const schedData = schedRes.data || [];
+
         const coachMap: Record<number, string> = {};
-        (coachesData || []).forEach((c: any) => {
+        coachesData.forEach((c: any) => {
           if (c.coach_id !== undefined && c.coach_id !== null) {
             coachMap[Number(c.coach_id)] = c.coach_name;
           }
         });
 
-        let standingsQuery = supabase
-          .from('league_standings')
-          .select('*');
+        // Compute live records per (league_id, team_id) from league_gamestats & league_schedule (same formula as /standings)
+        const computedBySeasonTeam = new Map<string, { gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number; gd: number }>();
 
-        if (selectedSeason !== 0) {
-          standingsQuery = standingsQuery.eq('season_id', selectedSeason);
-        }
+        const ensureRecord = (sId: number, tId: number) => {
+          const key = `${sId}-${tId}`;
+          let rec = computedBySeasonTeam.get(key);
+          if (!rec) {
+            rec = { gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0, gd: 0 };
+            computedBySeasonTeam.set(key, rec);
+          }
+          return rec;
+        };
 
-        const { data: standingsData, error: standingsError } = await standingsQuery;
-        if (standingsError) {
-          console.error("Standings Error:", standingsError.message || standingsError);
-        }
+        const resolveTeamKeyInSeason = (rawId: any, sId: number): number | null => {
+          const num = Number(rawId);
+          if (!num || num === 999 || num === 0 || num === 68) return null;
+          const direct = (allTeamsData || []).find((t: any) => Number(t.team_id) === num && Number(t.league_id) === sId);
+          if (direct) return Number(direct.team_id);
+
+          const matchTeam = (allTeamsData || []).find((t: any) => Number(t.team_id) === num || Number(t.coach_id) === num);
+          if (matchTeam) {
+            const seasonMatch = (allTeamsData || []).find((t: any) =>
+              Number(t.league_id) === sId &&
+              (
+                (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
+                (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
+                (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id))
+              )
+            );
+            if (seasonMatch) return Number(seasonMatch.team_id);
+          }
+          return num;
+        };
+
+        const applyGame = (sId: number, rawHId: any, rawAId: any, homeScore: number, awayScore: number, gameMeta: any, statsObj?: any) => {
+          if (!sId) return;
+          const hId = resolveTeamKeyInSeason(rawHId, sId);
+          const aId = resolveTeamKeyInSeason(rawAId, sId);
+          if (!hId || !aId || hId === aId) return;
+
+          let isOT = false;
+          let isTie = false;
+          if (gameMeta) {
+            try {
+              const meta = typeof gameMeta === 'string' ? JSON.parse(gameMeta) : gameMeta;
+              isOT = meta.is_ot === true || meta.is_ot === 'true' || meta.is_ot === 1 || meta.is_ot === '1' ||
+                     meta.isOT === true || meta.isOT === 'true' || meta.isOT === 1;
+              isTie = meta.is_tie === true || meta.is_tie === 'true' || meta.is_tie === 1 || meta.is_tie === '1';
+            } catch {
+              const lowStr = String(gameMeta || '').toLowerCase();
+              isOT = lowStr.includes('"is_ot":true') || lowStr.includes('"is_ot":"true"') || lowStr.includes('"is_ot":1') ||
+                     lowStr.includes('"isot":true') || lowStr.includes('"isot":"true"');
+              isTie = lowStr.includes('"is_tie":true') || lowStr.includes('"is_tie":"true"') || lowStr.includes('"is_tie":1');
+            }
+          }
+          if (!isOT && statsObj) {
+            try {
+              const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
+              const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
+              if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
+                  Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+                isOT = true;
+              }
+            } catch {}
+          }
+          if (homeScore === awayScore && !isOT) {
+            isTie = true;
+          }
+
+          const hRec = ensureRecord(sId, hId);
+          const aRec = ensureRecord(sId, aId);
+          hRec.gp += 1;
+          aRec.gp += 1;
+          hRec.gf += homeScore;
+          hRec.ga += awayScore;
+          hRec.gd = hRec.gf - hRec.ga;
+          aRec.gf += awayScore;
+          aRec.ga += homeScore;
+          aRec.gd = aRec.gf - aRec.ga;
+
+          if (isTie) {
+            hRec.t += 1;
+            hRec.pts += 1;
+            aRec.t += 1;
+            aRec.pts += 1;
+          } else if (homeScore > awayScore) {
+            hRec.w += 1;
+            hRec.pts += 2;
+            if (isOT) {
+              aRec.otl += 1;
+              aRec.pts += 1;
+            } else {
+              aRec.l += 1;
+            }
+          } else if (awayScore > homeScore) {
+            aRec.w += 1;
+            aRec.pts += 2;
+            if (isOT) {
+              hRec.otl += 1;
+              hRec.pts += 1;
+            } else {
+              hRec.l += 1;
+            }
+          }
+        };
+
+        const processedStatsGameIds = new Set<string>();
+        statsData.forEach((stats: any) => {
+          const gIdStr = `${stats.league_id}-${String(stats.game_id).trim()}`;
+          processedStatsGameIds.add(gIdStr);
+          applyGame(
+            Number(stats.league_id),
+            stats.home_team_id,
+            stats.away_team_id,
+            Number(stats.home_score) || 0,
+            Number(stats.away_score) || 0,
+            stats.game_meta,
+            stats
+          );
+        });
+
+        schedData.forEach((game: any) => {
+          const gIdStr = `${game.league_id}-${String(game.game_id).trim()}`;
+          const rawPlayed = String(game.played || '').trim().toLowerCase();
+          const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
+          if (isPlayed && !processedStatsGameIds.has(gIdStr) && game.game_meta) {
+            applyGame(
+              Number(game.league_id),
+              game.home_team_id,
+              game.away_team_id,
+              Number(game.home_score) || 0,
+              Number(game.away_score) || 0,
+              game.game_meta,
+              game
+            );
+          }
+        });
+
+        const seasonsWithComputedGames = new Set<number>();
+        computedBySeasonTeam.forEach((rec, key) => {
+          if (rec.gp > 0) {
+            seasonsWithComputedGames.add(Number(key.split('-')[0]));
+          }
+        });
 
         const combined = (teamsData || []).map((team: any) => {
-          const record = standingsData?.find((s: any) => 
-            Number(s.team_id) === Number(team.team_id) && 
-            (selectedSeason === 0 ? Number(s.season_id) === Number(team.league_id) : true)
+          const sId = selectedSeason !== 0 ? Number(selectedSeason) : Number(team.league_id);
+          const tId = Number(team.team_id);
+          const computedRec = computedBySeasonTeam.get(`${sId}-${tId}`);
+          const dbRecord = standingsData?.find((s: any) =>
+            Number(s.team_id) === tId &&
+            (selectedSeason === 0 ? Number(s.season_id) === sId : true)
           );
-          const w = Number(record?.w) || 0;
-          const l = Number(record?.l) || 0;
-          const t = Number(record?.t) || 0;
-          const otl = Number(record?.otl) || 0;
-          const points = record?.pts !== undefined ? Number(record.pts) : (w * 2) + otl + t;
+
+          const useComputed = seasonsWithComputedGames.has(sId) || (computedRec && computedRec.gp > 0);
+          const w = useComputed ? (computedRec?.w || 0) : (Number(dbRecord?.w) || 0);
+          const l = useComputed ? (computedRec?.l || 0) : (Number(dbRecord?.l) || 0);
+          const t = useComputed ? (computedRec?.t || 0) : (Number(dbRecord?.t) || 0);
+          const otl = useComputed ? (computedRec?.otl || 0) : (Number(dbRecord?.otl) || 0);
+          const gd = useComputed ? (computedRec?.gd || 0) : (Number(dbRecord?.gd) || 0);
+          const points = useComputed
+            ? (computedRec?.pts ?? ((w * 2) + otl + t))
+            : (dbRecord?.pts !== undefined ? Number(dbRecord.pts) : (w * 2) + otl + t);
 
           // Parse arena name from team_meta or direct column
           let arenaName = team.arena || team.arena_name || '';
@@ -200,12 +355,16 @@ export default function AllTeamsContent() {
             ...team,
             coachName,
             arenaName: arenaName || 'TBD',
-            record: record || { w, l, t, otl },
+            record: { w, l, t, otl, gd },
             points
           };
         });
 
-        const sorted = combined.sort((a, b) => b.points - a.points);
+        const sorted = combined.sort((a, b) => {
+          if (b.points !== a.points) return b.points - a.points;
+          if (b.record.w !== a.record.w) return b.record.w - a.record.w;
+          return (b.record.gd || 0) - (a.record.gd || 0);
+        });
         setTeams(sorted);
       } catch (err: any) {
         console.error("fetchTeams error:", err);
