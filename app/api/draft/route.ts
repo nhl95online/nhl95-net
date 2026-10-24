@@ -9,6 +9,18 @@ const supabase = serviceKey
   ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
   : defaultSupabase;
 
+async function ensureLeagueExists(supabase: any, leagueId: number, rows?: any[]) {
+  const numId = Number(leagueId);
+  if (!numId || isNaN(numId)) return;
+  const sampleYear = rows?.[0]?.year ? Number(rows[0].year) : (numId >= 41 ? 2014 + (numId - 41) : 2013);
+  const wNum = numId >= 41 ? 19 + (numId - 41) : 18;
+  const leagueLevel = `W${String(wNum).padStart(2, '0')}`;
+  await supabase.from('leagues').upsert(
+    [{ league_id: numId, league_level: leagueLevel, nhl_year: sampleYear }],
+    { onConflict: 'league_id', ignoreDuplicates: true }
+  );
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -24,6 +36,8 @@ export async function POST(req: NextRequest) {
       if (!leagueId || !Array.isArray(rows) || rows.length === 0) {
         return NextResponse.json({ error: 'Missing leagueId or draft order rows' }, { status: 400 });
       }
+
+      await ensureLeagueExists(supabase, Number(leagueId), rows);
 
       if (hasExisting) {
         const { error: delErr } = await supabase
@@ -69,6 +83,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (Array.isArray(rowsToInsert) && rowsToInsert.length > 0) {
+        if (rowsToInsert[0]?.league_id) {
+          await ensureLeagueExists(supabase, Number(rowsToInsert[0].league_id), rowsToInsert);
+        }
         const { data: insertedAll, error: insErr } = await supabase
           .from('league_drafts')
           .insert(rowsToInsert)
@@ -97,6 +114,8 @@ export async function POST(req: NextRequest) {
       for (const batch of batches) {
         const lId = Number(batch.leagueId);
         if (!lId || !Array.isArray(batch.rows) || batch.rows.length === 0) continue;
+
+        await ensureLeagueExists(supabase, lId, batch.rows);
 
         if (batch.hasExisting) {
           const { error: delErr } = await supabase
