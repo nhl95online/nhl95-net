@@ -451,7 +451,8 @@ export default function UploadPage() {
   const [connectionStatus, setConnectionStatus] = useState<{ testing: boolean; message: string | null; error: boolean }>({ testing: false, message: null, error: false });
   const [dbTeams, setDbTeams] = useState<any[]>([]);
 
-  // Schedule Matchup Validation (Check if game is already played)
+  // Game Mode ('Season' vs 'Playoffs') & Schedule / Playoff Series Matchup Validation
+  const [gameMode, setGameMode] = useState<'Season' | 'Playoffs'>('Season');
   const [scheduleStatus, setScheduleStatus] = useState<{
     loading: boolean;
     checked: boolean;
@@ -470,6 +471,33 @@ export default function UploadPage() {
     playedGameIds: [],
     isAllPlayed: false,
     message: null
+  });
+  const [playoffStatus, setPlayoffStatus] = useState<{
+    loading: boolean;
+    checked: boolean;
+    matchingSeries: any[];
+    selectedPlayoffId: number | null;
+    selectedGameNumber: number;
+    nextGameNumber: number;
+    seriesLength: number;
+    homeWins: number;
+    awayWins: number;
+    isSeriesComplete: boolean;
+    existingGames: any[];
+    autoDetectedReason: string | null;
+  }>({
+    loading: false,
+    checked: false,
+    matchingSeries: [],
+    selectedPlayoffId: null,
+    selectedGameNumber: 1,
+    nextGameNumber: 1,
+    seriesLength: 7,
+    homeWins: 0,
+    awayWins: 0,
+    isSeriesComplete: false,
+    existingGames: [],
+    autoDetectedReason: null
   });
   const [allowOverwrite, setAllowOverwrite] = useState<boolean>(false);
 
@@ -655,6 +683,12 @@ export default function UploadPage() {
 
       const result = parseSaveStateBuffer(buffer, customConfig);
       setParsedGame(result);
+
+      // Auto-detect playoff state from filename keywords (e.g. "playoff", "po", "qf", "sf", "cf", "final", "rd1")
+      const lowerName = (f.name || '').toLowerCase();
+      if (/\b(playoff|playoffs|po|qf|sf|cf|final|finals|series|rd[1-4]|r[1-4])\b/.test(lowerName)) {
+        setGameMode('Playoffs');
+      }
     } catch (err: any) {
       console.error("Parsing error:", err);
       setParseError(err.message || "Failed to parse save state file. Make sure it is a valid RetroArch .state file.");
@@ -764,11 +798,15 @@ export default function UploadPage() {
 
     return {
       league_id: sId,
+      ...(gameMode === 'Playoffs' ? {
+        playoff_id: playoffStatus.selectedPlayoffId || 1,
+        game_number: playoffStatus.selectedGameNumber || 1
+      } : {}),
       game_meta: {
         is_ot: game.isOT,
         is_tie: game.homeTeam.goals === game.awayTeam.goals,
         league: getLeagueCode(sId),
-        league_mode: "Season"
+        league_mode: gameMode
       },
       game_results: `${awayTeamCode} ${game.awayTeam.goals} - ${game.homeTeam.goals} ${homeTeamCode}`,
       home_team_id: homeTeamId,
@@ -786,15 +824,18 @@ export default function UploadPage() {
     };
   };
 
-  // Real-time schedule check to prevent duplicate submissions
+  // Real-time schedule & playoff series check to prevent duplicate submissions and detect playoff states
   useEffect(() => {
-    async function checkScheduleStatus() {
+    async function checkScheduleAndPlayoffStatus() {
       if (!parsedGame) {
         setScheduleStatus({ loading: false, checked: false, totalScheduled: 0, playedCount: 0, unplayedGameId: null, playedGameIds: [], isAllPlayed: false, message: null });
+        setPlayoffStatus({ loading: false, checked: false, matchingSeries: [], selectedPlayoffId: null, selectedGameNumber: 1, nextGameNumber: 1, seriesLength: 7, homeWins: 0, awayWins: 0, isSeriesComplete: false, existingGames: [], autoDetectedReason: null });
         return;
       }
 
       setScheduleStatus(prev => ({ ...prev, loading: true }));
+      setPlayoffStatus(prev => ({ ...prev, loading: true }));
+
       const sId = Number(selectedSeasonId) || 40;
       const homeCode = parsedGame.homeTeam.teamCode.toUpperCase();
       const awayCode = parsedGame.awayTeam.teamCode.toUpperCase();
@@ -807,9 +848,11 @@ export default function UploadPage() {
 
       if (!hId || !aId) {
         setScheduleStatus({ loading: false, checked: true, totalScheduled: 0, playedCount: 0, unplayedGameId: null, playedGameIds: [], isAllPlayed: false, message: null });
+        setPlayoffStatus({ loading: false, checked: true, matchingSeries: [], selectedPlayoffId: null, selectedGameNumber: 1, nextGameNumber: 1, seriesLength: 7, homeWins: 0, awayWins: 0, isSeriesComplete: false, existingGames: [], autoDetectedReason: null });
         return;
       }
 
+      // 1. Check Regular Season Schedule (league_schedule)
       const { data: scheduledGames } = await supabase
         .from('league_schedule')
         .select('game_id, played, home_team_id, away_team_id')
@@ -818,46 +861,115 @@ export default function UploadPage() {
         .eq('away_team_id', aId)
         .order('game_id', { ascending: true });
 
-      if (!scheduledGames || scheduledGames.length === 0) {
-        setScheduleStatus({ loading: false, checked: true, totalScheduled: 0, playedCount: 0, unplayedGameId: null, playedGameIds: [], isAllPlayed: false, message: null });
-        return;
+      let unplayed: any = null;
+      let playedList: number[] = [];
+      let isAllPlayed = false;
+
+      if (scheduledGames && scheduledGames.length > 0) {
+        const schedIds = scheduledGames.map(g => g.game_id);
+        const { data: playedStats } = await supabase
+          .from('league_gamestats')
+          .select('game_id')
+          .in('game_id', schedIds);
+
+        const playedSet = new Set((playedStats || []).map(p => p.game_id));
+        unplayed = scheduledGames.find(g => {
+          const rawPlayed = String(g.played || '').trim().toLowerCase();
+          const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes';
+          return !isPlayed && !playedSet.has(g.game_id);
+        });
+
+        playedList = scheduledGames.filter(g => {
+          const rawPlayed = String(g.played || '').trim().toLowerCase();
+          return rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes' || playedSet.has(g.game_id);
+        }).map(g => g.game_id);
+
+        isAllPlayed = scheduledGames.length > 0 && !unplayed;
       }
-
-      const schedIds = scheduledGames.map(g => g.game_id);
-      const { data: playedStats } = await supabase
-        .from('league_gamestats')
-        .select('game_id')
-        .in('game_id', schedIds);
-
-      const playedSet = new Set((playedStats || []).map(p => p.game_id));
-      const unplayed = scheduledGames.find(g => {
-        const rawPlayed = String(g.played || '').trim().toLowerCase();
-        const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes';
-        return !isPlayed && !playedSet.has(g.game_id);
-      });
-
-      const playedList = scheduledGames.filter(g => {
-        const rawPlayed = String(g.played || '').trim().toLowerCase();
-        return rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes' || playedSet.has(g.game_id);
-      }).map(g => g.game_id);
-
-      const isAllPlayed = scheduledGames.length > 0 && !unplayed;
 
       setScheduleStatus({
         loading: false,
         checked: true,
-        totalScheduled: scheduledGames.length,
+        totalScheduled: scheduledGames?.length || 0,
         playedCount: playedList.length,
         unplayedGameId: unplayed ? Number(unplayed.game_id) : null,
         playedGameIds: playedList,
         isAllPlayed,
-        message: isAllPlayed 
-          ? `All scheduled games for this matchup are already marked as PLAYED (Game #${playedList.join(', #')}).` 
-          : `Scheduled fixture Game #${unplayed?.game_id} is unplayed and ready for submission.`
+        message: isAllPlayed
+          ? `All scheduled games for this matchup are already marked as PLAYED (Game #${playedList.join(', #')}).`
+          : unplayed
+          ? `Scheduled fixture Game #${unplayed.game_id} is unplayed and ready for submission.`
+          : null
+      });
+
+      // 2. Check Playoff Bracket Series (league_playoffs & league_playoff_gamestats)
+      const { data: allSeasonPlayoffs } = await supabase
+        .from('league_playoffs')
+        .select('*')
+        .eq('league_id', sId)
+        .order('playoff_id', { ascending: true });
+
+      const matchingSeries = (allSeasonPlayoffs || []).filter((m: any) => {
+        const mH = Number(m.home_team_id);
+        const mA = Number(m.away_team_id);
+        return (mH === hId && mA === aId) || (mH === aId && mA === hId);
+      });
+
+      const activeSeries = matchingSeries.find((m: any) => !m.is_complete) || matchingSeries[matchingSeries.length - 1] || null;
+
+      let existingGames: any[] = [];
+      let homeWins = 0;
+      let awayWins = 0;
+      let nextGameNumber = 1;
+      const seriesLength = Number(activeSeries?.series_length || 7);
+      const winsNeeded = Math.ceil(seriesLength / 2);
+
+      if (activeSeries) {
+        const { data: poGames } = await supabase
+          .from('league_playoff_gamestats')
+          .select('game_id, game_number, home_team_id, away_team_id, home_score, away_score, game_results')
+          .eq('playoff_id', activeSeries.playoff_id)
+          .order('game_number', { ascending: true });
+
+        existingGames = poGames || [];
+        existingGames.forEach((g: any) => {
+          const gH = Number(g.home_score || 0);
+          const gA = Number(g.away_score || 0);
+          const gWinner = gH > gA ? Number(g.home_team_id) : gA > gH ? Number(g.away_team_id) : 0;
+          if (gWinner === hId) homeWins++;
+          else if (gWinner === aId) awayWins++;
+        });
+
+        const maxNum = existingGames.reduce((max: number, g: any) => Math.max(max, Number(g.game_number || 0)), 0);
+        nextGameNumber = maxNum + 1;
+      }
+
+      const isSeriesComplete = homeWins >= winsNeeded || awayWins >= winsNeeded || Boolean(activeSeries?.is_complete);
+
+      // Auto-switch to Playoff mode if all regular season games are played AND a playoff series exists between these teams!
+      let autoReason: string | null = null;
+      if (isAllPlayed && activeSeries && !isSeriesComplete) {
+        setGameMode('Playoffs');
+        autoReason = `Auto-detected Playoff Series (${activeSeries.round_name || 'Playoffs'}): all regular-season games are complete and an active bracket matchup exists in league_playoffs.`;
+      }
+
+      setPlayoffStatus({
+        loading: false,
+        checked: true,
+        matchingSeries,
+        selectedPlayoffId: activeSeries ? Number(activeSeries.playoff_id) : null,
+        selectedGameNumber: Math.min(nextGameNumber, seriesLength),
+        nextGameNumber,
+        seriesLength,
+        homeWins,
+        awayWins,
+        isSeriesComplete,
+        existingGames,
+        autoDetectedReason: autoReason
       });
     }
 
-    checkScheduleStatus();
+    checkScheduleAndPlayoffStatus();
   }, [parsedGame, selectedSeasonId, dbTeams]);
 
   const [saveDetails, setSaveDetails] = useState<any | null>(null);
@@ -879,12 +991,13 @@ export default function UploadPage() {
         body: JSON.stringify({
           game: parsedGame,
           seasonId: selectedSeasonId,
-          targetGameId: scheduleStatus.unplayedGameId || undefined,
+          gameMode,
+          playoffId: gameMode === 'Playoffs' ? (playoffStatus.selectedPlayoffId || undefined) : undefined,
+          gameNumber: gameMode === 'Playoffs' ? (playoffStatus.selectedGameNumber || undefined) : undefined,
+          targetGameId: gameMode === 'Season' ? (scheduleStatus.unplayedGameId || undefined) : undefined,
           allowOverwrite: allowOverwrite
         })
       });
-
-
 
       const data = await response.json();
 
@@ -896,13 +1009,21 @@ export default function UploadPage() {
       setSaveDetails(data.details || null);
       setInsertedRowData(data.insertedRow || null);
       
-      // Update schedule status to reflected played
-      setScheduleStatus(prev => ({
-        ...prev,
-        isAllPlayed: true,
-        playedCount: prev.playedCount + 1,
-        unplayedGameId: null
-      }));
+      if (gameMode === 'Playoffs') {
+        setPlayoffStatus(prev => ({
+          ...prev,
+          nextGameNumber: prev.selectedGameNumber + 1,
+          selectedGameNumber: Math.min(prev.selectedGameNumber + 1, prev.seriesLength)
+        }));
+      } else {
+        // Update schedule status to reflected played
+        setScheduleStatus(prev => ({
+          ...prev,
+          isAllPlayed: true,
+          playedCount: prev.playedCount + 1,
+          unplayedGameId: null
+        }));
+      }
     } catch (err: any) {
       setSaveError(err.message || 'Error occurred while saving to Supabase.');
     } finally {
@@ -1160,6 +1281,32 @@ export default function UploadPage() {
             ))}
           </select>
 
+          {/* Game Mode Toggle: Regular Season vs Playoffs */}
+          <div className="flex items-center border-2 border-black bg-[#f4f1ea] font-sans text-xs font-black uppercase">
+            <button
+              type="button"
+              onClick={() => setGameMode('Season')}
+              className={`px-3 py-1 transition cursor-pointer ${
+                gameMode === 'Season'
+                  ? 'bg-black text-white'
+                  : 'text-black hover:bg-slate-200'
+              }`}
+            >
+              Regular Season
+            </button>
+            <button
+              type="button"
+              onClick={() => setGameMode('Playoffs')}
+              className={`px-3 py-1 border-l-2 border-black transition cursor-pointer ${
+                gameMode === 'Playoffs'
+                  ? 'bg-amber-600 text-white'
+                  : 'text-amber-900 hover:bg-amber-100'
+              }`}
+            >
+              Playoffs (Bracket Series)
+            </button>
+          </div>
+
           <button
             onClick={() => setShowAddSeasonModal(!showAddSeasonModal)}
             className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold uppercase border-2 border-black bg-emerald-100 hover:bg-black hover:text-white transition cursor-pointer"
@@ -1207,12 +1354,20 @@ export default function UploadPage() {
                   document.getElementById('file-input')?.click();
                 }
               }}
-              disabled={isSaving || (isLoggedIn && Boolean(parsedGame) && scheduleStatus.isAllPlayed && !allowOverwrite)}
+              disabled={
+                isSaving ||
+                (isLoggedIn &&
+                  Boolean(parsedGame) &&
+                  !allowOverwrite &&
+                  (gameMode === 'Season' ? scheduleStatus.isAllPlayed : playoffStatus.isSeriesComplete))
+              }
               style={{ 
                 backgroundColor: !isLoggedIn 
                   ? '#1c1917' 
-                  : (parsedGame && scheduleStatus.isAllPlayed && !allowOverwrite) 
+                  : (parsedGame && !allowOverwrite && (gameMode === 'Season' ? scheduleStatus.isAllPlayed : playoffStatus.isSeriesComplete)) 
                   ? '#991b1b' 
+                  : gameMode === 'Playoffs'
+                  ? '#d97706'
                   : '#16a34a', 
                 color: '#ffffff' 
               }}
@@ -1231,7 +1386,9 @@ export default function UploadPage() {
                     {isSaving
                       ? "Publishing to Supabase..."
                       : parsedGame
-                      ? (scheduleStatus.isAllPlayed && !allowOverwrite ? "Matchup Already Played" : "Push to Supabase")
+                      ? gameMode === 'Playoffs'
+                        ? (playoffStatus.isSeriesComplete && !allowOverwrite ? "Series Complete" : `Push Playoff Game #${playoffStatus.selectedGameNumber}`)
+                        : (scheduleStatus.isAllPlayed && !allowOverwrite ? "Matchup Already Played" : "Push to Supabase")
                       : "Submit to Supabase"}
                   </span>
                 </>
@@ -1241,29 +1398,109 @@ export default function UploadPage() {
       </div>
 
 
-      {/* Schedule Fixture Match Status Alert */}
-      {parsedGame && scheduleStatus.checked && (
+      {/* Schedule / Playoff Series Match Status Alert */}
+      {parsedGame && (scheduleStatus.checked || playoffStatus.checked) && (
         <div className="mb-6">
-          {scheduleStatus.isAllPlayed ? (
+          {gameMode === 'Playoffs' ? (
+            <div className="p-4 bg-amber-50 border-2 border-amber-800 text-amber-950 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-xs uppercase bg-amber-700 text-white px-2 py-0.5">
+                      PLAYOFF SERIES INGESTION MODE
+                    </span>
+                    {playoffStatus.matchingSeries.length > 0 ? (
+                      <span className="font-black text-xs uppercase">
+                        Matched Series: {playoffStatus.matchingSeries.find((m: any) => Number(m.playoff_id) === Number(playoffStatus.selectedPlayoffId))?.round_name || 'Playoffs'} • {parsedGame.awayTeam.teamCode} vs {parsedGame.homeTeam.teamCode}
+                      </span>
+                    ) : (
+                      <span className="font-black text-xs uppercase text-amber-900">
+                        New Bracket Series: {parsedGame.awayTeam.teamCode} vs {parsedGame.homeTeam.teamCode} (will auto-create in league_playoffs)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-amber-900 mt-1">
+                    Series Standing before this game: <strong>{parsedGame.awayTeam.teamCode} {playoffStatus.awayWins} - {playoffStatus.homeWins} {parsedGame.homeTeam.teamCode}</strong> (Best of {playoffStatus.seriesLength}) • Recording into <code className="bg-amber-100 px-1 border border-amber-400">league_playoff_gamestats</code> as <strong>Game #{playoffStatus.selectedGameNumber}</strong>.
+                  </p>
+                  {playoffStatus.autoDetectedReason && (
+                    <p className="text-[10px] font-sans font-bold text-amber-800 mt-1 italic">
+                      ⚡ {playoffStatus.autoDetectedReason}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {playoffStatus.matchingSeries.length > 1 && (
+                  <select
+                    value={playoffStatus.selectedPlayoffId || ''}
+                    onChange={(e) => setPlayoffStatus(prev => ({ ...prev, selectedPlayoffId: Number(e.target.value) }))}
+                    className="border-2 border-amber-900 bg-white px-2.5 py-1 text-xs font-bold font-sans uppercase"
+                  >
+                    {playoffStatus.matchingSeries.map((s: any) => (
+                      <option key={s.playoff_id} value={s.playoff_id}>
+                        Series #{s.playoff_id}: {s.round_name} ({s.match_label || `${parsedGame.awayTeam.teamCode}-${parsedGame.homeTeam.teamCode}`})
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 border-2 border-amber-900 text-xs font-black uppercase">
+                  <span>Series Game #:</span>
+                  <select
+                    value={playoffStatus.selectedGameNumber}
+                    onChange={(e) => setPlayoffStatus(prev => ({ ...prev, selectedGameNumber: Number(e.target.value) }))}
+                    className="font-mono font-black bg-amber-100 px-1.5 py-0.5 border border-amber-700 cursor-pointer"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                      <option key={num} value={num}>
+                        Game {num}{num === playoffStatus.nextGameNumber ? ' (Next)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="flex items-center gap-1.5 bg-white px-2.5 py-1 border-2 border-amber-900 text-xs font-black uppercase cursor-pointer hover:bg-amber-100">
+                  <input
+                    type="checkbox"
+                    checked={allowOverwrite}
+                    onChange={(e) => setAllowOverwrite(e.target.checked)}
+                    className="cursor-pointer"
+                  />
+                  Overwrite Game
+                </label>
+              </div>
+            </div>
+          ) : scheduleStatus.isAllPlayed ? (
             <div className="p-4 bg-red-50 border-2 border-red-800 text-red-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
               <div className="flex items-center gap-2.5">
                 <AlertTriangle className="w-5 h-5 text-red-700 shrink-0" />
                 <div>
-                  <span className="font-black text-xs uppercase block">Matchup Already Completed in Schedule (Played: TRUE)</span>
+                  <span className="font-black text-xs uppercase block">Regular Season Matchup Already Completed in Schedule (Played: TRUE)</span>
                   <p className="text-[11px] text-red-900 mt-0.5">
-                    All scheduled games between <strong>{parsedGame.awayTeam.teamCode}</strong> and <strong>{parsedGame.homeTeam.teamCode}</strong> in Season {selectedSeasonId} have already been recorded (Game #{scheduleStatus.playedGameIds.join(', #')}). Submitting a duplicate game is blocked.
+                    All scheduled regular-season games between <strong>{parsedGame.awayTeam.teamCode}</strong> and <strong>{parsedGame.homeTeam.teamCode}</strong> in Season {selectedSeasonId} have already been recorded (Game #{scheduleStatus.playedGameIds.join(', #')}). Is this a Playoff game?
                   </p>
                 </div>
               </div>
-              <label className="flex items-center gap-2 bg-white px-3 py-1.5 border-2 border-red-800 text-xs font-black uppercase shrink-0 cursor-pointer hover:bg-red-50">
-                <input
-                  type="checkbox"
-                  checked={allowOverwrite}
-                  onChange={(e) => setAllowOverwrite(e.target.checked)}
-                  className="cursor-pointer"
-                />
-                Allow Resubmit / Overwrite
-              </label>
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setGameMode('Playoffs')}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 border-2 border-black text-xs font-black uppercase cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                >
+                  Switch to Playoff Mode →
+                </button>
+                <label className="flex items-center gap-2 bg-white px-3 py-1.5 border-2 border-red-800 text-xs font-black uppercase shrink-0 cursor-pointer hover:bg-red-50">
+                  <input
+                    type="checkbox"
+                    checked={allowOverwrite}
+                    onChange={(e) => setAllowOverwrite(e.target.checked)}
+                    className="cursor-pointer"
+                  />
+                  Allow Resubmit / Overwrite
+                </label>
+              </div>
             </div>
           ) : scheduleStatus.unplayedGameId ? (
             <div className="p-3 bg-green-50 border-2 border-green-800 text-green-950 flex items-center justify-between text-xs font-bold uppercase shadow-xs">

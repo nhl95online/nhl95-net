@@ -38,18 +38,21 @@ function generateDeterministicId(str: string): number {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { game, seasonId, targetGameId, allowOverwrite } = body as {
+    const { game, seasonId, targetGameId, allowOverwrite, gameMode, playoffId, gameNumber } = body as {
       game: any;
       seasonId: number | string;
       targetGameId?: number;
       allowOverwrite?: boolean;
+      gameMode?: 'Season' | 'Playoffs';
+      playoffId?: number;
+      gameNumber?: number;
     };
 
     if (!game) {
       return NextResponse.json({ error: 'No game data provided' }, { status: 400 });
     }
 
-
+    const isPlayoffMode = gameMode === 'Playoffs' || Boolean(playoffId);
     const sId = Number(seasonId) || 40;
     const homeTeamCode = (game.homeTeam?.teamCode || 'HOME').toUpperCase();
     const awayTeamCode = (game.awayTeam?.teamCode || 'AWAY').toUpperCase();
@@ -152,61 +155,182 @@ export async function POST(req: NextRequest) {
       return 1;
     };
 
-    // 3. Resolve Game ID (Matching schedule or Target Game ID or next available)
+    // 3. Resolve Game ID (Matching schedule / playoff series or Target Game ID or next available)
     let finalGameId = targetGameId ? Number(targetGameId) : 0;
+    let resolvedPlayoffId = playoffId ? Number(playoffId) : 0;
+    let finalGameNumber = gameNumber ? Number(gameNumber) : 0;
+    let activePlayoffSeries: any = null;
 
-    // Check for scheduled games in this season for this matchup
-    const { data: scheduledGames } = await supabase
-      .from('league_schedule')
-      .select('game_id, played, home_team_id, away_team_id')
-      .eq('league_id', sId)
-      .eq('home_team_id', homeTeamId)
-      .eq('away_team_id', awayTeamId)
-      .order('game_id', { ascending: true });
+    if (isPlayoffMode) {
+      // Look up matching playoff series in league_playoffs for these two teams in either Home/Away order
+      let { data: seriesMatches } = await supabase
+        .from('league_playoffs')
+        .select('*')
+        .eq('league_id', sId);
 
-    if (!finalGameId) {
-      if (scheduledGames && scheduledGames.length > 0) {
-        const schedIds = scheduledGames.map(g => g.game_id);
-        const { data: playedGames } = await supabase
-          .from('league_gamestats')
-          .select('game_id')
-          .in('game_id', schedIds);
+      const matchingSeriesList = (seriesMatches || []).filter((m: any) => {
+        if (resolvedPlayoffId && Number(m.playoff_id) === resolvedPlayoffId) return true;
+        const mH = Number(m.home_team_id);
+        const mA = Number(m.away_team_id);
+        return (mH === homeTeamId && mA === awayTeamId) || (mH === awayTeamId && mA === homeTeamId);
+      });
 
-        const playedSet = new Set((playedGames || []).map(p => p.game_id));
-        const unplayed = scheduledGames.find(g => {
-          const rawPlayed = String(g.played || '').trim().toLowerCase();
-          const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes';
-          return !isPlayed && !playedSet.has(g.game_id);
-        });
+      // Prefer an incomplete series if multiple rounds exist, or exact playoffId match
+      activePlayoffSeries = matchingSeriesList.find((m: any) => resolvedPlayoffId && Number(m.playoff_id) === resolvedPlayoffId)
+        || matchingSeriesList.find((m: any) => !m.is_complete)
+        || matchingSeriesList[matchingSeriesList.length - 1]
+        || null;
 
-        if (unplayed) {
-          finalGameId = Number(unplayed.game_id);
+      if (!activePlayoffSeries && homeTeamId && awayTeamId) {
+        // Auto-create a playoff series in league_playoffs if not pre-seeded yet
+        const { data: latestSeries } = await supabase
+          .from('league_playoffs')
+          .select('playoff_id')
+          .order('playoff_id', { ascending: false })
+          .limit(1);
+        const nextPlayoffId = (latestSeries && latestSeries.length > 0 && latestSeries[0].playoff_id)
+          ? Number(latestSeries[0].playoff_id) + 1
+          : 1;
+
+        const newSeriesRow = {
+          playoff_id: nextPlayoffId,
+          league_id: sId,
+          round_name: 'Playoffs',
+          match_label: `${awayTeamCode} vs ${homeTeamCode}`,
+          home_team_id: homeTeamId,
+          away_team_id: awayTeamId,
+          series_length: 7,
+          is_complete: false
+        };
+
+        const { data: createdSeries } = await supabase
+          .from('league_playoffs')
+          .upsert(newSeriesRow, { onConflict: 'playoff_id' })
+          .select()
+          .single();
+
+        activePlayoffSeries = createdSeries || newSeriesRow;
+      }
+
+      resolvedPlayoffId = Number(activePlayoffSeries?.playoff_id || resolvedPlayoffId || 1);
+      const seriesLength = Number(activePlayoffSeries?.series_length || 7);
+      const winsNeeded = Math.ceil(seriesLength / 2);
+
+      const { data: existingPlayoffGames } = await supabase
+        .from('league_playoff_gamestats')
+        .select('game_id, game_number, home_team_id, away_team_id, home_score, away_score')
+        .eq('playoff_id', resolvedPlayoffId)
+        .order('game_number', { ascending: true });
+
+      const seriesGames = existingPlayoffGames || [];
+      let team1Wins = 0;
+      let team2Wins = 0;
+      seriesGames.forEach((g: any) => {
+        const hScore = Number(g.home_score || 0);
+        const aScore = Number(g.away_score || 0);
+        const winnerId = hScore > aScore ? Number(g.home_team_id) : aScore > hScore ? Number(g.away_team_id) : 0;
+        if (winnerId === homeTeamId) team1Wins++;
+        else if (winnerId === awayTeamId) team2Wins++;
+      });
+
+      const isSeriesAlreadyWon = team1Wins >= winsNeeded || team2Wins >= winsNeeded;
+
+      if (isSeriesAlreadyWon && !allowOverwrite && !finalGameNumber) {
+        return NextResponse.json({
+          error: `Playoff series already completed! (${awayTeamCode} ${team2Wins} - ${team1Wins} ${homeTeamCode} in Best-of-${seriesLength}). Check "Allow Resubmit / Overwrite" or select a specific game number if you want to replace a game.`,
+          alreadyPlayed: true,
+          playedGameIds: seriesGames.map((g: any) => g.game_id)
+        }, { status: 409 });
+      }
+
+      if (!finalGameNumber) {
+        if (allowOverwrite && seriesGames.length > 0 && isSeriesAlreadyWon) {
+          finalGameNumber = Number(seriesGames[seriesGames.length - 1].game_number);
         } else {
-          // ALL scheduled games between these teams for this season have ALREADY been played!
-          if (!allowOverwrite) {
-            return NextResponse.json({
-              error: `Matchup already completed! All scheduled games between ${awayTeamCode} and ${homeTeamCode} for Season ${sId} have already been played and recorded in league_schedule (Game #${schedIds.join(', #')}). Another game cannot be submitted to prevent duplicate entries.`,
-              alreadyPlayed: true,
-              playedGameIds: schedIds
-            }, { status: 409 });
+          const maxGameNum = seriesGames.reduce((max: number, g: any) => Math.max(max, Number(g.game_number || 0)), 0);
+          finalGameNumber = maxGameNum + 1;
+        }
+      }
+
+      // Check if this specific game_number already exists in this playoff series
+      const existingGameForNumber = seriesGames.find((g: any) => Number(g.game_number) === finalGameNumber);
+      if (existingGameForNumber && !allowOverwrite && !targetGameId) {
+        return NextResponse.json({
+          error: `Playoff Game #${finalGameNumber} for this series has already been recorded (Game ID #${existingGameForNumber.game_id}). Enable overwrite or pick the next game in the series.`,
+          alreadyPlayed: true,
+          playedGameIds: [existingGameForNumber.game_id]
+        }, { status: 409 });
+      }
+
+      if (!finalGameId) {
+        if (existingGameForNumber) {
+          finalGameId = Number(existingGameForNumber.game_id);
+        } else {
+          const { data: latestPlayoffGame } = await supabase
+            .from('league_playoff_gamestats')
+            .select('game_id')
+            .order('game_id', { ascending: false })
+            .limit(1);
+
+          finalGameId = (latestPlayoffGame && latestPlayoffGame.length > 0 && latestPlayoffGame[0].game_id)
+            ? Number(latestPlayoffGame[0].game_id) + 1
+            : 1;
+        }
+      }
+    } else {
+      // Regular Season: Check for scheduled games in this season for this matchup
+      const { data: scheduledGames } = await supabase
+        .from('league_schedule')
+        .select('game_id, played, home_team_id, away_team_id')
+        .eq('league_id', sId)
+        .eq('home_team_id', homeTeamId)
+        .eq('away_team_id', awayTeamId)
+        .order('game_id', { ascending: true });
+
+      if (!finalGameId) {
+        if (scheduledGames && scheduledGames.length > 0) {
+          const schedIds = scheduledGames.map(g => g.game_id);
+          const { data: playedGames } = await supabase
+            .from('league_gamestats')
+            .select('game_id')
+            .in('game_id', schedIds);
+
+          const playedSet = new Set((playedGames || []).map(p => p.game_id));
+          const unplayed = scheduledGames.find(g => {
+            const rawPlayed = String(g.played || '').trim().toLowerCase();
+            const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes';
+            return !isPlayed && !playedSet.has(g.game_id);
+          });
+
+          if (unplayed) {
+            finalGameId = Number(unplayed.game_id);
           } else {
-            // Overwrite allowed: overwrite the last played game
-            finalGameId = Number(schedIds[schedIds.length - 1]);
+            // ALL scheduled games between these teams for this season have ALREADY been played!
+            if (!allowOverwrite) {
+              return NextResponse.json({
+                error: `Matchup already completed! All scheduled regular-season games between ${awayTeamCode} and ${homeTeamCode} for Season ${sId} have already been played (Game #${schedIds.join(', #')}). If this is a Playoff game, switch Game Mode to "Playoffs (Bracket Series)".`,
+                alreadyPlayed: true,
+                playedGameIds: schedIds
+              }, { status: 409 });
+            } else {
+              // Overwrite allowed: overwrite the last played game
+              finalGameId = Number(schedIds[schedIds.length - 1]);
+            }
           }
         }
       }
-    }
 
-    if (!finalGameId) {
-      const { data: latestGame } = await supabase
-        .from('league_gamestats')
-        .select('game_id')
-        .order('game_id', { ascending: false })
-        .limit(1);
+      if (!finalGameId) {
+        const { data: latestGame } = await supabase
+          .from('league_gamestats')
+          .select('game_id')
+          .order('game_id', { ascending: false })
+          .limit(1);
 
-      finalGameId = (latestGame && latestGame.length > 0 && latestGame[0].game_id)
-        ? Number(latestGame[0].game_id) + 1
-        : 1;
+        finalGameId = (latestGame && latestGame.length > 0 && latestGame[0].game_id)
+          ? Number(latestGame[0].game_id) + 1
+          : 1;
+      }
     }
 
     // 4. Format game_meta and game_results
@@ -214,7 +338,7 @@ export async function POST(req: NextRequest) {
       is_ot: Boolean(game.isOT),
       is_tie: Number(game.homeTeam?.goals) === Number(game.awayTeam?.goals),
       league: getLeagueCode(sId),
-      league_mode: 'Season'
+      league_mode: isPlayoffMode ? 'Playoffs' : 'Season'
     };
 
     const gameResults = `${awayTeamCode} ${game.awayTeam?.goals || 0} - ${game.homeTeam?.goals || 0} ${homeTeamCode}`;
@@ -287,8 +411,9 @@ export async function POST(req: NextRequest) {
       ? `${rawGameLength}:00`
       : rawGameLength;
 
-    // 6. Assemble Row for league_gamestats
-    const gamestatsRow = {
+    // 6. Assemble Row for league_gamestats / league_playoff_gamestats
+    const gamestatsTable = isPlayoffMode ? 'league_playoff_gamestats' : 'league_gamestats';
+    const gamestatsRow: Record<string, any> = {
       game_id: finalGameId,
       league_id: sId,
       game_meta: gameMeta,
@@ -307,14 +432,19 @@ export async function POST(req: NextRequest) {
       game_length: formattedGameLength
     };
 
-    // 7. Insert into league_gamestats (UPSERT to avoid unique collision)
+    if (isPlayoffMode) {
+      gamestatsRow.playoff_id = resolvedPlayoffId;
+      gamestatsRow.game_number = finalGameNumber;
+    }
+
+    // 7. Insert into league_gamestats / league_playoff_gamestats (UPSERT to avoid unique collision)
     const { data: insertedGame, error: insertGameErr } = await supabase
-      .from('league_gamestats')
+      .from(gamestatsTable)
       .upsert(gamestatsRow, { onConflict: 'game_id' })
       .select();
 
     if (insertGameErr) {
-      console.error('Supabase gamestats insert error:', insertGameErr);
+      console.error(`Supabase ${gamestatsTable} insert error:`, insertGameErr);
       return NextResponse.json({
         error: insertGameErr.message,
         details: insertGameErr.details || insertGameErr.hint
@@ -549,16 +679,17 @@ export async function POST(req: NextRequest) {
     });
 
     // Clean existing rows for this game and insert new player stats
-    await supabase.from('league_player_stats_master').delete().eq('game_id', finalGameId);
+    const playerStatsTable = isPlayoffMode ? 'league_playoff_player_stats_master' : 'league_player_stats_master';
+    await supabase.from(playerStatsTable).delete().eq('game_id', finalGameId);
     const { error: insertPlayerErr } = await supabase
-      .from('league_player_stats_master')
+      .from(playerStatsTable)
       .insert(playerStatsRows);
 
     if (insertPlayerErr) {
-      console.error('Error inserting league_player_stats_master:', insertPlayerErr);
+      console.error(`Error inserting ${playerStatsTable}:`, insertPlayerErr);
     }
 
-    // 9. Assemble Rows for league_scoring (matching exact schema with time, team, scorer, assist1, assist2, way)
+    // 9. Assemble Rows for league_scoring / league_playoff_scoring (matching exact schema with time, team, scorer, assist1, assist2, way)
     const scoringRows = (game.goals || []).map((g: any) => {
       const gTeamId = g.side === 'Home' ? homeTeamId : awayTeamId;
       const gTeamCode = g.side === 'Home' ? homeTeamCode : awayTeamCode;
@@ -587,20 +718,21 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    await supabase.from('league_scoring').delete().eq('game_id', finalGameId);
+    const scoringTable = isPlayoffMode ? 'league_playoff_scoring' : 'league_scoring';
+    await supabase.from(scoringTable).delete().eq('game_id', finalGameId);
     let insertScoringErr: any = null;
     if (scoringRows.length > 0) {
       const res = await supabase
-        .from('league_scoring')
+        .from(scoringTable)
         .insert(scoringRows);
       insertScoringErr = res.error;
 
       if (insertScoringErr) {
-        console.error('Error inserting league_scoring:', insertScoringErr);
+        console.error(`Error inserting ${scoringTable}:`, insertScoringErr);
       }
     }
 
-    // 10. Assemble Rows for league_penalties (matching exact schema with period, time, team_id, team, player_id, player, penalty_type)
+    // 10. Assemble Rows for league_penalties / league_playoff_penalties (matching exact schema with period, time, team_id, team, player_id, player, penalty_type)
     const penaltyRows = (game.penalties || []).map((p: any) => {
       const pTeamId = p.side === 'Home' ? homeTeamId : awayTeamId;
       const pTeamCode = p.side === 'Home' ? homeTeamCode : awayTeamCode;
@@ -618,67 +750,124 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    await supabase.from('league_penalties').delete().eq('game_id', finalGameId);
+    const penaltiesTable = isPlayoffMode ? 'league_playoff_penalties' : 'league_penalties';
+    await supabase.from(penaltiesTable).delete().eq('game_id', finalGameId);
     let insertPenErr: any = null;
     if (penaltyRows.length > 0) {
       const res = await supabase
-        .from('league_penalties')
+        .from(penaltiesTable)
         .insert(penaltyRows);
       insertPenErr = res.error;
 
       if (insertPenErr) {
-        console.error('Error inserting league_penalties:', insertPenErr);
+        console.error(`Error inserting ${penaltiesTable}:`, insertPenErr);
       }
     }
 
-    // 11. Update league_schedule to mark this game as played (played: true)
     let scheduleUpdateSuccess = false;
     let scheduleUpdateErr: any = null;
+    let standingsResult: { success: boolean; updatedRows?: number; error?: string } = { success: true, updatedRows: 0 };
+    let playoffSeriesSummary: string | null = null;
 
-    const schedUpdateRes = await supabase
-      .from('league_schedule')
-      .update({
-        played: true,
-        game_meta: gameMeta
-      })
-      .eq('game_id', finalGameId);
+    if (isPlayoffMode) {
+      // 11 (Playoffs). Recompute series wins from league_playoff_gamestats and update league_playoffs
+      const { data: updatedSeriesGames } = await supabase
+        .from('league_playoff_gamestats')
+        .select('game_id, game_number, home_team_id, away_team_id, home_score, away_score')
+        .eq('playoff_id', resolvedPlayoffId)
+        .order('game_number', { ascending: true });
 
-    if (schedUpdateRes.error) {
-      console.error('Error updating league_schedule by game_id:', schedUpdateRes.error);
-      scheduleUpdateErr = schedUpdateRes.error;
+      const sHomeId = Number(activePlayoffSeries?.home_team_id || homeTeamId);
+      const sAwayId = Number(activePlayoffSeries?.away_team_id || awayTeamId);
+      const sLength = Number(activePlayoffSeries?.series_length || 7);
+      const winsNeeded = Math.ceil(sLength / 2);
 
-      // Fallback: try updating with string 'true' or string game_id
-      const fallbackRes = await supabase
-        .from('league_schedule')
+      let sHomeWins = 0;
+      let sAwayWins = 0;
+      (updatedSeriesGames || []).forEach((g: any) => {
+        const hScore = Number(g.home_score || 0);
+        const aScore = Number(g.away_score || 0);
+        const gWinner = hScore > aScore ? Number(g.home_team_id) : aScore > hScore ? Number(g.away_team_id) : 0;
+        if (gWinner === sHomeId) sHomeWins++;
+        else if (gWinner === sAwayId) sAwayWins++;
+      });
+
+      const seriesWinnerId = sHomeWins >= winsNeeded
+        ? sHomeId
+        : sAwayWins >= winsNeeded
+        ? sAwayId
+        : null;
+      const isNowComplete = Boolean(seriesWinnerId);
+
+      const { error: poErr } = await supabase
+        .from('league_playoffs')
         .update({
-          played: 'true' as any,
-          game_meta: gameMeta
+          is_complete: isNowComplete,
+          winner_id: seriesWinnerId
         })
-        .eq('game_id', String(finalGameId));
+        .eq('playoff_id', resolvedPlayoffId);
 
-      if (!fallbackRes.error) {
+      if (poErr) {
+        scheduleUpdateErr = poErr;
+      } else {
         scheduleUpdateSuccess = true;
-        scheduleUpdateErr = null;
       }
-    } else {
-      scheduleUpdateSuccess = true;
-    }
 
-    if (homeTeamId && awayTeamId) {
-      await supabase
+      // Optional RPC hook if configured in Supabase
+      try {
+        await supabase.rpc('sync_playoff_series', { p_playoff_id: resolvedPlayoffId });
+      } catch {
+        // Ignore if RPC does not exist
+      }
+
+      playoffSeriesSummary = `Playoff Series #${resolvedPlayoffId} (${activePlayoffSeries?.round_name || 'Playoffs'} • Game #${finalGameNumber}): Series Wins ${sHomeWins}-${sAwayWins}${isNowComplete ? ' [SERIES COMPLETE]' : ''}`;
+    } else {
+      // 11 (Regular Season). Update league_schedule to mark this game as played (played: true)
+      const schedUpdateRes = await supabase
         .from('league_schedule')
         .update({
           played: true,
           game_meta: gameMeta
         })
-        .eq('league_id', sId)
-        .eq('home_team_id', homeTeamId)
-        .eq('away_team_id', awayTeamId)
         .eq('game_id', finalGameId);
-    }
 
-    // 12. Recalculate and synchronize league_standings for this active season
-    const standingsResult = await recalculateAndSaveSeasonStandings(sId);
+      if (schedUpdateRes.error) {
+        console.error('Error updating league_schedule by game_id:', schedUpdateRes.error);
+        scheduleUpdateErr = schedUpdateRes.error;
+
+        // Fallback: try updating with string 'true' or string game_id
+        const fallbackRes = await supabase
+          .from('league_schedule')
+          .update({
+            played: 'true' as any,
+            game_meta: gameMeta
+          })
+          .eq('game_id', String(finalGameId));
+
+        if (!fallbackRes.error) {
+          scheduleUpdateSuccess = true;
+          scheduleUpdateErr = null;
+        }
+      } else {
+        scheduleUpdateSuccess = true;
+      }
+
+      if (homeTeamId && awayTeamId) {
+        await supabase
+          .from('league_schedule')
+          .update({
+            played: true,
+            game_meta: gameMeta
+          })
+          .eq('league_id', sId)
+          .eq('home_team_id', homeTeamId)
+          .eq('away_team_id', awayTeamId)
+          .eq('game_id', finalGameId);
+      }
+
+      // 12. Recalculate and synchronize league_standings for this active season
+      standingsResult = await recalculateAndSaveSeasonStandings(sId);
+    }
 
     // 13. Automatically broadcast rich Boxscore to Discord server
     let discordSent = false;
@@ -698,21 +887,26 @@ export async function POST(req: NextRequest) {
     }
 
     const tableErrors: Record<string, string> = {};
-    if (insertPlayerErr) tableErrors['league_player_stats_master'] = insertPlayerErr.message || JSON.stringify(insertPlayerErr);
-    if (insertScoringErr) tableErrors['league_scoring'] = insertScoringErr.message || JSON.stringify(insertScoringErr);
-    if (insertPenErr) tableErrors['league_penalties'] = insertPenErr.message || JSON.stringify(insertPenErr);
-    if (scheduleUpdateErr) tableErrors['league_schedule'] = scheduleUpdateErr.message || JSON.stringify(scheduleUpdateErr);
-    if (!standingsResult.success) tableErrors['league_standings'] = standingsResult.error || 'Failed updating standings';
+    if (insertPlayerErr) tableErrors[playerStatsTable] = insertPlayerErr.message || JSON.stringify(insertPlayerErr);
+    if (insertScoringErr) tableErrors[scoringTable] = insertScoringErr.message || JSON.stringify(insertScoringErr);
+    if (insertPenErr) tableErrors[penaltiesTable] = insertPenErr.message || JSON.stringify(insertPenErr);
+    if (scheduleUpdateErr) tableErrors[isPlayoffMode ? 'league_playoffs' : 'league_schedule'] = scheduleUpdateErr.message || JSON.stringify(scheduleUpdateErr);
+    if (!isPlayoffMode && !standingsResult.success) tableErrors['league_standings'] = standingsResult.error || 'Failed updating standings';
 
     return NextResponse.json({
       success: true,
       gameId: finalGameId,
-      message: `Game #${finalGameId} (${gameResults}) saved to Supabase!`,
+      gameMode: isPlayoffMode ? 'Playoffs' : 'Season',
+      playoffId: isPlayoffMode ? resolvedPlayoffId : undefined,
+      gameNumber: isPlayoffMode ? finalGameNumber : undefined,
+      message: isPlayoffMode
+        ? `Playoff Game #${finalGameId} (${gameResults}) • ${playoffSeriesSummary} saved to Supabase!`
+        : `Game #${finalGameId} (${gameResults}) saved to Supabase!`,
       details: {
         gamestats: true,
         scheduleUpdated: !scheduleUpdateErr,
-        standingsUpdated: standingsResult.success,
-        standingsTeamsUpdated: standingsResult.updatedRows || 0,
+        standingsUpdated: isPlayoffMode ? true : standingsResult.success,
+        standingsTeamsUpdated: isPlayoffMode ? 0 : (standingsResult.updatedRows || 0),
         playerStatsInserted: !insertPlayerErr,
         playerRows: playerStatsRows.length,
         scoringInserted: !insertScoringErr,
@@ -720,6 +914,7 @@ export async function POST(req: NextRequest) {
         penaltiesInserted: !insertPenErr,
         penaltyRows: penaltyRows.length,
         discordBroadcast: discordSent,
+        playoffSeriesSummary: playoffSeriesSummary || undefined,
         tableErrors: Object.keys(tableErrors).length > 0 ? tableErrors : undefined
       },
       insertedRow: insertedGame?.[0] || gamestatsRow

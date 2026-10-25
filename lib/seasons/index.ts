@@ -53,10 +53,9 @@ export const O_LEAGUE_SKATERS: Record<string, string[]> = O_SEASON_CONFIG.skater
 
 const registeredSeasonsMap = new Map<string, SeasonConfig>();
 
-// Register base seasons
+// Register current active seasons only (W17 / Season 38 is complete)
 registeredSeasonsMap.set('40', W_SEASON_CONFIG);
 registeredSeasonsMap.set('39', O_SEASON_CONFIG);
-registeredSeasonsMap.set('38', W17_SEASON_CONFIG);
 
 /**
  * Register a new season configuration into the system at runtime.
@@ -102,8 +101,7 @@ export function getAllSeasons(): SeasonConfig[] {
  */
 export const AVAILABLE_SEASONS: SeasonConfig[] = [
   W_SEASON_CONFIG,
-  O_SEASON_CONFIG,
-  W17_SEASON_CONFIG
+  O_SEASON_CONFIG
 ];
 
 /**
