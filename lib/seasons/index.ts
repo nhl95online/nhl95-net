@@ -11,11 +11,11 @@ export * from './types';
 export const W_SEASON_CONFIG: SeasonConfig = normalizeSeasonConfig(wSeasonRaw, 40);
 export const O_SEASON_CONFIG: SeasonConfig = normalizeSeasonConfig(oSeasonRaw, 39);
 
-// Season 38 (W17) derived from W-League
+// Season 38 (W17) derived from W-League (Available for Playoff Save States)
 export const W17_SEASON_CONFIG: SeasonConfig = {
   ...W_SEASON_CONFIG,
   seasonId: 38,
-  seasonName: 'W League - Season 17 (W17 / Season 38)',
+  seasonName: 'W League - Season 17 Playoffs (W17 / Season 38)',
   leagueCode: 'W17'
 };
 
@@ -119,9 +119,12 @@ export function getSeasonConfig(seasonId: number | string): SeasonConfig {
   );
   if (matched) return matched;
 
-  // Fallback for Original 6
+  // Fallback for Original 6 & W17 Playoffs
   if (Number(seasonId) === 39) {
     return O_SEASON_CONFIG;
+  }
+  if (Number(seasonId) === 38) {
+    return W17_SEASON_CONFIG;
   }
 
   // Dynamic fallback for any new or unregistered season ID

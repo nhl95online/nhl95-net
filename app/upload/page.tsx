@@ -13,6 +13,7 @@ import {
   SeasonConfig, 
   TeamPositionCount, 
   AVAILABLE_SEASONS, 
+  W17_SEASON_CONFIG,
   getSeasonConfig, 
   registerSeason, 
   loadSeasonFromJson, 
@@ -671,8 +672,18 @@ export default function UploadPage() {
       const arrayBuffer = await f.arrayBuffer();
       const buffer = new Uint8Array(arrayBuffer);
 
-      let customConfig: Partial<SeasonConfig> = AVAILABLE_SEASONS.find(s => String(s.seasonId) === String(selectedSeasonId)) || AVAILABLE_SEASONS[0];
-      if (customConfigJson.trim()) {
+      const lowerName = (f.name || '').toLowerCase();
+      let effectiveSeasonId = selectedSeasonId;
+      if (/\b(w17|s38|season[_\s-]*38|season[_\s-]*17)\b/.test(lowerName)) {
+        effectiveSeasonId = 38;
+        setSelectedSeasonId(38);
+        setGameMode('Playoffs');
+      } else if (/\b(playoff|playoffs|po|qf|sf|cf|final|finals|series|rd[1-4]|r[1-4])\b/.test(lowerName)) {
+        setGameMode('Playoffs');
+      }
+
+      let customConfig: Partial<SeasonConfig> = getSeasonConfig(effectiveSeasonId);
+      if (customConfigJson.trim() && String(effectiveSeasonId) === String(selectedSeasonId)) {
         try {
           const parsed = JSON.parse(customConfigJson);
           customConfig = { ...customConfig, ...parsed };
@@ -683,12 +694,6 @@ export default function UploadPage() {
 
       const result = parseSaveStateBuffer(buffer, customConfig);
       setParsedGame(result);
-
-      // Auto-detect playoff state from filename keywords (e.g. "playoff", "po", "qf", "sf", "cf", "final", "rd1")
-      const lowerName = (f.name || '').toLowerCase();
-      if (/\b(playoff|playoffs|po|qf|sf|cf|final|finals|series|rd[1-4]|r[1-4])\b/.test(lowerName)) {
-        setGameMode('Playoffs');
-      }
     } catch (err: any) {
       console.error("Parsing error:", err);
       setParseError(err.message || "Failed to parse save state file. Make sure it is a valid RetroArch .state file.");
@@ -1270,22 +1275,51 @@ export default function UploadPage() {
             className="border-2 border-black bg-[#f4f1ea] px-3 py-1 text-xs font-bold font-sans cursor-pointer focus:outline-none"
             value={selectedSeasonId}
             onChange={(e) => {
-              setSelectedSeasonId(e.target.value);
+              const nextVal = e.target.value;
+              setSelectedSeasonId(nextVal);
+              if (Number(nextVal) === 38) {
+                setGameMode('Playoffs');
+              }
               if (file) processFile(file);
             }}
           >
-            {seasonsList.map(s => (
-              <option key={s.seasonId} value={s.seasonId}>
-                {s.seasonName}
-              </option>
-            ))}
+            {gameMode === 'Playoffs' ? (
+              <>
+                <option value={W17_SEASON_CONFIG.seasonId}>
+                  {W17_SEASON_CONFIG.seasonName}
+                </option>
+                {seasonsList.filter(s => Number(s.seasonId) !== 38).map(s => (
+                  <option key={s.seasonId} value={s.seasonId}>
+                    {s.seasonName}
+                  </option>
+                ))}
+              </>
+            ) : (
+              <>
+                {seasonsList.filter(s => Number(s.seasonId) !== 38).map(s => (
+                  <option key={s.seasonId} value={s.seasonId}>
+                    {s.seasonName}
+                  </option>
+                ))}
+                <optgroup label="Playoff Save States">
+                  <option value={W17_SEASON_CONFIG.seasonId}>
+                    {W17_SEASON_CONFIG.seasonName}
+                  </option>
+                </optgroup>
+              </>
+            )}
           </select>
 
           {/* Game Mode Toggle: Regular Season vs Playoffs */}
           <div className="flex items-center border-2 border-black bg-[#f4f1ea] font-sans text-xs font-black uppercase">
             <button
               type="button"
-              onClick={() => setGameMode('Season')}
+              onClick={() => {
+                setGameMode('Season');
+                if (Number(selectedSeasonId) === 38) {
+                  setSelectedSeasonId(40);
+                }
+              }}
               className={`px-3 py-1 transition cursor-pointer ${
                 gameMode === 'Season'
                   ? 'bg-black text-white'
@@ -1296,7 +1330,12 @@ export default function UploadPage() {
             </button>
             <button
               type="button"
-              onClick={() => setGameMode('Playoffs')}
+              onClick={() => {
+                setGameMode('Playoffs');
+                if (Number(selectedSeasonId) === 40) {
+                  setSelectedSeasonId(38);
+                }
+              }}
               className={`px-3 py-1 border-l-2 border-black transition cursor-pointer ${
                 gameMode === 'Playoffs'
                   ? 'bg-amber-600 text-white'
