@@ -153,14 +153,30 @@ export const KNOWN_LEAGUE_SEASON_MAP: Record<number | string, { badge: string; p
   50: { badge: 'W28 (2023)', prefix: 'W', year: 2023, name: 'W League - Season 28 (2023)' },
   51: { badge: 'W29 (2024)', prefix: 'W', year: 2024, name: 'W League - Season 29 (2024)' },
   52: { badge: 'W30 (2025)', prefix: 'W', year: 2025, name: 'W League - Season 30 (2025)' },
-  53: { badge: 'W31 (2026)', prefix: 'W', year: 2026, name: 'W League - Season 31 (2026)' }
+  53: { badge: 'W31 (2026)', prefix: 'W', year: 2026, name: 'W League - Season 31 (2026)' },
+  54: { badge: 'O02 (1928)', prefix: 'O', year: 1928, name: 'Original 6 - Season 2 (1928)' },
+  55: { badge: 'O03 (1929)', prefix: 'O', year: 1929, name: 'Original 6 - Season 3 (1929)' },
+  56: { badge: 'O04 (1930)', prefix: 'O', year: 1930, name: 'Original 6 - Season 4 (1930)' }
 };
 
 // Helper: Dynamically resolve accurate season badge, prefix, and year for ANY league_id (including 41+, O02, etc.)
 const resolveSeasonInfo = (leagueId: number | string, dbLeagueName?: string, dbYear?: number): { badge: string; prefix: string; year: number; name: string } => {
   const numId = Number(leagueId);
 
-  // 1. Check known base map
+  // 1. If dbLeagueName explicitly gives an O-league or custom level (e.g. "O02", "O03"), prioritize it
+  if (dbLeagueName && /^O0*[2-9]/i.test(dbLeagueName.trim())) {
+    const codeMatch = dbLeagueName.trim().match(/^O0*(\d+)/i);
+    const sNum = codeMatch ? parseInt(codeMatch[1], 10) : 2;
+    const yr = dbYear || (1926 + sNum);
+    return {
+      badge: `O${String(sNum).padStart(2, '0')} (${yr})`,
+      prefix: 'O',
+      year: yr,
+      name: `Original 6 - Season ${sNum} (${yr})`
+    };
+  }
+
+  // 2. Check known base map
   if (!isNaN(numId) && KNOWN_LEAGUE_SEASON_MAP[numId]) {
     const known = KNOWN_LEAGUE_SEASON_MAP[numId];
     if (dbLeagueName && dbLeagueName.includes('(') && /^[A-Z]+\d+/i.test(dbLeagueName.trim())) {
@@ -657,7 +673,7 @@ export default function DraftPage() {
           });
         });
 
-        // 2. Process leagues table from database (includes draft dates / rules_json)
+        // 2. Process leagues table from database (includes draft dates / rules_json / league_level)
         rawLeagues.forEach((l: any) => {
           const lId = String(l.league_id !== undefined ? l.league_id : (l.id || l.season_id));
           let draftDate = l.draft_date || l.draft_datetime || l.start_date || null;
@@ -668,7 +684,17 @@ export default function DraftPage() {
             } catch {}
           }
 
-          const resolved = resolveSeasonInfo(lId, l.league_name || l.name, l.year);
+          const rawName = l.league_level || l.league_name || l.name;
+          const rawYr = l.nhl_year || l.year;
+          const resolved = resolveSeasonInfo(lId, rawName, rawYr);
+
+          // If a DB row defines O02/O03/O04 under a custom league_id, remove the placeholder ID (54/55/56) to avoid duplicates
+          for (const [k, v] of combinedSeasonMap.entries()) {
+            if (k !== lId && v.seasonBadge === resolved.badge) {
+              combinedSeasonMap.delete(k);
+            }
+          }
+
           combinedSeasonMap.set(lId, {
             leagueId: lId,
             seasonBadge: resolved.badge,
@@ -921,11 +947,19 @@ export default function DraftPage() {
 
   // Filtered Season Options for Draft Floor & Past
   const availableFloorSeasons = useMemo(() => {
-    const nonCompleted = seasons.filter(
-      s => !completedDraftLeagues.has(s.leagueId) && (floorLeague === 'ALL' || s.leagueType === floorLeague)
-    );
-    return nonCompleted.length > 0
-      ? nonCompleted
+    const isPastArchiveSeason = (s: SeasonOption) => {
+      const numId = Number(s.leagueId);
+      if (completedDraftLeagues.has(s.leagueId)) return true;
+      if (s.leagueType === 'W' && numId <= 40) return true;
+      if (s.leagueType === 'O' && numId === 39) return true;
+      if (s.leagueType === 'Q' && numId < 36) return true;
+      return false;
+    };
+    const upcoming = seasons
+      .filter(s => !isPastArchiveSeason(s) && (floorLeague === 'ALL' || s.leagueType === floorLeague))
+      .sort((a, b) => Number(a.leagueId) - Number(b.leagueId));
+    return upcoming.length > 0
+      ? upcoming
       : seasons.filter(s => floorLeague === 'ALL' || s.leagueType === floorLeague);
   }, [seasons, floorLeague, completedDraftLeagues]);
 
@@ -933,23 +967,26 @@ export default function DraftPage() {
     return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
   }, [seasons, pastLeagueType]);
 
-  // Drafts that are live: upcoming/current drafts (e.g. W19 = 41, O01 = 39, Q19 = 36, V01 = 20, G01 = 16, or 42+ when opened)
-  // Historical archive seasons (W01-W18 and Q01-Q18) are excluded so they never clutter Live Drafts.
+  // Drafts that are live: upcoming/current drafts (e.g. W19 = 41, O02 = 54, or future seasons when opened)
+  // Historical archive seasons (W01-W18, O01, and Q01-Q18) are excluded so they never clutter Live Drafts.
   const activeDrafts = useMemo(() => {
     return seasons
       .filter(s => {
         if (completedDraftLeagues.has(s.leagueId)) return false;
         const numId = Number(s.leagueId);
-        // W01-W18 (<=40 in W) and Q01-Q18 (<=34 in Q) are completed seasons whose drafts belong in Past Drafts
+        // W01-W18 (<=40 in W), O01 (39 in O), and Q01-Q18 (<36 in Q) are completed seasons whose drafts belong in Past Drafts
         if (s.leagueType === 'W' && numId <= 40) return false;
+        if (s.leagueType === 'O' && numId === 39) return false;
         if (s.leagueType === 'Q' && numId < 36) return false;
+        const isO02 = s.seasonBadge.startsWith('O02') || s.leagueId === '54';
         return (
           s.leagueId === '41' ||
+          isO02 ||
           String(s.status || '').toLowerCase() === 'active' ||
           (numId >= 41 && openDraftLeagues.has(s.leagueId))
         );
       })
-      .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
+      .sort((a, b) => Number(a.leagueId) - Number(b.leagueId));
   }, [seasons, completedDraftLeagues, openDraftLeagues]);
 
   useEffect(() => {
@@ -1099,7 +1136,23 @@ export default function DraftPage() {
   // Handle switching League tier on Draft Floor
   const handleFloorLeagueChange = (newLeagueType: string) => {
     setFloorLeague(newLeagueType);
-    const matches = seasons.filter(s => newLeagueType === 'ALL' || s.leagueType === newLeagueType);
+    if (newLeagueType === 'W' || newLeagueType === 'ALL') {
+      const w19 = seasons.find(s => s.leagueId === '41');
+      if (w19) {
+        setFloorLeagueId(w19.leagueId);
+        return;
+      }
+    }
+    if (newLeagueType === 'O') {
+      const o02 = seasons.find(s => s.seasonBadge.startsWith('O02') || s.leagueId === '54');
+      if (o02) {
+        setFloorLeagueId(o02.leagueId);
+        return;
+      }
+    }
+    const matches = seasons
+      .filter(s => newLeagueType === 'ALL' || s.leagueType === newLeagueType)
+      .sort((a, b) => Number(a.leagueId) - Number(b.leagueId));
     if (matches.length > 0) {
       setFloorLeagueId(matches[0].leagueId);
     }
@@ -1161,6 +1214,18 @@ export default function DraftPage() {
         }
       }
     }
+
+    if (teamIds.length === 0 && targetType === 'O') {
+      const o6Abbrs = new Set(['BOS', 'CHI', 'DET', 'DTC', 'MTL', 'NYR', 'TOR']);
+      const o6Teams = Array.from(teamsMap.values()).filter(
+        t => t.league_id === 39 || o6Abbrs.has((t.abbreviation || '').trim().toUpperCase())
+      );
+      if (o6Teams.length > 0) {
+        sourceLeagueId = 39;
+        teamIds = o6Teams.map(t => t.team_id);
+      }
+    }
+
     if (teamIds.length === 0) return [];
 
     const activeLeagueTeams = teamIds.map(id => teamsMap.get(id)).filter(Boolean) as TeamInfo[];
@@ -2542,7 +2607,15 @@ export default function DraftPage() {
 
                 <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs font-black uppercase">
                   <span>Upcoming Classes:</span>
-                  {[2014, 2015, 2016, 2017, 2018, 2019, 2020].map((yr, idx) => (
+                  {[
+                    { yr: 2014, label: '2014 (W19)' },
+                    { yr: 2015, label: '2015 (W20)' },
+                    { yr: 2016, label: '2016 (W21)' },
+                    { yr: 2017, label: '2017 (W22)' },
+                    { yr: 1928, label: '1928 (O02)' },
+                    { yr: 1929, label: '1929 (O03)' },
+                    { yr: 1930, label: '1930 (O04)' }
+                  ].map(({ yr, label }) => (
                     <button
                       key={yr}
                       onClick={() => setRookieYearOverride(yr)}
@@ -2551,9 +2624,9 @@ export default function DraftPage() {
                           ? 'bg-amber-300 text-black'
                           : 'bg-white text-black hover:bg-neutral-100'
                       }`}
-                      title={`View ${yr} Rookie Class (W${19 + idx})`}
+                      title={`View ${label} Rookie Class`}
                     >
-                      {yr} (W{19 + idx})
+                      {label}
                     </button>
                   ))}
                   <select
@@ -2564,13 +2637,14 @@ export default function DraftPage() {
                     {Array.from(
                       new Set([
                         activeFloorSeasonMeta?.year || 2014,
+                        1927, 1928, 1929, 1930, 1931, 1932,
                         ...Array.from({ length: 14 }, (_, i) => 2013 + i) // 2013 through 2026
                       ])
                     )
                       .sort((a, b) => a - b)
                       .map(y => (
                         <option key={y} value={y}>
-                          {y} Class {y >= 2014 ? `(W${19 + (y - 2014)})` : ''}
+                          {y} Class {y >= 2014 ? `(W${19 + (y - 2014)})` : y >= 1927 && y <= 1942 ? `(O${String(y - 1926).padStart(2, '0')})` : ''}
                         </option>
                       ))}
                   </select>
@@ -2733,8 +2807,9 @@ export default function DraftPage() {
             .filter(Boolean)
             .sort((a, b) => (a!.team_name || '').localeCompare(b!.team_name || '')) as TeamInfo[];
 
-          // 3-year future horizon for W League (W19 2014, W20 2015, W21 2016) or selected tier
-          const horizonLeagueIds = ['41', '42', '43'];
+          // 3-year future horizon for W League (W19 2014 - W21 2016) or Original 6 (O02 1928 - O04 1930)
+          const isO6Capital = (capMeta as any)?.leagueType === 'O' || (capMeta as any)?.prefix === 'O';
+          const horizonLeagueIds = isO6Capital ? ['54', '55', '56'] : ['41', '42', '43'];
           const horizonSlotsByLeague = horizonLeagueIds.map(lId => ({
             leagueId: lId,
             badge: resolveSeasonInfo(lId).badge,
@@ -2777,7 +2852,15 @@ export default function DraftPage() {
                       className="bg-emerald-800 text-white hover:bg-emerald-900 disabled:opacity-50 px-3.5 py-2 text-xs font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      Upload 2014–2016 Capital (W19–W21)
+                      Upload W19–W21 Capital
+                    </button>
+                    <button
+                      onClick={() => handleUploadDraftCapital(['54', '55', '56'])}
+                      disabled={isUploadingCapital}
+                      className="bg-blue-900 text-white hover:bg-blue-950 disabled:opacity-50 px-3.5 py-2 text-xs font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Upload O02–O04 Capital
                     </button>
                   </div>
                 </div>
@@ -2785,7 +2868,7 @@ export default function DraftPage() {
                 {/* Future Season Selector Pills */}
                 <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs font-black uppercase">
                   <span className="text-slate-700 mr-1">Select Draft Season:</span>
-                  {['41', '42', '43', '44', '45', '39', '36', '20', '16'].map(lId => {
+                  {['41', '42', '43', '44', '45', '54', '55', '56', '36', '20', '16'].map(lId => {
                     const info = seasons.find(s => s.leagueId === lId) || resolveSeasonInfo(lId);
                     const badge = (info as any)?.seasonBadge || (info as any)?.badge;
                     const isSelected = capitalLeagueId === lId;
@@ -2804,11 +2887,11 @@ export default function DraftPage() {
                 </div>
               </div>
 
-              {/* Section 1: Active Teams 3-Year Future Draft Capital Portfolio (W19 2014 - W21 2016) */}
+              {/* Section 1: Active Teams 3-Year Future Draft Capital Portfolio */}
               <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/20 pb-2">
                   <h3 className="font-mono text-xs font-black uppercase tracking-wider">
-                    Active Franchises Future Pick Portfolio (W19 2014 &bull; W20 2015 &bull; W21 2016)
+                    Active Franchises Future Pick Portfolio ({isO6Capital ? 'O02 1928 • O03 1929 • O04 1930' : 'W19 2014 • W20 2015 • W21 2016'})
                   </h3>
                   <span className="text-[10px] font-mono font-bold text-slate-600 uppercase">
                     Automatically synced with confirmed trades in league_trades

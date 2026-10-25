@@ -9,12 +9,42 @@ const supabase = serviceKey
   ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
   : defaultSupabase;
 
+const KNOWN_LEAGUE_LEVELS: Record<number, { level: string; year: number }> = {
+  39: { level: 'O01', year: 1927 },
+  40: { level: 'W18', year: 2013 },
+  41: { level: 'W19', year: 2014 },
+  42: { level: 'W20', year: 2015 },
+  43: { level: 'W21', year: 2016 },
+  44: { level: 'W22', year: 2017 },
+  45: { level: 'W23', year: 2018 },
+  46: { level: 'W24', year: 2019 },
+  47: { level: 'W25', year: 2020 },
+  48: { level: 'W26', year: 2021 },
+  49: { level: 'W27', year: 2022 },
+  50: { level: 'W28', year: 2023 },
+  51: { level: 'W29', year: 2024 },
+  52: { level: 'W30', year: 2025 },
+  53: { level: 'W31', year: 2026 },
+  54: { level: 'O02', year: 1928 },
+  55: { level: 'O03', year: 1929 },
+  56: { level: 'O04', year: 1930 }
+};
+
 async function ensureLeagueExists(supabase: any, leagueId: number, rows?: any[]) {
   const numId = Number(leagueId);
   if (!numId || isNaN(numId)) return;
-  const sampleYear = rows?.[0]?.year ? Number(rows[0].year) : (numId >= 41 ? 2014 + (numId - 41) : 2013);
-  const wNum = numId >= 41 ? 19 + (numId - 41) : 18;
-  const leagueLevel = `W${String(wNum).padStart(2, '0')}`;
+  const known = KNOWN_LEAGUE_LEVELS[numId];
+  const sampleYear = rows?.[0]?.year ? Number(rows[0].year) : (known?.year || (numId >= 41 ? 2014 + (numId - 41) : 2013));
+  let leagueLevel = known?.level;
+  if (!leagueLevel) {
+    if (sampleYear >= 1927 && sampleYear <= 1945) {
+      const oNum = Math.max(1, sampleYear - 1926);
+      leagueLevel = `O${String(oNum).padStart(2, '0')}`;
+    } else {
+      const wNum = numId >= 41 ? 19 + (numId - 41) : 18;
+      leagueLevel = `W${String(wNum).padStart(2, '0')}`;
+    }
+  }
   await supabase.from('leagues').upsert(
     [{ league_id: numId, league_level: leagueLevel, nhl_year: sampleYear }],
     { onConflict: 'league_id', ignoreDuplicates: true }
