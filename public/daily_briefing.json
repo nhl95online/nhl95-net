@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published October 25, 2026 at 03:08 PM",
+  "updated_at": "Published October 26, 2026 at 05:45 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "<:KAK:1447629097684697270>",
-    "author": "MattyA",
+    "quote": "<:OCW:1030175920536948868>",
+    "author": "MNYoda",
     "context": "Uttered in #season-19-signup"
   },
-  "total_messages": 148,
+  "total_messages": 97,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -21,7 +21,7 @@
       "title": "Season 18 Playoffs End Date",
       "description": "",
       "url": "https://discord.com/events/146381349589090305/1521590330238046290",
-      "interested": 7,
+      "interested": 8,
       "is_live": false
     },
     {
@@ -30,7 +30,25 @@
       "title": "2014 Entry Draft",
       "description": "",
       "url": "https://discord.com/events/146381349589090305/1521590788495249419",
+      "interested": 8,
+      "is_live": false
+    },
+    {
+      "date": "Oct 27",
+      "time": "12:30 AM",
+      "title": "Ballerina Bowl - Pitt v Highland",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1564053971029467237",
       "interested": 7,
+      "is_live": false
+    },
+    {
+      "date": "Oct 30",
+      "time": "01:00 AM",
+      "title": "(3) Taipei vs (14) Hamilton",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1564243851621703770",
+      "interested": 6,
       "is_live": false
     }
   ],
@@ -59,14 +77,9 @@
       "commentary": "Heated debate and banter erupts in #exis-only over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "18:36",
-          "author": "LHX",
+          "time": "00:32",
+          "author": "MNYoda",
           "text": "@Sexy Exis/Friendlies"
-        },
-        {
-          "time": "19:06",
-          "author": "Unholy",
-          "text": "no thanks"
         }
       ]
     },
@@ -77,264 +90,147 @@
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:15",
-          "author": "GMDS",
-          "text": "I like that @krav1 is just hanging out on the docks"
+          "time": "17:45",
+          "author": "halifax",
+          "text": "if i see you online...ill send an invite, and we can try and connect, bud"
         },
         {
-          "time": "15:16",
-          "author": "GMDS",
-          "text": "https://klipy.com/gifs/ohmy-startrek"
-        },
-        {
-          "time": "15:17",
-          "author": "Pink_Elephants",
-          "text": "Is that Matt Hasselbeck?"
-        },
-        {
-          "time": "16:56",
-          "author": "krav1",
-          "text": "getting ready for the playoffs"
-        },
-        {
-          "time": "18:24",
-          "author": "marylandmike.",
-          "text": "https://drive.google.com/file/d/17_MJCjIpuCJdXS9a1d0MhSDZywhzhFhL/view?usp=drivesdk"
-        },
-        {
-          "time": "18:24",
-          "author": "marylandmike.",
-          "text": "If that link doesn’t work, lmk"
-        },
-        {
-          "time": "18:29",
-          "author": "Unholy",
-          "text": "no thanks"
-        },
-        {
-          "time": "18:31",
+          "time": "17:51",
           "author": "Ticklepuss",
-          "text": "So u are hard tanking the loser tournament?"
+          "text": "But would that handle going to 10 OTs?"
         },
         {
-          "time": "18:36",
-          "author": "marylandmike.",
-          "text": "I’m not gonna play that tournament"
-        },
-        {
-          "time": "18:36",
-          "author": "marylandmike.",
-          "text": "Is that the hardest tank ever?"
-        },
-        {
-          "time": "19:48",
-          "author": "halifax",
-          "text": "I feel like nhl95 Elo is easy pickings for top spot right now."
-        },
-        {
-          "time": "19:48",
-          "author": "halifax",
-          "text": "@UltraMagnus you got this."
-        },
-        {
-          "time": "19:52",
+          "time": "17:51",
           "author": "UltraMagnus",
-          "text": "Giving her"
+          "text": "yes, ive tested and its infinite"
         },
         {
-          "time": "20:44",
+          "time": "17:52",
+          "author": "UltraMagnus",
+          "text": "as long as its set to playoffs."
+        },
+        {
+          "time": "17:52",
+          "author": "UltraMagnus",
+          "text": "or the best of 7."
+        },
+        {
+          "time": "17:52",
+          "author": "UltraMagnus",
+          "text": "which allows continuous OTs"
+        },
+        {
+          "time": "17:53",
+          "author": "UltraMagnus",
+          "text": "I would just set the matchups here"
+        },
+        {
+          "time": "17:53",
+          "author": "UltraMagnus",
+          "text": "in the rom"
+        },
+        {
+          "time": "17:54",
+          "author": "Ticklepuss",
+          "text": "We should have done this a long time ago.  I dunno how this would affect bsb @Ellis ."
+        },
+        {
+          "time": "17:54",
+          "author": "Ticklepuss",
+          "text": "Shawn would have never won any championships in this format"
+        },
+        {
+          "time": "17:56",
+          "author": "UltraMagnus",
+          "text": "it doesnt. its the same save states. nothign would change it. Let me update the rom,"
+        },
+        {
+          "time": "17:56",
+          "author": "UltraMagnus",
+          "text": "it would be for the first round only, but can add for future rounds"
+        },
+        {
+          "time": "17:57",
+          "author": "Unholy",
+          "text": "Let’s celebrate Segathon’s birthday by getting rid of in-game penalties like he always wanted to do."
+        },
+        {
+          "time": "18:00",
+          "author": "Ticklepuss",
+          "text": "Do u personally know if bsb will shit the bed if it receives a period 5?  I don’t know the answer"
+        },
+        {
+          "time": "18:00",
+          "author": "UltraMagnus",
+          "text": "Now loaded in the rom."
+        },
+        {
+          "time": "18:05",
+          "author": "Ticklepuss",
+          "text": "Happy birthday @segathon - can i send u a gift card for a manny peddi?"
+        },
+        {
+          "time": "18:09",
+          "author": "UltraMagnus",
+          "text": "maybe a perm LOL"
+        },
+        {
+          "time": "19:39",
           "author": "The Villain CTJ",
-          "text": "This was AI"
+          "text": "I'd pay to see @segathon get a mani/pedi and a perm"
         },
         {
-          "time": "03:32",
-          "author": "Ellis",
-          "text": "The W has it's history and it's always fun to follow. Would love to play but dynasty format is quite the commitment for me personally...\nAnyways, it's still fun to brainstorm on this league. As a fan of this league it would be fun to watch a 2 tier league format. 2 divisions. One higher and the other lower. Not horizontal. Each div plays it's own div 4 or more games and the other tier 2 times. Perhaps not everyone plays everyone from the other tier? Some kind of promotion relegation. What really hit me tonight on B&B cast was someone saying how the seeding doesn't really mean much with a few exceptions and I agreed."
+          "time": "19:39",
+          "author": "The Villain CTJ",
+          "text": "can this be streamed on the bell-n-bell?"
         },
         {
-          "time": "03:32",
-          "author": "Ellis",
-          "text": "I know this has all been discussed before and this is nothing new but just saying as a viewer it sounds fun."
+          "time": "20:04",
+          "author": "Unholy",
+          "text": "When is the Ballerina Bowl™?"
         },
         {
-          "time": "03:42",
+          "time": "20:05",
+          "author": "Unholy",
+          "text": "Have negotiations begun yet?"
+        },
+        {
+          "time": "00:00",
+          "author": "marylandmike.",
+          "text": "HBD @segathon ! (Sent with an endless supply of Costco hotdogs)"
+        },
+        {
+          "time": "17:21",
           "author": "GMDS",
-          "text": "If we could ever got to 40 teams we could have promotion and relegation"
+          "text": "Is Marty brodeur, the last remaining guy from OG 95 still in the rom (on rosters)? I believe he is\n\n#penalties\n#tanking\n(Throttling this post)"
         },
         {
-          "time": "03:42",
-          "author": "Unholy",
-          "text": "I believe we tried this The Pope and it ended up elevating the lower teams to otherwise unreachable slots in the playoffs. It didn’t work."
-        },
-        {
-          "time": "03:45",
-          "author": "Unholy",
-          "text": "I think the major issue is that some of the best players in the league are also good-to-great GMs. The combination of that is tough to overcome. Tough but not impossible."
-        },
-        {
-          "time": "04:07",
-          "author": "Ellis",
-          "text": "I mean playoffs are league seperated.  Even draft order snakes between both leagues...\n@GMDS why need 40 teams? Genuinely asking..."
-        },
-        {
-          "time": "04:08",
-          "author": "Ellis",
-          "text": "There has been no season with seperate tiers that are there own leagues"
-        },
-        {
-          "time": "04:21",
-          "author": "Ellis",
-          "text": "Lol I just had to...."
-        },
-        {
-          "time": "04:25",
-          "author": "Ticklepuss",
-          "text": "What’s wrong with head on dekes?  Does that mean something i don’t know about?"
-        },
-        {
-          "time": "04:28",
-          "author": "Ticklepuss",
-          "text": "Also i just played a guy from brazil in the 94 arena.  Good to see brazil represented"
-        },
-        {
-          "time": "04:30",
-          "author": "Ellis",
-          "text": "Just etiquette in general..."
-        },
-        {
-          "time": "04:30",
-          "author": "Ticklepuss",
-          "text": "What does it even mean?"
-        },
-        {
-          "time": "04:30",
-          "author": "Ellis",
-          "text": "Head on dekes is legit though for sure"
-        },
-        {
-          "time": "04:31",
-          "author": "Ticklepuss",
-          "text": "I get it.  Cross crease has to be earned at this level so it’s legit.\n\nAppreciate etiquette though"
-        },
-        {
-          "time": "05:03",
+          "time": "17:22",
           "author": "GMDS",
-          "text": "20 and 20.... suppose less works"
+          "text": "Wait is jagr on a team? Maybe 2 guys"
         },
         {
-          "time": "05:25",
-          "author": "Unholy",
-          "text": "Night Fever, Bee Gees"
+          "time": "17:32",
+          "author": "segathon",
+          "text": "Jagr will be the last"
         },
         {
-          "time": "05:25",
-          "author": "Unholy",
-          "text": "Goated imo"
-        },
+          "time": "17:32",
+          "author": "segathon",
+          "text": "teemu i think is still around too"
+        }
+      ]
+    },
+    {
+      "channel": "complaints",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #complaints",
+      "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
+      "messages": [
         {
-          "time": "05:26",
-          "author": "Unholy",
-          "text": "I used to hate Disco but compared to now - Disco doesn’t suck"
-        },
-        {
-          "time": "05:28",
-          "author": "Ticklepuss",
-          "text": "I would like to praise the 95 arena.  It’s refreshing playing dudes that don’t know my shit"
-        },
-        {
-          "time": "05:28",
-          "author": "Ticklepuss",
-          "text": "94 arena?  I dunno"
-        },
-        {
-          "time": "05:29",
-          "author": "Ticklepuss",
-          "text": "Also instatjo or whatever squirts"
-        },
-        {
-          "time": "05:31",
-          "author": "Unholy",
-          "text": "Great. More ladies."
-        },
-        {
-          "time": "05:32",
-          "author": "Ticklepuss",
-          "text": "He plays decent besides that.  But….ya know"
-        },
-        {
-          "time": "05:32",
-          "author": "Ticklepuss",
-          "text": "U should get in there unholy"
-        },
-        {
-          "time": "05:32",
-          "author": "Ticklepuss",
-          "text": "It’s fairly dope"
-        },
-        {
-          "time": "05:32",
-          "author": "Unholy",
-          "text": "no thanks"
-        },
-        {
-          "time": "05:33",
-          "author": "Unholy",
-          "text": "😂"
-        },
-        {
-          "time": "05:33",
-          "author": "Unholy",
-          "text": "I’m addicted to making “no thanks” happen"
-        },
-        {
-          "time": "05:34",
-          "author": "Ticklepuss",
-          "text": "I drank all my steelers 9am beers"
-        },
-        {
-          "time": "05:35",
-          "author": "Unholy",
-          "text": "Me too"
-        },
-        {
-          "time": "05:35",
-          "author": "Ticklepuss",
-          "text": "I love her beyond words"
-        },
-        {
-          "time": "05:36",
-          "author": "Unholy",
-          "text": "Zero beers left but 22 smokes remain"
-        },
-        {
-          "time": "05:36",
-          "author": "Unholy",
-          "text": "She’s the hottest"
-        },
-        {
-          "time": "05:38",
-          "author": "Unholy",
-          "text": "I downloaded some disco. If you don’t like that: go fuck yourselves?"
-        },
-        {
-          "time": "05:39",
-          "author": "Unholy",
-          "text": "Sorry for having a good time killjoys"
-        },
-        {
-          "time": "15:01",
-          "author": "halifax",
-          "text": "@GMDS has claiming number one in Elo ratings."
-        },
-        {
-          "time": "15:01",
-          "author": "GMDS",
-          "text": "Lol by not playing for 3 days 🙃"
-        },
-        {
-          "time": "15:08",
-          "author": "halifax",
-          "text": "@Ticklepuss helped you out by beating the other guy guy twice."
+          "time": "14:43",
+          "author": "The Villain CTJ",
+          "text": "Maybe it's a skin walker. Get in there and assert dominance"
         }
       ]
     },
@@ -345,74 +241,22 @@
       "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:23",
-          "author": "Pink_Elephants",
-          "text": "PRAISE: Pink Jr. scored a hat trick in his soccer game today including the game winner. 4-3 final. 🎩 🎩 🎩"
-        },
-        {
-          "time": "15:25",
+          "time": "00:36",
           "author": "Ticklepuss",
-          "text": "Take him out for ice cream"
-        },
+          "text": "Praise - I can edit other people’s events"
+        }
+      ]
+    },
+    {
+      "channel": "league-material",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #league-material",
+      "commentary": "Heated debate and banter erupts in #league-material over game tape, timing, and locker room etiquette.",
+      "messages": [
         {
-          "time": "17:21",
-          "author": "The Villain CTJ",
-          "text": "The hell with ice cream, get that kid a beer"
-        },
-        {
-          "time": "17:22",
-          "author": "GMDS",
-          "text": "Assume he was hopped up on McDonald's orange drink"
-        },
-        {
-          "time": "17:22",
-          "author": "The Villain CTJ",
-          "text": "sugar, water, orange"
-        },
-        {
-          "time": "18:26",
-          "author": "marylandmike.",
-          "text": "Assuming he also read your book"
-        },
-        {
-          "time": "19:00",
-          "author": "shawnmb",
-          "text": "Assuming that kid has been playing for pink the last 5 seasons or so"
-        },
-        {
-          "time": "19:40",
-          "author": "Lloyd10xmas",
-          "text": "I heard the publisher dropped him because he got writer’s block…."
-        },
-        {
-          "time": "21:59",
-          "author": "MNYoda",
-          "text": "Orange Drink!!  Classic from 80’s and 90’s!"
-        },
-        {
-          "time": "22:43",
+          "time": "18:02",
           "author": "UltraMagnus",
-          "text": "Orange Crush or Fanta"
-        },
-        {
-          "time": "23:15",
-          "author": "MNYoda",
-          "text": "I have some orange crush in the refridgerator!  haha"
-        },
-        {
-          "time": "05:39",
-          "author": "Ticklepuss",
-          "text": "Silicon Valley doesn’t get talked about enough"
-        },
-        {
-          "time": "05:42",
-          "author": "Unholy",
-          "text": "Going 4-3 .. but in Paris!"
-        },
-        {
-          "time": "10:58",
-          "author": "DON DON",
-          "text": "No fanta its gotta be og, in the glass bottles"
+          "text": "@Leaguers Use PLayoff Best of 7"
         }
       ]
     },
@@ -423,69 +267,9 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:19",
-          "author": "Ticklepuss",
-          "text": "Perhaps we can schedule ours?  I am off to Red Rocks this cumming week"
-        },
-        {
-          "time": "16:26",
-          "author": "Ticklepuss",
-          "text": "Good chat"
-        },
-        {
-          "time": "17:00",
-          "author": "Lloyd10xmas",
-          "text": "I’m at the rink all day today and tomorrow(!) Working on site all week this week(!)"
-        },
-        {
-          "time": "17:02",
-          "author": "Lloyd10xmas",
-          "text": "When do you leave for red rocks?"
-        },
-        {
-          "time": "17:08",
-          "author": "Adolf Oliver Nipples",
-          "text": "Shut up"
-        },
-        {
-          "time": "17:08",
-          "author": "Lloyd10xmas",
-          "text": "You shut…bitch(!)"
-        },
-        {
-          "time": "17:16",
-          "author": "Ticklepuss",
-          "text": "Thursday"
-        },
-        {
-          "time": "17:17",
-          "author": "Ticklepuss",
-          "text": "I am open to dragging our feet though.  Nobody will care"
-        },
-        {
-          "time": "22:21",
-          "author": "MattyA",
-          "text": "Who you going to see at Red Rocks?"
-        },
-        {
-          "time": "22:25",
-          "author": "MattyA",
-          "text": "Being a newcomer to the hip Hop / rap world, I do like Cypress Hill because that's old school.. I love it. Enjoy brother and think of me when you're passing one around"
-        },
-        {
-          "time": "22:30",
-          "author": "Ticklepuss",
-          "text": "I am impressed Digable Planets is still touring and got on this ticket since they had 2 albums."
-        },
-        {
-          "time": "23:22",
-          "author": "LHX",
-          "text": "dope lineup"
-        },
-        {
-          "time": "12:11",
-          "author": "wolf_of_highland",
-          "text": "Yeah no"
+          "time": "14:20",
+          "author": "chalkitup7777",
+          "text": "If it’s not Pearl Jam the wolf doesn’t approve"
         }
       ]
     },
@@ -496,87 +280,24 @@
       "commentary": "Managers are talking behind closed doors. Draft picks and fourth-liners are flying around like loose pucks.",
       "messages": [
         {
-          "time": "15:14",
-          "author": "GMDS",
-          "text": "https://klipy.com/gifs/giggles-12"
-        },
-        {
-          "time": "20:46",
+          "time": "17:47",
           "author": "MarcusVickEBC",
-          "text": "KAR first round pick is up for trade."
+          "text": "If you’re outside the top 6 and you want a great shot at one of Mackinnon/kucherov/barkov/gaudreau/kuznetsov……..here’s your chance."
         },
         {
-          "time": "20:46",
-          "author": "MarcusVickEBC",
-          "text": "A chance at MacKinnon"
-        },
-        {
-          "time": "00:12",
-          "author": "shawnmb",
-          "text": "how do you feel about high weight?"
-        },
-        {
-          "time": "00:40",
+          "time": "19:20",
           "author": "Ticklepuss",
-          "text": "I have never been so proud of you"
-        }
-      ]
-    },
-    {
-      "channel": "draft-discussion",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #draft-discussion",
-      "commentary": "Heated debate and banter erupts in #draft-discussion over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "20:20",
-          "author": "UltraMagnus",
-          "text": "@Leaguers New development in the competiting site, that drafts now can be automated. Pick you player, shows all the draft classes and draft cpaital even if a trade happens it will update as well"
+          "text": "Anyone want a goalie?\n\nLook at the eyes on this thing and tell me he can’t track a puck?"
         },
         {
-          "time": "20:21",
-          "author": "UltraMagnus",
-          "text": "Even the waivers are loaded for simpler access."
+          "time": "19:21",
+          "author": "Unholy",
+          "text": "“this thing”"
         },
         {
-          "time": "20:21",
-          "author": "UltraMagnus",
-          "text": "Waivers are in reverse order as well."
-        },
-        {
-          "time": "20:21",
-          "author": "UltraMagnus",
-          "text": "BPA is also enforced"
-        },
-        {
-          "time": "21:00",
-          "author": "marylandmike.",
-          "text": "Can you post the link in here?"
-        },
-        {
-          "time": "22:42",
-          "author": "UltraMagnus",
-          "text": "https://www.nhl95.net/draft"
-        },
-        {
-          "time": "23:54",
-          "author": "GMDS",
-          "text": "@UltraMagnus \nJohn/Johnny boychuk, needs to be merged, but keep the 2014 John boychuk"
-        },
-        {
-          "time": "23:55",
-          "author": "GMDS",
-          "text": "Mike/Michael kostka"
-        },
-        {
-          "time": "00:17",
-          "author": "Pink_Elephants",
-          "text": "This still isn’t fixed?????"
-        },
-        {
-          "time": "12:32",
-          "author": "UltraMagnus",
-          "text": "completed"
+          "time": "19:30",
+          "author": "Ticklepuss",
+          "text": "It has a bunch of 6s.  Puck control pretty close to a 7.  This is the thing tanking teams don’t want because they don’t need guaranteed wins"
         }
       ]
     },
@@ -587,109 +308,92 @@
       "commentary": "Heated debate and banter erupts in #shitty-bill over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:27",
-          "author": "jer_33",
-          "text": "A shitty bill tab looks exactly like it sounds."
+          "time": "18:45",
+          "author": "DON DON",
+          "text": "Soon"
         },
         {
-          "time": "17:19",
-          "author": "The Villain CTJ",
-          "text": "If there is one made for it, it needs to be done in crayon"
+          "time": "00:06",
+          "author": "GaelicGopher",
+          "text": "Just tell me who and when to play.  I’ve spent the past week giving Getslaf Steroids and ain’t no one gunna stop him!!"
         },
         {
-          "time": "21:43",
-          "author": "Adolf Oliver Nipples",
-          "text": "who plays who in this? Is there a bracket?"
+          "time": "01:13",
+          "author": "marylandmike.",
+          "text": "RIC 2 - SHS 5\nSHS 6 - RIC 1"
         },
         {
-          "time": "21:43",
-          "author": "Lloyd10xmas",
-          "text": "Tankfest(!)"
-        },
+          "time": "01:54",
+          "author": "GMDS",
+          "text": "Other side of the bracket:\n2) @The Villain CTJ  vs 10)  @DON DON \n\nWinner plays:\n3) @MNYoda  vs\n6) @marylandmike."
+        }
+      ]
+    },
+    {
+      "channel": "blubber-magazine",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #blubber-magazine",
+      "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
+      "messages": [
         {
-          "time": "21:44",
-          "author": "Lloyd10xmas",
-          "text": "I nominate @Unholy for the face of the Shitty Bill(!)"
-        },
-        {
-          "time": "21:51",
-          "author": "Unholy",
-          "text": "no thanks"
-        },
-        {
-          "time": "22:23",
-          "author": "MattyA",
-          "text": "Okay, I'm late to the discussion here as I was busy at work yesterday, but where are the brackets for the shitty bill? How do I know who I lose to?"
-        },
-        {
-          "time": "22:24",
+          "time": "12:30",
           "author": "Ticklepuss",
-          "text": "Some of the qualifiers have already said no thanks"
-        },
-        {
-          "time": "22:27",
-          "author": "GMDS",
-          "text": "https://discord.com/channels/146381349589090305/1475646168410230946/1563363212450201612"
-        },
-        {
-          "time": "22:58",
-          "author": "DON DON",
-          "text": "@jer_33 wanna play?"
-        },
-        {
-          "time": "02:48",
-          "author": "DON DON",
-          "text": "@The Villain CTJ let's schedule our games."
-        },
-        {
-          "time": "03:38",
-          "author": "GMDS",
-          "text": "Did you and jer play?\n\nIf yes, please post scores"
+          "text": "**__Blubber Magazine - 2013 Brule Round 1 Preview - Take It Up With Cocksinsun Volume 127__**\n\n“We did it yinz!”, exclaimed an anonymous source said after last Friday’s regular season final box scores trickled in.  Some spent a few hours patting themselves on the back for managing to complete 56 games in 90 days, while others moved on to other stuff to complain about.  Now that the playoffs have arrived at last, the rule tinkering and complaining should subside for 2-3 weeks….\n\nRound 1 has some juicy matchups….Yeah, seems that way every season, but a few really do stand out for the S18 version of the Brule Playoffs.\n\n\n__(1) Sumter vs (16) Autobahn__\nTeam Autobahn finally makes it back to the dance after an incredibly long hiatus and draws a team trying to get to their 5th Finals in a row.  Welcome back!\n\nWhat to Expect:  \nBellNBell podcast guest Jim Elephants laughed out loud when asked if Sumter would win this series, then provided, what some have called, a snarky “yeah”.  If you’ve read his books on success, confidence doesn’t seem to be an issue in the Sumter locker room.   Coming off a regular season that saw them lose just 8 games in regulation, it’s very difficult to see the Trash losing to a team that hasn’t finished in the top 16 for the better part of a decade.  Stranger things have happened….Have they though?  Returning to the Brule marks a milestone for Team Autobahn, and NHL95 fans across the globe hope to continue to see improvement, but the stats say it would be a minor miracle if this series gets to 6 games.\n\n**Prediction:  Sumter in 4**"
         },
         {
           "time": "12:30",
-          "author": "DON DON",
-          "text": "2-3 ot / 5-3 / 6-2"
+          "author": "Ticklepuss",
+          "text": "__(2) Pitt vs (15) Highland__\nThe latest version of the Ballerina Bowl is set to kick off the Brule this season, with both teams expected to be in their leotards and on the ice by 8:30 tonight.\n\nWhat to Expect:  \nThe history between these two best online friends is well documented.  They are cross-state rivals, wrapped in a mysterious cloak of exis.  Just how much they play these practice games is anyone’s guess.  Estimates range from 15 - 60 a week.  A few leaks have come out over the years, such as the fact that one of them refuses to turn off penalties citing World National settings dedication.  Nonetheless, these 2 have met a few times in the playoffs with Pitt having the upper hand.  The Intramurals had another amazing regular season, keeping the #1 seed in their sights up until the final day of the regular season.  Still, of all 1st round draws, getting matched up with the team you play the most doesn’t seem ideal.  Unless, of course, Pitt wins most of those games.  Highland’s best shot to advance likely needs to be a full series of lockdown drag-out camping pussy.  That’s all we got for this one….\n\n** Prediction:  Pitt in 6**"
         },
         {
-          "time": "13:08",
-          "author": "GMDS",
-          "text": "Other side of the bracket:\n2) @The Villain CTJ  vs 10)  @DON DON \n\nWinners play:\n3) @MNYoda  faces winner of \n6) @marylandmike. Vs 10) @bclinton_666"
+          "time": "12:31",
+          "author": "Ticklepuss",
+          "text": "__(4) Thunder Bay vs (13) Easter Island__\nThis matchup could be the jewel of the 1st round, or it might not.  Easter Isle returns to the W and warms to the task right out of the gate with a lesser roster, while Thunder Bay looks to repeat for about the 8th time.\n\nWhat to Expect:  \nStylistically, this should be a treat to watch.  Both are great in every area - F, D, G, and each can shapeshift styles on the fly.  This is probably the worst of all the possible matchups Thunder Bay could have gotten in the 1st round across the bottom 8.  That’s not to say the Pike won’t be confident.  They have the better roster and more recent 7 game series experience.  Coach Big Belly is well aware that he could lose this series, so he will be ready.  Coach LHX probably also thinks he can win if he plays perfectly, which is to say, Thunder Bay is still the obvious favorite despite this potential landmine.  Thunder Bay has never failed to get past the 1st round.  LHX has beaten Shawn multiple times in other tier 2 leagues (we think and heard on a top 10 podcast), giving this all the makings of a potential all-timer…..Or not….\n\n\n** Prediction:  Thunder Bay in 6**"
         },
         {
-          "time": "13:20",
-          "author": "DON DON",
-          "text": "GGS @jer_33"
+          "time": "12:31",
+          "author": "Ticklepuss",
+          "text": "__(5) Providence vs (12) Tegucigalpa\n__These two dear friends, fresh off their regular season finale together, get to do it all over again now.  It seems these 2 teams have played in the Brule relatively recently, but according to a popular NHL95 website, it’s been 5 years already since Tegucigalpa sent Providence back to the beauty parlor in 7 games.\n\nWhat to Expect:  \nParty “Dan”, somewhat quietly and without much fanfare, has his highest seed in a very long time.  How long?  We aren’t sure and didn’t care to look.  These 2 squads typically play a fun end-to-end style that could be different than the rest of the 1st round matchups.  It wouldn’t be surprising if this series has the highest scoring R1 series….so if you like offense, tune in sometime in the future.  The standard playbook between these two are a high-flying 1 timing squiring team, backstopped by a camping pussy, versus a team that likes to skate, sucks at camping, and uses the C button to score.  Many times the victor here is which team does better on breakaways.  Over 7 games, there will be other factors, such as: how many squirts sneak through, can Tegucigalpa actually stop a one-timer they know is coming, can Providence shapeshift for once?\n\n\n** Prediction:  Providence in 4**"
         },
         {
-          "time": "13:23",
-          "author": "DON DON",
-          "text": "Morning.  If i  win i would play yoda or Mike or Clinton?"
+          "time": "12:34",
+          "author": "Ticklepuss",
+          "text": "__(6) Woodlynne vs (11) Grand River__\nLike Easter Isle, Coach Moses returned to the W after a long hiatus and put together a very impressive campaign.  The Herons started the season as a long(ish) shot to get into the top 16, so #11 is an accomplishment in its own right.  Woodlynne is back in the tournament again, and again a team nobody wants to see themselves paired up with.\n\nWhat to Expect:  \nRecently, some podcasters picked the Herons to advance in this series.  We found it quite surprising, but they do know Moses best.  From here, we just don’t see it.  The Rats are brutally tough to play against.  Lock down D, great goaltending, and a steadily improving offense is a prime mixture for the playoffs.  The Rats seem destined to win one of these things one year, and it could happen at any time.  Grand River, as mentioned, did have a great season.  They also have the ability to lock things down in their own zone at times with solid tendy play.  If they get hot, they can go on a run no doubt….We still think Moses is the only team to eliminate KingRaph way back when.  This, however, feels like an awful matchup.  The creative ways that the Rats are able to generate just enough offense to win will really make things rough on Grand River.  \n\n\n** Prediction:  Woodlynnne in 5**"
         },
         {
-          "time": "13:24",
-          "author": "DON DON",
-          "text": "Whoever wins that series?"
+          "time": "12:35",
+          "author": "Ticklepuss",
+          "text": "__(7) Maryhill vs (10) Minhattrick__\nWin or lose, Maryhill is already the frontrunner for best car video of the year with their depiction of a petrified Nick from Minnesota running (unsuccessfully) from a bull.  Neither of these teams have missed the playoffs ever, so both know what they need to do.\n\nWhat to Expect:  \nThis really is a great matchup on digital paper.  Somewhat of a mind bender.  It’s very easy to imagine Maryhill winning this quickly in 5 games.  It’s also easy to see them losing in 5 games.  Or both losing in 7 games.  A true clash of styles: male/female for starters, fast attacking offense/slow methodical, quiet and poised / constant moaning and belching.  They do have similarities in net though;  Nick from Minnesota is often named as a top manual goalie player, but Red has drastically improved in this area over the years.  The Swayzes are different in the playoffs than the regular season, but they are going against a team that is very familiar with how to get it done.  This one feels like it could go either way….We flipped a coin, and are picking the team that hits above the belt.\n\n\n** Prediction:  Maryhill in 6**"
         },
         {
-          "time": "13:26",
-          "author": "DON DON",
-          "text": "One more ?..... is my series against ctj bo3 or 5?"
+          "time": "12:36",
+          "author": "Ticklepuss",
+          "text": "__(8) Betty Ford vs (9) Sugar Valley__\nThe 8/9 matchup is always a treat.  The Brule officially welcomes Betty Ford in their first legit shot at glory.  As is customary, you’ll be matched up with someone with a shitty connection and slippery when it comes to etiquette and morals.  Sugar Valley is officially at the contender hump.  \n\nWhat to Expect:  \nHopefully this one goes off smooth, because it could be a dandy.  The leagues best lineup, guided by a rapidly improving rational Krav, should give the Firebirds all they can handle.  Sugar Valley as been drastically improving in their own right.  Once a team that seemingly just wanted to lead the league in shots on goal, has quietly improved their defensive play.  They may need to lean on that quite a bit in this series, because they can’t keep up with the guys Cardinal Krav sends over the boards.  Couple that with the fact that Betty Ford has lead the league in attack zone time for 3 straight seasons (we think?), and it’s easy to see how the Clinic could outgun the Firebirds.  Coach Topher has some tricks - some of which aren’t effeminate - of his own.  Betty Ford might want a boat race, but Sugar Valley is wily enough to muck it up and piss in the pool.  This has all the makings of a fantastic series, and hopefully one that goes off without a technology hitch.\n\n\n\n** Prediction:  Sugar Valley in 7**"
         },
         {
-          "time": "14:15",
-          "author": "MattyA",
-          "text": "@UltraMagnus if you want to play our SB series today, let me know ...I am here all day pretty much."
+          "time": "12:36",
+          "author": "Ticklepuss",
+          "text": "-- **Brian Cocksinsun is a Senior Writer for Blubber Magazine and his parents are somehow happy together and still attend family picnics**"
         },
         {
-          "time": "14:22",
-          "author": "GMDS",
-          "text": "Still best 2/3; finals is 3/5"
+          "time": "13:13",
+          "author": "Lloyd10xmas",
+          "text": "Some of the best reporting Brian “THE Dick” Cocksinsun has ever done(!)"
         },
         {
-          "time": "14:54",
-          "author": "UltraMagnus",
-          "text": "lets dance"
+          "time": "14:13",
+          "author": "segathon",
+          "text": "great stuff Cokcsinsun"
+        },
+        {
+          "time": "14:13",
+          "author": "segathon",
+          "text": "can tell he kept the interns away"
+        },
+        {
+          "time": "14:14",
+          "author": "segathon",
+          "text": "also i think you missed a match up...."
         }
       ]
     },
@@ -700,118 +404,120 @@
       "commentary": "Heated debate and banter erupts in #bell-n-bell over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:34",
-          "author": "LHX",
-          "text": "the mapping was pretty messed up"
-        },
-        {
-          "time": "15:35",
-          "author": "LHX",
-          "text": "finally got it working"
-        },
-        {
-          "time": "15:35",
-          "author": "LHX",
-          "text": "it seems solid, but def feels some lag compared to Retroarch"
-        },
-        {
-          "time": "01:24",
-          "author": "shawnmb",
-          "text": "starting soon"
-        },
-        {
-          "time": "01:30",
+          "time": "17:52",
           "author": "Ticklepuss",
-          "text": "Mya"
+          "text": "It’s annoying to play them.  I don’t care if people tank beyond that."
         },
         {
-          "time": "03:23",
-          "author": "Ellis",
-          "text": "good stuff guys"
+          "time": "18:25",
+          "author": "marylandmike.",
+          "text": "You’ve tanked in the past yes? We’re trying to eliminate tanking completely. No gimmicks, just looking for a better system"
         },
         {
-          "time": "03:23",
-          "author": "Ellis",
-          "text": "I missed the first portion but still good"
-        },
-        {
-          "time": "03:24",
-          "author": "Ticklepuss",
-          "text": "Get to work rational @krav1"
-        },
-        {
-          "time": "03:26",
+          "time": "18:27",
           "author": "Unholy",
-          "text": "I blacked out during the Tanking segment"
+          "text": "I’m pro tanking"
         },
         {
-          "time": "03:34",
-          "author": "Ellis",
-          "text": "I missed it!"
-        },
-        {
-          "time": "03:34",
-          "author": "Ellis",
-          "text": "what was discussed on tanking"
-        },
-        {
-          "time": "03:35",
-          "author": "Ellis",
-          "text": "I remember thinking the random ass lotery draft for all would make tanking obsolete. Lottery draft slots assigned by the wheel and higher picks for one season perhaps lower odds for the following season to pick as high?"
-        },
-        {
-          "time": "04:05",
-          "author": "Ticklepuss",
-          "text": "It was all laid at the feet of @krav1"
-        },
-        {
-          "time": "04:37",
+          "time": "18:28",
           "author": "Unholy",
-          "text": "All I remember is Bell-n-Bell being super-pro tanking"
+          "text": "If we all tank then nobody tanks. Problem solved."
         },
         {
-          "time": "05:01",
+          "time": "18:32",
+          "author": "GMDS",
+          "text": "Soft tank when the team needed a reset, yes... outright hard tank no"
+        },
+        {
+          "time": "18:38",
+          "author": "Unholy",
+          "text": "All joking aside: I don’t think this is a big issue. If a couple of guys want to burn a season to get a shot at someone they want, I don’t care."
+        },
+        {
+          "time": "18:40",
+          "author": "Unholy",
+          "text": "We haven’t even tried the new snake draft yet and we’re already onto fixing some other issue that doesn’t need to be addressed imo. Leave it alone already for a couple of seasons."
+        },
+        {
+          "time": "18:40",
+          "author": "Unholy",
+          "text": "Let’s move on to important issues like getting rid of in-game penalties."
+        },
+        {
+          "time": "18:41",
+          "author": "GMDS",
+          "text": "https://klipy.com/gifs/look-what-7"
+        },
+        {
+          "time": "19:16",
           "author": "Ticklepuss",
-          "text": "2 great guys"
+          "text": "Is the snake actually happening?"
         },
         {
-          "time": "12:32",
-          "author": "Ticklepuss",
-          "text": "Did i miss the section on midseason markers?"
-        },
-        {
-          "time": "12:57",
-          "author": "segathon",
-          "text": "Great stuff last night boys"
-        },
-        {
-          "time": "13:02",
+          "time": "21:04",
           "author": "red",
-          "text": "I do appreciate bell and bell reviews but pink is 100% right about my up and coming series"
+          "text": "Free agent list is all guys need"
+        },
+        {
+          "time": "01:06",
+          "author": "shawnmb",
+          "text": "https://klipy.com/gifs/type-90-main-battle-tank"
+        },
+        {
+          "time": "01:28",
+          "author": "shawnmb",
+          "text": "https://www.youtube.com/watch?v=dplY38O5qMg"
         }
       ]
     },
     {
-      "channel": "live-streams",
+      "channel": "the-hockey-news",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #live-streams",
-      "commentary": "Heated debate and banter erupts in #live-streams over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #the-hockey-news",
+      "commentary": "Heated debate and banter erupts in #the-hockey-news over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "22:34",
-          "author": "LHX",
-          "text": "still works:"
+          "time": "17:58",
+          "author": "Ticklepuss",
+          "text": "Shawn got a solid team when he joined.  Adolfo had the worst team ever assembled.  He picked from the scraps after the initial draft."
         },
         {
-          "time": "22:34",
-          "author": "LHX",
-          "text": "https://www.twitch.tv/merkonomics"
-        }
-      ],
-      "clips": [
+          "time": "18:26",
+          "author": "shawnmb",
+          "text": "true, i had Lindros and Ozolinsh. Didn't Pitt get Yzerman and then he picked Forsberg in Season 2 after winning the Shitty Bill in Season 1?"
+        },
         {
-          "name": "merkonomics",
-          "url": "https://www.twitch.tv/merkonomics"
+          "time": "18:26",
+          "author": "shawnmb",
+          "text": "That was 17 seasons ago and everyone who was on those teams is retired."
+        },
+        {
+          "time": "18:27",
+          "author": "UltraMagnus",
+          "text": "he did get yzerman"
+        },
+        {
+          "time": "18:27",
+          "author": "UltraMagnus",
+          "text": "from ATonesir (binghampton DUsters)"
+        },
+        {
+          "time": "18:28",
+          "author": "Ticklepuss",
+          "text": "Yes"
+        }
+      ]
+    },
+    {
+      "channel": "nobody-puts-swayze-on-the-ice",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #nobody-puts-swayze-on-the-ice",
+      "commentary": "Heated debate and banter erupts in #nobody-puts-swayze-on-the-ice over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "00:32",
+          "author": "GaelicGopher",
+          "text": "Happy B Day GodFather of 95 nerdiness and Goat 🐐 Herder.  I wish you nothing but the best on your day….enjoy the Cake that may or may not have cyanide in it."
         }
       ]
     },
@@ -822,9 +528,39 @@
       "commentary": "Cryptic communications transmitted during late-night downtime. Scouts are still deciphering the deeper strategic playbook.",
       "messages": [
         {
-          "time": "16:53",
-          "author": "segathon",
-          "text": "Jud’s unreachable"
+          "time": "00:16",
+          "author": "GaelicGopher",
+          "text": "Well, after careful thought deliberation, consultations with Magnus, The Former Face of the League, and my attorney……\nI have decided I love all you degenerates too much.  Even the Yinzers are on my virtual Xmas Card list now.\n\nCarry On, good luck, Go Gophers\n(Truth be told I lost a coin flip whether to come back or not AND Nick started crying on his Birthday 🎂!\n\nBut if ya all sim and tank Lattimer is coming out!!"
+        },
+        {
+          "time": "00:18",
+          "author": "Ticklepuss",
+          "text": "I think everyone appreciated that u stabbed his birthday cake"
+        },
+        {
+          "time": "00:20",
+          "author": "GaelicGopher",
+          "text": "My attorney advised that is the only thing I could stab and still stay out of jail."
+        },
+        {
+          "time": "00:22",
+          "author": "Pink_Elephants",
+          "text": "🔪"
+        },
+        {
+          "time": "00:22",
+          "author": "Ticklepuss",
+          "text": "U will be happy to know that the league has decided to embrace tanking"
+        },
+        {
+          "time": "00:30",
+          "author": "GaelicGopher",
+          "text": "I would like to thank @Liasson to the Affairs of Gopher for relaying my feelings and demands….and re-writing them on nice Napkins.\nPlease let me know when Corey Millen’s HOF ceremony is."
+        },
+        {
+          "time": "15:02",
+          "author": "Liasson to the Affairs of Gopher",
+          "text": "Ok, I will focus my energies on the Babes Sports Bar lawsuit from 2002"
         }
       ]
     },
@@ -835,19 +571,77 @@
       "commentary": "Heated debate and banter erupts in #stiller-nation over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "13:24",
+          "time": "19:34",
           "author": "Ticklepuss",
-          "text": "Let’s go yinz"
+          "text": "Bengals/Ravens have to be 2 worst kits right?"
         },
         {
-          "time": "14:17",
+          "time": "19:34",
+          "author": "Ticklepuss",
+          "text": "Or am i just bias?"
+        },
+        {
+          "time": "19:34",
+          "author": "Ticklepuss",
+          "text": "I can’t do purple outside of the world national"
+        },
+        {
+          "time": "19:35",
           "author": "Unholy",
-          "text": "Looked like his knee was down. #killjoy"
+          "text": "Vikings getups are great imo"
         },
         {
-          "time": "14:46",
+          "time": "19:35",
           "author": "Ticklepuss",
-          "text": "Poop"
+          "text": "Ah shit yeah ur right"
+        },
+        {
+          "time": "19:36",
+          "author": "Ticklepuss",
+          "text": "I forgot there were 2 purple teams"
+        },
+        {
+          "time": "19:37",
+          "author": "Unholy",
+          "text": "The Ravens always look like they cut corners on their design dept"
+        },
+        {
+          "time": "19:38",
+          "author": "Ticklepuss",
+          "text": "The bengals always have corny pants imo"
+        },
+        {
+          "time": "19:40",
+          "author": "Ticklepuss",
+          "text": "Not a fan of the pants matching jersey colors either.  I am sure there is a name for that"
+        },
+        {
+          "time": "19:46",
+          "author": "Unholy",
+          "text": "“Lame”"
+        },
+        {
+          "time": "00:23",
+          "author": "Ticklepuss",
+          "text": "I don’t hate this SNF matchup.  Seahawks need to go back to the retros permanently.  I hope mahomes rolls an ankle"
+        },
+        {
+          "time": "00:45",
+          "author": "Unholy",
+          "text": "Agree on the Seahawks getups. They are fantastic."
+        }
+      ]
+    },
+    {
+      "channel": "knightsvision",
+      "badge": "HOT SCOOP",
+      "title": "Archival Identity Verification Incident",
+      "commentary": "Vintage game film circulated through the wire. Unholy confirmed his legendary on-ice persona by sheer instinct without even rendering the media.",
+      "messages": [
+        {
+          "time": "15:18",
+          "author": "GMDS",
+          "text": "Not onion...but could be"
         }
       ]
     },
@@ -858,9 +652,9 @@
       "commentary": "Heated debate and banter erupts in #hai over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:38",
-          "author": "Ticklepuss",
-          "text": "https://klipy.com/gifs/arthurtv-legend-1"
+          "time": "02:13",
+          "author": "red",
+          "text": "Is this a tease that WolfNcline might give us a episode"
         }
       ]
     },
@@ -871,24 +665,9 @@
       "commentary": "Heated debate and banter erupts in #segathon-tournaments-inperson over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "17:38",
-          "author": "segathon",
-          "text": "We got performance team dancing"
-        },
-        {
-          "time": "17:43",
-          "author": "segathon",
-          "text": "Jud talking shit"
-        },
-        {
-          "time": "18:59",
-          "author": "segathon",
-          "text": "@Liasson to the Affairs of Gopher  your client sighting"
-        },
-        {
-          "time": "00:13",
-          "author": "shawnmb",
-          "text": "They heard Autobahn snuck into the playoffs?"
+          "time": "00:19",
+          "author": "GaelicGopher",
+          "text": "Blair, your 30MG ass got smoked by Doug.  You shouldn’t even be allowed to play next tailgate.\nYou Suck"
         }
       ]
     },
@@ -899,14 +678,24 @@
       "commentary": "Heated debate and banter erupts in #season-19-signup over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "17:08",
-          "author": "red",
-          "text": "<:MHA:1347389671059095604>"
+          "time": "21:31",
+          "author": "autobahn",
+          "text": "<:MGG:897245448522313738>"
         },
         {
-          "time": "22:23",
-          "author": "MattyA",
-          "text": "<:KAK:1447629097684697270>"
+          "time": "00:35",
+          "author": "bclinton_666",
+          "text": "<:RIC:878393337009283134>"
+        },
+        {
+          "time": "00:39",
+          "author": "GaelicGopher",
+          "text": "<:AUT:1040258542629826691>"
+        },
+        {
+          "time": "01:14",
+          "author": "MNYoda",
+          "text": "<:OCW:1030175920536948868>"
         }
       ]
     }
