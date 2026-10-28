@@ -1327,46 +1327,71 @@ export default function PlayoffBracket() {
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [displayMode, setDisplayMode] = useState<CardDisplayMode>('banner-coach');
   const [trophyImgFailed, setTrophyImgFailed] = useState<boolean>(false);
+  const [isProjectedBracket, setIsProjectedBracket] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchSeasons = async () => {
-      const { data, error } = await supabase
-        .from('league_playoffs')
-        .select(`
-          league_id,
-          leagues:league_id (
-            league_name
-          )
-        `);
+      const [playoffsRes, leaguesRes, gamestatsRes] = await Promise.all([
+        supabase
+          .from('league_playoffs')
+          .select(`
+            league_id,
+            leagues:league_id (
+              league_name
+            )
+          `),
+        supabase
+          .from('leagues')
+          .select('*')
+          .order('league_id', { ascending: false }),
+        supabase
+          .from('league_gamestats')
+          .select('league_id')
+      ]);
 
-      if (error) {
-        console.error("Error fetching playoff leagues:", error.message);
-        return;
-      }
+      const activeGameLeagueIds = new Set<number>();
+      const uniqueMap = new Map<number, { league_id: number; league_name: string; hasOfficialPlayoffs: boolean }>();
 
-      if (data) {
-        const uniqueMap = new Map();
-        data.forEach((row: any) => {
-          if (row.league_id) {
-            const rawLeagues = row.leagues;
-            const targetName = Array.isArray(rawLeagues)
-              ? rawLeagues[0]?.league_name
-              : rawLeagues?.league_name;
+      (gamestatsRes.data || []).forEach((g: any) => {
+        if (g.league_id) activeGameLeagueIds.add(Number(g.league_id));
+      });
 
-            const labelName = targetName || `W0${row.league_id}`;
-            uniqueMap.set(row.league_id, labelName);
-          }
-        });
-
-        const list = Array.from(uniqueMap.entries()).map(([id, name]: any) => ({
-          league_id: id,
-          league_name: name
-        })).sort((a, b) => Number(b.league_id) - Number(a.league_id));
-
-        setSeasons(list);
-        if (list.length > 0) {
-          setSelectedLeagueId(list[0].league_id);
+      (leaguesRes.data || []).forEach((l: any) => {
+        const idNum = Number(l.league_id ?? l.id);
+        if (!idNum) return;
+        const name = l.league_name || l.name || `W${String(idNum).padStart(2, '0')}`;
+        const status = String(l.status || '').toLowerCase();
+        if (activeGameLeagueIds.has(idNum) || status === 'active' || idNum >= 38) {
+          uniqueMap.set(idNum, {
+            league_id: idNum,
+            league_name: String(name).trim(),
+            hasOfficialPlayoffs: false
+          });
         }
+      });
+
+      (playoffsRes.data || []).forEach((row: any) => {
+        if (row.league_id) {
+          const idNum = Number(row.league_id);
+          const rawLeagues = row.leagues;
+          const targetName = Array.isArray(rawLeagues)
+            ? rawLeagues[0]?.league_name
+            : rawLeagues?.league_name;
+          const existing = uniqueMap.get(idNum);
+          const labelName = targetName || existing?.league_name || `W0${idNum}`;
+          uniqueMap.set(idNum, {
+            league_id: idNum,
+            league_name: String(labelName).trim(),
+            hasOfficialPlayoffs: true
+          });
+        }
+      });
+
+      const list = Array.from(uniqueMap.values()).sort((a, b) => Number(b.league_id) - Number(a.league_id));
+      setSeasons(list);
+      if (list.length > 0) {
+        const latestWithPlayoffs = list.find(s => s.hasOfficialPlayoffs) || list[0];
+        setSelectedLeagueId(latestWithPlayoffs.league_id);
       }
     };
 
@@ -1382,7 +1407,8 @@ export default function PlayoffBracket() {
 
   const fetchPlayoffs = async (leagueId: number | string) => {
     try {
-      const [playoffsRes, gamestatsRes, teamsRes, coachesRes] = await Promise.all([
+      const numericLeagueId = Number(leagueId);
+      const [playoffsRes, gamestatsRes, teamsRes, coachesRes, regGamesRes, standingsRes, leagueMetaRes] = await Promise.all([
         supabase
           .from('league_playoffs')
           .select(`
@@ -1402,7 +1428,19 @@ export default function PlayoffBracket() {
           .select('*'),
         supabase
           .from('league_coaches')
-          .select('coach_id, coach_name')
+          .select('coach_id, coach_name'),
+        supabase
+          .from('league_gamestats')
+          .select('game_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_coach, away_coach')
+          .eq('league_id', leagueId),
+        supabase
+          .from('league_standings')
+          .select('*')
+          .eq('season_id', leagueId),
+        supabase
+          .from('leagues')
+          .select('*')
+          .eq('league_id', leagueId)
       ]);
 
       if (playoffsRes.error) {
@@ -1414,6 +1452,9 @@ export default function PlayoffBracket() {
       const rawGames = gamestatsRes.data || [];
       const allTeams = teamsRes.data || [];
       const allCoaches = coachesRes.data || [];
+      const regGames = regGamesRes.data || [];
+      const regStandings = standingsRes.data || [];
+      const leagueMeta = (leagueMetaRes.data && leagueMetaRes.data[0]) || null;
 
       const coachesMap = new Map<number, string>();
       allCoaches.forEach((c: any) => {
@@ -1427,12 +1468,20 @@ export default function PlayoffBracket() {
         const tId = Number(t.team_id);
         const existing = teamsMap.get(tId);
         // Prefer the row matching the active leagueId when multiple rows share team_id
-        if (!existing || Number(t.league_id) === Number(leagueId)) {
+        if (!existing || Number(t.league_id) === numericLeagueId) {
           teamsMap.set(tId, t);
         }
       });
 
       const gameCoachByTeam = new Map<number, string>();
+      regGames.forEach((g: any) => {
+        if (g.home_team_id && g.home_coach) {
+          gameCoachByTeam.set(Number(g.home_team_id), String(g.home_coach).trim());
+        }
+        if (g.away_team_id && g.away_coach) {
+          gameCoachByTeam.set(Number(g.away_team_id), String(g.away_coach).trim());
+        }
+      });
       rawGames.forEach((g: any) => {
         if (g.home_team_id && g.home_coach) {
           gameCoachByTeam.set(Number(g.home_team_id), String(g.home_coach).trim());
@@ -1459,69 +1508,486 @@ export default function PlayoffBracket() {
         return null;
       };
 
-      const matchesWithBanners = rawPlayoffs.map((match: any) => {
-        const pId = match.playoff_id ?? match.id;
+      const buildPlayoffTeam = (teamId: number | null | undefined, fallbackObj?: any): PlayoffTeam | null => {
+        if (!teamId && !fallbackObj) return null;
+        const tId = Number(teamId || fallbackObj?.team_id);
+        const resolved = (tId ? teamsMap.get(tId) : null) || fallbackObj;
+        if (!resolved) return null;
 
-        const matchedGames: SeriesGameResult[] = rawGames
-          .filter((g: any) => Number(g.playoff_id) === Number(pId))
-          .map((g: any) => ({
-            game_number: Number(g.game_num ?? g.game_number ?? 1),
-            home_score: Number(g.home_score ?? 0),
-            away_score: Number(g.away_score ?? 0),
-            home_team_id: Number(g.home_team_id),
-            away_team_id: Number(g.away_team_id),
-            game_id: g.game_id,
-            home_stats: g.home_stats,
-            away_stats: g.away_stats,
-            game_results: g.game_results,
-            game_meta: g.game_meta
-          }))
-          .sort((a: SeriesGameResult, b: SeriesGameResult) => a.game_number - b.game_number);
-
-        const effectiveHomeTeamId = match.home_team_id || (matchedGames.length > 0 ? matchedGames[0].home_team_id : null);
-        const effectiveAwayTeamId = match.away_team_id || (matchedGames.length > 0 ? matchedGames[0].away_team_id : null);
-
-        const resolvedHomeTeam = (effectiveHomeTeamId ? teamsMap.get(Number(effectiveHomeTeamId)) : null) || match.home_team;
-        const resolvedAwayTeam = (effectiveAwayTeamId ? teamsMap.get(Number(effectiveAwayTeamId)) : null) || match.away_team;
-
-        const homeBannerInfo = resolvedHomeTeam ? getTeamBannerUrls({
-          team_id: resolvedHomeTeam.team_id,
-          team_name: resolvedHomeTeam.team_name,
-          abbreviation: resolvedHomeTeam.abbreviation,
-          banner_filename: resolvedHomeTeam.banner_filename,
+        const bannerInfo = getTeamBannerUrls({
+          team_id: resolved.team_id ?? tId,
+          team_name: resolved.team_name,
+          abbreviation: resolved.abbreviation,
+          banner_filename: resolved.banner_filename,
           league_id: leagueId
-        }, leagueId) : null;
-
-        const awayBannerInfo = resolvedAwayTeam ? getTeamBannerUrls({
-          team_id: resolvedAwayTeam.team_id,
-          team_name: resolvedAwayTeam.team_name,
-          abbreviation: resolvedAwayTeam.abbreviation,
-          banner_filename: resolvedAwayTeam.banner_filename,
-          league_id: leagueId
-        }, leagueId) : null;
+        }, leagueId);
 
         return {
-          ...match,
-          playoff_id: pId,
-          home_team_id: effectiveHomeTeamId,
-          away_team_id: effectiveAwayTeamId,
-          home_team: resolvedHomeTeam ? {
-            ...resolvedHomeTeam,
-            coach_name: resolveTeamCoach(resolvedHomeTeam, effectiveHomeTeamId),
-            banner_url: homeBannerInfo?.primaryUrl || null,
-            fallback_urls: homeBannerInfo?.fallbackUrls || []
-          } : null,
-          away_team: resolvedAwayTeam ? {
-            ...resolvedAwayTeam,
-            coach_name: resolveTeamCoach(resolvedAwayTeam, effectiveAwayTeamId),
-            banner_url: awayBannerInfo?.primaryUrl || null,
-            fallback_urls: awayBannerInfo?.fallbackUrls || []
-          } : null,
-          results: matchedGames
+          ...resolved,
+          team_id: Number(resolved.team_id ?? tId),
+          team_name: resolved.team_name || `Team #${tId}`,
+          abbreviation: resolved.abbreviation || `TM${tId}`,
+          coach_name: resolveTeamCoach(resolved, tId),
+          banner_url: bannerInfo?.primaryUrl || null,
+          fallback_urls: bannerInfo?.fallbackUrls || []
         };
+      };
+
+      // Compute Live Regular-Season Standings & Conference Seeds for this season
+      const seasonTeams = allTeams.filter((t: any) => Number(t.league_id) === numericLeagueId);
+      const activeTeamIds = new Set<number>();
+      seasonTeams.forEach((t: any) => {
+        const id = Number(t.team_id);
+        if (id && id !== 999 && id !== 68) activeTeamIds.add(id);
+      });
+      regGames.forEach((g: any) => {
+        const h = Number(g.home_team_id);
+        const a = Number(g.away_team_id);
+        if (h && h !== 999 && h !== 68) activeTeamIds.add(h);
+        if (a && a !== 999 && a !== 68) activeTeamIds.add(a);
+      });
+      regStandings.forEach((s: any) => {
+        const id = Number(s.team_id);
+        if (id && id !== 999 && id !== 68) activeTeamIds.add(id);
       });
 
-      setMatches(matchesWithBanners);
+      interface RankedTeam {
+        team_id: number;
+        conference: 'east' | 'west';
+        gp: number;
+        w: number;
+        l: number;
+        t: number;
+        otl: number;
+        pts: number;
+        gf: number;
+        ga: number;
+        gd: number;
+        seed?: number;
+      }
+
+      const teamRecords = new Map<number, RankedTeam>();
+      activeTeamIds.forEach((tId) => {
+        const meta = teamsMap.get(tId);
+        const confRaw = String(meta?.conference || '').toLowerCase();
+        const divRaw = String(meta?.division || '').toLowerCase();
+        const isWest = confRaw.includes('west') || confRaw.includes('campbell') || divRaw.includes('west') || divRaw.includes('central') || divRaw.includes('pacific');
+        teamRecords.set(tId, {
+          team_id: tId,
+          conference: isWest ? 'west' : 'east',
+          gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0, gd: 0
+        });
+      });
+
+      if (regGames.length > 0) {
+        regGames.forEach((g: any) => {
+          const hId = Number(g.home_team_id);
+          const aId = Number(g.away_team_id);
+          const hScore = Number(g.home_score ?? 0);
+          const aScore = Number(g.away_score ?? 0);
+          let isOT = false;
+          if (g.game_meta) {
+            try {
+              const m = typeof g.game_meta === 'string' ? JSON.parse(g.game_meta) : g.game_meta;
+              isOT = Boolean(m?.is_ot);
+            } catch {}
+          }
+          const hRec = teamRecords.get(hId);
+          const aRec = teamRecords.get(aId);
+          if (hRec) {
+            hRec.gp++;
+            hRec.gf += hScore;
+            hRec.ga += aScore;
+            if (hScore > aScore) { hRec.w++; hRec.pts += 2; }
+            else if (hScore < aScore) {
+              if (isOT) { hRec.otl++; } else { hRec.l++; }
+            } else { hRec.t++; hRec.pts += 1; }
+            hRec.gd = hRec.gf - hRec.ga;
+          }
+          if (aRec) {
+            aRec.gp++;
+            aRec.gf += aScore;
+            aRec.ga += hScore;
+            if (aScore > hScore) { aRec.w++; aRec.pts += 2; }
+            else if (aScore < hScore) {
+              if (isOT) { aRec.otl++; } else { aRec.l++; }
+            } else { aRec.t++; aRec.pts += 1; }
+            aRec.gd = aRec.gf - aRec.ga;
+          }
+        });
+      } else if (regStandings.length > 0) {
+        regStandings.forEach((s: any) => {
+          const tId = Number(s.team_id);
+          const rec = teamRecords.get(tId);
+          if (rec) {
+            rec.gp = Number(s.gp || 0);
+            rec.w = Number(s.w || 0);
+            rec.l = Number(s.l || 0);
+            rec.t = Number(s.t || 0);
+            rec.otl = Number(s.otl || 0);
+            rec.pts = Number(s.pts ?? (rec.w * 2 + rec.t));
+            rec.gf = Number(s.gf || 0);
+            rec.ga = Number(s.ga || 0);
+            rec.gd = rec.gf - rec.ga;
+          }
+        });
+      }
+
+      const sortStandings = (a: RankedTeam, b: RankedTeam) => {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        if (b.w !== a.w) return b.w - a.w;
+        if (b.gd !== a.gd) return b.gd - a.gd;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.team_id - b.team_id;
+      };
+
+      const allRanked = Array.from(teamRecords.values()).sort(sortStandings);
+      const eastRanked = allRanked.filter(r => r.conference === 'east');
+      const westRanked = allRanked.filter(r => r.conference === 'west');
+
+      const hasTwoConferences = eastRanked.length >= 3 && westRanked.length >= 3;
+      const seedByTeamId = new Map<number, number>();
+      if (hasTwoConferences) {
+        eastRanked.forEach((r, idx) => { r.seed = idx + 1; seedByTeamId.set(r.team_id, idx + 1); });
+        westRanked.forEach((r, idx) => { r.seed = idx + 1; seedByTeamId.set(r.team_id, idx + 1); });
+      } else {
+        allRanked.forEach((r, idx) => { r.seed = idx + 1; seedByTeamId.set(r.team_id, idx + 1); });
+      }
+
+      const hasSeededPlayoffTeams = rawPlayoffs.some((m: any) => Boolean(m.home_team_id || m.away_team_id)) || rawGames.length > 0;
+
+      let compiledMatches: PlayoffMatch[] = [];
+
+      if (!hasSeededPlayoffTeams && allRanked.length > 0) {
+        setIsProjectedBracket(true);
+        const leagueNameStr = String(leagueMeta?.league_name || seasons.find(s => Number(s.league_id) === numericLeagueId)?.league_name || '').toUpperCase();
+        const isOriginalSix = leagueNameStr.startsWith('O') || numericLeagueId === 39 || allRanked.length <= 6;
+        const isSixTeamBracket = isOriginalSix || allRanked.length <= 12;
+
+        if (isOriginalSix && allRanked.length >= 4) {
+          const s1 = allRanked[0];
+          const s2 = allRanked[1];
+          const s3 = allRanked[2];
+          const s4 = allRanked[3];
+          compiledMatches = [
+            {
+              match_label: 'Conference Finals 1',
+              round_name: 'Conference Finals 1',
+              series_length: 7,
+              home_team_id: s1?.team_id,
+              away_team_id: s4?.team_id,
+              home_team_seed: 1,
+              away_team_seed: 4,
+              home_team: buildPlayoffTeam(s1?.team_id),
+              away_team: buildPlayoffTeam(s4?.team_id),
+              results: []
+            },
+            {
+              match_label: 'Conference Finals 2',
+              round_name: 'Conference Finals 2',
+              series_length: 7,
+              home_team_id: s2?.team_id,
+              away_team_id: s3?.team_id,
+              home_team_seed: 2,
+              away_team_seed: 3,
+              home_team: buildPlayoffTeam(s2?.team_id),
+              away_team: buildPlayoffTeam(s3?.team_id),
+              results: []
+            },
+            {
+              match_label: 'Finals',
+              round_name: 'Finals',
+              series_length: 7,
+              results: []
+            }
+          ];
+        } else if (isSixTeamBracket && hasTwoConferences) {
+          compiledMatches = [
+            {
+              match_label: 'Semi Finals 1',
+              round_name: 'Semi Finals 1',
+              series_length: 5,
+              home_team_id: eastRanked[1]?.team_id,
+              away_team_id: eastRanked[2]?.team_id,
+              home_team_seed: 2,
+              away_team_seed: 3,
+              home_team: buildPlayoffTeam(eastRanked[1]?.team_id),
+              away_team: buildPlayoffTeam(eastRanked[2]?.team_id),
+              results: []
+            },
+            {
+              match_label: 'Semi Finals 3',
+              round_name: 'Semi Finals 3',
+              series_length: 5,
+              home_team_id: westRanked[1]?.team_id,
+              away_team_id: westRanked[2]?.team_id,
+              home_team_seed: 2,
+              away_team_seed: 3,
+              home_team: buildPlayoffTeam(westRanked[1]?.team_id),
+              away_team: buildPlayoffTeam(westRanked[2]?.team_id),
+              results: []
+            },
+            {
+              match_label: 'Conference Finals 1',
+              round_name: 'Conference Finals 1',
+              series_length: 7,
+              home_team_id: eastRanked[0]?.team_id,
+              home_team_seed: 1,
+              home_team: buildPlayoffTeam(eastRanked[0]?.team_id),
+              results: []
+            },
+            {
+              match_label: 'Conference Finals 2',
+              round_name: 'Conference Finals 2',
+              series_length: 7,
+              home_team_id: westRanked[0]?.team_id,
+              home_team_seed: 1,
+              home_team: buildPlayoffTeam(westRanked[0]?.team_id),
+              results: []
+            },
+            {
+              match_label: 'Finals',
+              round_name: 'Finals',
+              series_length: 7,
+              results: []
+            }
+          ];
+        } else {
+          const e = hasTwoConferences ? eastRanked : allRanked.filter((_, i) => i % 2 === 0);
+          const w = hasTwoConferences ? westRanked : allRanked.filter((_, i) => i % 2 === 1);
+          const qfPairs = [
+            { label: 'Quarter Finals 1', top: e[0], bot: e[7], topSeed: 1, botSeed: 8 },
+            { label: 'Quarter Finals 2', top: e[1], bot: e[6], topSeed: 2, botSeed: 7 },
+            { label: 'Quarter Finals 3', top: e[2], bot: e[5], topSeed: 3, botSeed: 6 },
+            { label: 'Quarter Finals 4', top: e[3], bot: e[4], topSeed: 4, botSeed: 5 },
+            { label: 'Quarter Finals 5', top: w[0], bot: w[7], topSeed: 1, botSeed: 8 },
+            { label: 'Quarter Finals 6', top: w[1], bot: w[6], topSeed: 2, botSeed: 7 },
+            { label: 'Quarter Finals 7', top: w[2], bot: w[5], topSeed: 3, botSeed: 6 },
+            { label: 'Quarter Finals 8', top: w[3], bot: w[4], topSeed: 4, botSeed: 5 },
+          ];
+          compiledMatches = [
+            ...qfPairs.map(q => ({
+              match_label: q.label,
+              round_name: q.label,
+              series_length: 7,
+              home_team_id: q.top?.team_id,
+              away_team_id: q.bot?.team_id,
+              home_team_seed: q.topSeed,
+              away_team_seed: q.botSeed,
+              home_team: buildPlayoffTeam(q.top?.team_id),
+              away_team: buildPlayoffTeam(q.bot?.team_id),
+              results: []
+            })),
+            { match_label: 'Semi Finals 1', round_name: 'Semi Finals 1', series_length: 7, results: [] },
+            { match_label: 'Semi Finals 2', round_name: 'Semi Finals 2', series_length: 7, results: [] },
+            { match_label: 'Semi Finals 3', round_name: 'Semi Finals 3', series_length: 7, results: [] },
+            { match_label: 'Semi Finals 4', round_name: 'Semi Finals 4', series_length: 7, results: [] },
+            { match_label: 'Conference Finals 1', round_name: 'Conference Finals 1', series_length: 7, results: [] },
+            { match_label: 'Conference Finals 2', round_name: 'Conference Finals 2', series_length: 7, results: [] },
+            { match_label: 'Finals', round_name: 'Finals', series_length: 7, results: [] }
+          ];
+        }
+      } else {
+        setIsProjectedBracket(false);
+        compiledMatches = rawPlayoffs.map((match: any) => {
+          const pId = match.playoff_id ?? match.id;
+
+          const matchedGames: SeriesGameResult[] = rawGames
+            .filter((g: any) => Number(g.playoff_id) === Number(pId))
+            .map((g: any) => ({
+              game_number: Number(g.game_num ?? g.game_number ?? 1),
+              home_score: Number(g.home_score ?? 0),
+              away_score: Number(g.away_score ?? 0),
+              home_team_id: Number(g.home_team_id),
+              away_team_id: Number(g.away_team_id),
+              game_id: g.game_id,
+              home_stats: g.home_stats,
+              away_stats: g.away_stats,
+              game_results: g.game_results,
+              game_meta: g.game_meta
+            }))
+            .sort((a: SeriesGameResult, b: SeriesGameResult) => a.game_number - b.game_number);
+
+          const effectiveHomeTeamId = match.home_team_id || (matchedGames.length > 0 ? matchedGames[0].home_team_id : null);
+          const effectiveAwayTeamId = match.away_team_id || (matchedGames.length > 0 ? matchedGames[0].away_team_id : null);
+
+          const homeSeed = match.home_team_seed ?? (effectiveHomeTeamId ? seedByTeamId.get(Number(effectiveHomeTeamId)) : undefined);
+          const awaySeed = match.away_team_seed ?? (effectiveAwayTeamId ? seedByTeamId.get(Number(effectiveAwayTeamId)) : undefined);
+
+          return {
+            ...match,
+            playoff_id: pId,
+            home_team_id: effectiveHomeTeamId,
+            away_team_id: effectiveAwayTeamId,
+            home_team_seed: homeSeed,
+            away_team_seed: awaySeed,
+            home_team: buildPlayoffTeam(effectiveHomeTeamId, match.home_team),
+            away_team: buildPlayoffTeam(effectiveAwayTeamId, match.away_team),
+            results: matchedGames
+          };
+        });
+      }
+
+      // Auto-Advance & Conference Re-Seed Completed Series Winners Across Rounds
+      const norm = (s?: string | null) => (s || '').replace(/[\s\-_]+/g, '').toLowerCase();
+      const findOrCreateMatch = (label: string, defaultSeriesLen = 7): PlayoffMatch => {
+        const target = norm(label);
+        let found = compiledMatches.find(
+          m => norm(m.match_label) === target || norm(m.round_name) === target
+        );
+        if (!found) {
+          found = { match_label: label, round_name: label, series_length: defaultSeriesLen, results: [] };
+          compiledMatches.push(found);
+        }
+        return found;
+      };
+
+      interface AdvancingTeam {
+        team_id: number;
+        seed: number;
+        team: PlayoffTeam;
+      }
+
+      const getWinnerFromMatch = (m?: PlayoffMatch): AdvancingTeam | null => {
+        if (!m) return null;
+        const details = getSeriesDetails(m);
+        if (details.isComplete && details.winner) {
+          if (details.winner === 'home' && m.home_team_id && m.home_team) {
+            return {
+              team_id: Number(m.home_team_id),
+              seed: Number(m.home_team_seed ?? seedByTeamId.get(Number(m.home_team_id)) ?? 99),
+              team: m.home_team
+            };
+          }
+          if (details.winner === 'away' && m.away_team_id && m.away_team) {
+            return {
+              team_id: Number(m.away_team_id),
+              seed: Number(m.away_team_seed ?? seedByTeamId.get(Number(m.away_team_id)) ?? 99),
+              team: m.away_team
+            };
+          }
+        }
+        if (m.winner_id) {
+          const wId = Number(m.winner_id);
+          if (wId === Number(m.home_team_id) && m.home_team) {
+            return {
+              team_id: wId,
+              seed: Number(m.home_team_seed ?? seedByTeamId.get(wId) ?? 99),
+              team: m.home_team
+            };
+          }
+          if (wId === Number(m.away_team_id) && m.away_team) {
+            return {
+              team_id: wId,
+              seed: Number(m.away_team_seed ?? seedByTeamId.get(wId) ?? 99),
+              team: m.away_team
+            };
+          }
+        }
+        return null;
+      };
+
+      const assignSlotIfEmpty = (targetMatch: PlayoffMatch, side: 'home' | 'away', adv?: AdvancingTeam | null) => {
+        if (!adv) return;
+        const hasPlayedGames = (targetMatch.results || []).length > 0;
+        if (hasPlayedGames) return;
+        if (side === 'home' && !targetMatch.home_team_id) {
+          targetMatch.home_team_id = adv.team_id;
+          targetMatch.home_team_seed = adv.seed !== 99 ? adv.seed : undefined;
+          targetMatch.home_team = adv.team;
+        } else if (side === 'away' && !targetMatch.away_team_id) {
+          targetMatch.away_team_id = adv.team_id;
+          targetMatch.away_team_seed = adv.seed !== 99 ? adv.seed : undefined;
+          targetMatch.away_team = adv.team;
+        }
+      };
+
+      const hasQuarterFinals = compiledMatches.some(m => norm(m.match_label).includes('quarterfinals'));
+      if (hasQuarterFinals) {
+        // 1. East Quarterfinals (QF 1..4) -> East Semifinals (SF 1, SF 2) with Re-Seeding (#1 vs lowest remaining seed)
+        const eastQFWinners = ['Quarter Finals 1', 'Quarter Finals 2', 'Quarter Finals 3', 'Quarter Finals 4']
+          .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
+          .filter(Boolean) as AdvancingTeam[];
+        eastQFWinners.sort((a, b) => a.seed - b.seed);
+
+        if (eastQFWinners.length > 0) {
+          const sf1 = findOrCreateMatch('Semi Finals 1');
+          const sf2 = findOrCreateMatch('Semi Finals 2');
+          if (eastQFWinners.length === 4) {
+            assignSlotIfEmpty(sf1, 'home', eastQFWinners[0]);
+            assignSlotIfEmpty(sf1, 'away', eastQFWinners[3]);
+            assignSlotIfEmpty(sf2, 'home', eastQFWinners[1]);
+            assignSlotIfEmpty(sf2, 'away', eastQFWinners[2]);
+          } else {
+            assignSlotIfEmpty(sf1, 'home', eastQFWinners[0]);
+            assignSlotIfEmpty(sf2, 'home', eastQFWinners[1]);
+            assignSlotIfEmpty(sf2, 'away', eastQFWinners[2]);
+          }
+        }
+
+        // 2. West Quarterfinals (QF 5..8) -> West Semifinals (SF 3, SF 4) with Re-Seeding (#1 vs lowest remaining seed)
+        const westQFWinners = ['Quarter Finals 5', 'Quarter Finals 6', 'Quarter Finals 7', 'Quarter Finals 8']
+          .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
+          .filter(Boolean) as AdvancingTeam[];
+        westQFWinners.sort((a, b) => a.seed - b.seed);
+
+        if (westQFWinners.length > 0) {
+          const sf3 = findOrCreateMatch('Semi Finals 3');
+          const sf4 = findOrCreateMatch('Semi Finals 4');
+          if (westQFWinners.length === 4) {
+            assignSlotIfEmpty(sf3, 'home', westQFWinners[0]);
+            assignSlotIfEmpty(sf3, 'away', westQFWinners[3]);
+            assignSlotIfEmpty(sf4, 'home', westQFWinners[1]);
+            assignSlotIfEmpty(sf4, 'away', westQFWinners[2]);
+          } else {
+            assignSlotIfEmpty(sf3, 'home', westQFWinners[0]);
+            assignSlotIfEmpty(sf4, 'home', westQFWinners[1]);
+            assignSlotIfEmpty(sf4, 'away', westQFWinners[2]);
+          }
+        }
+      }
+
+      // 3. Semifinals -> Conference Finals (Re-seeded so higher seed gets Home / top slot)
+      const eastSFWinners = ['Semi Finals 1', 'Semi Finals 2']
+        .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
+        .filter(Boolean) as AdvancingTeam[];
+      eastSFWinners.sort((a, b) => a.seed - b.seed);
+      if (eastSFWinners.length > 0) {
+        const cf1 = findOrCreateMatch('Conference Finals 1');
+        if (cf1.home_team_id && !cf1.away_team_id && eastSFWinners.length === 1 && cf1.home_team_id !== eastSFWinners[0].team_id) {
+          assignSlotIfEmpty(cf1, 'away', eastSFWinners[0]);
+        } else {
+          assignSlotIfEmpty(cf1, 'home', eastSFWinners[0]);
+          assignSlotIfEmpty(cf1, 'away', eastSFWinners[1]);
+        }
+      }
+
+      const westSFWinners = ['Semi Finals 3', 'Semi Finals 4']
+        .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
+        .filter(Boolean) as AdvancingTeam[];
+      westSFWinners.sort((a, b) => a.seed - b.seed);
+      if (westSFWinners.length > 0) {
+        const cf2 = findOrCreateMatch('Conference Finals 2');
+        if (cf2.home_team_id && !cf2.away_team_id && westSFWinners.length === 1 && cf2.home_team_id !== westSFWinners[0].team_id) {
+          assignSlotIfEmpty(cf2, 'away', westSFWinners[0]);
+        } else {
+          assignSlotIfEmpty(cf2, 'home', westSFWinners[0]);
+          assignSlotIfEmpty(cf2, 'away', westSFWinners[1]);
+        }
+      }
+
+      // 4. Conference Finals -> Championship Finals
+      const cfWinners = ['Conference Finals 1', 'Conference Finals 2']
+        .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
+        .filter(Boolean) as AdvancingTeam[];
+      cfWinners.sort((a, b) => a.seed - b.seed);
+      if (cfWinners.length > 0) {
+        const finals = findOrCreateMatch('Finals');
+        assignSlotIfEmpty(finals, 'home', cfWinners[0]);
+        assignSlotIfEmpty(finals, 'away', cfWinners[1]);
+      }
+
+      setMatches(compiledMatches);
     } catch (err) {
       console.error("Error loading playoffs:", err);
     }
@@ -1675,17 +2141,28 @@ export default function PlayoffBracket() {
       <header className="bg-white border-b border-slate-200 py-6 mb-6">
         <div className="max-w-[1600px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
+            <div className="flex items-center justify-center md:justify-start gap-2 mb-1 flex-wrap">
               <Shield className="w-5 h-5 text-blue-700" />
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 font-mono">
                 {cupMeta.title} PLAYOFFS • {playoffFormat.toUpperCase()} BRACKET
               </span>
+              {isProjectedBracket ? (
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-mono font-black uppercase tracking-wider">
+                  ● Live Playoff Picture (If Playoffs Started Today)
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-mono font-bold uppercase tracking-wider">
+                  Auto-Advancing • Re-Seeded by Conference Seed
+                </span>
+              )}
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
               {cupMeta.title} Playoffs
             </h1>
             <p className="text-xs text-slate-500 font-mono mt-0.5">
-              Official Tournament Tree & Game-by-Game Series Results
+              {isProjectedBracket
+                ? 'Live Projected Seedings & Matchups from Current Regular-Season Standings'
+                : 'Official Tournament Tree & Game-by-Game Series Results (Re-Seeded Each Round)'}
             </p>
           </div>
 
@@ -1701,7 +2178,7 @@ export default function PlayoffBracket() {
                   >
                     {seasons.map((s) => (
                       <option key={s.league_id} value={s.league_id}>
-                        {s.league_name}
+                        {s.league_name}{s.hasOfficialPlayoffs === false ? ' (Live Picture)' : ''}
                       </option>
                     ))}
                   </select>

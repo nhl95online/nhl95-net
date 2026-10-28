@@ -451,6 +451,163 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    // 7b. If Playoff Mode: check if series is now complete, update winner_id, and advance + re-seed next round in league_playoffs
+    if (isPlayoffMode && resolvedPlayoffId) {
+      try {
+        const [{ data: allSeasonSeries }, { data: allSeasonPlayoffGames }] = await Promise.all([
+          supabase.from('league_playoffs').select('*').eq('league_id', sId).order('playoff_id', { ascending: true }),
+          supabase.from('league_playoff_gamestats').select('playoff_id, game_number, home_team_id, away_team_id, home_score, away_score').eq('league_id', sId)
+        ]);
+
+        const seriesList = allSeasonSeries || [];
+        const pGamesList = allSeasonPlayoffGames || [];
+
+        const normLbl = (str?: string | null) => (str || '').replace(/[\s\-_]+/g, '').toLowerCase();
+
+        const evaluateSeriesWinner = (seriesRow: any): { winnerId: number; winnerSeed: number } | null => {
+          if (!seriesRow) return null;
+          const pId = Number(seriesRow.playoff_id ?? seriesRow.id);
+          const sLen = Number(seriesRow.series_length || 7);
+          const needed = Math.ceil(sLen / 2);
+          const hId = Number(seriesRow.home_team_id);
+          const aId = Number(seriesRow.away_team_id);
+          if (!hId || !aId) return null;
+
+          let hWins = 0;
+          let aWins = 0;
+          pGamesList
+            .filter((g: any) => Number(g.playoff_id) === pId)
+            .forEach((g: any) => {
+              const hs = Number(g.home_score ?? 0);
+              const as = Number(g.away_score ?? 0);
+              const wTeam = hs > as ? Number(g.home_team_id) : as > hs ? Number(g.away_team_id) : 0;
+              if (wTeam === hId) hWins++;
+              else if (wTeam === aId) aWins++;
+            });
+
+          if (hWins >= needed) {
+            return { winnerId: hId, winnerSeed: Number(seriesRow.home_team_seed || 99) };
+          }
+          if (aWins >= needed) {
+            return { winnerId: aId, winnerSeed: Number(seriesRow.away_team_seed || 99) };
+          }
+          return null;
+        };
+
+        const currentSeriesRow = seriesList.find((m: any) => Number(m.playoff_id) === Number(resolvedPlayoffId));
+        const currentOutcome = evaluateSeriesWinner(currentSeriesRow);
+        if (currentOutcome && Number(currentSeriesRow?.winner_id) !== currentOutcome.winnerId) {
+          await supabase
+            .from('league_playoffs')
+            .update({ winner_id: currentOutcome.winnerId })
+            .eq('playoff_id', resolvedPlayoffId);
+          currentSeriesRow.winner_id = currentOutcome.winnerId;
+        }
+
+        const upsertNextRoundMatchup = async (
+          label: string,
+          topWinner: { winnerId: number; winnerSeed: number } | null,
+          botWinner: { winnerId: number; winnerSeed: number } | null
+        ) => {
+          if (!topWinner && !botWinner) return;
+          const targetNorm = normLbl(label);
+          const existingTarget = seriesList.find(
+            (m: any) => normLbl(m.match_label) === targetNorm || normLbl(m.round_name) === targetNorm
+          );
+
+          if (existingTarget) {
+            const existingPId = Number(existingTarget.playoff_id);
+            const hasGamesAlready = pGamesList.some((g: any) => Number(g.playoff_id) === existingPId);
+            if (!hasGamesAlready) {
+              const updates: Record<string, any> = {};
+              if (topWinner) {
+                updates.home_team_id = topWinner.winnerId;
+                if (topWinner.winnerSeed !== 99) updates.home_team_seed = topWinner.winnerSeed;
+              }
+              if (botWinner) {
+                updates.away_team_id = botWinner.winnerId;
+                if (botWinner.winnerSeed !== 99) updates.away_team_seed = botWinner.winnerSeed;
+              }
+              if (Object.keys(updates).length > 0) {
+                await supabase.from('league_playoffs').update(updates).eq('playoff_id', existingPId);
+              }
+            }
+          } else if (topWinner && botWinner) {
+            const { data: latestRow } = await supabase
+              .from('league_playoffs')
+              .select('playoff_id')
+              .order('playoff_id', { ascending: false })
+              .limit(1);
+            const nextId = (latestRow && latestRow.length > 0 && latestRow[0].playoff_id)
+              ? Number(latestRow[0].playoff_id) + 1
+              : 1;
+
+            const newMatchup: Record<string, any> = {
+              playoff_id: nextId,
+              league_id: sId,
+              round_name: label,
+              match_label: label,
+              home_team_id: topWinner.winnerId,
+              away_team_id: botWinner.winnerId,
+              series_length: 7
+            };
+            if (topWinner.winnerSeed !== 99) newMatchup.home_team_seed = topWinner.winnerSeed;
+            if (botWinner.winnerSeed !== 99) newMatchup.away_team_seed = botWinner.winnerSeed;
+            await supabase.from('league_playoffs').upsert(newMatchup, { onConflict: 'playoff_id' });
+          }
+        };
+
+        // Check East Quarter Finals (QF 1..4) -> Re-seed into Semi Finals 1 & 2
+        const eastQF = ['Quarter Finals 1', 'Quarter Finals 2', 'Quarter Finals 3', 'Quarter Finals 4']
+          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
+          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
+        if (eastQF.length === 4) {
+          eastQF.sort((a, b) => a.winnerSeed - b.winnerSeed);
+          await upsertNextRoundMatchup('Semi Finals 1', eastQF[0], eastQF[3]);
+          await upsertNextRoundMatchup('Semi Finals 2', eastQF[1], eastQF[2]);
+        }
+
+        // Check West Quarter Finals (QF 5..8) -> Re-seed into Semi Finals 3 & 4
+        const westQF = ['Quarter Finals 5', 'Quarter Finals 6', 'Quarter Finals 7', 'Quarter Finals 8']
+          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
+          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
+        if (westQF.length === 4) {
+          westQF.sort((a, b) => a.winnerSeed - b.winnerSeed);
+          await upsertNextRoundMatchup('Semi Finals 3', westQF[0], westQF[3]);
+          await upsertNextRoundMatchup('Semi Finals 4', westQF[1], westQF[2]);
+        }
+
+        // Check East Semi Finals (SF 1..2) -> Re-seed into Conference Finals 1
+        const eastSF = ['Semi Finals 1', 'Semi Finals 2']
+          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
+          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
+        if (eastSF.length === 2) {
+          eastSF.sort((a, b) => a.winnerSeed - b.winnerSeed);
+          await upsertNextRoundMatchup('Conference Finals 1', eastSF[0], eastSF[1]);
+        }
+
+        // Check West Semi Finals (SF 3..4) -> Re-seed into Conference Finals 2
+        const westSF = ['Semi Finals 3', 'Semi Finals 4']
+          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
+          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
+        if (westSF.length === 2) {
+          westSF.sort((a, b) => a.winnerSeed - b.winnerSeed);
+          await upsertNextRoundMatchup('Conference Finals 2', westSF[0], westSF[1]);
+        }
+
+        // Check Conference Finals (CF 1..2) -> Finals
+        const cfWins = ['Conference Finals 1', 'Conference Finals 2']
+          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
+          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
+        if (cfWins.length === 2) {
+          cfWins.sort((a, b) => a.winnerSeed - b.winnerSeed);
+          await upsertNextRoundMatchup('Finals', cfWins[0], cfWins[1]);
+        }
+      } catch (advErr) {
+        console.warn('Non-fatal error advancing playoff bracket round:', advErr);
+      }
+    }
+
     // 8. Assemble Rows for league_player_stats_master
     // Determine Game Winning Goal (GWG) and Overtime Goal (OTG)
     const homeGoals = Number(game.homeTeam?.goals || 0);
