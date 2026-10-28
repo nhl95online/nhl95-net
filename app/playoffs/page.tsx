@@ -56,10 +56,13 @@ export interface SeriesGameResult {
   game_meta?: any;
 }
 
+export type CardDisplayMode = 'banner-coach' | 'banner-only';
+
 export interface PlayoffTeam {
   team_id: number;
   team_name: string;
   abbreviation: string;
+  coach_name?: string | null;
   banner_filename?: string;
   banner_url?: string | null;
   fallback_urls?: string[];
@@ -205,6 +208,7 @@ interface ModernMatchupCardProps {
   conference?: 'east' | 'west' | 'finals';
   onSelect?: (match: PlayoffMatch, label: string) => void;
   isChampionship?: boolean;
+  displayMode?: CardDisplayMode;
 }
 
 const ModernMatchupCard = ({
@@ -212,7 +216,8 @@ const ModernMatchupCard = ({
   label,
   conference = 'east',
   onSelect,
-  isChampionship = false
+  isChampionship = false,
+  displayMode = 'banner-coach'
 }: ModernMatchupCardProps) => {
   const series = getSeriesDetails(match);
   const parentHomeId = match?.home_team_id;
@@ -221,8 +226,13 @@ const ModernMatchupCard = ({
   const homeName = match?.home_team?.team_name || "TBD";
   const awayName = match?.away_team?.team_name || "TBD";
 
+  const homeCoach = match?.home_team?.coach_name || "";
+  const awayCoach = match?.away_team?.coach_name || "";
+
   const homeBanner = match?.home_team?.banner_url;
   const awayBanner = match?.away_team?.banner_url;
+  const homeFallbacks = match?.home_team?.fallback_urls || [];
+  const awayFallbacks = match?.away_team?.fallback_urls || [];
 
   const homeSeed = match?.home_team_seed !== null && match?.home_team_seed !== undefined ? match.home_team_seed : "";
   const awaySeed = match?.away_team_seed !== null && match?.away_team_seed !== undefined ? match.away_team_seed : "";
@@ -230,8 +240,39 @@ const ModernMatchupCard = ({
   const games = match?.results || [];
   const maxDisplayGames = Math.max(series.seriesLength || 5, 5);
 
+  const [homeFallbackIdx, setHomeFallbackIdx] = useState<number>(-1);
+  const [awayFallbackIdx, setAwayFallbackIdx] = useState<number>(-1);
   const [homeImgFailed, setHomeImgFailed] = useState(false);
   const [awayImgFailed, setAwayImgFailed] = useState(false);
+
+  useEffect(() => {
+    setHomeFallbackIdx(-1);
+    setHomeImgFailed(false);
+  }, [homeBanner]);
+
+  useEffect(() => {
+    setAwayFallbackIdx(-1);
+    setAwayImgFailed(false);
+  }, [awayBanner]);
+
+  const activeHomeBanner = homeFallbackIdx === -1 ? homeBanner : homeFallbacks[homeFallbackIdx];
+  const activeAwayBanner = awayFallbackIdx === -1 ? awayBanner : awayFallbacks[awayFallbackIdx];
+
+  const handleHomeImgError = () => {
+    if (homeFallbackIdx + 1 < homeFallbacks.length) {
+      setHomeFallbackIdx(prev => prev + 1);
+    } else {
+      setHomeImgFailed(true);
+    }
+  };
+
+  const handleAwayImgError = () => {
+    if (awayFallbackIdx + 1 < awayFallbacks.length) {
+      setAwayFallbackIdx(prev => prev + 1);
+    } else {
+      setAwayImgFailed(true);
+    }
+  };
 
   const isHomeSeriesWinner = series.isComplete && series.winner === 'home';
   const isAwaySeriesWinner = series.isComplete && series.winner === 'away';
@@ -251,6 +292,7 @@ const ModernMatchupCard = ({
     : (conference === 'west' ? 'bg-[#f0f7ff]' : conference === 'east' ? 'bg-[#fff5f5]' : 'bg-white');
 
   const teamColWidth = 310 - (28 + maxDisplayGames * 18 + 26);
+  const showCoach = displayMode === 'banner-coach';
 
   return (
     <div 
@@ -269,7 +311,16 @@ const ModernMatchupCard = ({
         <thead>
           <tr className="h-[18px] bg-neutral-100 border-b border-neutral-300 text-[9px] font-sans font-semibold text-neutral-500">
             <th style={{ width: 28 }} className="w-[28px] p-0 text-center font-mono">#</th>
-            <th style={{ width: teamColWidth }} className="p-0 pl-1.5 truncate">Team</th>
+            <th style={{ width: teamColWidth }} className="p-0 px-1.5 truncate">
+              {showCoach ? (
+                <div className="flex items-center justify-between">
+                  <span>Team</span>
+                  <span className="text-[8px] font-mono uppercase tracking-tight text-neutral-400">Coach</span>
+                </div>
+              ) : (
+                <span>Team</span>
+              )}
+            </th>
             {Array.from({ length: maxDisplayGames }).map((_, i) => (
               <th key={`hdr-g-${i}`} style={{ width: 18 }} className="w-[18px] p-0 text-center border-l border-neutral-300 font-mono">
                 {i + 1}
@@ -288,18 +339,43 @@ const ModernMatchupCard = ({
             </td>
 
             <td className="p-0 px-1.5 min-w-0">
-              <div className="flex items-center gap-1.5 overflow-hidden">
-                {homeBanner && !homeImgFailed ? (
-                  <img
-                    src={homeBanner}
-                    alt={homeName}
-                    className="h-3.5 max-w-[38px] w-auto object-contain shrink-0"
-                    onError={() => setHomeImgFailed(true)}
-                  />
-                ) : null}
-                <span className={`text-[11px] truncate font-sans leading-none ${isHomeSeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
-                  {homeName}
-                </span>
+              <div className="flex items-center justify-between gap-1.5 overflow-hidden h-[26px]">
+                {activeHomeBanner && !homeImgFailed ? (
+                  <>
+                    <img
+                      src={activeHomeBanner}
+                      alt={homeName}
+                      title={homeCoach ? `${homeName} (${homeCoach})` : homeName}
+                      className={
+                        showCoach && homeCoach
+                          ? "h-[19px] max-w-[66px] w-auto object-contain shrink-0"
+                          : "h-[21px] max-w-[116px] w-auto object-contain shrink-0"
+                      }
+                      onError={handleHomeImgError}
+                    />
+                    {showCoach && homeCoach && (
+                      <span
+                        title={homeCoach}
+                        className={`text-[10px] truncate font-mono leading-none text-right ${
+                          isHomeSeriesWinner ? 'font-black text-neutral-950' : 'font-bold text-neutral-700'
+                        }`}
+                      >
+                        {homeCoach}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between gap-1 w-full overflow-hidden">
+                    <span className={`text-[11px] truncate font-sans leading-none ${isHomeSeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
+                      {homeName}
+                    </span>
+                    {showCoach && homeCoach && (
+                      <span className="text-[9px] font-mono font-semibold text-neutral-500 truncate shrink-0 max-w-[54px]">
+                        {homeCoach}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </td>
 
@@ -347,18 +423,43 @@ const ModernMatchupCard = ({
             </td>
 
             <td className="p-0 px-1.5 min-w-0">
-              <div className="flex items-center gap-1.5 overflow-hidden">
-                {awayBanner && !awayImgFailed ? (
-                  <img
-                    src={awayBanner}
-                    alt={awayName}
-                    className="h-3.5 max-w-[38px] w-auto object-contain shrink-0"
-                    onError={() => setAwayImgFailed(true)}
-                  />
-                ) : null}
-                <span className={`text-[11px] truncate font-sans leading-none ${isAwaySeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
-                  {awayName}
-                </span>
+              <div className="flex items-center justify-between gap-1.5 overflow-hidden h-[26px]">
+                {activeAwayBanner && !awayImgFailed ? (
+                  <>
+                    <img
+                      src={activeAwayBanner}
+                      alt={awayName}
+                      title={awayCoach ? `${awayName} (${awayCoach})` : awayName}
+                      className={
+                        showCoach && awayCoach
+                          ? "h-[19px] max-w-[66px] w-auto object-contain shrink-0"
+                          : "h-[21px] max-w-[116px] w-auto object-contain shrink-0"
+                      }
+                      onError={handleAwayImgError}
+                    />
+                    {showCoach && awayCoach && (
+                      <span
+                        title={awayCoach}
+                        className={`text-[10px] truncate font-mono leading-none text-right ${
+                          isAwaySeriesWinner ? 'font-black text-neutral-950' : 'font-bold text-neutral-700'
+                        }`}
+                      >
+                        {awayCoach}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between gap-1 w-full overflow-hidden">
+                    <span className={`text-[11px] truncate font-sans leading-none ${isAwaySeriesWinner ? 'font-bold text-neutral-950' : 'font-medium text-neutral-800'}`}>
+                      {awayName}
+                    </span>
+                    {showCoach && awayCoach && (
+                      <span className="text-[9px] font-mono font-semibold text-neutral-500 truncate shrink-0 max-w-[54px]">
+                        {awayCoach}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </td>
 
@@ -1224,6 +1325,8 @@ export default function PlayoffBracket() {
   const [selectedLeagueId, setSelectedLeagueId] = useState<number | string>('');
   const [selectedSeries, setSelectedSeries] = useState<{ match: PlayoffMatch; label: string } | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [displayMode, setDisplayMode] = useState<CardDisplayMode>('banner-coach');
+  const [trophyImgFailed, setTrophyImgFailed] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchSeasons = async () => {
@@ -1272,19 +1375,20 @@ export default function PlayoffBracket() {
 
   useEffect(() => {
     if (selectedLeagueId) {
+      setTrophyImgFailed(false);
       fetchPlayoffs(selectedLeagueId);
     }
   }, [selectedLeagueId]);
 
   const fetchPlayoffs = async (leagueId: number | string) => {
     try {
-      const [playoffsRes, gamestatsRes, teamsRes] = await Promise.all([
+      const [playoffsRes, gamestatsRes, teamsRes, coachesRes] = await Promise.all([
         supabase
           .from('league_playoffs')
           .select(`
             *, 
-            home_team:league_teams!league_playoffs_home_team_id_fkey(team_id, team_name, abbreviation, banner_filename),
-            away_team:league_teams!league_playoffs_away_team_id_fkey(team_id, team_name, abbreviation, banner_filename)
+            home_team:league_teams!league_playoffs_home_team_id_fkey(*),
+            away_team:league_teams!league_playoffs_away_team_id_fkey(*)
           `)
           .eq('league_id', leagueId)
           .order('playoff_id', { ascending: true }),
@@ -1295,8 +1399,10 @@ export default function PlayoffBracket() {
           .order('game_id', { ascending: true }),
         supabase
           .from('league_teams')
-          .select('team_id, team_name, abbreviation, banner_filename')
-          .eq('league_id', leagueId)
+          .select('*'),
+        supabase
+          .from('league_coaches')
+          .select('coach_id, coach_name')
       ]);
 
       if (playoffsRes.error) {
@@ -1307,9 +1413,51 @@ export default function PlayoffBracket() {
       const rawPlayoffs = playoffsRes.data || [];
       const rawGames = gamestatsRes.data || [];
       const allTeams = teamsRes.data || [];
+      const allCoaches = coachesRes.data || [];
+
+      const coachesMap = new Map<number, string>();
+      allCoaches.forEach((c: any) => {
+        if (c.coach_id !== undefined && c.coach_name) {
+          coachesMap.set(Number(c.coach_id), String(c.coach_name).trim());
+        }
+      });
 
       const teamsMap = new Map<number, any>();
-      allTeams.forEach((t: any) => teamsMap.set(Number(t.team_id), t));
+      allTeams.forEach((t: any) => {
+        const tId = Number(t.team_id);
+        const existing = teamsMap.get(tId);
+        // Prefer the row matching the active leagueId when multiple rows share team_id
+        if (!existing || Number(t.league_id) === Number(leagueId)) {
+          teamsMap.set(tId, t);
+        }
+      });
+
+      const gameCoachByTeam = new Map<number, string>();
+      rawGames.forEach((g: any) => {
+        if (g.home_team_id && g.home_coach) {
+          gameCoachByTeam.set(Number(g.home_team_id), String(g.home_coach).trim());
+        }
+        if (g.away_team_id && g.away_coach) {
+          gameCoachByTeam.set(Number(g.away_team_id), String(g.away_coach).trim());
+        }
+      });
+
+      const resolveTeamCoach = (teamObj: any, teamId?: number | null): string | null => {
+        if (!teamObj && !teamId) return null;
+        const seasonSpecificTeam = teamId ? teamsMap.get(Number(teamId)) : null;
+        const cId = Number(seasonSpecificTeam?.coach_id ?? teamObj?.coach_id);
+        if (cId && coachesMap.has(cId)) {
+          return coachesMap.get(cId)!;
+        }
+        const directName = seasonSpecificTeam?.coach_name || teamObj?.coach_name || teamObj?.coach;
+        if (directName && String(directName).trim()) {
+          return String(directName).trim();
+        }
+        if (teamId && gameCoachByTeam.has(Number(teamId))) {
+          return gameCoachByTeam.get(Number(teamId))!;
+        }
+        return null;
+      };
 
       const matchesWithBanners = rawPlayoffs.map((match: any) => {
         const pId = match.playoff_id ?? match.id;
@@ -1333,8 +1481,8 @@ export default function PlayoffBracket() {
         const effectiveHomeTeamId = match.home_team_id || (matchedGames.length > 0 ? matchedGames[0].home_team_id : null);
         const effectiveAwayTeamId = match.away_team_id || (matchedGames.length > 0 ? matchedGames[0].away_team_id : null);
 
-        const resolvedHomeTeam = match.home_team || (effectiveHomeTeamId ? teamsMap.get(Number(effectiveHomeTeamId)) : null);
-        const resolvedAwayTeam = match.away_team || (effectiveAwayTeamId ? teamsMap.get(Number(effectiveAwayTeamId)) : null);
+        const resolvedHomeTeam = (effectiveHomeTeamId ? teamsMap.get(Number(effectiveHomeTeamId)) : null) || match.home_team;
+        const resolvedAwayTeam = (effectiveAwayTeamId ? teamsMap.get(Number(effectiveAwayTeamId)) : null) || match.away_team;
 
         const homeBannerInfo = resolvedHomeTeam ? getTeamBannerUrls({
           team_id: resolvedHomeTeam.team_id,
@@ -1359,11 +1507,13 @@ export default function PlayoffBracket() {
           away_team_id: effectiveAwayTeamId,
           home_team: resolvedHomeTeam ? {
             ...resolvedHomeTeam,
+            coach_name: resolveTeamCoach(resolvedHomeTeam, effectiveHomeTeamId),
             banner_url: homeBannerInfo?.primaryUrl || null,
             fallback_urls: homeBannerInfo?.fallbackUrls || []
           } : null,
           away_team: resolvedAwayTeam ? {
             ...resolvedAwayTeam,
+            coach_name: resolveTeamCoach(resolvedAwayTeam, effectiveAwayTeamId),
             banner_url: awayBannerInfo?.primaryUrl || null,
             fallback_urls: awayBannerInfo?.fallbackUrls || []
           } : null,
@@ -1430,7 +1580,7 @@ export default function PlayoffBracket() {
     const databaseLeagueName = currentLeague?.league_name || "";
     const firstLetter = databaseLeagueName.trim().toUpperCase()[0];
 
-    let filename = "default_trophy.png";
+    let filename = "stanley_cup.png";
     let title = "STANLEY CUP";
 
     if (firstLetter === 'W') {
@@ -1454,6 +1604,61 @@ export default function PlayoffBracket() {
 
   const championData = getChampionDetails();
   const cupMeta = getCupMetadata();
+
+  const renderTrophyShowcase = () => (
+    <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
+      {cupMeta.trophyUrl && !trophyImgFailed ? (
+        <img
+          src={cupMeta.trophyUrl}
+          alt={cupMeta.title}
+          className="h-20 w-auto object-contain filter drop-shadow-md mb-2"
+          onError={() => setTrophyImgFailed(true)}
+        />
+      ) : (
+        <Trophy className="w-14 h-14 text-amber-500 drop-shadow-xs mb-2" />
+      )}
+      <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs whitespace-nowrap mb-2">
+        ★ {cupMeta.title} ★
+      </div>
+      {championData ? (
+        <div className="text-center w-full border-t border-amber-200 pt-2 mt-1">
+          <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block mb-1">
+            CHAMPION
+          </span>
+          {championData.team?.banner_url ? (
+            <img
+              src={championData.team.banner_url}
+              alt={championData.team.team_name}
+              className="h-7 w-auto max-w-[150px] object-contain mx-auto my-1 filter contrast-110"
+              onError={(e) => {
+                const fallbacks = championData.team?.fallback_urls || [];
+                const currentIdx = fallbacks.indexOf(e.currentTarget.src);
+                if (currentIdx + 1 < fallbacks.length) {
+                  e.currentTarget.src = fallbacks[currentIdx + 1];
+                }
+              }}
+            />
+          ) : (
+            <div className="text-sm font-black text-slate-900 truncate">
+              {championData.team?.team_name}
+            </div>
+          )}
+          {championData.team?.coach_name && (
+            <div className="text-[11px] font-mono font-bold text-slate-700 truncate mt-0.5">
+              Coach: {championData.team.coach_name}
+            </div>
+          )}
+          <div className="text-xs text-emerald-700 font-mono font-black mt-1">
+            Won Series {championData.score}
+          </div>
+        </div>
+      ) : (
+        <div className="text-xs font-semibold text-slate-500 mt-1 font-mono">
+          Awaiting Champion
+        </div>
+      )}
+    </div>
+  );
 
   const handleCardSelect = (match: PlayoffMatch, label: string) => {
     setSelectedSeries({ match, label });
@@ -1504,6 +1709,33 @@ export default function PlayoffBracket() {
                 </div>
               </div>
             )}
+
+            <div className="flex items-center border border-slate-300 rounded bg-white shadow-xs text-xs font-mono overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setDisplayMode('banner-coach')}
+                className={`px-2.5 py-1.5 font-bold transition cursor-pointer ${
+                  displayMode === 'banner-coach'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+                title="Show Team Banner + Coach Name"
+              >
+                Banner + Coach
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisplayMode('banner-only')}
+                className={`px-2.5 py-1.5 font-bold transition cursor-pointer border-l border-slate-200 ${
+                  displayMode === 'banner-only'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+                title="Show Team Banner Only"
+              >
+                Banner Only
+              </button>
+            </div>
 
             <div className="flex items-center border border-slate-300 rounded bg-white shadow-xs text-xs font-mono">
               <button
@@ -1582,49 +1814,49 @@ export default function PlayoffBracket() {
               <div className="w-[310px] flex flex-col shrink-0">
                 {/* Row 0: QF 1 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 1: Space for SF 1 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 2: QF 2 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 3: Space for East CF */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 4: QF 3 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 5: Space for SF 2 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 6: QF 4 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 7: Center Spacer */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 8: QF 5 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 9: Space for SF 3 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 10: QF 6 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 11: Space for West CF */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 12: QF 7 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 13: Space for SF 4 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 14: QF 8 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
               </div>
 
@@ -1658,22 +1890,22 @@ export default function PlayoffBracket() {
                 <div style={{ height: ROW_H }} />
                 {/* Row 1: Semifinal 1 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 5: Semifinal 2 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 9: Semifinal 3 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 13: Semifinal 4 */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H }} />
               </div>
@@ -1700,12 +1932,12 @@ export default function PlayoffBracket() {
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 3: Conference Final 1 (East) */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 7 }} />
                 {/* Row 11: Conference Final 2 (West) */}
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
               </div>
@@ -1733,6 +1965,7 @@ export default function PlayoffBracket() {
                     conference="finals"
                     isChampionship={true}
                     onSelect={handleCardSelect}
+                    displayMode={displayMode}
                   />
                 </div>
                 <div style={{ height: ROW_H * 7 }} />
@@ -1754,43 +1987,7 @@ export default function PlayoffBracket() {
                 <div style={{ height: ROW_H * 6 }} />
                 {/* Aligned with Finals (Row 7) */}
                 <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
-                  <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
-                    {cupMeta.trophyUrl && (
-                      <img
-                        src={cupMeta.trophyUrl}
-                        alt={cupMeta.title}
-                        className="h-20 w-auto object-contain filter drop-shadow-md mb-2"
-                      />
-                    )}
-                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs whitespace-nowrap mb-2">
-                      ★ {cupMeta.title} ★
-                    </div>
-                    {championData ? (
-                      <div className="text-center w-full border-t border-amber-200 pt-2 mt-1">
-                        <span className="text-[10px] font-black text-amber-800 uppercase tracking-widest block mb-1">
-                          CHAMPION
-                        </span>
-                        {championData.team?.banner_url ? (
-                          <img
-                            src={championData.team.banner_url}
-                            alt={championData.team.team_name}
-                            className="h-6 w-auto max-w-[140px] object-contain mx-auto my-1 filter contrast-110"
-                          />
-                        ) : (
-                          <div className="text-sm font-black text-slate-900 truncate">
-                            {championData.team?.team_name}
-                          </div>
-                        )}
-                        <div className="text-xs text-emerald-700 font-mono font-black mt-1">
-                          Won Series {championData.score}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs font-semibold text-slate-500 mt-1 font-mono">
-                        Awaiting Champion
-                      </div>
-                    )}
-                  </div>
+                  {renderTrophyShowcase()}
                 </div>
                 <div style={{ height: ROW_H * 6 }} />
               </div>
@@ -1828,11 +2025,11 @@ export default function PlayoffBracket() {
               {/* Col 1: Semifinals */}
               <div className="w-[310px] flex flex-col shrink-0">
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
               </div>
 
@@ -1847,11 +2044,11 @@ export default function PlayoffBracket() {
               {/* Col 2: Conference Finals */}
               <div className="w-[310px] flex flex-col shrink-0">
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
               </div>
 
@@ -1873,6 +2070,7 @@ export default function PlayoffBracket() {
                     conference="finals"
                     isChampionship={true}
                     onSelect={handleCardSelect}
+                    displayMode={displayMode}
                   />
                 </div>
                 <div style={{ height: ROW_H * 2 }} />
@@ -1889,21 +2087,7 @@ export default function PlayoffBracket() {
               <div className="w-[230px] flex flex-col shrink-0 pl-2">
                 <div style={{ height: ROW_H }} />
                 <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
-                  <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
-                    {cupMeta.trophyUrl && (
-                      <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-16 w-auto object-contain filter drop-shadow-md mb-2" />
-                    )}
-                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs mb-1">
-                      ★ {cupMeta.title} ★
-                    </div>
-                    {championData && (
-                      <div className="text-center w-full border-t border-amber-200 pt-1 mt-1">
-                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block">CHAMPION</span>
-                        <div className="text-xs font-black text-slate-900 truncate">{championData.team?.team_name}</div>
-                        <div className="text-[10px] text-emerald-700 font-mono font-bold">Won {championData.score}</div>
-                      </div>
-                    )}
-                  </div>
+                  {renderTrophyShowcase()}
                 </div>
                 <div style={{ height: ROW_H }} />
               </div>
@@ -1940,13 +2124,13 @@ export default function PlayoffBracket() {
 
               {/* Col 1: Opening Round */}
               <div className="w-[310px] flex flex-col shrink-0">
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 5 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 4 }} />
               </div>
 
@@ -1962,13 +2146,13 @@ export default function PlayoffBracket() {
 
               {/* Col 2: Semifinals */}
               <div className="w-[310px] flex flex-col shrink-0">
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 5 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 4 }} />
               </div>
 
@@ -1985,9 +2169,9 @@ export default function PlayoffBracket() {
               {/* Col 3: Conference Finals */}
               <div className="w-[310px] flex flex-col shrink-0">
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 7 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} /></div>
+                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 5 }} />
               </div>
 
@@ -2003,7 +2187,7 @@ export default function PlayoffBracket() {
               <div className="w-[310px] flex flex-col shrink-0">
                 <div style={{ height: ROW_H * 5 }} />
                 <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
-                  <ModernMatchupCard match={matches[10] || getMatch('Finals')} label="CHAMPIONSHIP FINALS" conference="finals" isChampionship={true} onSelect={handleCardSelect} />
+                  <ModernMatchupCard match={matches[10] || getMatch('Finals')} label="CHAMPIONSHIP FINALS" conference="finals" isChampionship={true} onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 9 }} />
               </div>
@@ -2019,19 +2203,7 @@ export default function PlayoffBracket() {
               <div className="w-[230px] flex flex-col shrink-0 pl-2">
                 <div style={{ height: ROW_H * 4 }} />
                 <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
-                  <div className="flex flex-col items-center justify-center text-center p-4 bg-amber-50/80 border-2 border-amber-400 rounded-xl shadow-md w-full">
-                    {cupMeta.trophyUrl && <img src={cupMeta.trophyUrl} alt={cupMeta.title} className="h-16 w-auto object-contain mb-2" />}
-                    <div className="bg-slate-900 text-amber-300 px-3 py-1 rounded text-xs font-black uppercase tracking-widest shadow-xs mb-1">
-                      ★ {cupMeta.title} ★
-                    </div>
-                    {championData && (
-                      <div className="text-center w-full border-t border-amber-200 pt-1 mt-1">
-                        <span className="text-[9px] font-black text-amber-800 uppercase tracking-widest block">CHAMPION</span>
-                        <div className="text-xs font-black text-slate-900 truncate">{championData.team?.team_name}</div>
-                        <div className="text-[10px] text-emerald-700 font-mono font-bold">Won {championData.score}</div>
-                      </div>
-                    )}
-                  </div>
+                  {renderTrophyShowcase()}
                 </div>
                 <div style={{ height: ROW_H * 8 }} />
               </div>
