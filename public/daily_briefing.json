@@ -1,13 +1,13 @@
 {
-  "updated_at": "Published October 27, 2026 at 05:19 PM",
+  "updated_at": "Published October 28, 2026 at 05:30 PM",
   "headline": "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
   "subheadline": "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Clips",
   "quote_of_the_day": {
-    "quote": "Eating fish out of cans until I beat @red",
+    "quote": "Well Hamerlik is still on @red team.  he was the diamond there.  Did we do 3rds at one point?",
     "author": "segathon",
-    "context": "Uttered in #cooking-with-puss"
+    "context": "Uttered in #art_gallery"
   },
-  "total_messages": 89,
+  "total_messages": 179,
   "bulletin": {
     "title": "COMMISSIONER'S DESK: SEASON 40 REGISTRATION",
     "text": "All team managers are instructed to confirm their active rosters and check emulator configs prior to puck drop. Rulebook updates regarding manual goalies are now in effect.",
@@ -48,7 +48,7 @@
       "title": "(8) Betty Ford Clinic vs. (9) Sugar Valley Firebirds",
       "description": "",
       "url": "https://discord.com/events/146381349589090305/1564392112861085838",
-      "interested": 4,
+      "interested": 5,
       "is_live": false
     },
     {
@@ -57,7 +57,7 @@
       "title": "Brule 1st round playoffs",
       "description": "#4 Thunder Bay Pike vs #13 Easter Island Stone Heads .... come see if high weight translates to the playoffs",
       "url": "https://discord.com/events/146381349589090305/1564654461836591315",
-      "interested": 4,
+      "interested": 6,
       "is_live": false
     }
   ],
@@ -80,163 +80,124 @@
   ],
   "sections": [
     {
+      "channel": "welcome-to-the-darkside",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #welcome-to-the-darkside",
+      "commentary": "Heated debate and banter erupts in #welcome-to-the-darkside over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "16:25",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/we-got-one-annie-potts"
+        },
+        {
+          "time": "16:33",
+          "author": "Ticklepuss",
+          "text": "Name checks out"
+        },
+        {
+          "time": "16:38",
+          "author": "gartnersdoghouse",
+          "text": "I am new to all of this.  How do I get started?"
+        },
+        {
+          "time": "16:41",
+          "author": "segathon",
+          "text": "welcome,  you just found the best place on the internets...."
+        },
+        {
+          "time": "16:48",
+          "author": "GMDS",
+          "text": "How did you find us?\n\nWhat's is your 95 experience?\n\nYou will need to download the retroarch  platform,  and complete your internet port forwarding.  See #tech-channel , and download the game/season rom . See #tech-material . Also familiarize yourself with #online-rules \n\nBasically, if you start a franchise here is the bullet points\n\n1) create a team name, name of your stadium, colour scheme, and logo\n\n2) you (and another expansion team) will be  able to select players from our free agent list\n\n3) you will be provided a 1st and 2nd rd pick In our end of year draft (end of each round)\n\n4) submit roster and starting line up to our commish/rom creator @UltraMagnus \n\n5) play the games and have fun"
+        },
+        {
+          "time": "17:11",
+          "author": "Ticklepuss",
+          "text": "- Download Retroarch from here (bottom right depending on your computer): https://nhl94online.com (don't go out and download the latest version, use this one)\n\n- Download the ROM (this is the game) file from here (W18 is your best bet): https://discord.com/channels/146381349589090305/1441778748713209927/1537785377849344111\n\n- Getting Started - the 94 nerds have a pretty good set of instructions you can follow:  https://nhl94online.com/html/getting-started.php\n\n** It's not very difficult at all so don't get overwhelmed if you are not technical in any way....Feel free to ask for help - overall it could be fully setup in under 5 minutes"
+        },
+        {
+          "time": "17:12",
+          "author": "Ticklepuss",
+          "text": "Also buy a controller if you don't have that 🙂"
+        },
+        {
+          "time": "17:13",
+          "author": "Ticklepuss",
+          "text": "https://amzn.to/4oNhQ8a  Retrobit Genesis Controller → — cheaper option, works fine, won't last as long as the next option. Suggest buying 2 at a time. Doesn't always require controller configuration.\n\nhttps://amzn.to/47EvSlv  8bitDo M30 Controller → — more expensive but lasts much longer than Retrobit. Controller configuration is more complicated and usually requires someone to share a picture of the setup. Comes with a wire even though not shown on Amazon, but some use wireless. Note that newer versions of 8bitDo may not work — multiple cases reported."
+        },
+        {
+          "time": "17:14",
+          "author": "Ticklepuss",
+          "text": "those are probably 2 most popular....some people play with playstation controllers or something - not sure how, they are just weird"
+        }
+      ]
+    },
+    {
+      "channel": "exis-only",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #exis-only",
+      "commentary": "Heated debate and banter erupts in #exis-only over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "01:19",
+          "author": "krav1",
+          "text": "@Sexy Exis/Friendlies"
+        }
+      ]
+    },
+    {
       "channel": "open-discussion",
       "badge": "LOCKER ROOM",
       "title": "Dispatches from #open-discussion",
       "commentary": "Heated debate and banter erupts in #open-discussion over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "17:21",
-          "author": "GMDS",
-          "text": "Is Marty brodeur, the last remaining guy from OG 95 still in the rom (on rosters)? I believe he is\n\n#penalties\n#tanking\n(Throttling this post)"
+          "time": "04:17",
+          "author": "Ticklepuss",
+          "text": "@krav1 put this on your list"
         },
         {
-          "time": "17:22",
-          "author": "GMDS",
-          "text": "Wait is jagr on a team? Maybe 2 guys"
+          "time": "04:17",
+          "author": "Ticklepuss",
+          "text": "https://www.instagram.com/p/DfAUwyZPm0A/?dlrf=dHFuYnF3enFxZzV6"
         },
         {
-          "time": "17:32",
+          "time": "10:16",
+          "author": "krav1",
+          "text": "Stars 🔥"
+        },
+        {
+          "time": "11:43",
+          "author": "Ticklepuss",
+          "text": "That’s about their 30th best song.  Most underrated band of all time.  Tisi"
+        },
+        {
+          "time": "16:03",
+          "author": "NathanMB",
+          "text": "With Sunnyvale coming back - lhx and moses returning last season.. it might be time for the return of another legend, Mr.Tex"
+        },
+        {
+          "time": "16:15",
+          "author": "GMDS",
+          "text": "I heard his car broke down in a snowstorm while moving and seeing an ill family member"
+        },
+        {
+          "time": "16:25",
           "author": "segathon",
-          "text": "Jagr will be the last"
-        },
-        {
-          "time": "17:32",
-          "author": "segathon",
-          "text": "teemu i think is still around too"
-        },
-        {
-          "time": "19:25",
-          "author": "DON DON",
-          "text": "....2 more years... i think"
-        },
-        {
-          "time": "19:27",
-          "author": "DON DON",
-          "text": "Ya 2 more. I got a few more years on jagr b4 hes worthless to me"
-        },
-        {
-          "time": "02:17",
-          "author": "GMDS",
-          "text": "https://klipy.com/gifs/pope-24"
+          "text": "I've kept the communications open with Mr T....."
         }
       ]
     },
     {
-      "channel": "complaints",
+      "channel": "praise",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #complaints",
-      "commentary": "Heated debate and banter erupts in #complaints over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #praise",
+      "commentary": "Heated debate and banter erupts in #praise over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "13:07",
+          "time": "22:17",
           "author": "Adolf Oliver Nipples",
-          "text": "Complaint: No Brules scheduled for tonight or tomorrow night. Idiots"
-        },
-        {
-          "time": "13:09",
-          "author": "Ticklepuss",
-          "text": "Tough talk for a guy who beat up on someone with a broken controller while watching a football game"
-        },
-        {
-          "time": "13:12",
-          "author": "Adolf Oliver Nipples",
-          "text": "The kid is 57 years old and doesn’t have a paddle usable for the playoffs? Good grief."
-        },
-        {
-          "time": "13:13",
-          "author": "Lloyd10xmas",
-          "text": "I think they are just excuses for poor play(!)"
-        },
-        {
-          "time": "13:15",
-          "author": "Adolf Oliver Nipples",
-          "text": "He tried to move it up to Sunday night but I alpha’d his ass."
-        },
-        {
-          "time": "13:32",
-          "author": "Ticklepuss",
-          "text": "did he offer to send the states?"
-        },
-        {
-          "time": "13:34",
-          "author": "Adolf Oliver Nipples",
-          "text": "No he’s OG. He doesn’t do that."
-        },
-        {
-          "time": "13:41",
-          "author": "Ticklepuss",
-          "text": "this game sounds fun as hell"
-        },
-        {
-          "time": "14:03",
-          "author": "segathon",
-          "text": "This discord game notices is the gift that keeps on giving.  I will never forget Heinze playing \"Horney Island\""
-        },
-        {
-          "time": "14:21",
-          "author": "Ticklepuss",
-          "text": "My neighbor is gonna join the 94 arena.  Told him about it and 60 sex later he told me \"controller arrives tomorrow\"..."
-        },
-        {
-          "time": "14:25",
-          "author": "Ticklepuss",
-          "text": "Everyone gets excited about nhl94"
-        },
-        {
-          "time": "14:34",
-          "author": "segathon",
-          "text": "wait till he gets dummied a few times, he will come into our open 95 arms"
-        },
-        {
-          "time": "14:37",
-          "author": "Ticklepuss",
-          "text": "he might need help plugging his paddle in"
-        },
-        {
-          "time": "14:45",
-          "author": "segathon",
-          "text": "Big thing is for him to get wired in.  Lots of new guys on wifi and that still doesnt work the best"
-        },
-        {
-          "time": "14:48",
-          "author": "Ticklepuss",
-          "text": "I'm always happy to help grow the 94 community"
-        },
-        {
-          "time": "14:51",
-          "author": "segathon",
-          "text": "this guy is perfect.  Don't mess this up"
-        },
-        {
-          "time": "14:51",
-          "author": "segathon",
-          "text": "Also Leslie Neilson is a treasure"
-        },
-        {
-          "time": "14:51",
-          "author": "Adolf Oliver Nipples",
-          "text": "We’ve arrived at the point where you need to calm down."
-        },
-        {
-          "time": "14:53",
-          "author": "segathon",
-          "text": "I can't beleive you played your online best friend with a broken paddle.  That is dirty pool"
-        },
-        {
-          "time": "14:54",
-          "author": "Adolf Oliver Nipples",
-          "text": "The broken paddle was never mentioned until after the series. Not before, not during. Only after."
-        },
-        {
-          "time": "14:55",
-          "author": "Ticklepuss",
-          "text": "maybe his keyboard was broken during the series?"
-        },
-        {
-          "time": "14:56",
-          "author": "segathon",
-          "text": "I think you should replay in @S’Vale Shithawks living room.  Me and Bell did that"
+          "text": "https://www.youtube.com/shorts/LwEgyXXhFQ8"
         }
       ]
     },
@@ -247,60 +208,57 @@
       "commentary": "Heated debate and banter erupts in #season-games over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:26",
-          "author": "Lloyd10xmas",
-          "text": "How are the playoffs going?"
-        },
-        {
-          "time": "01:25",
-          "author": "Adolf Oliver Nipples",
-          "text": "beauty"
-        },
-        {
-          "time": "01:25",
-          "author": "Adolf Oliver Nipples",
-          "text": "sweet rims on the chair"
-        }
-      ]
-    },
-    {
-      "channel": "2013-saves",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #2013-saves",
-      "commentary": "Heated debate and banter erupts in #2013-saves over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "01:14",
-          "author": "Adolf Oliver Nipples",
-          "text": "<:PIT:878396735028863007> <:HIG:897245384601108490>"
-        },
-        {
-          "time": "01:15",
-          "author": "Ticklepuss",
-          "text": "Almost certainly wrong channel"
-        },
-        {
-          "time": "01:25",
-          "author": "Adolf Oliver Nipples",
-          "text": "i din't see a playoffs states channel."
+          "time": "22:58",
+          "author": "Moses Bogart",
+          "text": "gross"
         },
         {
           "time": "01:36",
-          "author": "Ellis",
-          "text": "alirght off to a private channel"
+          "author": "MNYoda",
+          "text": "anybody have a good host for maryland mike and I to play our shitty series? @marylandmike."
+        },
+        {
+          "time": "02:22",
+          "author": "Ticklepuss",
+          "text": "Shouldn’t it be played on a shitty host?"
         }
       ]
     },
     {
-      "channel": "2013-boxscores",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #2013-boxscores",
-      "commentary": "Heated debate and banter erupts in #2013-boxscores over game tape, timing, and locker room etiquette.",
+      "channel": "trade-discussion",
+      "badge": "TRADE RUMOR",
+      "title": "Smoke From the GM Suite",
+      "commentary": "Managers are talking behind closed doors. Draft picks and fourth-liners are flying around like loose pucks.",
       "messages": [
         {
-          "time": "02:15",
-          "author": "Adolf Oliver Nipples",
-          "text": "thanks @Ellis !"
+          "time": "04:36",
+          "author": "MarcusVickEBC",
+          "text": "Will trade KAR 1st round for Ovechkin. Will trade ITA 1st round for Crosby. \n\n@krav1 @MattyA"
+        },
+        {
+          "time": "08:00",
+          "author": "GMDS",
+          "text": "https://klipy.com/gifs/lol-123"
+        },
+        {
+          "time": "08:00",
+          "author": "GMDS",
+          "text": "I'm not sure both picks get either player"
+        },
+        {
+          "time": "12:18",
+          "author": "MarcusVickEBC",
+          "text": "3 picks in the draft are demonstrably better than ovechkin and Crosby"
+        },
+        {
+          "time": "12:18",
+          "author": "MarcusVickEBC",
+          "text": "And for a long time"
+        },
+        {
+          "time": "12:19",
+          "author": "MarcusVickEBC",
+          "text": "Crosby loses his “eliteness” from a 95 attribute standpoint in like 2019. Same for ovechkin. \n\nMacKinnon, Kucherov, Gaudreau and arguably Barkov remain elite through 2024/2025."
         }
       ]
     },
@@ -311,137 +269,102 @@
       "commentary": "Heated debate and banter erupts in #shitty-bill over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "22:52",
-          "author": "DON DON",
-          "text": "@MNYoda n @marylandmike. Have you guys played? Me and the Villian plan to play here soon"
+          "time": "00:27",
+          "author": "MarcusVickEBC",
+          "text": "Me and @Unholy  either tonight or tomorrow. But won’t slip past tomorrow."
         },
         {
-          "time": "23:05",
+          "time": "01:35",
+          "author": "MNYoda",
+          "text": "Can anybody put up a host for @marylandmike. and i?  Can't get a decent one and trying to play shitty games"
+        },
+        {
+          "time": "01:36",
+          "author": "NathanMB",
+          "text": "You guys still need a host?"
+        },
+        {
+          "time": "01:36",
+          "author": "NathanMB",
+          "text": "@MNYoda @marylandmike."
+        },
+        {
+          "time": "01:36",
           "author": "marylandmike.",
-          "text": "We’re playing tomorrow night"
+          "text": "Krav said he could, can you be on standby? He’s gonna try and stream it"
         },
         {
-          "time": "23:53",
-          "author": "DON DON",
-          "text": "Ing 0-2 ctj / ing 1-3 ctj @The Villain CTJ ggs"
+          "time": "01:37",
+          "author": "MNYoda",
+          "text": "oh nice, @marylandmike. can crush me on a stream"
         },
         {
-          "time": "23:53",
-          "author": "The Villain CTJ",
-          "text": "ggs"
+          "time": "01:37",
+          "author": "MNYoda",
+          "text": "Love it"
         },
         {
-          "time": "23:56",
-          "author": "The Villain CTJ",
-          "text": "Only one person believed in me to win the first round. @shawnmb I did not disappoint you."
+          "time": "01:37",
+          "author": "marylandmike.",
+          "text": "Haha"
         },
         {
-          "time": "00:42",
+          "time": "01:37",
+          "author": "marylandmike.",
+          "text": "No stream Krav!!"
+        },
+        {
+          "time": "01:37",
+          "author": "marylandmike.",
+          "text": "If it fucks up the connection I don’t wanna do it"
+        },
+        {
+          "time": "02:45",
+          "author": "marylandmike.",
+          "text": "SHS 2 - ORG 1\nORG 1 - SHS 2"
+        },
+        {
+          "time": "03:01",
           "author": "GMDS",
-          "text": "https://klipy.com/gifs/ted-lasso-afc-richmond-5"
+          "text": "Congrats South hills\n\n@marylandmike. Vs @The Villain CTJ  for the right to go to the finals"
         },
         {
-          "time": "00:43",
+          "time": "03:02",
           "author": "GMDS",
-          "text": "@The Villain CTJ will face the winner of @MNYoda  @marylandmike."
+          "text": "Still waiting on @vancecookcobxin vs @DSN \nWinner plays @GaelicGopher \n\nNorth bay v Italy tonight/tomorrow,  Winner plays Valhalla"
         },
         {
-          "time": "00:44",
-          "author": "shawnmb",
-          "text": "The Villan is going all the way"
+          "time": "11:14",
+          "author": "The Villain CTJ",
+          "text": "@marylandmike. What works for you?"
+        },
+        {
+          "time": "11:28",
+          "author": "Unholy",
+          "text": "Vick & I will be going tonight, sorry all, very busy work week"
+        },
+        {
+          "time": "12:22",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/eddie-murphy-shock-1"
+        },
+        {
+          "time": "17:14",
+          "author": "vancecookcobxin",
+          "text": "Me and @DSN are locked in on Fridayish"
         }
       ]
     },
     {
-      "channel": "blubber-magazine",
+      "channel": "season-19-signup",
       "badge": "LOCKER ROOM",
-      "title": "Dispatches from #blubber-magazine",
-      "commentary": "Heated debate and banter erupts in #blubber-magazine over game tape, timing, and locker room etiquette.",
+      "title": "Dispatches from #season-19-signup",
+      "commentary": "Heated debate and banter erupts in #season-19-signup over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "00:03",
-          "author": "shawnmb",
-          "text": "7 out of 8 aint bad"
-        },
-        {
-          "time": "01:21",
-          "author": "Adolf Oliver Nipples",
-          "text": "i'm getting some nasty DM's"
-        },
-        {
-          "time": "01:21",
-          "author": "Ticklepuss",
-          "text": "That’s great"
-        },
-        {
-          "time": "01:22",
-          "author": "Ticklepuss",
-          "text": "“There were 4”"
-        },
-        {
-          "time": "01:23",
-          "author": "shawnmb",
-          "text": "Did the Wolf tank?"
-        },
-        {
-          "time": "01:24",
-          "author": "Ticklepuss",
-          "text": "Tell leadership to set bsb for playoffs"
-        },
-        {
-          "time": "01:24",
-          "author": "Adolf Oliver Nipples",
-          "text": "do you normally use broken controllers for the Brule?"
-        },
-        {
-          "time": "01:24",
-          "author": "Ticklepuss",
-          "text": "Mine is tremendously shitty.  Been using it all year"
-        },
-        {
-          "time": "01:34",
-          "author": "GMDS",
-          "text": "https://klipy.com/gifs/excuses-files-1"
-        },
-        {
-          "time": "02:31",
-          "author": "Adolf Oliver Nipples",
-          "text": "@Ticklepuss where do i see the Highland logo explode?"
-        },
-        {
-          "time": "02:32",
-          "author": "Adolf Oliver Nipples",
-          "text": "lol nevermind"
-        },
-        {
-          "time": "02:41",
-          "author": "Lloyd10xmas",
-          "text": "I didn’t know @Adolf Oliver Nipples could actually chirp(!) Only ever hear her say “shut up.”"
-        },
-        {
-          "time": "02:42",
-          "author": "Adolf Oliver Nipples",
-          "text": "https://klipy.com/gifs/dak-prescott-nfl-1"
-        },
-        {
-          "time": "02:43",
-          "author": "Lloyd10xmas",
-          "text": "I don’t watch or care about football…"
-        },
-        {
-          "time": "03:52",
-          "author": "Pink_Elephants",
-          "text": "I like Nips talking shit post series. We need more of it league wide."
-        },
-        {
-          "time": "04:01",
-          "author": "red",
-          "text": "Just drove 18 hours straight, exhausted, rodeo was a tough one , didn't think anything couldn't make my face turn from the 1000 yard stare I had ....until I read \"There where 4\" 🤣🤣🤣🤣🤣🤣🤣🤣🤣🤣 The people and this league are the best"
-        },
-        {
-          "time": "10:08",
-          "author": "Lloyd10xmas",
-          "text": "Agreed(!)"
+          "time": "12:20",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/alf-wont-be-fooled"
         }
       ]
     },
@@ -452,155 +375,690 @@
       "commentary": "Heated debate and banter erupts in #bell-n-bell over game tape, timing, and locker room etiquette.",
       "messages": [
         {
-          "time": "15:16",
-          "author": "shawnmb",
-          "text": "I was listening back to @Pink_Elephants passionate defence of tanking (and re-reading the comments in favour of allowing tanking). A couple of things for Rational @krav1 to think about :\n\nIdea #1 - Tanking is fine. We're all okay with it. We just don't want to play the games where a guy is trying to lose. The solution is therefore to allow guys to take a \"gap\" season, where they go 0-56, don't have to play any games, and get lottery odds according to where they finish.\n\n*Thoughts: upon reflection this would be absurd. We could potentially have seasons where the entire lottery is made up of teams that didn't play a single game*\n\nIdea #2 - Tanking is fine, leave things the way they are, if guys want to lose every game good for them.\n\nIdea #3 - Tanking is no good, lets solve it by giving all teams equal lottery odds every season, no matter where you finish.\n\n*Thoughts: this sounds fine until TBay gets first overall pick in McDavid's draft year. As long as everyone is okay with that, this would work. There could be other rules, like if you're top 5 in one season, you can't be top 5 the next (or whatever). It would be simple and clean. Based on the idea that rosters don't matter and it doesn't matter if the best players have the best pixelated players*\n\nIdea #4 - Tanking is no good. To solve it we need more weighted lottery odds and maybe other rules that limit a team's ability to continually get high draft picks (ie. can't finish top 3 two seasons in a row, or whatever).\n\n*Thoughts: wouldn't remove tanking but might disincentivize guys. It will allow certain GMs to work the new rules in their own favour.*\n\nIdea #5 - Tanking is no good. To solve it, give everyone someone else's 1st round pick. This is the Nathan approach. The benefit is that it encourages people to cheer against their friends.\n\n*Thoughts: very little downside except it would be harder for guys to manipulate the system for their own benefit.*"
+          "time": "17:33",
+          "author": "GaelicGopher",
+          "text": "Ok, now it’s growing on me."
         },
         {
-          "time": "15:28",
-          "author": "GMDS",
-          "text": "Idea 1, is fine, but guys who elect to do it get no more than (for example) 5% lottery odds...they'd be better off to play and win the bill\n\nIdea 3, guys at the top are already getting another feather by snake draft and dropped guys available\n\nIdea4 is reasonable, the  lottery odds can be adjusted, or there is a lottery, and brule teams get wheeled for their order, and limiting top x pick for x years is just another thing to track, and worry about with traded picks and will get convoluted and abuse when 1 gm knows they can't pick top5 and the other gm doesn't\n\nIdea 5 you know my opinion"
-        },
-        {
-          "time": "15:36",
+          "time": "17:33",
           "author": "Adolf Oliver Nipples",
-          "text": "Why didn’t I get a nickname like Rational Nips?"
+          "text": "Where the fuck is @krav1 ?"
         },
         {
-          "time": "15:37",
-          "author": "Adolf Oliver Nipples",
-          "text": "I say leave it as is. I want the ability to hurl accusations."
+          "time": "17:36",
+          "author": "GaelicGopher",
+          "text": "@Pink_Elephants you started at the bottom, made your team a contender and you are basically saying you don’t want others to have that ability.  Blasphemy/Hypocritical\ntrade better or come up with a better plan than tanking.\nIf we have a good draft and 12 people want to all tank (and use your idea - SIM)….all 12 can’t be 0-56 bro.  What do you do then?"
         },
         {
-          "time": "15:39",
+          "time": "17:38",
+          "author": "GaelicGopher",
+          "text": "Oh, and I did take a season off…..I didn’t get rewarded with the first pick, I got the LAST pick.  As it should be"
+        },
+        {
+          "time": "17:45",
           "author": "Ticklepuss",
-          "text": "There's no rational fix for tanking so just leave it alone.  Make them struggle to play 50+ games and waste their time.  Continue to do your level best to embarrass them publicly, at least as much as possible.  \n\nOverall, not a problem at mass.  Most teams have solid rosters outside of 2, and 1 of them doesn't care."
+          "text": "Pink didn't tank, he just fleeced Ed"
         },
         {
-          "time": "15:41",
-          "author": "Ticklepuss",
-          "text": "Personally. on a side note, i like the idea of setting a \"boundary\" that a team in the top X cannot get better than top X for X number of seasons.  Since we have this loser tournament to further screw the lowest teams, it might be good to set some sort of limits as to the very top picks over multiple seasons"
-        },
-        {
-          "time": "15:43",
-          "author": "Ticklepuss",
-          "text": "I do think obvious tanking should require a public powerpoint presentation"
-        },
-        {
-          "time": "15:46",
-          "author": "Unholy",
-          "text": "I would be in support of a rule that doesn’t allow a team continual top picks, like if you are in the top 5 picks for 3 consecutive seasons you’re out of the lottery for the next 2 seasons or something. Something reasonable to stop the same teams being in the top 5 over-and-over again."
-        },
-        {
-          "time": "15:48",
-          "author": "shawnmb",
-          "text": "Yes, the more public shaming the better"
-        },
-        {
-          "time": "16:03",
-          "author": "red",
-          "text": "I pick option 6 everyone play and win you win loose you loose and that's how you build a team , that is all if nobody has noticed 5 teams have the top stud guys and don't make brule , so it's about guy at the controller not always the roster"
-        },
-        {
-          "time": "16:05",
-          "author": "Adolf Oliver Nipples",
-          "text": "Ultra?"
-        },
-        {
-          "time": "16:12",
-          "author": "Ticklepuss",
-          "text": "I'm embarrassed this is a discussion topic.  We all know those that have brought this up as a viable option.....I feel shame for this collective.\n\nHaving said that, Claude suggested at a minimum the person should have to do a public roast on TickleWeb (which could be substituted by the press room above obviously)"
-        },
-        {
-          "time": "16:13",
-          "author": "Pink_Elephants",
-          "text": "Why are guys who win not allowed to have better players?"
-        },
-        {
-          "time": "16:14",
-          "author": "Adolf Oliver Nipples",
-          "text": "There’s some communists in here"
-        },
-        {
-          "time": "16:14",
-          "author": "Ticklepuss",
-          "text": "also suggested some other ideas - i was initially intrigued by the \"reverse draft incentive at predetermined time\" where later state results would be worth more specifically for draft placement (i.e. win to improve).  but then i tucked and put myself in the mind of a tanker and realized I could manipulate this too if I'm girly enough."
-        },
-        {
-          "time": "16:16",
-          "author": "Pink_Elephants",
-          "text": "Idea 4 is the best except forget about giving any additional odds for missing the playoffs."
-        },
-        {
-          "time": "16:16",
-          "author": "Ticklepuss",
-          "text": "I also liked the idea of sending the team that gets #1 automatically to last pick following season."
-        },
-        {
-          "time": "16:17",
-          "author": "Ticklepuss",
-          "text": "that was fun - can we decide on a public shamming stunt then move on and forget about this?"
-        },
-        {
-          "time": "16:17",
-          "author": "GMDS",
-          "text": "They are\nA) use your 2nd rd pick\nB) you got waiver priority \nC) now a snake rd 2\nD) and first access to dropped guys"
-        },
-        {
-          "time": "16:19",
-          "author": "Adolf Oliver Nipples",
-          "text": "The rich get richer"
-        },
-        {
-          "time": "16:39",
-          "author": "Unholy",
-          "text": "Idea 6: Get rid of in-game Penalties"
-        },
-        {
-          "time": "16:56",
-          "author": "Ticklepuss",
-          "text": "I do agree that getting rid of penalties solves tanking"
-        },
-        {
-          "time": "17:17",
-          "author": "NathanMB",
-          "text": "Guys why are we so opposed to rooting against others? It truly seems like the spirit of this league. \n\nPink can wake up, see Shawn lost and have an instant smile on his face. Gophers sees Richfield lose, terrific! \nThrough others misery, we grow closer"
-        },
-        {
-          "time": "17:18",
-          "author": "NathanMB",
-          "text": "Tanking is secondary here"
-        }
-      ]
-    },
-    {
-      "channel": "injuries",
-      "badge": "LOCKER ROOM",
-      "title": "Dispatches from #injuries",
-      "commentary": "Heated debate and banter erupts in #injuries over game tape, timing, and locker room etiquette.",
-      "messages": [
-        {
-          "time": "01:29",
-          "author": "Ticklepuss",
-          "text": "https://www.instagram.com/reel/De9--E0Mjs5/?xtok=aDdyZ2cyOXN3ZHJs"
-        },
-        {
-          "time": "01:32",
-          "author": "Ticklepuss",
-          "text": "@Pink_Elephants"
-        }
-      ]
-    },
-    {
-      "channel": "cooking-with-puss",
-      "badge": "CULINARY CONTROVERSY",
-      "title": "Kitchen Confidential & Hate-Watching",
-      "commentary": "Late-night food critique reaches boiling point as members profess deep disdain for online buffet content while simultaneously watching every single second.",
-      "messages": [
-        {
-          "time": "17:48",
+          "time": "17:50",
           "author": "segathon",
-          "text": "Eating fish out of cans until I beat @red"
+          "text": "Ed also had a broken controller last night"
+        },
+        {
+          "time": "17:56",
+          "author": "Adolf Oliver Nipples",
+          "text": "Talk about a bad night. 1. Break your paddle. 2. Get ousted from the Brule. 3. Eagles get beaded by the Cowboys. Poor little bugger."
+        },
+        {
+          "time": "19:15",
+          "author": "Unholy",
+          "text": "4. Nyad moved to Paramount+"
+        },
+        {
+          "time": "19:55",
+          "author": "Unholy",
+          "text": "You mean Rational Krav?"
+        },
+        {
+          "time": "20:10",
+          "author": "segathon",
+          "text": "how many draft classed have a MacKinnon type player in the next few years?"
+        },
+        {
+          "time": "20:32",
+          "author": "GaelicGopher",
+          "text": "When we get past 2030 we start over with 1995 and then there is Corey Millen"
+        },
+        {
+          "time": "20:35",
+          "author": "shawnmb",
+          "text": "Rational Nips"
+        },
+        {
+          "time": "20:43",
+          "author": "Adolf Oliver Nipples",
+          "text": "So which of the seven tank prevention options did @krav1 land on?"
+        },
+        {
+          "time": "20:47",
+          "author": "shawnmb",
+          "text": "i assume he's carefully considering all options, in a measured and reasonable way, and not jumping to an irrational emotional decision"
+        },
+        {
+          "time": "21:22",
+          "author": "Pink_Elephants",
+          "text": "How does a guy with Getzlaf have the second most points on the regular season but finish 17th in the standings?"
+        },
+        {
+          "time": "21:24",
+          "author": "Pink_Elephants",
+          "text": "Offer Sumter a trade for Getzlaf so we can make him #1"
+        },
+        {
+          "time": "22:33",
+          "author": "GaelicGopher",
+          "text": "Combination of Pinot, Gummies, and Collusion that’s how.  I’ll trade you Getslaf for Both Sedins, $97, and a slice of Blueberry 🫐 Pie 🥧.  Then I’ll bench them, and SIM all games."
+        },
+        {
+          "time": "22:42",
+          "author": "The Villain CTJ",
+          "text": "https://klipy.com/gifs/challenger-2-bumpy-ride"
+        },
+        {
+          "time": "22:51",
+          "author": "Pink_Elephants",
+          "text": "My idea was ridding the league of the possibility of tanking."
+        },
+        {
+          "time": "22:57",
+          "author": "GaelicGopher",
+          "text": "It doesn’t matter what any of us think.  At some point UltraMagnus is going to re appear with a bottle of Tequila and in an Arnold Swartzeneggar voice move this league back to a Dictatorship.  Obviously Democracy doesn’t work.\nDespite drafts starting on no notice, attributes changing, and total chaos…..it somehow worked and was fun.  And tanking was an afterthought"
+        },
+        {
+          "time": "23:00",
+          "author": "Pink_Elephants",
+          "text": "If you started winning you’d be happier. Trust me. I know."
+        },
+        {
+          "time": "23:04",
+          "author": "GaelicGopher",
+          "text": "Oh I’m happy.  If I could be any happier I’d be tap dancing with Bing Fucking Crosby AND Sidney Crosby"
+        },
+        {
+          "time": "23:06",
+          "author": "Pink_Elephants",
+          "text": "I don’t know. You seem upset that I’m ok with tanking and at the same time have a solution for preventing it."
+        },
+        {
+          "time": "23:08",
+          "author": "Pink_Elephants",
+          "text": "If you want you and I can pair up next season and have each others picks"
+        },
+        {
+          "time": "23:09",
+          "author": "Ticklepuss",
+          "text": "O am also in the market for someone that wants to do a blind pickswap"
+        },
+        {
+          "time": "23:09",
+          "author": "Pink_Elephants",
+          "text": "We should be able to choose who we pair up with"
+        },
+        {
+          "time": "23:14",
+          "author": "NathanMB",
+          "text": "This is the way puss"
+        },
+        {
+          "time": "23:18",
+          "author": "segathon",
+          "text": "I just avenged wolf"
+        },
+        {
+          "time": "23:21",
+          "author": "Pink_Elephants",
+          "text": "Ed fleeced himself."
+        },
+        {
+          "time": "23:24",
+          "author": "segathon",
+          "text": "was he posting during an eagles game?"
+        },
+        {
+          "time": "23:57",
+          "author": "krav1",
+          "text": "Hi all…I agree with @red \nThe beauty of this league is that the less skilled players (on the controller) are able to build more skilled teams.  In theory this is supposed to level out the game play and give the league some parody.  So if the same bottom teams end up with the higher draft picks then eventually they will have to drop them to add another stud and that’s why I proposed (hopefully implemented) snake draft where the top players will be able to draft these players at the beginning of the 2nd RD.  \n\nThe middle class always gets the shaft (it’s the way it is).  Middle 3rd of the league doesn’t get a great 1st round pick and probably won’t benefit from grabbing a decent dropped player.  So this is where you need to improve your GM skills and get more savvy.  Maybe you can intercept and trade for one of these players that a bottom team may have to drop to make room for their pick etc….I get it everyone wants a chance to get a unicorn which is the e main reason for “The Tank”\n\nSo I have a thought on maybe curbing this urge…Don’t do It!  Hahaha…"
+        },
+        {
+          "time": "23:57",
+          "author": "krav1",
+          "text": "I like Nate’s idea and I’m game with trying it but don’t think most of the league agrees.  So here is a draft order proposal (lottery).  This is based on the current 29 teams (16 playoff teams and 13 non-playoff teams).  \nTop 5 picks will consist of 4 non-playoff teams and 1 playoff team.  The winner of the Shitty Bill is guaranteed to be in the top 5.  Each of these teams will have an equal chance to get the number 1 pick.  \nHow these 5 chosen teams are selected….\n\nPlayoff team lottery…seeds 13-16 (10% chance)…9-12 (7.5% chance)….5-8(5% chance)…1-4 (2.5 % chance)…so why not just soft tank…just dont…but then you are hurting your chance to get a top 2nd rd pick and land a potential dropped player\n\nShitty Bill Winner - Gets an automatic bid to top 5\n\nNon-Playoff team lottery…all 12 teams have an equal chance to be remaining 3 teams in top 5…\n\nSo 9 non-playoff teams not in the top 5…will fill out spots 6-14 in the draft (random wheel)\n\n15 playoff teams not in top 5 will finish out draft positions 15-29 (to avoid soft tanking we could do a random wheel for spots 15-24…picks 25-29 will automatically be awarded to the top 5 seeds because they earned the right to pick high in 2nd rd)\nThe playoff team that wins the lottery and drafts in the top 5 cannot have a top 5 pick in the 2nd rd.\n\nThis is a proposal and probably has tons of flaws that @GMDS can analyze.  \n\nIrrational Krav"
+        },
+        {
+          "time": "00:14",
+          "author": "shawnmb",
+          "text": "This is pretty good"
+        },
+        {
+          "time": "00:17",
+          "author": "GaelicGopher",
+          "text": "This is Pretty Good"
+        },
+        {
+          "time": "00:18",
+          "author": "Lloyd10xmas",
+          "text": "https://klipy.com/gifs/dumb-and-dumber-lloyd-14"
+        },
+        {
+          "time": "00:18",
+          "author": "Lloyd10xmas",
+          "text": "Irrational Krav should be the face of the league…sorry @segathon(!)"
+        },
+        {
+          "time": "00:19",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/if-its-summer-and-its-hot-why-cant-you-wear-a-tank-top"
+        },
+        {
+          "time": "00:19",
+          "author": "krav1",
+          "text": "Yeahhhhhhhhh"
+        },
+        {
+          "time": "00:19",
+          "author": "segathon",
+          "text": "anything to get people to stop talking about tank tops"
+        },
+        {
+          "time": "00:20",
+          "author": "Lloyd10xmas",
+          "text": "Someone provide a real picture of @Unholy and then @Ticklepuss can create AI art with him wearing a tank top(!)"
+        },
+        {
+          "time": "00:21",
+          "author": "Lloyd10xmas",
+          "text": "Who’s the vaganoid now(!)"
+        },
+        {
+          "time": "00:23",
+          "author": "krav1",
+          "text": "*note…top 5 selected in a way so any of the 5 teams can get picks #1-5"
+        },
+        {
+          "time": "00:23",
+          "author": "GMDS",
+          "text": "its impressive and well thought out @krav1 \n\nmaybe just some % tweaks are needed, but it does make the draft more random\n\ncouple items i would suggest is that this doesnt start till next year as there have been many 2014 picks traded, all of 2015 1sts are in tact\n\nalso the playoff team that gets to the top 5 one year cant return till 3 drafts after (i.e 2015, then not again till 2018); as a playoff team, if they are not in the brule they are subject to the non playoff standard ordering\n\nmaybe the 9 non playoff teams still draft in reverse finish order? dont want to totally fuck over the bottom teams?"
+        },
+        {
+          "time": "00:30",
+          "author": "krav1",
+          "text": "I agree @GMDS Just threw some % out there so probably need some tweaks….using reverse finish order on 9 non-playoff teams that don’t make lotto probably makes more sense so #6 is the lowest the last place team can draft…just trying to make it completely random in all tiers.."
+        },
+        {
+          "time": "00:36",
+          "author": "krav1",
+          "text": "I’m fine with current rules and always play to win.  Best competition in this league regardless.\nI love this lotto stuff and the notion of a “fair game” so figure I’d  put something out there as a follow up to the bell and bell top 10 NHL95 podcast."
+        },
+        {
+          "time": "00:37",
+          "author": "Ticklepuss",
+          "text": "My 2 cents….it doesn’t curb tanking and is too complicated for a problem that isn’t really a problem.   But i still think commissioner rational krav"
+        },
+        {
+          "time": "00:39",
+          "author": "krav1",
+          "text": "I actually agree @Ticklepuss but I was bored and didn’t feel like using AI for a rational proposal."
+        },
+        {
+          "time": "00:42",
+          "author": "GMDS",
+          "text": "it could also help expedite trades in the off season, right now everyone is probably waiting for the lottery.\nwith the above we could at end of season right away we could:\na) weighted lottery the playoff teams for top5 \nb) even wheel the 3 non playoff teams for top 5\nc) remaining 9 non playoffs know where they are (with exception of SB winner) based on record\nd) 25*-29 will be locked in (if a top 5 team gets in the top 5 picks, will it remain the top 4 in the 2nd rd, or does team 6 move to that 5th spot? or does team 6 get a shot at picks 15-24?)\ne) even wheel the remaining 15-24 teams\n\nthen basically we wait for the SB winner. and once completed the remaining 5 teams go to the wheel for draft order"
+        },
+        {
+          "time": "00:42",
+          "author": "marylandmike.",
+          "text": "I like your proposal @Rational Krav. You really thought about all the levels"
+        },
+        {
+          "time": "00:44",
+          "author": "marylandmike.",
+          "text": "Also, while the four of you are here. All Sims should be a split: W 2-1, L 1-2"
+        },
+        {
+          "time": "00:44",
+          "author": "Ticklepuss",
+          "text": "Fair enough.  There’s no logical way to curb it, at least not that I could come up with.  I do wonder if whoever has the 1st overall would then pick in the bottom 3 the next 3 years (each year moving up a slot to account for the next years coach).  Would 3 shitty draft picks be deterrent enough not to tank?  I dunno"
+        },
+        {
+          "time": "00:45",
+          "author": "Ticklepuss",
+          "text": "The one thing that makes sense to me with ^ is that it’s virtually always going to be a mid-tier bubble team won win the loser tournament anyway"
+        },
+        {
+          "time": "00:45",
+          "author": "UltraMagnus",
+          "text": "I think getting rid of the lottery. Done and done."
+        },
+        {
+          "time": "00:45",
+          "author": "UltraMagnus",
+          "text": "Bring back the old shitty bill. Win the shitty win the top pick."
+        },
+        {
+          "time": "00:46",
+          "author": "marylandmike.",
+          "text": "But we all agree about the sims, right?"
+        },
+        {
+          "time": "00:46",
+          "author": "UltraMagnus",
+          "text": "Thats how it use to work. And if you want to talk. Go ahead you still have win out."
+        },
+        {
+          "time": "00:46",
+          "author": "GMDS",
+          "text": "there is nothing wrong with the lottery, in fact by getting rid of it that only encourages more tanking"
+        },
+        {
+          "time": "00:46",
+          "author": "UltraMagnus",
+          "text": "Go and tank. Who really cares. I rather play in the playoffs than get a pick ill end up trading lol"
+        },
+        {
+          "time": "00:48",
+          "author": "GMDS",
+          "text": "at this point we are just spitballing ideas, and they are good ones. but (cant believe im saying this) but puss (and others) are probably right, are we over thinking the resolution to a problem that really is just 1-2 guys, every so many years?"
+        },
+        {
+          "time": "00:50",
+          "author": "Adolf Oliver Nipples",
+          "text": "With Vick getting 2 top picks, he won’t be tanking anyone. Now we just need to worry about Richfield."
+        },
+        {
+          "time": "00:51",
+          "author": "Ticklepuss",
+          "text": "@shawnmb @NathanMB can u have Vicky and Blair on for a fireside podcast session where u ask them questions about what penalties would be enough of a deterrent?"
+        },
+        {
+          "time": "00:51",
+          "author": "Adolf Oliver Nipples",
+          "text": "I don’t think anyone else is tanking."
+        },
+        {
+          "time": "00:52",
+          "author": "krav1",
+          "text": "This proposal is mainly to give the middle tier a chance at a top 5 pick every so often.  Bottom tier always gets a decent pick…top tier going to win with any roster but now could still build solid teams with snake draft…sounds more complicated than it really is…shitty bill winner(middle tier player) gets a chance at a top 5 pick…3 other non-playoff teams get a chance (as usual) and 1 playoff team gets a chance with the middle tier player having the best odds"
+        },
+        {
+          "time": "00:53",
+          "author": "Adolf Oliver Nipples",
+          "text": "Sounds good to me."
+        },
+        {
+          "time": "00:54",
+          "author": "Ticklepuss",
+          "text": "So just aoft tank to the middle like nick from Minnesota"
+        },
+        {
+          "time": "00:54",
+          "author": "Ticklepuss",
+          "text": "I like all ur ideas @krav1 .  I like everything about you"
+        },
+        {
+          "time": "00:54",
+          "author": "MattyA",
+          "text": "Hey now💥"
+        },
+        {
+          "time": "00:54",
+          "author": "Adolf Oliver Nipples",
+          "text": "As long as the shitty bill runner up receives no benefit. Those days were the worst when the SB finalists got 1 and 2 automatically."
+        },
+        {
+          "time": "00:56",
+          "author": "Ticklepuss",
+          "text": "Now back to penalties….."
+        },
+        {
+          "time": "00:57",
+          "author": "krav1",
+          "text": "Penalties…easy fix…just toggle them off"
+        },
+        {
+          "time": "00:57",
+          "author": "shawnmb",
+          "text": "I wish we had a rule that people can only post once every 30 minutes"
+        },
+        {
+          "time": "00:58",
+          "author": "Adolf Oliver Nipples",
+          "text": "this is my channel now"
+        },
+        {
+          "time": "00:58",
+          "author": "Ticklepuss",
+          "text": "In all honesty i don’t care what yinz decide with the anti-tanking measures.  I play either way.  I would just ask for public humiliation in some form"
+        },
+        {
+          "time": "00:58",
+          "author": "Ticklepuss",
+          "text": "U can turn that on"
+        },
+        {
+          "time": "00:59",
+          "author": "Ticklepuss",
+          "text": "Pies said the lottery is gone and vanished"
+        },
+        {
+          "time": "00:59",
+          "author": "Pink_Elephants",
+          "text": "Isn’t it sad that @GaelicGopher thought that would stump the entire tank idea?"
+        },
+        {
+          "time": "00:59",
+          "author": "krav1",
+          "text": "No tanking in the Pure league and don’t have to control that stupid goalie."
+        },
+        {
+          "time": "01:00",
+          "author": "Ticklepuss",
+          "text": "Simple and elegant"
+        },
+        {
+          "time": "01:00",
+          "author": "shawnmb",
+          "text": "Lets implement Krav's idea immediately."
+        },
+        {
+          "time": "01:00",
+          "author": "Ticklepuss",
+          "text": "Wait until sedins last year"
+        },
+        {
+          "time": "01:01",
+          "author": "GaelicGopher",
+          "text": "I don’t even follow, but thats ok.\nKRAV for President"
+        },
+        {
+          "time": "01:01",
+          "author": "Pink_Elephants",
+          "text": "Shawn said Unholy is tanking"
+        },
+        {
+          "time": "01:03",
+          "author": "krav1",
+          "text": "By the way I didn’t stink my first few seasons…tank\n\nnow I’m 8th seed…semi-soft tank"
+        },
+        {
+          "time": "01:04",
+          "author": "Ticklepuss",
+          "text": "https://klipy.com/gifs/jim-halpert-face-7"
+        },
+        {
+          "time": "01:06",
+          "author": "marylandmike.",
+          "text": "Thank you @FOTL"
+        },
+        {
+          "time": "01:11",
+          "author": "NathanMB",
+          "text": "And pink when the sedins retire"
+        },
+        {
+          "time": "01:12",
+          "author": "Pink_Elephants",
+          "text": "I wish I could trade them away for my future. I don’t even like them"
+        },
+        {
+          "time": "01:12",
+          "author": "NathanMB",
+          "text": "Good stuff krav let’s do this for 2015"
+        },
+        {
+          "time": "01:21",
+          "author": "shawnmb",
+          "text": "I heard a former Brule Cup champion say he was going to tank as soon as his roster wasn't good"
+        },
+        {
+          "time": "01:21",
+          "author": "shawnmb",
+          "text": "why wait?"
+        },
+        {
+          "time": "01:21",
+          "author": "shawnmb",
+          "text": "Lets do it now"
+        },
+        {
+          "time": "01:21",
+          "author": "shawnmb",
+          "text": "who loses?"
+        },
+        {
+          "time": "01:22",
+          "author": "shawnmb",
+          "text": "other than tankers"
+        },
+        {
+          "time": "01:22",
+          "author": "shawnmb",
+          "text": "and people who spend too much time trading for picks"
+        },
+        {
+          "time": "01:22",
+          "author": "shawnmb",
+          "text": "and that's it"
+        },
+        {
+          "time": "01:24",
+          "author": "GMDS",
+          "text": "11 2014 1sts have been traded impacting 16 teams, under the auspice of the prior rules, thats why"
+        },
+        {
+          "time": "01:25",
+          "author": "shawnmb",
+          "text": "who cares"
+        },
+        {
+          "time": "01:25",
+          "author": "GMDS",
+          "text": "some of us that have been planning for this draft for 2+ offseasons"
+        },
+        {
+          "time": "01:25",
+          "author": "shawnmb",
+          "text": "NBA changed lottery rules even though teams have traded picks 8 years out"
+        },
+        {
+          "time": "01:25",
+          "author": "GMDS",
+          "text": "i mean whatever, my odds get better by implimenting it, but its not about ,me"
+        },
+        {
+          "time": "01:25",
+          "author": "shawnmb",
+          "text": "If the NBA can do it, i think the W can"
+        },
+        {
+          "time": "01:26",
+          "author": "GMDS",
+          "text": "the nba is a shit show"
+        },
+        {
+          "time": "01:26",
+          "author": "GMDS",
+          "text": "were ghetting close"
+        },
+        {
+          "time": "01:27",
+          "author": "shawnmb",
+          "text": "Barrie has Inglewood so he'd be impacted"
+        },
+        {
+          "time": "01:28",
+          "author": "shawnmb",
+          "text": "other than that, the only people impacted negatively are the wolf with Devil Hill (worst trade ever) and Italy with KVegas, but his tanking triggered the whole thing. And Taipei with Valhalla but who cares"
+        },
+        {
+          "time": "01:28",
+          "author": "shawnmb",
+          "text": "so what's the downside?"
+        },
+        {
+          "time": "01:33",
+          "author": "marylandmike.",
+          "text": "Can someone host Yoda and I?"
+        },
+        {
+          "time": "01:34",
+          "author": "marylandmike.",
+          "text": "Its for a good charity called  the Shitty Bill y’all"
+        },
+        {
+          "time": "01:40",
+          "author": "GaelicGopher",
+          "text": "More like 7+ seasons.  I admire your tenacity.  I agree, next year"
+        },
+        {
+          "time": "01:49",
+          "author": "GMDS",
+          "text": "I'm for the idea, we need to hammer out details, %'s, and what ifs, but when 16/29 teams have done something with the 2014 picks already, to just up and change everything (more than what's already being done for the betterment of the top teams) 2-3 weeks from the draft, is nonsensical"
+        },
+        {
+          "time": "01:55",
+          "author": "Pink_Elephants",
+          "text": "Correct. That’s how teams rebuild"
+        },
+        {
+          "time": "02:24",
+          "author": "Ticklepuss",
+          "text": "https://klipy.com/gifs/get-ready-to-learn-chinese-buddy"
+        },
+        {
+          "time": "04:15",
+          "author": "MarcusVickEBC",
+          "text": "I support anything to stop tanking."
+        },
+        {
+          "time": "04:19",
+          "author": "MarcusVickEBC",
+          "text": "Who plans for 2 years? Feel bad for anyone doing that…"
+        },
+        {
+          "time": "04:22",
+          "author": "MarcusVickEBC",
+          "text": "Is this really such a problem? I tanked my way to…14% chance at the #1 pick."
+        },
+        {
+          "time": "04:23",
+          "author": "MarcusVickEBC",
+          "text": "14%. Not 50%. Not guaranteed. I’m not gonna make you respin the wheel til I get #1 like Ed did."
+        },
+        {
+          "time": "04:23",
+          "author": "MarcusVickEBC",
+          "text": "14%. Is that really that much of a problem?"
+        },
+        {
+          "time": "11:19",
+          "author": "The Villain CTJ",
+          "text": "Full disclosure, I am looking to sell my team to a Chinese multi billionaire. The team would be renamed the Hong Kong Tanks."
+        },
+        {
+          "time": "11:31",
+          "author": "Unholy",
+          "text": "100% agree. Penalties are a much bigger problem. Get rid of them before any more playoff games are played."
+        },
+        {
+          "time": "11:33",
+          "author": "Unholy",
+          "text": "You can either play like a woman or have penalties - but you can’t have both. Since there are so many proud feminists in here that use vaginoids, we already know the only choice. Penalties gots to go."
+        },
+        {
+          "time": "12:19",
+          "author": "segathon",
+          "text": "https://klipy.com/gifs/crazy-insane-b5k"
+        }
+      ]
+    },
+    {
+      "channel": "wolfncline",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #wolfncline",
+      "commentary": "Heated debate and banter erupts in #wolfncline over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "12:24",
+          "author": "wolf_of_highland",
+          "text": "With the return of @S’Vale Shithawks the number one podcast returns.  Stay tuned."
+        },
+        {
+          "time": "12:30",
+          "author": "segathon",
+          "text": "Is this real life?"
+        },
+        {
+          "time": "13:12",
+          "author": "MattyA",
+          "text": "Number one podcast....hmmmm"
+        },
+        {
+          "time": "13:13",
+          "author": "MattyA",
+          "text": "As long as Mike is on the call I will be there"
+        },
+        {
+          "time": "13:14",
+          "author": "segathon",
+          "text": "With WnC coming back we should ask Sirius Radio to add an NHL 95 podcast channel, I am sure we can fill up 24 hours between the 4 pods we have!  Maybe they can replace the Pearl Jam channel...."
+        },
+        {
+          "time": "13:14",
+          "author": "MattyA",
+          "text": "There is absolutely nothing that can be said on any podcast about any video game that could/can/will replace the Pearl jam channel"
+        },
+        {
+          "time": "14:14",
+          "author": "GaelicGopher",
+          "text": "With all that extra Coaching Money the Shithawks have I bet they upgraded the mics 🎤 🎙️!!"
+        },
+        {
+          "time": "15:00",
+          "author": "red",
+          "text": "Is Sunnyvale really coming back ? @wolf_of_highland don't mess with my emotions"
+        },
+        {
+          "time": "15:00",
+          "author": "red",
+          "text": "Lol"
+        }
+      ]
+    },
+    {
+      "channel": "art_gallery",
+      "badge": "LOCKER ROOM",
+      "title": "Dispatches from #art_gallery",
+      "commentary": "Heated debate and banter erupts in #art_gallery over game tape, timing, and locker room etiquette.",
+      "messages": [
+        {
+          "time": "01:45",
+          "author": "Lloyd10xmas",
+          "text": "The female version of me…"
+        },
+        {
+          "time": "16:26",
+          "author": "segathon",
+          "text": "my last non ai creation to get people into the W"
+        },
+        {
+          "time": "16:42",
+          "author": "GMDS",
+          "text": "Is that better or worse than samsonov for Marchand?"
+        },
+        {
+          "time": "16:43",
+          "author": "segathon",
+          "text": "Well Hamerlik is still on @red team.  he was the diamond there.  Did we do 3rds at one point?"
         }
       ]
     }
