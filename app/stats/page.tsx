@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet, Trophy } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import {
   getAllSeasons,
@@ -374,6 +374,8 @@ const getLeaguePrefix = (league: { league_id: number | string; league_name?: str
 
 export default function NewspaperPage() {
   const [activeTab, setActiveTab] = useState('Home');
+  const [statsMode, setStatsMode] = useState<'regular' | 'playoffs'>('regular');
+  const [playoffSeasonIds, setPlayoffSeasonIds] = useState<Set<number>>(new Set());
   const [leagues, setLeagues] = useState<any[]>([]);
   const [selectedLeagueType, setSelectedLeagueType] = useState<string>('ALL');
   const [selectedLeague, setSelectedLeague] = useState('');
@@ -390,10 +392,28 @@ export default function NewspaperPage() {
   useEffect(() => {
     async function fetchLeagues() {
       try {
-        let { data, error } = await supabase
-          .from('leagues')
-          .select('league_id, league_name')
-          .order('league_id', { ascending: false });
+        const [leaguesRes, playoffGamesRes, playoffMasterRes] = await Promise.all([
+          supabase.from('leagues').select('league_id, league_name').order('league_id', { ascending: false }),
+          supabase.from('league_playoff_gamestats').select('league_id').then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_playoff_player_stats_master').select('league_id, season_id').then(r => r, () => ({ data: null, error: null }))
+        ]);
+
+        const poIds = new Set<number>();
+        (playoffGamesRes.data || []).forEach((g: any) => {
+          if (g.league_id != null && !isNaN(Number(g.league_id))) {
+            poIds.add(Number(g.league_id));
+          }
+        });
+        (playoffMasterRes.data || []).forEach((m: any) => {
+          const lid = m.league_id ?? m.season_id;
+          if (lid != null && !isNaN(Number(lid))) {
+            poIds.add(Number(lid));
+          }
+        });
+        setPlayoffSeasonIds(poIds);
+
+        let data = leaguesRes.data;
+        const error = leaguesRes.error;
 
         if (error || !data || data.length === 0) {
           const fallback = await supabase
@@ -413,7 +433,7 @@ export default function NewspaperPage() {
           const latest = data.reduce((prev: any, curr: any) => (Number(curr.league_id) > Number(prev.league_id) ? curr : prev), data[0]);
           const latestId = String(latest.league_id);
           setSelectedLeague(latestId);
-          loadData(latestId);
+          loadData(latestId, 'regular');
         }
       } catch (err) {
         console.error('Error fetching leagues in stats page:', err);
@@ -451,14 +471,40 @@ export default function NewspaperPage() {
     setSelectedLeagueType(type);
     const list = type === 'ALL' ? leagues : leagues.filter(l => getLeaguePrefix(l) === type);
     if (list.length > 0) {
-      const latestInType = list.reduce((prev, curr) => (Number(curr.league_id) > Number(prev.league_id) ? curr : prev), list[0]);
+      const withPlayoffs = statsMode === 'playoffs' ? list.filter(l => playoffSeasonIds.has(Number(l.league_id))) : [];
+      const pool = withPlayoffs.length > 0 ? withPlayoffs : list;
+      const latestInType = pool.reduce((prev, curr) => (Number(curr.league_id) > Number(prev.league_id) ? curr : prev), pool[0]);
       const nextId = String(latestInType.league_id);
       setSelectedLeague(nextId);
-      loadData(nextId);
+      loadData(nextId, statsMode);
     }
   };
 
-  async function loadData(leagueId: string) {
+  const handleStatsModeChange = (mode: 'regular' | 'playoffs') => {
+    if (mode === statsMode) return;
+    setStatsMode(mode);
+    setHoveredSkater(null);
+    setHoveredGoalie(null);
+    setHoveredDefense(null);
+    setHoveredRookie(null);
+
+    let targetLeagueId = selectedLeague;
+    if (mode === 'playoffs' && selectedLeague && !playoffSeasonIds.has(Number(selectedLeague))) {
+      const pool = (selectedLeagueType === 'ALL' ? leagues : leagues.filter(l => getLeaguePrefix(l) === selectedLeagueType))
+        .filter(l => playoffSeasonIds.has(Number(l.league_id)));
+      if (pool.length > 0) {
+        const latestWithPo = pool.reduce((prev, curr) => (Number(curr.league_id) > Number(prev.league_id) ? curr : prev), pool[0]);
+        targetLeagueId = String(latestWithPo.league_id);
+        setSelectedLeague(targetLeagueId);
+      }
+    }
+
+    if (targetLeagueId) {
+      loadData(targetLeagueId, mode);
+    }
+  };
+
+  async function loadData(leagueId: string, mode: 'regular' | 'playoffs' = statsMode) {
     const sId = parseInt(leagueId, 10);
 
     // Dynamic config refresh for the active league/season
@@ -489,6 +535,271 @@ export default function NewspaperPage() {
     } catch { }
 
     try {
+      if (mode === 'playoffs') {
+        const [poGamesRes, poMasterByLeagueRes, poMasterBySeasonRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
+          supabase.from('league_playoff_gamestats').select('game_id, league_id, home_team_id, away_team_id, home_score, away_score').eq('league_id', sId).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_playoff_player_stats_master').select('*').eq('league_id', sId).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_playoff_player_stats_master').select('*').eq('season_id', sId).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_rosters').select('*').eq('league_id', sId).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_player_database').select('*').then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_teams').select('*').then(r => r, () => ({ data: null, error: null }))
+        ]);
+
+        const playoffGameIds = Array.from(new Set(
+          (poGamesRes.data || [])
+            .map((g: any) => Number(g.game_id))
+            .filter((gid: number) => !isNaN(gid) && gid > 0)
+        ));
+
+        let poMasterByGamesData: any[] = [];
+        let poScoringData: any[] = [];
+        if (playoffGameIds.length > 0) {
+          const [byGamesRes, scoringRes] = await Promise.all([
+            supabase.from('league_playoff_player_stats_master').select('*').in('game_id', playoffGameIds).then(r => r, () => ({ data: null, error: null })),
+            supabase.from('league_playoff_scoring').select('*').in('game_id', playoffGameIds).then(r => r, () => ({ data: null, error: null }))
+          ]);
+          poMasterByGamesData = byGamesRes.data || [];
+          poScoringData = scoringRes.data || [];
+        }
+
+        // Build team lookup map
+        const teamMap = new Map<string, { name: string; logo: string; abbr: string }>();
+        (teamsRes.data || []).forEach((t: any) => {
+          const tId = String(t.team_id);
+          const abbr = String(t.abbreviation || '').trim().toUpperCase();
+          const name = String(t.team_name || '').trim();
+          const obj = { name, logo: t.logo_url || '', abbr };
+          if (tId) teamMap.set(tId, obj);
+          if (abbr) teamMap.set(abbr, obj);
+          if (name) teamMap.set(name.toLowerCase(), obj);
+        });
+
+        // Build player / roster lookup map
+        const newPosMap = new Map<string, string>();
+        const playerMetaMap = new Map<string, any>();
+
+        if (playerDbRes.data) {
+          playerDbRes.data.forEach((p: any) => {
+            const pos = String(p.pos || '').trim().toUpperCase();
+            const pName = String(p.player_name || '').trim();
+            const norm = normalizeName(pName);
+            const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
+            if (pos) {
+              if (pId) newPosMap.set(pId, pos);
+              if (pName) newPosMap.set(pName.toLowerCase(), pos);
+              if (norm) newPosMap.set(norm, pos);
+            }
+            if (pId) playerMetaMap.set(pId, p);
+            if (pName) playerMetaMap.set(pName.toLowerCase(), p);
+            if (norm) playerMetaMap.set(norm, p);
+          });
+        }
+
+        if (rosterRes.data) {
+          rosterRes.data.forEach((p: any) => {
+            const pos = String(p.pos || p.position || '').trim().toUpperCase();
+            const pName = String(p.player_name || '').trim();
+            const norm = normalizeName(pName);
+            const pId = p.player_id && String(p.player_id) !== '1' && String(p.player_id) !== '0' ? String(p.player_id) : '';
+            if (pos) {
+              if (pId) newPosMap.set(pId, pos);
+              if (pName) newPosMap.set(pName.toLowerCase(), pos);
+              if (norm) newPosMap.set(norm, pos);
+            }
+            if (pId) playerMetaMap.set(pId, { ...(playerMetaMap.get(pId) || {}), ...p });
+            if (pName) playerMetaMap.set(pName.toLowerCase(), { ...(playerMetaMap.get(pName.toLowerCase()) || {}), ...p });
+            if (norm) playerMetaMap.set(norm, { ...(playerMetaMap.get(norm) || {}), ...p });
+          });
+        }
+
+        // Also enrich player names and special teams goal/point tallies from league_playoff_scoring
+        const scoringNameById = new Map<string, string>();
+        const scoringSpecialByGamePlayer = new Map<string, { ppg: number; shg: number; evg: number; ppp: number; shp: number }>();
+
+        const bumpScoringStat = (gameId: any, playerKey: string, field: 'ppg' | 'shg' | 'evg' | 'ppp' | 'shp') => {
+          if (!playerKey) return;
+          const k = `${gameId}_${playerKey}`;
+          const cur = scoringSpecialByGamePlayer.get(k) || { ppg: 0, shg: 0, evg: 0, ppp: 0, shp: 0 };
+          cur[field] += 1;
+          scoringSpecialByGamePlayer.set(k, cur);
+        };
+
+        poScoringData.forEach((sc: any) => {
+          const gid = sc.game_id;
+          const gType = String(sc.goal_type || 'EV').trim().toUpperCase();
+          const isPP = gType.includes('PP');
+          const isSH = gType.includes('SH');
+
+          const sIdStr = sc.scorer_id && String(sc.scorer_id) !== '0' && String(sc.scorer_id) !== '1' ? String(sc.scorer_id) : '';
+          const sName = String(sc.scorer || '').trim();
+          if (sIdStr && sName) scoringNameById.set(sIdStr, sName);
+
+          const a1IdStr = sc.assist1_id && String(sc.assist1_id) !== '0' && String(sc.assist1_id) !== '1' ? String(sc.assist1_id) : '';
+          const a1Name = String(sc.assist1 || '').trim();
+          if (a1IdStr && a1Name) scoringNameById.set(a1IdStr, a1Name);
+
+          const a2IdStr = sc.assist2_id && String(sc.assist2_id) !== '0' && String(sc.assist2_id) !== '1' ? String(sc.assist2_id) : '';
+          const a2Name = String(sc.assist2 || '').trim();
+          if (a2IdStr && a2Name) scoringNameById.set(a2IdStr, a2Name);
+
+          const scorerKey = sIdStr || normalizeName(sName);
+          const a1Key = a1IdStr || normalizeName(a1Name);
+          const a2Key = a2IdStr || normalizeName(a2Name);
+
+          if (isPP) {
+            bumpScoringStat(gid, scorerKey, 'ppg');
+            bumpScoringStat(gid, scorerKey, 'ppp');
+            if (a1Key) bumpScoringStat(gid, a1Key, 'ppp');
+            if (a2Key) bumpScoringStat(gid, a2Key, 'ppp');
+          } else if (isSH) {
+            bumpScoringStat(gid, scorerKey, 'shg');
+            bumpScoringStat(gid, scorerKey, 'shp');
+            if (a1Key) bumpScoringStat(gid, a1Key, 'shp');
+            if (a2Key) bumpScoringStat(gid, a2Key, 'shp');
+          } else {
+            bumpScoringStat(gid, scorerKey, 'evg');
+          }
+        });
+
+        setPosMap(newPosMap);
+
+        // Deduplicate all playoff player stats rows
+        const rawMasterRows = [
+          ...(poMasterByLeagueRes.data || []),
+          ...(poMasterBySeasonRes.data || []),
+          ...poMasterByGamesData
+        ];
+        const seenRows = new Set<string>();
+        const dedupedRows: any[] = [];
+        rawMasterRows.forEach((row: any) => {
+          const rowKey = row.id != null
+            ? `id_${row.id}`
+            : `${row.game_id}_${row.player_id}_${ normalizeName(row.player_name || '') }_${row.team_id}_${row.pos_played}`;
+          if (!seenRows.has(rowKey)) {
+            seenRows.add(rowKey);
+            dedupedRows.push(row);
+          }
+        });
+
+        const playoffAggregatedMap = new Map<string, any>();
+        dedupedRows.forEach((row: any) => {
+          if (!hasPlayed(row)) return;
+          const directPos = String(row.pos_played || '').toUpperCase();
+          const pId = row.player_id && String(row.player_id) !== '1' && String(row.player_id) !== '0' ? String(row.player_id) : '';
+          const rawPName = String(row.player_name || '').trim() || (pId ? (scoringNameById.get(pId) || '') : '');
+          const norm = normalizeName(rawPName);
+          const meta = (pId ? playerMetaMap.get(pId) : null) || (rawPName ? playerMetaMap.get(rawPName.toLowerCase()) : null) || (norm ? playerMetaMap.get(norm) : null);
+          const resolvedName = meta?.player_name || rawPName || (pId ? `Player #${pId}` : '');
+          if (!resolvedName || resolvedName === 'Goalie' || resolvedName === 'Skater') return;
+
+          const isG = directPos === 'G' || KNOWN_GOALIES_SET.has(normalizeName(resolvedName)) || (Number(row.shots_against || 0) > 0 || Number(row.saves || 0) > 0);
+          const key = (isG ? 'G_' : 'S_') + (pId ? pId : (normalizeName(resolvedName) + '_' + String(row.team_id || '')));
+
+          const tInfo = teamMap.get(String(row.team_id)) || (meta?.team_default ? teamMap.get(meta.team_default) : null);
+          const teamName = tInfo?.name || row.team_name || String(row.team_id || 'Team');
+          const logoUrl = tInfo?.logo || row.logo_url || '';
+          const isRookie = meta?.is_rookie === true || meta?.is_rookie === 'true' || meta?.is_rookie === 1 || row.is_rookie === true;
+
+          if (!playoffAggregatedMap.has(key)) {
+            playoffAggregatedMap.set(key, {
+              player_id: row.player_id,
+              player_name: resolvedName,
+              team_id: row.team_id,
+              team_name: teamName,
+              logo_url: logoUrl,
+              is_rookie: isRookie,
+              pos_played: isG ? 'G' : (row.pos_played || meta?.pos || 'F'),
+              gp: 0,
+              total_goals: 0,
+              total_assists: 0,
+              total_points: 0,
+              total_sog: 0,
+              total_chks: 0,
+              total_pim: 0,
+              pp_points: 0,
+              sh_points: 0,
+              ppg: 0,
+              shg: 0,
+              evg: 0,
+              gwg: 0,
+              otg: 0,
+              toi_seconds: 0,
+              shots_against: 0,
+              saves: 0,
+              goals_against: 0,
+              wins: 0,
+              losses: 0,
+              ties: 0,
+              otl: 0,
+              shutouts: 0
+            });
+          }
+
+          const cur = playoffAggregatedMap.get(key);
+          cur.gp += 1;
+          cur.toi_seconds += parseTOI(row.toi);
+
+          if (isG) {
+            cur.shots_against += Number(row.shots_against || 0);
+            cur.saves += Number(row.saves || 0);
+            cur.goals_against += Number(row.goals_against || 0);
+            if (row.is_win) cur.wins += 1;
+            if (row.is_loss) cur.losses += 1;
+            if (row.is_tie) cur.ties += 1;
+            if (row.is_otl) cur.otl += 1;
+            if (Number(row.goals_against || 0) === 0 && (Number(row.shots_against || 0) > 0 || row.is_win)) {
+              cur.shutouts += 1;
+            }
+            cur.total_goals += Number(row.goals || 0);
+            cur.total_assists += Number(row.assists || 0);
+            cur.total_points += (Number(row.goals || 0) + Number(row.assists || 0));
+          } else {
+            const g = Number(row.goals || 0);
+            const a = Number(row.assists || 0);
+            cur.total_goals += g;
+            cur.total_assists += a;
+            cur.total_points += (g + a);
+            cur.total_sog += Number(row.shots || 0);
+            cur.total_chks += Number(row.checks || 0);
+            cur.total_pim += Number(row.pim || 0);
+
+            const sp = scoringSpecialByGamePlayer.get(`${row.game_id}_${pId || normalizeName(resolvedName)}`);
+            const rowPPG = Number(row.ppg ?? sp?.ppg ?? 0);
+            const rowSHG = Number(row.shg ?? sp?.shg ?? 0);
+            const rowPPP = Number(row.pp_points ?? sp?.ppp ?? 0);
+            const rowSHP = Number(row.sh_points ?? sp?.shp ?? 0);
+            const rowEVG = row.evg != null ? Number(row.evg) : (sp?.evg ?? Math.max(0, g - rowPPG - rowSHG));
+
+            cur.ppg += rowPPG;
+            cur.shg += rowSHG;
+            cur.pp_points += rowPPP;
+            cur.sh_points += rowSHP;
+            cur.evg += rowEVG;
+            cur.gwg += Number(row.gwg || 0);
+            cur.otg += Number(row.otg || 0);
+          }
+        });
+
+        const playoffList: any[] = [];
+        playoffAggregatedMap.forEach((p: any) => {
+          const sa = p.shots_against || 0;
+          const sv = p.saves || 0;
+          const ga = p.goals_against || 0;
+          const gp = p.gp || 0;
+
+          playoffList.push({
+            ...p,
+            toi_minutes: formatSecondsToMMSS(p.toi_seconds),
+            sv_pct: sa > 0 ? Number((sv / sa).toFixed(3)) : 0,
+            gaa: gp > 0 ? Number((ga / gp).toFixed(2)) : 0,
+            pts_per_game: gp > 0 ? Number((p.total_points / gp).toFixed(2)) : 0
+          });
+        });
+
+        setData(playoffList);
+        return;
+      }
+
       // Parallel fetch with individual catches so missing views never break Promise.all
       const [statsRes, masterRes, rosterRes, playerDbRes, teamsRes] = await Promise.all([
         supabase.from('api_stats_with_names').select('*').eq('league_id', sId).then(r => r, () => ({ data: null, error: null })),
@@ -1030,6 +1341,7 @@ export default function NewspaperPage() {
   const handleResetFilters = () => {
     setSelectedLeagueType('ALL');
     setSelectedTeam('All');
+    setStatsMode('regular');
     setHoveredSkater(null);
     setHoveredGoalie(null);
     setHoveredDefense(null);
@@ -1039,7 +1351,7 @@ export default function NewspaperPage() {
       const latest = leagues.reduce((prev, curr) => (Number(curr.league_id) > Number(prev.league_id) ? curr : prev), leagues[0]);
       const latestId = String(latest.league_id);
       setSelectedLeague(latestId);
-      loadData(latestId);
+      loadData(latestId, 'regular');
     }
   };
 
@@ -1138,7 +1450,7 @@ export default function NewspaperPage() {
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `league_stats_${activeTab.toLowerCase()}.csv`);
+    link.setAttribute('download', `league_${statsMode === 'playoffs' ? 'playoff_' : ''}stats_${activeTab.toLowerCase()}.csv`);
     link.click();
   };
 
@@ -1175,7 +1487,7 @@ export default function NewspaperPage() {
       }
       if (key === 'ppg') return Number(p.ppg ?? p.total_ppg ?? p.pp_goals ?? p.total_pp_goals ?? 0);
       if (key === 'pp_points') return Number(p.pp_points ?? p.total_pp_points ?? p.ppp ?? p.pp_pts ?? 0);
-      if (key === 'shg') return Number(p.shg ?? p.total_shg ?? p.sh_goals ?? p.total_sh_goals ?? 0);
+      if (key === 'shg') return Number(p.shg ?? p.total_shg ?? p.sh_goals ?? r_shg(p));
       if (key === 'sh_points') return Number(p.sh_points ?? p.total_sh_points ?? p.shp ?? p.sh_pts ?? 0);
       if (key === 'gwg') return Number(p.gwg ?? p.total_gwg ?? 0);
       if (key === 'otg') return Number(p.otg ?? p.total_otg ?? 0);
@@ -1186,6 +1498,10 @@ export default function NewspaperPage() {
       if (key === 'gp') return Number(p.gp ?? 0);
       return 0;
     };
+
+    function r_shg(p: any) {
+      return p.total_sh_goals ?? 0;
+    }
 
     const keys = [
       'gp', 'total_goals', 'total_assists', 'total_points', 'pts_per_game',
@@ -1273,10 +1589,20 @@ export default function NewspaperPage() {
     );
   };
 
+  const goalieHomeMinGP = useMemo(() => {
+    if (statsMode === 'playoffs') {
+      const homeGoalies = getFilteredData('goalies', filteredData);
+      return homeGoalies.some(g => Number(g.gp || 0) >= 2) ? 2 : 1;
+    }
+    return 10;
+  }, [statsMode, filteredData]);
+
   return (
     <div className="bg-[#f4f1ea] text-black min-h-screen p-2 sm:p-4 font-serif text-sm">
       <header className="border-b-4 border-black pb-2 mb-4 text-center">
-        <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter">League Statistics</h1>
+        <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter">
+          {statsMode === 'playoffs' ? 'Playoff Statistics' : 'League Statistics'}
+        </h1>
       </header>
 
       {/* Responsive Filter Toolbar */}
@@ -1327,20 +1653,48 @@ export default function NewspaperPage() {
             })}
           </div>
 
+          {/* Season Mode Toggle: Regular Season vs Playoffs */}
+          <div className="flex items-center bg-white border-2 border-black p-0.5 shadow-xs">
+            <button
+              type="button"
+              onClick={() => handleStatsModeChange('regular')}
+              className={`px-2.5 py-1 text-xs font-black uppercase transition-all cursor-pointer ${statsMode === 'regular'
+                ? 'bg-black text-white'
+                : 'text-black hover:bg-neutral-100'
+                }`}
+            >
+              Regular Season
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStatsModeChange('playoffs')}
+              className={`px-2.5 py-1 text-xs font-black uppercase transition-all flex items-center gap-1 cursor-pointer ${statsMode === 'playoffs'
+                ? 'bg-yellow-400 text-black border-l border-black'
+                : 'text-black hover:bg-neutral-100'
+                }`}
+            >
+              <Trophy className="h-3.5 w-3.5" />
+              Playoffs
+            </button>
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={selectedLeague}
               onChange={(e) => {
                 setSelectedLeague(e.target.value);
-                loadData(e.target.value);
+                loadData(e.target.value, statsMode);
               }}
               className="bg-transparent border-b-2 border-black font-bold uppercase p-1 cursor-pointer text-xs sm:text-sm"
             >
-              {filteredLeagues.map((l) => (
-                <option key={l.league_id} value={l.league_id}>
-                  {l.league_name}
-                </option>
-              ))}
+              {filteredLeagues.map((l) => {
+                const hasPo = playoffSeasonIds.has(Number(l.league_id));
+                return (
+                  <option key={l.league_id} value={l.league_id}>
+                    {l.league_name}{statsMode === 'playoffs' && hasPo ? ' ★' : ''}
+                  </option>
+                );
+              })}
             </select>
 
             <select
@@ -1385,10 +1739,16 @@ export default function NewspaperPage() {
         ))}
       </div>
 
+      {statsMode === 'playoffs' && uniqueData.length === 0 && (
+        <div className="mb-4 border-2 border-black bg-yellow-50 p-4 text-center font-bold uppercase text-xs">
+          No playoff games have been recorded yet for this season. Select a completed or active playoff season (marked with ★) above to view Playoff Scoring &amp; Goalie Leaders.
+        </div>
+      )}
+
       {activeTab === 'Home' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <StatCard
-            title="Skaters"
+            title={statsMode === 'playoffs' ? 'Playoff Skaters' : 'Skaters'}
             data={getFilteredData('skaters', filteredData)}
             category="Skaters"
             onTabClick={handleTabChange}
@@ -1396,16 +1756,16 @@ export default function NewspaperPage() {
             setHoveredPlayer={setHoveredSkater}
           />
           <StatCard
-            title="Goalies"
+            title={statsMode === 'playoffs' ? 'Playoff Goalies' : 'Goalies'}
             data={getFilteredData('goalies', filteredData)}
             category="Goalies"
-            minGP={10}
+            minGP={goalieHomeMinGP}
             onTabClick={handleTabChange}
             hoveredPlayer={hoveredGoalie}
             setHoveredPlayer={setHoveredGoalie}
           />
           <StatCard
-            title="Defensemen"
+            title={statsMode === 'playoffs' ? 'Playoff Defensemen' : 'Defensemen'}
             data={getFilteredData('defense', filteredData)}
             category="Skaters"
             onTabClick={handleTabChange}
@@ -1413,7 +1773,7 @@ export default function NewspaperPage() {
             setHoveredPlayer={setHoveredDefense}
           />
           <StatCard
-            title="Rookie Scoring Leaders"
+            title={statsMode === 'playoffs' ? 'Playoff Rookie Leaders' : 'Rookie Scoring Leaders'}
             data={getFilteredData('skaters', filteredData).filter(p => p.is_rookie === true || p.is_rookie === 'true' || p.is_rookie === 1)}
             category="Skaters"
             onTabClick={handleTabChange}
