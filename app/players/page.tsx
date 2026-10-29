@@ -1011,6 +1011,14 @@ const TeamBanner = ({
       cleanName.toLowerCase(),
     ].filter(Boolean))) as string[];
 
+    let parsedYear: number | null = null;
+    if (yrStr && yrStr !== '----') {
+      const matchSingle = yrStr.match(/\d{4}/);
+      if (matchSingle) {
+        parsedYear = parseInt(matchSingle[0], 10);
+      }
+    }
+
     getNhlBannerBucketFiles().then((bannerFiles) => {
       if (isCancelled) return;
 
@@ -1019,15 +1027,51 @@ const TeamBanner = ({
 
       for (const file of bannerFiles) {
         const baseNoExt = file.replace(/\.[^.]+$/, '');
+        // Strip year range or year from filename when checking team name match
+        const teamPartOnly = baseNoExt.replace(/[\s_-]*(19\d{2}|20\d{2})([\s_-]+(19\d{2}|20\d{2}))?.*$/, '');
+        const normTeamPart = teamPartOnly.toLowerCase().replace(/[^a-z0-9]/g, '');
         const normFile = baseNoExt.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        // Exact normalized match gets highest priority (e.g., montreal_canadiens -> montrealcanadiens, chicago_blackhawks -> chicagoblackhawks)
-        const exactIdx = normVariants.findIndex((nv) => nv.length >= 3 && normFile === nv);
-        const prefixIdx = normVariants.findIndex((nv) => nv.length >= 3 && normFile.startsWith(nv));
+        const exactTeamIdx = normVariants.findIndex((nv) => nv.length >= 3 && (normTeamPart === nv || normFile === nv));
+        const prefixIdx = normVariants.findIndex((nv) => nv.length >= 3 && (normTeamPart.startsWith(nv) || normFile.startsWith(nv)));
 
-        if (exactIdx === -1 && prefixIdx === -1) continue;
+        if (exactTeamIdx === -1 && prefixIdx === -1) continue;
 
-        const score = exactIdx !== -1 ? 100 - exactIdx : 50 - prefixIdx;
+        const priorityPenalty = (exactTeamIdx !== -1 ? exactTeamIdx : prefixIdx + 10) * 0.5;
+        const rangeMatch = baseNoExt.match(/(19\d{2}|20\d{2})\D+(19\d{2}|20\d{2})/);
+        const singleYearMatch = !rangeMatch ? baseNoExt.match(/(19\d{2}|20\d{2})/) : null;
+
+        let score = 50 - priorityPenalty;
+
+        if (rangeMatch) {
+          const rs = parseInt(rangeMatch[1], 10);
+          const re = parseInt(rangeMatch[2], 10);
+          if (parsedYear && parsedYear >= rs && parsedYear <= re) {
+            // Exact era range match (e.g. toronto_maple_leafs_1927_1967.png for 1945)
+            score = 140 - priorityPenalty;
+          } else {
+            // Out-of-range era file
+            score = 10 - priorityPenalty;
+          }
+        } else if (singleYearMatch) {
+          const fy = parseInt(singleYearMatch[1], 10);
+          if (parsedYear) {
+            if (fy === parsedYear) {
+              score = 150 - priorityPenalty;
+            } else if (fy <= parsedYear) {
+              // Closest era start year <= season year
+              score = Math.max(20, 110 - (parsedYear - fy) * 0.5) - priorityPenalty;
+            } else {
+              score = Math.max(5, 40 - (fy - parsedYear) * 0.5) - priorityPenalty;
+            }
+          } else {
+            score = 60 - priorityPenalty;
+          }
+        } else {
+          // Base team banner with no year (e.g. toronto_maple_leafs.png)
+          score = 90 - priorityPenalty;
+        }
+
         matchedFiles.push({ file, score });
       }
 
