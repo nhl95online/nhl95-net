@@ -104,6 +104,110 @@
         ]
       };
 
+      var defaultControllerConfig = {
+        presetName: "Standard Xbox / PS / 8BitDo",
+        keyboard: {
+          b: "x",
+          a: "z",
+          c: "c",
+          x: "a",
+          y: "s",
+          z: "d",
+          start: "Enter",
+          mode: "Shift",
+          up: "ArrowUp",
+          down: "ArrowDown",
+          left: "ArrowLeft",
+          right: "ArrowRight"
+        },
+        gamepad: {
+          b: 0,
+          c: 1,
+          a: 2,
+          y: 3,
+          x: 4,
+          z: 5,
+          mode: 8,
+          start: 9,
+          up: 12,
+          down: 13,
+          left: 14,
+          right: 15,
+          deadzone: 0.4,
+          useAnalogStick: true
+        }
+      };
+
+      var controllerConfig = defaultControllerConfig;
+      try {
+        if (window.parent && window.parent.__NHL95_CONTROLLER_CONFIG) {
+          controllerConfig = window.parent.__NHL95_CONTROLLER_CONFIG;
+        }
+      } catch (e) {}
+
+      window.addEventListener("message", function (ev) {
+        if (ev.data && ev.data.type === "NHL95_CONTROLLER_CONFIG_UPDATE" && ev.data.config) {
+          controllerConfig = ev.data.config;
+        }
+      });
+
+      function isKeyDown(keysMap, targetKey) {
+        if (!targetKey) return false;
+        if (keysMap[targetKey]) return true;
+        if (targetKey.length === 1) {
+          if (keysMap[targetKey.toLowerCase()] || keysMap[targetKey.toUpperCase()]) return true;
+        }
+        return false;
+      }
+
+      function computeGenesisMask(keysMap, cfg, onPadFound) {
+        var kb = (cfg && cfg.keyboard) || defaultControllerConfig.keyboard;
+        var gp = (cfg && cfg.gamepad) || defaultControllerConfig.gamepad;
+        var dz = typeof gp.deadzone === "number" ? gp.deadzone : 0.4;
+        var useAnalog = gp.useAnalogStick !== false;
+
+        var b = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        if (isKeyDown(keysMap, kb.b)) b[0] = 1;
+        if (isKeyDown(keysMap, kb.a)) b[1] = 1;
+        if (isKeyDown(keysMap, kb.mode)) b[2] = 1;
+        if (isKeyDown(keysMap, kb.start)) b[3] = 1;
+        if (isKeyDown(keysMap, kb.up)) b[4] = 1;
+        if (isKeyDown(keysMap, kb.down)) b[5] = 1;
+        if (isKeyDown(keysMap, kb.left)) b[6] = 1;
+        if (isKeyDown(keysMap, kb.right)) b[7] = 1;
+        if (isKeyDown(keysMap, kb.c)) b[8] = 1;
+        if (isKeyDown(keysMap, kb.y)) b[9] = 1;
+        if (isKeyDown(keysMap, kb.x)) b[10] = 1;
+        if (isKeyDown(keysMap, kb.z)) b[11] = 1;
+
+        if (navigator.getGamepads) {
+          var pads = navigator.getGamepads();
+          var pad = pads[0] || pads[1] || pads[2] || pads[3];
+          if (pad) {
+            if (onPadFound) onPadFound(pad);
+            var btns = pad.buttons || [];
+            if (btns[gp.b] && btns[gp.b].pressed) b[0] = 1;
+            if (btns[gp.a] && btns[gp.a].pressed) b[1] = 1;
+            if (btns[gp.mode] && btns[gp.mode].pressed) b[2] = 1;
+            if (btns[gp.start] && btns[gp.start].pressed) b[3] = 1;
+            if ((btns[gp.up] && btns[gp.up].pressed) || (useAnalog && pad.axes && pad.axes[1] < -dz)) b[4] = 1;
+            if ((btns[gp.down] && btns[gp.down].pressed) || (useAnalog && pad.axes && pad.axes[1] > dz)) b[5] = 1;
+            if ((btns[gp.left] && btns[gp.left].pressed) || (useAnalog && pad.axes && pad.axes[0] < -dz)) b[6] = 1;
+            if ((btns[gp.right] && btns[gp.right].pressed) || (useAnalog && pad.axes && pad.axes[0] > dz)) b[7] = 1;
+            if (btns[gp.c] && btns[gp.c].pressed) b[8] = 1;
+            if (btns[gp.y] && btns[gp.y].pressed) b[9] = 1;
+            if (btns[gp.x] && btns[gp.x].pressed) b[10] = 1;
+            if (btns[gp.z] && btns[gp.z].pressed) b[11] = 1;
+          }
+        }
+
+        var mask = 0;
+        for (var i = 0; i < 12; i++) {
+          if (b[i]) mask |= (1 << i);
+        }
+        return mask;
+      }
+
       // ======================================================================
       // GUEST MODE (PLAYER 2 JOINING HOST'S GAME)
       // ======================================================================
@@ -207,46 +311,9 @@
 
         var lastMask = -1;
         function pollGuestControls() {
-          var b = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-          // Keyboard mapping for Guest
-          if (activeKeys["x"] || activeKeys["X"]) b[0] = 1; // B (Pass)
-          if (activeKeys["z"] || activeKeys["Z"]) b[1] = 1; // A (Dump/Line Change)
-          if (activeKeys["Shift"]) b[2] = 1;                // Mode
-          if (activeKeys["Enter"]) b[3] = 1;                // Start
-          if (activeKeys["ArrowUp"]) b[4] = 1;
-          if (activeKeys["ArrowDown"]) b[5] = 1;
-          if (activeKeys["ArrowLeft"]) b[6] = 1;
-          if (activeKeys["ArrowRight"]) b[7] = 1;
-          if (activeKeys["c"] || activeKeys["C"]) b[8] = 1; // C (Shoot/Check)
-          if (activeKeys["s"] || activeKeys["S"]) b[9] = 1; // Y
-          if (activeKeys["a"] || activeKeys["A"]) b[10] = 1; // X
-          if (activeKeys["d"] || activeKeys["D"]) b[11] = 1; // Z
-
-          // USB Gamepad mapping for Guest
-          if (navigator.getGamepads) {
-            var pads = navigator.getGamepads();
-            var pad = pads[0] || pads[1] || pads[2] || pads[3];
-            if (pad) {
-              padPill.textContent = "🎮 PAD READY";
-              if (pad.buttons[0] && pad.buttons[0].pressed) b[0] = 1; // B
-              if (pad.buttons[2] && pad.buttons[2].pressed) b[1] = 1; // A
-              if (pad.buttons[8] && pad.buttons[8].pressed) b[2] = 1; // Select/Mode
-              if (pad.buttons[9] && pad.buttons[9].pressed) b[3] = 1; // Start
-              if ((pad.buttons[12] && pad.buttons[12].pressed) || (pad.axes[1] < -0.4)) b[4] = 1;
-              if ((pad.buttons[13] && pad.buttons[13].pressed) || (pad.axes[1] > 0.4)) b[5] = 1;
-              if ((pad.buttons[14] && pad.buttons[14].pressed) || (pad.axes[0] < -0.4)) b[6] = 1;
-              if ((pad.buttons[15] && pad.buttons[15].pressed) || (pad.axes[0] > 0.4)) b[7] = 1;
-              if (pad.buttons[1] && pad.buttons[1].pressed) b[8] = 1; // C
-              if (pad.buttons[3] && pad.buttons[3].pressed) b[9] = 1; // Y
-              if (pad.buttons[4] && pad.buttons[4].pressed) b[10] = 1; // X
-              if (pad.buttons[5] && pad.buttons[5].pressed) b[11] = 1; // Z
-            }
-          }
-
-          var mask = 0;
-          for (var i = 0; i < 12; i++) {
-            if (b[i]) mask |= (1 << i);
-          }
+          var mask = computeGenesisMask(activeKeys, controllerConfig, function () {
+            padPill.textContent = "🎮 PAD READY";
+          });
 
           if (mask !== lastMask) {
             lastMask = mask;
@@ -408,9 +475,37 @@
         }, 120);
       }
 
+      var p1ActiveKeys = {};
+      window.addEventListener("keydown", function (e) {
+        p1ActiveKeys[e.key] = true;
+      });
+      window.addEventListener("keyup", function (e) {
+        delete p1ActiveKeys[e.key];
+      });
+
+      var prevP1Mask = 0;
+      function pollPlayer1CustomControls() {
+        var ejs = window.EJS_emulator;
+        if (ejs && ejs.gameManager && ejs.gameManager.simulateInput) {
+          var mask = computeGenesisMask(p1ActiveKeys, controllerConfig);
+          if (mask !== prevP1Mask) {
+            for (var i = 0; i < 12; i++) {
+              var wasOn = (prevP1Mask >> i) & 1;
+              var isOn = (mask >> i) & 1;
+              if (wasOn !== isOn) {
+                ejs.gameManager.simulateInput(0, i, isOn ? 1 : 0);
+              }
+            }
+            prevP1Mask = mask;
+          }
+        }
+        requestAnimationFrame(pollPlayer1CustomControls);
+      }
+
       window.EJS_onGameStart = function () {
         try {
           window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
+          requestAnimationFrame(pollPlayer1CustomControls);
           if (role === "host" && roomId) {
             setTimeout(startHostWebRTC, 800);
           }

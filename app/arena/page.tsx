@@ -266,44 +266,347 @@ function findMatchingBucketFile(rom: ArenaRomItem, bucketFiles: string[]): strin
 }
 
 // ============================================================================
-// INTERACTIVE CONTROLLER TESTER & KEYBOARD MAPPING COMPONENT
+// COACH CONTROLLER CONFIGURATION & PRESETS
+// ============================================================================
+export interface CoachControllerConfig {
+  presetName: string;
+  keyboard: {
+    b: string;
+    a: string;
+    c: string;
+    x: string;
+    y: string;
+    z: string;
+    start: string;
+    mode: string;
+    up: string;
+    down: string;
+    left: string;
+    right: string;
+  };
+  gamepad: {
+    b: number;
+    c: number;
+    a: number;
+    y: number;
+    x: number;
+    z: number;
+    mode: number;
+    start: number;
+    up: number;
+    down: number;
+    left: number;
+    right: number;
+    deadzone: number;
+    useAnalogStick: boolean;
+  };
+}
+
+export const DEFAULT_CONTROLLER_CONFIG: CoachControllerConfig = {
+  presetName: 'Standard Xbox / PS / 8BitDo',
+  keyboard: {
+    b: 'x',
+    a: 'z',
+    c: 'c',
+    x: 'a',
+    y: 's',
+    z: 'd',
+    start: 'Enter',
+    mode: 'Shift',
+    up: 'ArrowUp',
+    down: 'ArrowDown',
+    left: 'ArrowLeft',
+    right: 'ArrowRight'
+  },
+  gamepad: {
+    b: 0,
+    c: 1,
+    a: 2,
+    y: 3,
+    x: 4,
+    z: 5,
+    mode: 8,
+    start: 9,
+    up: 12,
+    down: 13,
+    left: 14,
+    right: 15,
+    deadzone: 0.4,
+    useAnalogStick: true
+  }
+};
+
+export const CONTROLLER_PRESETS: Record<string, CoachControllerConfig> = {
+  'Standard Xbox / PS / 8BitDo': DEFAULT_CONTROLLER_CONFIG,
+  'Sega Genesis 6-Button USB': {
+    presetName: 'Sega Genesis 6-Button USB',
+    keyboard: { ...DEFAULT_CONTROLLER_CONFIG.keyboard },
+    gamepad: {
+      b: 1,
+      c: 2,
+      a: 0,
+      y: 4,
+      x: 3,
+      z: 5,
+      mode: 8,
+      start: 9,
+      up: 12,
+      down: 13,
+      left: 14,
+      right: 15,
+      deadzone: 0.35,
+      useAnalogStick: true
+    }
+  },
+  'SNES / Classic Layout': {
+    presetName: 'SNES / Classic Layout',
+    keyboard: { ...DEFAULT_CONTROLLER_CONFIG.keyboard },
+    gamepad: {
+      b: 2,
+      c: 0,
+      a: 3,
+      y: 1,
+      x: 4,
+      z: 5,
+      mode: 8,
+      start: 9,
+      up: 12,
+      down: 13,
+      left: 14,
+      right: 15,
+      deadzone: 0.4,
+      useAnalogStick: true
+    }
+  },
+  'WASD + JKL Keyboard': {
+    presetName: 'WASD + JKL Keyboard',
+    keyboard: {
+      b: 'k',
+      a: 'j',
+      c: 'l',
+      x: 'u',
+      y: 'i',
+      z: 'o',
+      start: 'Enter',
+      mode: 'Shift',
+      up: 'w',
+      down: 's',
+      left: 'a',
+      right: 'd'
+    },
+    gamepad: { ...DEFAULT_CONTROLLER_CONFIG.gamepad }
+  }
+};
+
+type GenesisControlKey = keyof CoachControllerConfig['keyboard'];
+
+const GENESIS_BUTTON_ROWS: Array<{
+  key: GenesisControlKey;
+  label: string;
+  color: string;
+  desc: string;
+}> = [
+  { key: 'b', label: 'B Button', color: 'text-amber-400', desc: 'Pass / Switch Player / Poke Check' },
+  { key: 'c', label: 'C Button', color: 'text-amber-400', desc: 'Shoot / One-Timer / Body Check / Speed Burst' },
+  { key: 'a', label: 'A Button', color: 'text-amber-400', desc: 'Flip Puck / Dump / Line Change / Manual Goalie' },
+  { key: 'start', label: 'START', color: 'text-red-400', desc: 'Start Game / Pause / Instant Replay' },
+  { key: 'mode', label: 'MODE', color: 'text-cyan-400', desc: 'Mode / Select Button' },
+  { key: 'x', label: 'X Button', color: 'text-cyan-300', desc: '6-Button X (Line Change / Extra)' },
+  { key: 'y', label: 'Y Button', color: 'text-cyan-300', desc: '6-Button Y (Line Change / Extra)' },
+  { key: 'z', label: 'Z Button', color: 'text-cyan-300', desc: '6-Button Z (Line Change / Extra)' },
+  { key: 'up', label: 'D-Pad UP', color: 'text-emerald-400', desc: 'Skate Up / Aim Top Shelf' },
+  { key: 'down', label: 'D-Pad DOWN', color: 'text-emerald-400', desc: 'Skate Down / Aim Five-Hole' },
+  { key: 'left', label: 'D-Pad LEFT', color: 'text-emerald-400', desc: 'Skate Left / Aim Left Corner' },
+  { key: 'right', label: 'D-Pad RIGHT', color: 'text-emerald-400', desc: 'Skate Right / Aim Right Corner' }
+];
+
+function isConfiguredKeyActive(activeKeys: Set<string>, keyName: string): boolean {
+  if (!keyName) return false;
+  if (activeKeys.has(keyName)) return true;
+  if (keyName.length === 1) {
+    return activeKeys.has(keyName.toLowerCase()) || activeKeys.has(keyName.toUpperCase());
+  }
+  return false;
+}
+
+// ============================================================================
+// INTERACTIVE CONTROLLER TESTER, REMAPPING & COACH CLOUD SAVE COMPONENT
 // ============================================================================
 function ControllerTesterPanel({
   activeKeys,
   gamepadInfo,
   gamepadButtons,
-  gamepadAxes
+  gamepadAxes,
+  controllerConfig,
+  onChangeConfig,
+  onSaveCoachConfig,
+  isSavingConfig,
+  saveConfigBanner,
+  isLoggedIn,
+  coachName,
+  onOpenLogin,
+  onReturnToGame
 }: {
   activeKeys: Set<string>;
   gamepadInfo: string | null;
   gamepadButtons: boolean[];
   gamepadAxes: number[];
+  controllerConfig: CoachControllerConfig;
+  onChangeConfig: (next: CoachControllerConfig) => void;
+  onSaveCoachConfig: () => void;
+  isSavingConfig: boolean;
+  saveConfigBanner: { type: 'success' | 'error' | 'info'; text: string } | null;
+  isLoggedIn: boolean;
+  coachName: string;
+  onOpenLogin: () => void;
+  onReturnToGame: () => void;
 }) {
-  const isUp = activeKeys.has('ArrowUp') || gamepadButtons[12] || (gamepadAxes[1] !== undefined && gamepadAxes[1] < -0.4);
-  const isDown = activeKeys.has('ArrowDown') || gamepadButtons[13] || (gamepadAxes[1] !== undefined && gamepadAxes[1] > 0.4);
-  const isLeft = activeKeys.has('ArrowLeft') || gamepadButtons[14] || (gamepadAxes[0] !== undefined && gamepadAxes[0] < -0.4);
-  const isRight = activeKeys.has('ArrowRight') || gamepadButtons[15] || (gamepadAxes[0] !== undefined && gamepadAxes[0] > 0.4);
+  const [listeningTarget, setListeningTarget] = useState<{
+    type: 'keyboard' | 'gamepad';
+    control: GenesisControlKey;
+  } | null>(null);
 
-  const isA = activeKeys.has('z') || activeKeys.has('Z') || gamepadButtons[2];
-  const isB = activeKeys.has('x') || activeKeys.has('X') || gamepadButtons[0];
-  const isC = activeKeys.has('c') || activeKeys.has('C') || gamepadButtons[1];
-  const isX = activeKeys.has('a') || activeKeys.has('A') || gamepadButtons[4];
-  const isY = activeKeys.has('s') || activeKeys.has('S') || gamepadButtons[3];
-  const isZ = activeKeys.has('d') || activeKeys.has('D') || gamepadButtons[5];
-  const isStart = activeKeys.has('Enter') || gamepadButtons[9];
-  const isMode = activeKeys.has('Shift') || gamepadButtons[8];
+  const kb = controllerConfig.keyboard;
+  const gp = controllerConfig.gamepad;
+  const dz = gp.deadzone ?? 0.4;
+  const useAnalog = gp.useAnalogStick !== false;
+
+  // Listen for keyboard press when remapping a keyboard key
+  useEffect(() => {
+    if (!listeningTarget || listeningTarget.type !== 'keyboard') return;
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        setListeningTarget(null);
+        return;
+      }
+      const normalizedKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      onChangeConfig({
+        ...controllerConfig,
+        presetName: 'Custom Coach Mapping',
+        keyboard: {
+          ...controllerConfig.keyboard,
+          [listeningTarget.control]: normalizedKey
+        }
+      });
+      setListeningTarget(null);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [listeningTarget, controllerConfig, onChangeConfig]);
+
+  // Listen for USB/Bluetooth gamepad button press when remapping a controller button
+  useEffect(() => {
+    if (!listeningTarget || listeningTarget.type !== 'gamepad') return;
+    const pressedIdx = gamepadButtons.findIndex(Boolean);
+    if (pressedIdx !== -1) {
+      onChangeConfig({
+        ...controllerConfig,
+        presetName: 'Custom Coach Mapping',
+        gamepad: {
+          ...controllerConfig.gamepad,
+          [listeningTarget.control]: pressedIdx
+        }
+      });
+      setListeningTarget(null);
+    }
+  }, [listeningTarget, gamepadButtons, controllerConfig, onChangeConfig]);
+
+  const isUp =
+    isConfiguredKeyActive(activeKeys, kb.up) ||
+    Boolean(gamepadButtons[gp.up]) ||
+    (useAnalog && gamepadAxes[1] !== undefined && gamepadAxes[1] < -dz);
+  const isDown =
+    isConfiguredKeyActive(activeKeys, kb.down) ||
+    Boolean(gamepadButtons[gp.down]) ||
+    (useAnalog && gamepadAxes[1] !== undefined && gamepadAxes[1] > dz);
+  const isLeft =
+    isConfiguredKeyActive(activeKeys, kb.left) ||
+    Boolean(gamepadButtons[gp.left]) ||
+    (useAnalog && gamepadAxes[0] !== undefined && gamepadAxes[0] < -dz);
+  const isRight =
+    isConfiguredKeyActive(activeKeys, kb.right) ||
+    Boolean(gamepadButtons[gp.right]) ||
+    (useAnalog && gamepadAxes[0] !== undefined && gamepadAxes[0] > dz);
+
+  const isA = isConfiguredKeyActive(activeKeys, kb.a) || Boolean(gamepadButtons[gp.a]);
+  const isB = isConfiguredKeyActive(activeKeys, kb.b) || Boolean(gamepadButtons[gp.b]);
+  const isC = isConfiguredKeyActive(activeKeys, kb.c) || Boolean(gamepadButtons[gp.c]);
+  const isX = isConfiguredKeyActive(activeKeys, kb.x) || Boolean(gamepadButtons[gp.x]);
+  const isY = isConfiguredKeyActive(activeKeys, kb.y) || Boolean(gamepadButtons[gp.y]);
+  const isZ = isConfiguredKeyActive(activeKeys, kb.z) || Boolean(gamepadButtons[gp.z]);
+  const isStart = isConfiguredKeyActive(activeKeys, kb.start) || Boolean(gamepadButtons[gp.start]);
+  const isMode = isConfiguredKeyActive(activeKeys, kb.mode) || Boolean(gamepadButtons[gp.mode]);
 
   return (
-    <div className="bg-neutral-950 text-white border-2 border-black p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-neutral-800 pb-4 mb-5">
+    <div className="bg-neutral-950 text-white border-2 border-black p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-5">
+      {/* Header Bar with Return to Game + Coach Cloud Save */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-neutral-800 pb-4">
         <div>
           <div className="flex items-center gap-2 text-amber-400 font-mono text-xs uppercase font-black">
-            <Gamepad2 className="w-4 h-4" /> Sega Genesis 6-Button Diagnostic &amp; Controller Setup
+            <Gamepad2 className="w-4 h-4" /> Sega Genesis 6-Button Diagnostic &amp; Coach Controller Settings
           </div>
           <p className="text-xs text-slate-400 font-sans mt-1">
-            Press buttons on your USB/Bluetooth controller or keyboard below to verify responsiveness before dropping the puck.
+            Test your controller live, click any button below to remap your Keyboard or USB Gamepad, and save your setup to your Coach Profile.
           </p>
         </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={onReturnToGame}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-black uppercase px-3.5 py-2 rounded-xs cursor-pointer flex items-center gap-1.5 shadow-2xs"
+          >
+            <Play className="w-3.5 h-3.5 fill-white" />
+            <span>Return to Game</span>
+          </button>
+
+          {isLoggedIn ? (
+            <button
+              onClick={onSaveCoachConfig}
+              disabled={isSavingConfig}
+              className="bg-amber-400 hover:bg-amber-300 text-black font-mono text-xs font-black uppercase px-4 py-2 rounded-xs cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            >
+              <CloudUpload className="w-4 h-4" />
+              <span>{isSavingConfig ? 'Saving...' : `Save Controller Settings (${coachName})`}</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenLogin}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-black uppercase px-4 py-2 rounded-xs cursor-pointer flex items-center gap-1.5 shadow-2xs"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Sign In as Coach to Save Controller Settings</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Save Status Notification Banner */}
+      {saveConfigBanner && (
+        <div
+          className={`p-3 rounded border font-mono text-xs flex items-center justify-between gap-2 ${
+            saveConfigBanner.type === 'success'
+              ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300'
+              : saveConfigBanner.type === 'error'
+              ? 'bg-red-950/90 border-red-500 text-red-300'
+              : 'bg-blue-950/90 border-blue-500 text-blue-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{saveConfigBanner.text}</span>
+          </div>
+          {isLoggedIn && (
+            <span className="text-[10px] uppercase px-2 py-0.5 bg-black/50 rounded border border-white/10">
+              Coach Profile: {coachName}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Active Input Status & Quick Preset Bar */}
+      <div className="bg-[#0d1017] border border-neutral-800 rounded p-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className={`px-3 py-1.5 rounded border font-mono text-xs font-bold flex items-center gap-2 ${
           gamepadInfo
             ? 'bg-emerald-950/90 border-emerald-500 text-emerald-300'
@@ -312,12 +615,36 @@ function ControllerTesterPanel({
           <span className={`w-2 h-2 rounded-full ${gamepadInfo ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
           <span>{gamepadInfo ? `Gamepad Ready: ${gamepadInfo}` : 'Keyboard Mode (Press any controller button to wake USB pad)'}</span>
         </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">Quick Presets:</span>
+          {Object.keys(CONTROLLER_PRESETS).map(presetKey => (
+            <button
+              key={presetKey}
+              onClick={() => onChangeConfig(CONTROLLER_PRESETS[presetKey])}
+              className={`px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase border cursor-pointer transition ${
+                controllerConfig.presetName === presetKey
+                  ? 'bg-amber-400 text-black border-amber-300 font-black'
+                  : 'bg-neutral-900 hover:bg-neutral-800 text-slate-300 border-neutral-700'
+              }`}
+            >
+              {presetKey}
+            </button>
+          ))}
+          <button
+            onClick={() => onChangeConfig(DEFAULT_CONTROLLER_CONFIG)}
+            className="px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase bg-neutral-900 hover:bg-red-950 text-red-300 border border-red-900/60 cursor-pointer"
+          >
+            Reset Default
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-        <div className="lg:col-span-7 flex flex-col items-center justify-center bg-[#0d1017] border border-neutral-800 rounded-lg p-6 relative">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-3">
-            SEGA MEGA DRIVE / GENESIS 16-BIT PAD
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left: Visual 6-Button Pad + Analog Settings */}
+        <div className="lg:col-span-6 flex flex-col items-center justify-center bg-[#0d1017] border border-neutral-800 rounded-lg p-6 relative space-y-5">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
+            SEGA MEGA DRIVE / GENESIS 16-BIT PAD ({controllerConfig.presetName.toUpperCase()})
           </div>
 
           <div className="w-full max-w-[440px] bg-gradient-to-b from-neutral-800 to-neutral-900 border-2 border-neutral-600 rounded-[48px] p-6 sm:p-8 shadow-2xl flex items-center justify-between gap-4 relative">
@@ -393,43 +720,163 @@ function ControllerTesterPanel({
               </div>
             </div>
           </div>
+
+          {/* Analog Stick & Sensitivity Options */}
+          <div className="w-full bg-neutral-900/90 border border-neutral-800 rounded p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-mono font-bold text-slate-300 flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useAnalog}
+                  onChange={e =>
+                    onChangeConfig({
+                      ...controllerConfig,
+                      gamepad: { ...gp, useAnalogStick: e.target.checked }
+                    })
+                  }
+                  className="accent-amber-400"
+                />
+                <span>Enable Left Analog Stick for Skating</span>
+              </label>
+              <span className="text-[11px] font-mono text-amber-400 font-bold">
+                Deadzone: {Math.round(dz * 100)}%
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-mono text-slate-400">Sensitive (15%)</span>
+              <input
+                type="range"
+                min={0.15}
+                max={0.75}
+                step={0.05}
+                value={dz}
+                onChange={e =>
+                  onChangeConfig({
+                    ...controllerConfig,
+                    gamepad: { ...gp, deadzone: parseFloat(e.target.value) }
+                  })
+                }
+                className="flex-1 accent-amber-400 cursor-pointer"
+              />
+              <span className="text-[10px] font-mono text-slate-400">Firm (75%)</span>
+            </div>
+          </div>
         </div>
 
-        <div className="lg:col-span-5 bg-neutral-900 border border-neutral-800 rounded-lg p-4">
-          <div className="text-xs font-mono font-black uppercase text-amber-400 mb-3 border-b border-neutral-800 pb-2">
-            NHL &apos;95 Action &amp; Button Mapping
+        {/* Right: Interactive Button Remapping Table */}
+        <div className="lg:col-span-6 bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5 mb-3">
+            <div>
+              <div className="text-xs font-mono font-black uppercase text-amber-400">
+                Interactive Button Remapping
+              </div>
+              <div className="text-[11px] text-slate-400">
+                Click any Keyboard or USB Pad slot below, then press the key or button you want to assign.
+              </div>
+            </div>
+            {listeningTarget && (
+              <button
+                onClick={() => setListeningTarget(null)}
+                className="px-2.5 py-1 bg-red-600 text-white font-mono text-[10px] font-black uppercase rounded animate-pulse cursor-pointer"
+              >
+                Cancel Listening
+              </button>
+            )}
           </div>
-          <div className="space-y-2 text-xs font-mono">
+
+          <div className="space-y-1.5 text-xs font-mono max-h-[380px] overflow-y-auto pr-1">
             <div className="grid grid-cols-12 text-[10px] text-slate-400 uppercase pb-1 border-b border-neutral-800">
               <div className="col-span-3">Genesis</div>
               <div className="col-span-3">Keyboard</div>
-              <div className="col-span-6">On-Ice Function</div>
+              <div className="col-span-3">USB Pad</div>
+              <div className="col-span-3">Function</div>
             </div>
-            <div className="grid grid-cols-12 items-center py-1 border-b border-neutral-800/60">
-              <div className="col-span-3 font-black text-amber-400">B Button</div>
-              <div className="col-span-3"><kbd className="bg-black px-1.5 py-0.5 rounded border border-neutral-700">X</kbd></div>
-              <div className="col-span-6 text-slate-200 font-sans">Pass / Switch Player / Poke</div>
-            </div>
-            <div className="grid grid-cols-12 items-center py-1 border-b border-neutral-800/60">
-              <div className="col-span-3 font-black text-amber-400">C Button</div>
-              <div className="col-span-3"><kbd className="bg-black px-1.5 py-0.5 rounded border border-neutral-700">C</kbd></div>
-              <div className="col-span-6 text-slate-200 font-sans">Shoot / One-Timer / Check / Speed Burst</div>
-            </div>
-            <div className="grid grid-cols-12 items-center py-1 border-b border-neutral-800/60">
-              <div className="col-span-3 font-black text-amber-400">A Button</div>
-              <div className="col-span-3"><kbd className="bg-black px-1.5 py-0.5 rounded border border-neutral-700">Z</kbd></div>
-              <div className="col-span-6 text-slate-200 font-sans">Flip Puck / Dump / Line Change / Manual Goalie</div>
-            </div>
-            <div className="grid grid-cols-12 items-center py-1 border-b border-neutral-800/60">
-              <div className="col-span-3 font-black text-red-400">START</div>
-              <div className="col-span-3"><kbd className="bg-black px-1.5 py-0.5 rounded border border-neutral-700">Enter</kbd></div>
-              <div className="col-span-6 text-slate-200 font-sans">Start Game / Pause / Instant Replay</div>
-            </div>
-            <div className="grid grid-cols-12 items-center py-1">
-              <div className="col-span-3 font-black text-cyan-400">D-PAD</div>
-              <div className="col-span-3"><kbd className="bg-black px-1.5 py-0.5 rounded border border-neutral-700">Arrows</kbd></div>
-              <div className="col-span-6 text-slate-200 font-sans">Skate / Aim Shot / Deek</div>
-            </div>
+
+            {GENESIS_BUTTON_ROWS.map(row => {
+              const isListeningKb =
+                listeningTarget?.type === 'keyboard' && listeningTarget.control === row.key;
+              const isListeningGp =
+                listeningTarget?.type === 'gamepad' && listeningTarget.control === row.key;
+              const currentKey = kb[row.key];
+              const currentGpBtn = gp[row.key];
+
+              return (
+                <div
+                  key={row.key}
+                  className="grid grid-cols-12 items-center py-1.5 border-b border-neutral-800/60 gap-1"
+                >
+                  <div className={`col-span-3 font-black ${row.color}`}>{row.label}</div>
+
+                  <div className="col-span-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setListeningTarget(
+                          isListeningKb ? null : { type: 'keyboard', control: row.key }
+                        )
+                      }
+                      className={`px-2 py-1 rounded border text-[11px] font-mono font-bold cursor-pointer transition ${
+                        isListeningKb
+                          ? 'bg-amber-400 text-black border-white animate-pulse'
+                          : 'bg-black hover:bg-neutral-800 text-white border-neutral-700'
+                      }`}
+                      title="Click then press any keyboard key"
+                    >
+                      {isListeningKb ? 'Press Key...' : currentKey.toUpperCase()}
+                    </button>
+                  </div>
+
+                  <div className="col-span-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setListeningTarget(
+                          isListeningGp ? null : { type: 'gamepad', control: row.key }
+                        )
+                      }
+                      className={`px-2 py-1 rounded border text-[11px] font-mono font-bold cursor-pointer transition ${
+                        isListeningGp
+                          ? 'bg-emerald-400 text-black border-white animate-pulse'
+                          : 'bg-neutral-950 hover:bg-neutral-800 text-emerald-300 border-emerald-800/70'
+                      }`}
+                      title="Click then press any button on your USB/Bluetooth controller"
+                    >
+                      {isListeningGp ? 'Press Pad...' : `Btn ${currentGpBtn}`}
+                    </button>
+                  </div>
+
+                  <div className="col-span-3 text-[11px] text-slate-300 font-sans truncate" title={row.desc}>
+                    {row.desc}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[11px] text-slate-400">
+              {isLoggedIn
+                ? `Signed in as Coach ${coachName} — click Save to store these mappings to your account.`
+                : 'Sign in as a Coach to save your custom controller mappings across all devices.'}
+            </span>
+            {isLoggedIn ? (
+              <button
+                onClick={onSaveCoachConfig}
+                disabled={isSavingConfig}
+                className="bg-amber-400 hover:bg-amber-300 text-black font-mono text-xs font-black uppercase px-3.5 py-1.5 rounded-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                <span>{isSavingConfig ? 'Saving...' : `Save for ${coachName}`}</span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenLogin}
+                className="bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-black uppercase px-3.5 py-1.5 rounded-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Coach Sign In</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -580,11 +1027,144 @@ function ArenaContent() {
   const [vaultCategory, setVaultCategory] = useState<'all' | 'cloud' | 'league' | 'nhl-history' | 'misc'>('cloud');
   const [vaultSearch, setVaultSearch] = useState<string>('');
 
-  // Controller & Keyboard Live State
+  // Controller & Keyboard Live State + Coach Saved Controller Profile
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [gamepadInfo, setGamepadInfo] = useState<string | null>(null);
   const [gamepadButtons, setGamepadButtons] = useState<boolean[]>([]);
   const [gamepadAxes, setGamepadAxes] = useState<number[]>([]);
+  const [controllerConfig, setControllerConfig] = useState<CoachControllerConfig>(DEFAULT_CONTROLLER_CONFIG);
+  const [isSavingControllerConfig, setIsSavingControllerConfig] = useState<boolean>(false);
+  const [controllerSaveBanner, setControllerSaveBanner] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
+
+  // Sync active controller config to window & running emulator iframe
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__NHL95_CONTROLLER_CONFIG = controllerConfig;
+    }
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        {
+          type: 'NHL95_CONTROLLER_CONFIG_UPDATE',
+          config: controllerConfig
+        },
+        '*'
+      );
+    } catch {
+      // ignore
+    }
+  }, [controllerConfig]);
+
+  // Auto-load coach's saved controller settings when signed in
+  useEffect(() => {
+    if (!isLoggedIn || !currentCoach?.coach_id) {
+      try {
+        const guestLocal = localStorage.getItem('nhl95_controller_config_guest');
+        if (guestLocal) {
+          const parsed = JSON.parse(guestLocal);
+          if (parsed && parsed.keyboard && parsed.gamepad) {
+            setControllerConfig(parsed);
+          }
+        }
+      } catch {}
+      return;
+    }
+
+    const coachId = currentCoach.coach_id;
+    const localKey = `nhl95_controller_config_${coachId}`;
+
+    // Load instant local cache first
+    try {
+      const cached = localStorage.getItem(localKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.keyboard && parsed.gamepad) {
+          setControllerConfig(parsed);
+        }
+      }
+    } catch {}
+
+    // Fetch cloud-saved controller settings from Supabase for this coach
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/coach/controller-settings?coachId=${encodeURIComponent(String(coachId))}`);
+        const data = await res.json();
+        if (!cancelled && data?.config && data.config.keyboard && data.config.gamepad) {
+          setControllerConfig(data.config);
+          try {
+            localStorage.setItem(localKey, JSON.stringify(data.config));
+          } catch {}
+          setControllerSaveBanner({
+            type: 'info',
+            text: `Loaded saved controller settings for Coach ${currentCoach.coach_name} (${data.config.presetName || 'Custom'}).`
+          });
+        }
+      } catch {
+        // keep cached or default
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, currentCoach?.coach_id, currentCoach?.coach_name]);
+
+  const handleUpdateControllerConfig = useCallback(
+    (next: CoachControllerConfig) => {
+      setControllerConfig(next);
+      try {
+        const key =
+          isLoggedIn && currentCoach?.coach_id
+            ? `nhl95_controller_config_${currentCoach.coach_id}`
+            : 'nhl95_controller_config_guest';
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {}
+    },
+    [isLoggedIn, currentCoach?.coach_id]
+  );
+
+  const handleSaveCoachControllerConfig = useCallback(async () => {
+    if (!isLoggedIn || !currentCoach?.coach_id) {
+      openLoginModal('Sign in as a Coach to save your controller settings to your profile');
+      return;
+    }
+
+    setIsSavingControllerConfig(true);
+    setControllerSaveBanner(null);
+    try {
+      const localKey = `nhl95_controller_config_${currentCoach.coach_id}`;
+      localStorage.setItem(localKey, JSON.stringify(controllerConfig));
+
+      const res = await fetch('/api/coach/controller-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coachId: currentCoach.coach_id,
+          coachName: currentCoach.coach_name,
+          config: controllerConfig
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || 'Could not save controller settings to cloud');
+      }
+
+      setControllerSaveBanner({
+        type: 'success',
+        text: `Saved controller settings (${controllerConfig.presetName}) to Coach ${currentCoach.coach_name}'s profile!`
+      });
+    } catch (err: any) {
+      setControllerSaveBanner({
+        type: 'error',
+        text: err?.message || 'Saved locally, but cloud sync failed.'
+      });
+    } finally {
+      setIsSavingControllerConfig(false);
+    }
+  }, [isLoggedIn, currentCoach, controllerConfig, openLoginModal]);
 
   // Boxscore & Save State Parser Lab State
   const [selectedSeasonConfigId, setSelectedSeasonConfigId] = useState<string>('40');
@@ -2184,6 +2764,17 @@ function ArenaContent() {
               gamepadInfo={gamepadInfo}
               gamepadButtons={gamepadButtons}
               gamepadAxes={gamepadAxes}
+              controllerConfig={controllerConfig}
+              onChangeConfig={handleUpdateControllerConfig}
+              onSaveCoachConfig={handleSaveCoachControllerConfig}
+              isSavingConfig={isSavingControllerConfig}
+              saveConfigBanner={controllerSaveBanner}
+              isLoggedIn={isLoggedIn}
+              coachName={myDisplayName}
+              onOpenLogin={() =>
+                openLoginModal('Sign in as a Coach to save your controller settings to your profile')
+              }
+              onReturnToGame={() => setActiveArenaTab('ice')}
             />
           )}
 
@@ -2343,13 +2934,37 @@ function ArenaContent() {
               </div>
             </div>
 
-            <div className="py-3 border-b border-slate-200 text-xs">
-              <div className="font-mono text-[10px] uppercase text-slate-500 font-bold mb-1">
-                ACTIVE INPUT DEVICE
+            <div className="py-3 border-b border-slate-200 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] uppercase text-slate-500 font-bold">
+                  ACTIVE INPUT DEVICE
+                </span>
+                <span className="font-mono text-[9px] uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
+                  {controllerConfig.presetName}
+                </span>
               </div>
               <div className="font-mono font-bold text-slate-800 truncate">
                 {gamepadInfo ? `🎮 ${gamepadInfo}` : '⌨️ Keyboard — No USB controller detected'}
               </div>
+              {isLoggedIn && (
+                <button
+                  onClick={handleSaveCoachControllerConfig}
+                  disabled={isSavingControllerConfig}
+                  className="w-full mt-1 py-1.5 px-2.5 bg-amber-400 hover:bg-amber-300 text-black border border-black font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition"
+                >
+                  <CloudUpload className="w-3.5 h-3.5" />
+                  <span>
+                    {isSavingControllerConfig
+                      ? 'Saving Controller...'
+                      : `Save Controller Settings (${myDisplayName})`}
+                  </span>
+                </button>
+              )}
+              {controllerSaveBanner && (
+                <div className="text-[10px] font-mono text-emerald-700 font-bold">
+                  ✓ {controllerSaveBanner.text}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-3.5 font-mono text-xs">
@@ -2381,7 +2996,7 @@ function ArenaContent() {
                 onClick={() => setActiveArenaTab('controller')}
                 className="py-2 px-3 bg-slate-100 hover:bg-black hover:text-white text-black border border-slate-300 font-bold uppercase rounded-xs cursor-pointer transition"
               >
-                Test Controller
+                Controller Setup
               </button>
 
               <button

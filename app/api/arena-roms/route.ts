@@ -17,7 +17,7 @@ export async function GET() {
 
     const files = (data || [])
       .map(item => item.name)
-      .filter(name => name && !name.startsWith('.'));
+      .filter(name => name && !name.startsWith('.') && /\.(zip|bin|md|gen|smd)$/i.test(name));
 
     return NextResponse.json({ files });
   } catch (err: any) {
