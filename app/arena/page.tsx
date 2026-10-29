@@ -103,10 +103,12 @@ function buildArenaCatalog(): ArenaRomItem[] {
         `${rom.id.toLowerCase()}.png`
       ],
       fileCandidates: [
-        `${rom.id.toUpperCase()}.bin`,
-        `${rom.id.toLowerCase()}.bin`,
         `${rom.id.toUpperCase()}.zip`,
         `${rom.id.toLowerCase()}.zip`,
+        `${rom.id.toUpperCase()}.bin`,
+        `${rom.id.toLowerCase()}.bin`,
+        `${rom.id.toUpperCase()}p.bin`,
+        `${rom.id.toLowerCase()}p.bin`,
         rom.fileName
       ],
       customDownloadUrl: rom.downloadUrl,
@@ -127,7 +129,7 @@ function buildArenaCatalog(): ArenaRomItem[] {
       rulesSummary: rom.champion ? `Champion: ${rom.champion}` : rom.eraLabel,
       description: rom.features,
       imageCandidates: [rom.imageUrl || `${rom.year}.png`, `${rom.year}.png`],
-      fileCandidates: [`${rom.year}.bin`, `${rom.year}.zip`, rom.fileName],
+      fileCandidates: [`${rom.year}.zip`, `${rom.year}.bin`, rom.fileName],
       customDownloadUrl: rom.downloadUrl,
       defaultSeasonConfigId: '40'
     });
@@ -146,7 +148,7 @@ function buildArenaCatalog(): ArenaRomItem[] {
       rulesSummary: `${rom.platform} • ${rom.tags.slice(0, 3).join(' • ')}`,
       description: rom.description,
       imageCandidates: [rom.imageUrl || rom.coverImage || ''],
-      fileCandidates: [`${cleanTitle}.bin`, `${cleanTitle}.zip`, rom.fileName],
+      fileCandidates: [`${cleanTitle}.zip`, `${cleanTitle}.bin`, rom.fileName],
       customDownloadUrl: rom.downloadUrl,
       defaultSeasonConfigId: '40'
     });
@@ -209,77 +211,6 @@ function ensureRetroArchHeader(raw: Uint8Array): Uint8Array {
   }
   out.set(raw, 32);
   return out;
-}
-
-// Build isolated HTML document for the EmulatorJS Genesis Plus GX iframe
-function buildEmulatorIframeHtml(romUrl: string, gameTitle: string): string {
-  const safeTitle = gameTitle.replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  const safeUrl = romUrl.replace(/"/g, '&quot;');
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${safeTitle}</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #050608;
-      overflow: hidden;
-      font-family: monospace;
-    }
-    #game-container {
-      width: 100%;
-      height: 100%;
-    }
-  </style>
-</head>
-<body>
-  <div id="game-container"></div>
-  <script>
-    window.EJS_player = "#game-container";
-    window.EJS_core = "segaMD";
-    window.EJS_gameName = "${safeTitle}";
-    window.EJS_gameUrl = "${safeUrl}";
-    window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
-    window.EJS_color = "#f59e0b";
-    window.EJS_backgroundColor = "#050608";
-    window.EJS_startOnLoaded = true;
-    window.EJS_defaultControls = {
-      0: {
-        0: { value: "x", value2: "BUTTON_1" },     // B (Pass / Switch Player)
-        1: { value: "z", value2: "BUTTON_3" },     // A (Dump / Line Change)
-        2: { value: "shift", value2: "SELECT" },   // Mode
-        3: { value: "enter", value2: "START" },    // Start
-        4: { value: "up arrow", value2: "DPAD_UP" },
-        5: { value: "down arrow", value2: "DPAD_DOWN" },
-        6: { value: "left arrow", value2: "DPAD_LEFT" },
-        7: { value: "right arrow", value2: "DPAD_RIGHT" },
-        8: { value: "c", value2: "BUTTON_2" },     // C (Shoot / Check / Speed Burst)
-        9: { value: "s", value2: "BUTTON_4" },     // Y
-        10: { value: "a", value2: "LEFT_TOP_SHOULDER" },  // X
-        11: { value: "d", value2: "RIGHT_TOP_SHOULDER" }  // Z
-      },
-      1: {}
-    };
-
-    window.EJS_onGameStart = function() {
-      window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
-    };
-
-    window.EJS_onSaveState = function(data) {
-      if (data && data.state) {
-        window.parent.postMessage({ type: "NHL95_EJS_SAVESTATE", state: data.state }, "*");
-      }
-    };
-  </script>
-  <script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
-</body>
-</html>`;
 }
 
 // ============================================================================
@@ -573,6 +504,9 @@ function ArenaContent() {
     setRomLoadError(null);
     setLocalRomObjectUrl(null);
     setLocalRomTitle(null);
+    if (typeof window !== 'undefined') {
+      (window as any).__NHL95_LOCAL_FILE = null;
+    }
 
     if (rom.customDownloadUrl) {
       setResolvedRomUrl(rom.customDownloadUrl);
@@ -596,6 +530,26 @@ function ArenaContent() {
         }
       } catch {
         // continue checking next candidate
+      }
+    }
+
+    // Fallback: query Supabase storage bucket file list for case-insensitive / prefix match
+    if (!matchedUrl) {
+      try {
+        const { data: bucketFiles } = await supabase.storage.from('roms').list('', { limit: 500 });
+        if (bucketFiles && bucketFiles.length > 0) {
+          const lowerCandidates = rom.fileCandidates.map(c => c.toLowerCase());
+          const idPrefix = rom.id.toLowerCase();
+          const foundFile =
+            bucketFiles.find(f => lowerCandidates.includes(f.name.toLowerCase())) ||
+            bucketFiles.find(f => f.name.toLowerCase().startsWith(idPrefix) && /\.(bin|zip|md|gen|smd)$/i.test(f.name));
+          if (foundFile) {
+            matchedFile = foundFile.name;
+            matchedUrl = `${SUPABASE_ROMS_URL}/${encodeURIComponent(foundFile.name)}`;
+          }
+        }
+      } catch {
+        // ignore storage list error
       }
     }
 
@@ -778,12 +732,17 @@ function ArenaContent() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (localRomObjectUrl) URL.revokeObjectURL(localRomObjectUrl);
+    if (typeof window !== 'undefined') {
+      (window as any).__NHL95_LOCAL_FILE = file;
+    }
     const objUrl = URL.createObjectURL(file);
     setLocalRomObjectUrl(objUrl);
     setLocalRomTitle(file.name);
+    setResolvedRomFileName(file.name);
     setRomLoadError(null);
     setEmulatorRunning(false);
     setActiveArenaTab('ice');
+    e.target.value = '';
   };
 
   // Upload & Parse an external .state file (and optionally load it into the running emulator!)
@@ -830,10 +789,11 @@ function ArenaContent() {
   const activeRomUrl = localRomObjectUrl || resolvedRomUrl;
   const activeRomTitle = localRomTitle || selectedRom.title;
 
-  const iframeSrcDoc = useMemo(() => {
+  const emulatorIframeSrc = useMemo(() => {
     if (!activeRomUrl) return null;
-    return buildEmulatorIframeHtml(activeRomUrl, activeRomTitle);
-  }, [activeRomUrl, activeRomTitle]);
+    const fileLabel = localRomTitle || resolvedRomFileName || `${selectedRom.id.toUpperCase()}.bin`;
+    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}`;
+  }, [activeRomUrl, localRomTitle, resolvedRomFileName, selectedRom.id]);
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-16">
@@ -1088,11 +1048,11 @@ function ArenaContent() {
                 </div>
               ) : (
                 <div className="aspect-[4/3] w-full bg-black relative">
-                  {iframeSrcDoc && (
+                  {emulatorIframeSrc && (
                     <iframe
                       ref={iframeRef}
-                      key={activeRomUrl || 'empty'}
-                      srcDoc={iframeSrcDoc}
+                      key={emulatorIframeSrc}
+                      src={emulatorIframeSrc}
                       title={`NHL 95 Emulator - ${activeRomTitle}`}
                       className="w-full h-full border-0"
                       allow="autoplay; fullscreen; gamepad"

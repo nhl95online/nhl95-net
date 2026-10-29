@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NHL '95 Online Arena Emulator</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #050608;
+      color: #ffffff;
+      overflow: hidden;
+      font-family: monospace;
+    }
+    #game {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var romUrl = params.get("romUrl") || "";
+      var title = params.get("title") || "NHL95.bin";
+
+      // If parent window provided a local File/Blob, create object URL in this window's origin
+      try {
+        if (window.parent && window.parent.__NHL95_LOCAL_FILE) {
+          var localFile = window.parent.__NHL95_LOCAL_FILE;
+          romUrl = URL.createObjectURL(localFile);
+          title = localFile.name || title;
+        }
+      } catch (e) {
+        console.warn("Could not read parent file:", e);
+      }
+
+      if (!romUrl) {
+        document.getElementById("game").innerHTML =
+          '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:13px;">Select a ROM cartridge to start playing.</div>';
+        return;
+      }
+
+      window.EJS_player = "#game";
+      window.EJS_core = "segaMD";
+      window.EJS_gameName = title;
+      window.EJS_gameUrl = romUrl;
+      window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
+      window.EJS_color = "#f59e0b";
+      window.EJS_backgroundColor = "#050608";
+      window.EJS_startOnLoaded = true;
+
+      window.EJS_onGameStart = function () {
+        try {
+          window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
+        } catch (e) {}
+      };
+
+      window.EJS_onSaveState = function (data) {
+        try {
+          if (data && data.state) {
+            window.parent.postMessage({ type: "NHL95_EJS_SAVESTATE", state: data.state }, "*");
+          }
+        } catch (e) {}
+      };
+
+      var script = document.createElement("script");
+      script.src = "https://cdn.emulatorjs.org/stable/data/loader.js";
+      document.body.appendChild(script);
+    })();
+  </script>
+</body>
+</html>
