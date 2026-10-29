@@ -624,9 +624,40 @@ const NHL_ERA_RANGES: Record<string, Array<{ start: number; end: number }>> = {
   ],
 };
 
-// Global in-memory cache of verified working logo URLs (or null for confirmed 404s)
+// Global in-memory cache of verified working logo URLs from the "nhl logo" bucket only
 const LOGO_CACHE = new Map<string, string | null>();
 const LOGO_PENDING = new Map<string, Promise<string | null>>();
+let NHL_LOGO_BUCKET_FILES: string[] | null = null;
+let NHL_LOGO_BUCKET_PROMISE: Promise<string[]> | null = null;
+
+const getNhlLogoBucketFiles = async (): Promise<string[]> => {
+  if (NHL_LOGO_BUCKET_FILES !== null) return NHL_LOGO_BUCKET_FILES;
+  if (NHL_LOGO_BUCKET_PROMISE !== null) return NHL_LOGO_BUCKET_PROMISE;
+
+  NHL_LOGO_BUCKET_PROMISE = (async () => {
+    try {
+      const { data, error } = await supabase.storage.from('nhl logo').list('', { limit: 1000 });
+      if (!error && data && data.length > 0) {
+        NHL_LOGO_BUCKET_FILES = data
+          .map((item) => item.name)
+          .filter((name) => name && name !== '.emptyFolderPlaceholder');
+        return NHL_LOGO_BUCKET_FILES;
+      }
+    } catch {}
+    NHL_LOGO_BUCKET_FILES = [
+      'BER_1909_1911.png',
+      'boston_bruins 1927.png',
+      'chicago_black_hawks 1927.png',
+      'detroit_cougars 1927.png',
+      'montreal_canadiens 1927.png',
+      'new_york_rangers 1927.png',
+      'toronto_maple_leafs 1927.png',
+    ];
+    return NHL_LOGO_BUCKET_FILES;
+  })();
+
+  return NHL_LOGO_BUCKET_PROMISE;
+};
 
 // Background probe function that tests candidate URLs sequentially with an offscreen image
 const resolveLogoUrl = async (cacheKey: string, candidateUrls: string[]): Promise<string | null> => {
@@ -714,7 +745,7 @@ const NHL_ABBR_TO_FULL_SLUGS: Record<string, string[]> = {
   WPG: ['winnipeg_jets'],
 };
 
-// Team Logo / Banner Component with Zero-Flashing Offscreen Resolution
+// Team Logo Component — Looks ONLY in the "nhl logo" Supabase bucket
 const TeamLogo = ({
   teamName,
   year,
@@ -735,7 +766,7 @@ const TeamLogo = ({
   const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
   const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
   const yrStr = year ? String(year).trim() : '';
-  const cacheKey = `${abbr || cleanName}_${slug}_${yrStr || 'base'}`;
+  const cacheKey = `nhl_logo_only_${abbr || cleanName}_${slug}_${yrStr || 'base'}`;
 
   const [logoUrl, setLogoUrl] = useState<string | null>(() => LOGO_CACHE.get(cacheKey) || null);
 
@@ -750,9 +781,8 @@ const TeamLogo = ({
       return;
     }
 
-    // Build focused list of candidate URLs
-    const urls: string[] = [];
-    const base = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public';
+    let isCancelled = false;
+    const baseBucketUrl = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20logo';
 
     let parsedYear: number | null = null;
     let rangeStart: number | null = null;
@@ -778,101 +808,78 @@ const TeamLogo = ({
       slug ? slug.toLowerCase() : null,
       abbr ? abbr.toUpperCase() : null,
       abbr ? abbr.toLowerCase() : null,
-      cleanName,
+      cleanName.toLowerCase(),
     ].filter(Boolean))) as string[];
 
-    const isBos = abbr?.toUpperCase() === 'BOS' || upper.includes('BOSTON');
+    getNhlLogoBucketFiles().then((bucketFiles) => {
+      if (isCancelled) return;
 
-    // 1. For BOS / Boston Bruins (and post-1967 seasons), check nhl banners first so BOS always displays the clean Boston Bruins banner
-    if (isBos) {
-      for (const n of nameVariants) {
-        const encN = encodeURIComponent(n);
-        urls.push(`${base}/nhl%20banners/${encN}.png`);
-        urls.push(`${base}/banners/${encN}.png`);
+      const normVariants = nameVariants.map((v) => v.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const matchedFiles: { file: string; score: number }[] = [];
+
+      for (const file of bucketFiles) {
+        const baseNoExt = file.replace(/\.[^.]+$/, '');
+        const normFile = baseNoExt.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        const matchesTeam = normVariants.some(
+          (nv) => nv.length >= 3 && (normFile === nv || normFile.startsWith(nv))
+        );
+        if (!matchesTeam) continue;
+
+        let score = 10;
+        const rangeMatch = baseNoExt.match(/(\d{4})\D+(\d{4})/);
+        const singleYearMatch = !rangeMatch ? baseNoExt.match(/(\d{4})/) : null;
+
+        if (targetYear && singleYearMatch) {
+          const fy = parseInt(singleYearMatch[1], 10);
+          if (fy === targetYear) score = 100;
+          else score = Math.max(1, 50 - Math.abs(targetYear - fy) * 0.5);
+        } else if (targetYear && rangeMatch) {
+          const rs = parseInt(rangeMatch[1], 10);
+          const re = parseInt(rangeMatch[2], 10);
+          if (targetYear >= rs && targetYear <= re) score = 90;
+          else score = 20;
+        } else if (!rangeMatch && !singleYearMatch) {
+          score = 60;
+        }
+
+        matchedFiles.push({ file, score });
       }
-    }
 
-    // 2. Direct primary match in actual Supabase buckets (nhl logo 1927 vintage & nhl banners) — resolves in 1 request!
-    if (!isBos && (!targetYear || targetYear <= 1967)) {
-      for (const n of nameVariants) {
-        const encN = encodeURIComponent(n);
-        urls.push(`${base}/nhl%20logo/${encN}%201927.png`);
-      }
-    }
-    for (const b of ['nhl%20banners', 'banners', 'nhl%20logo', 'teams']) {
-      for (const n of nameVariants) {
-        const encN = encodeURIComponent(n);
-        urls.push(`${base}/${b}/${encN}.png`);
-      }
-    }
+      matchedFiles.sort((a, b) => b.score - a.score);
 
-    // 3. Official NHL Logo CDN fallback for NHL franchises not yet uploaded to Supabase (EDM, WAS, LAK, PIT, etc.)
-    if (abbr && /^[A-Z]{3}$/.test(abbr.toUpperCase())) {
-      const cdnMap: Record<string, string> = { WAS: 'WSH', DTC: 'DET', HFD: 'CAR', QUE: 'COL', OAK: 'DAL', MNS: 'DAL', PHX: 'ARI' };
-      const cdnAbbr = cdnMap[abbr.toUpperCase()] || abbr.toUpperCase();
-      urls.push(`https://assets.nhle.com/logos/nhl/svg/${cdnAbbr}_light.svg`);
-    }
-
-    // 4. Year specific in nhl logo (including space-separated e.g. "montreal_canadiens 1927.png")
-    if (targetYear) {
-      for (const n of nameVariants) {
-        const encN = encodeURIComponent(n);
-        urls.push(`${base}/nhl%20logo/${encN}%20${targetYear}.png`);
-        urls.push(`${base}/nhl%20logo/${encN}_${targetYear}.png`);
-        urls.push(`${base}/nhl%20logo/${encN}-${targetYear}.png`);
-      }
-    }
-
-    // 5. Explicit range matching (e.g. BER_1909_1911.png)
-    if (rangeStart && rangeEnd) {
-      for (const n of nameVariants) {
-        const encN = encodeURIComponent(n);
-        urls.push(`${base}/nhl%20logo/${encN}_${rangeStart}_${rangeEnd}.png`);
-        urls.push(`${base}/nhl%20logo/${encN}_${rangeStart}-${rangeEnd}.png`);
-      }
-    }
-
-    // 6. Automated era-range matching in nhl logo
-    if (targetYear && abbr && NHL_ERA_RANGES[abbr]) {
-      const matchingEras = NHL_ERA_RANGES[abbr].filter(
-        (era) => targetYear >= era.start && targetYear <= era.end
+      const urls: string[] = matchedFiles.map(
+        (m) => `${baseBucketUrl}/${encodeURIComponent(m.file)}`
       );
-      for (const era of matchingEras) {
+
+      // Direct fallback patterns ONLY inside "nhl logo" bucket
+      if (urls.length === 0) {
+        if (targetYear) {
+          for (const n of nameVariants) {
+            const encN = encodeURIComponent(n);
+            urls.push(`${baseBucketUrl}/${encN}%20${targetYear}.png`);
+            urls.push(`${baseBucketUrl}/${encN}_${targetYear}.png`);
+          }
+        }
         for (const n of nameVariants) {
           const encN = encodeURIComponent(n);
-          urls.push(`${base}/nhl%20logo/${encN}_${era.start}_${era.end}.png`);
-          urls.push(`${base}/nhl%20logo/${encN}_${era.start}-${era.end}.png`);
+          urls.push(`${baseBucketUrl}/${encN}%201927.png`);
+          urls.push(`${baseBucketUrl}/${encN}.png`);
         }
       }
-    }
 
-    const uniqueUrls = Array.from(new Set(urls));
-    let isCancelled = false;
-
-    resolveLogoUrl(cacheKey, uniqueUrls).then((res) => {
-      if (!isCancelled) {
-        setLogoUrl(res);
-      }
+      const uniqueUrls = Array.from(new Set(urls));
+      resolveLogoUrl(cacheKey, uniqueUrls).then((res) => {
+        if (!isCancelled) {
+          setLogoUrl(res);
+        }
+      });
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [cacheKey, cleanName, abbr, slug, yrStr, upper]);
-
-  const isBannerUrl = Boolean(
-    logoUrl && (logoUrl.includes('/nhl%20banners/') || logoUrl.includes('/banners/'))
-  );
-
-  if (logoUrl && isBannerUrl) {
-    return (
-      <img
-        src={logoUrl}
-        alt={`${cleanName} ${yrStr || ''}`}
-        className={`${bannerClassName} shrink-0`}
-      />
-    );
-  }
+  }, [cacheKey, cleanName, abbr, slug, yrStr]);
 
   if (showLabel) {
     return (
