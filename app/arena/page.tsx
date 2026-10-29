@@ -484,7 +484,7 @@ function ArenaContent() {
     refreshBucketFiles();
   }, [refreshBucketFiles]);
 
-  // Selected ROM state
+  // Selected Bucket File / ROM state
   const [selectedRomId, setSelectedRomId] = useState<string>(() => {
     const found = catalog.find(r => r.id.toLowerCase() === initialRomParam.toLowerCase());
     return found ? found.id : 'w16';
@@ -493,7 +493,12 @@ function ArenaContent() {
   useEffect(() => {
     const param = searchParams.get('rom');
     if (param) {
-      const found = catalog.find(r => r.id.toLowerCase() === param.toLowerCase());
+      const cleanParam = param.replace(/\.(zip|bin)$/i, '').toLowerCase();
+      const found = catalog.find(
+        r =>
+          r.id.toLowerCase() === cleanParam ||
+          (cleanParam === '1909' && r.id === 'nhl-1909-10')
+      );
       if (found) setSelectedRomId(found.id);
     }
   }, [searchParams, catalog]);
@@ -502,6 +507,35 @@ function ArenaContent() {
     () => catalog.find(r => r.id === selectedRomId) || catalog[0],
     [catalog, selectedRomId]
   );
+
+  // Build exact list of ROMs as they are in the Supabase "roms" bucket (`1909.zip`, `W01.zip`..`W16.zip`, etc.)
+  const bucketRomItems = useMemo(() => {
+    return bucketFiles.map(fileName => {
+      const base = fileName.replace(/\.(zip|bin|md|gen|smd)$/i, '');
+      const matchedCatalog =
+        catalog.find(r => {
+          const m = findMatchingBucketFile(r, [fileName]);
+          return m !== null;
+        }) ||
+        catalog.find(
+          r =>
+            r.id.toLowerCase() === base.toLowerCase() ||
+            (base === '1909' && r.id === 'nhl-1909-10')
+        );
+
+      return {
+        fileName,
+        base,
+        romId: matchedCatalog ? matchedCatalog.id : base.toLowerCase(),
+        title: matchedCatalog ? matchedCatalog.title : `${base.toUpperCase()} Cartridge`,
+        subtitle: matchedCatalog ? matchedCatalog.subtitle : 'Supabase "roms" Bucket',
+        description: matchedCatalog
+          ? matchedCatalog.description
+          : `Official ${fileName} archive from the Supabase "roms" bucket.`,
+        badge: fileName
+      };
+    });
+  }, [bucketFiles, catalog]);
 
   // Arena Sub-navigation Tab ('ice' | 'lobby' | 'vault' | 'controller' | 'boxscore')
   const [activeArenaTab, setActiveArenaTab] = useState<'ice' | 'lobby' | 'vault' | 'controller' | 'boxscore'>('ice');
@@ -541,8 +575,8 @@ function ArenaContent() {
   const localRomInputRef = useRef<HTMLInputElement | null>(null);
   const loadStateInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Vault Browser filters
-  const [vaultCategory, setVaultCategory] = useState<'all' | 'cloud' | 'league' | 'nhl-history' | 'misc'>('all');
+  // Vault Browser filters — default to 'cloud' so the user sees the exact files in the "roms" bucket first
+  const [vaultCategory, setVaultCategory] = useState<'all' | 'cloud' | 'league' | 'nhl-history' | 'misc'>('cloud');
   const [vaultSearch, setVaultSearch] = useState<string>('');
 
   // Controller & Keyboard Live State
@@ -580,7 +614,7 @@ function ArenaContent() {
     loadTeams();
   }, []);
 
-  // Resolve the selected ROM against the Supabase `roms` bucket (with automatic fallback to W16.zip if not uploaded yet)
+  // Resolve the selected ROM against the Supabase `roms` bucket and stream extracted .bin via /api/arena-rom-stream
   useEffect(() => {
     if (!selectedRom) return;
     setEmulatorRunning(false);
@@ -594,13 +628,19 @@ function ArenaContent() {
 
     const matchedFile = findMatchingBucketFile(selectedRom, bucketFiles);
     if (matchedFile) {
-      setResolvedRomUrl(`${SUPABASE_ROMS_URL}/${encodeURIComponent(matchedFile)}`);
+      const cleanBase = matchedFile.replace(/\.(zip|bin|md|gen|smd)$/i, '');
+      setResolvedRomUrl(
+        `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(matchedFile)}`
+      );
       setResolvedRomFileName(matchedFile);
       setFallbackNotice(null);
     } else {
       // Automatically boot W16.zip from the "roms" bucket so the game ALWAYS loads & plays immediately!
       const fallbackFile = bucketFiles.find(f => f.toUpperCase() === 'W16.ZIP') || bucketFiles[0] || 'W16.zip';
-      setResolvedRomUrl(`${SUPABASE_ROMS_URL}/${encodeURIComponent(fallbackFile)}`);
+      const cleanBase = fallbackFile.replace(/\.(zip|bin|md|gen|smd)$/i, '');
+      setResolvedRomUrl(
+        `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(fallbackFile)}`
+      );
       setResolvedRomFileName(fallbackFile);
       setFallbackNotice(
         `Note: "${selectedRom.id.toUpperCase()}" isn't uploaded to the cloud "roms" bucket yet, so we automatically booted ${fallbackFile} from the "roms" bucket! You can also click "Load Local ROM" to play or upload ${selectedRom.id.toUpperCase()} from your computer.`
@@ -1378,50 +1418,39 @@ function ArenaContent() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LEFT / CENTER COLUMN (8 cols on lg) */}
         <div className="lg:col-span-8 space-y-5">
-          {/* CLOUD-READY FEATURED ARENA BUILDS STRIP */}
+          {/* CLOUD-READY "ROMS" BUCKET CARTRIDGES STRIP (ALL FILES IN SUPABASE "roms" BUCKET) */}
           <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-              <span>INSTANT PLAY — CLOUD &ldquo;ROMS&rdquo; BUCKET CARTRIDGES</span>
+              <span>SUPABASE &ldquo;ROMS&rdquo; BUCKET CARTRIDGES ({bucketRomItems.length} FILES)</span>
               <button
                 onClick={() => setActiveArenaTab('vault')}
                 className="text-amber-700 hover:underline cursor-pointer font-bold"
               >
-                Browse All {catalog.length} ROMs ({bucketFiles.length} in Cloud) &rarr;
+                Open Full Vault ({bucketFiles.length} in Bucket) &rarr;
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {cloudReadyFeaturedRoms.map(rom => {
-                const isSelected = rom.id === selectedRom.id && !localRomObjectUrl;
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {bucketRomItems.map(item => {
+                const isSelected = item.romId === selectedRom.id && !localRomObjectUrl;
                 return (
                   <button
-                    key={rom.id}
+                    key={item.fileName}
                     onClick={() => {
                       if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
                       setLocalRomObjectUrl(null);
                       setLocalRomTitle(null);
-                      setSelectedRomId(rom.id);
+                      setSelectedRomId(item.romId);
                       setActiveArenaTab('ice');
                     }}
-                    className={`p-2 text-left border transition cursor-pointer rounded-xs flex flex-col justify-between ${
+                    title={`${item.fileName} — ${item.title}`}
+                    className={`px-2.5 py-1.5 border transition cursor-pointer rounded-xs flex items-center gap-1.5 font-mono text-xs font-black ${
                       isSelected
-                        ? 'bg-neutral-950 text-white border-black ring-2 ring-amber-500'
-                        : 'bg-[#faf8f5] hover:bg-amber-50/70 text-black border-slate-300'
+                        ? 'bg-neutral-950 text-amber-400 border-black ring-2 ring-amber-500'
+                        : 'bg-[#faf8f5] hover:bg-amber-50 text-black border-slate-300 hover:border-black'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1 w-full mb-1">
-                      <span className={`font-mono text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
-                        isSelected ? 'bg-amber-500 text-black' : 'bg-black text-white'
-                      }`}>
-                        {rom.id.toUpperCase()}
-                      </span>
-                      <span className="text-[8px] font-mono font-bold text-emerald-500 uppercase">● Ready</span>
-                    </div>
-                    <div className="font-serif text-xs font-black uppercase truncate w-full">
-                      {rom.title.replace(`${rom.id.toUpperCase()} — `, '')}
-                    </div>
-                    <div className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {rom.subtitle}
-                    </div>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{item.fileName}</span>
                   </button>
                 );
               })}
