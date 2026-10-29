@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getTeamBannerUrls } from '../standings/page';
+import RetroBoxscore, { type RetroStatRow } from '@/components/RetroBoxscore';
+import { W_LEAGUE_GOALIES, W_LEAGUE_SKATERS, O_LEAGUE_GOALIES, O_LEAGUE_SKATERS } from '@/lib/seasons';
 
 function formatDayFractionOrTime(val: any): string {
   if (val === null || val === undefined || val === '') return '0:00';
@@ -291,13 +293,17 @@ const ModernMatchupCard = ({
     ? (conference === 'west' ? 'bg-[#dbeafe]' : conference === 'east' ? 'bg-[#ffe4e6]' : 'bg-amber-100')
     : (conference === 'west' ? 'bg-[#f0f7ff]' : conference === 'east' ? 'bg-[#fff5f5]' : 'bg-white');
 
-  const teamColWidth = 310 - (28 + maxDisplayGames * 18 + 26);
   const showCoach = displayMode === 'banner-coach';
+  const cardWidth = showCoach ? 290 : 230;
+  const seedColW = 24;
+  const gameColW = 16;
+  const winColW = 22;
+  const teamColWidth = cardWidth - (seedColW + maxDisplayGames * gameColW + winColW);
 
   return (
     <div 
       onClick={() => onSelect && onSelect(match, label)}
-      style={{ width: 310, minWidth: 310, maxWidth: 310, height: 72 }}
+      style={{ width: cardWidth, minWidth: cardWidth, maxWidth: cardWidth, height: 66 }}
       className={`group select-none shrink-0 rounded-xs border transition-all cursor-pointer shadow-xs hover:shadow-md ${
         isChampionship
           ? 'border-amber-600 bg-amber-50/40 ring-1 ring-amber-500/50'
@@ -305,13 +311,13 @@ const ModernMatchupCard = ({
       }`}
     >
       <table 
-        style={{ width: 310, minWidth: 310, tableLayout: 'fixed' }}
+        style={{ width: cardWidth, minWidth: cardWidth, tableLayout: 'fixed' }}
         className="w-full h-full text-left border-collapse table-fixed"
       >
         <thead>
-          <tr className="h-[18px] bg-neutral-100 border-b border-neutral-300 text-[9px] font-sans font-semibold text-neutral-500">
-            <th style={{ width: 28 }} className="w-[28px] p-0 text-center font-mono">#</th>
-            <th style={{ width: teamColWidth }} className="p-0 px-1.5 truncate">
+          <tr className="h-[16px] bg-neutral-100 border-b border-neutral-300 text-[9px] font-sans font-semibold text-neutral-500">
+            <th style={{ width: seedColW }} className="p-0 text-center font-mono">#</th>
+            <th style={{ width: teamColWidth }} className="p-0 px-1 truncate">
               {showCoach ? (
                 <div className="flex items-center justify-between">
                   <span>Team</span>
@@ -322,24 +328,24 @@ const ModernMatchupCard = ({
               )}
             </th>
             {Array.from({ length: maxDisplayGames }).map((_, i) => (
-              <th key={`hdr-g-${i}`} style={{ width: 18 }} className="w-[18px] p-0 text-center border-l border-neutral-300 font-mono">
+              <th key={`hdr-g-${i}`} style={{ width: gameColW }} className="p-0 text-center border-l border-neutral-300 font-mono">
                 {i + 1}
               </th>
             ))}
-            <th style={{ width: 26 }} className="w-[26px] p-0 text-center border-l-2 border-neutral-900 font-mono font-bold text-neutral-900">
+            <th style={{ width: winColW }} className="p-0 text-center border-l-2 border-neutral-900 font-mono font-bold text-neutral-900">
               W
             </th>
           </tr>
         </thead>
         <tbody>
           {/* Top / Home Team */}
-          <tr className={`h-[27px] border-b border-neutral-300 ${homeRowBg} transition-colors`}>
+          <tr className={`h-[25px] border-b border-neutral-300 ${homeRowBg} transition-colors`}>
             <td className={`p-0 text-center font-mono font-bold text-[10px] ${seedBgColor}`}>
               {homeSeed || '—'}
             </td>
 
-            <td className="p-0 px-1.5 min-w-0">
-              <div className="flex items-center justify-between gap-1.5 overflow-hidden h-[26px]">
+            <td className="p-0 px-1 min-w-0">
+              <div className="flex items-center justify-between gap-1 overflow-hidden h-[24px]">
                 {activeHomeBanner && !homeImgFailed ? (
                   <>
                     <img
@@ -349,7 +355,7 @@ const ModernMatchupCard = ({
                       className={
                         showCoach && homeCoach
                           ? "h-[19px] max-w-[66px] w-auto object-contain shrink-0"
-                          : "h-[21px] max-w-[116px] w-auto object-contain shrink-0"
+                          : "h-[19px] max-w-[64px] w-auto object-contain shrink-0"
                       }
                       onError={handleHomeImgError}
                     />
@@ -417,13 +423,13 @@ const ModernMatchupCard = ({
           </tr>
 
           {/* Bottom / Away Team */}
-          <tr className={`h-[27px] ${awayRowBg} transition-colors`}>
+          <tr className={`h-[25px] ${awayRowBg} transition-colors`}>
             <td className={`p-0 text-center font-mono font-bold text-[10px] ${seedBgColor}`}>
               {awaySeed || '—'}
             </td>
 
-            <td className="p-0 px-1.5 min-w-0">
-              <div className="flex items-center justify-between gap-1.5 overflow-hidden h-[26px]">
+            <td className="p-0 px-1 min-w-0">
+              <div className="flex items-center justify-between gap-1 overflow-hidden h-[24px]">
                 {activeAwayBanner && !awayImgFailed ? (
                   <>
                     <img
@@ -433,7 +439,7 @@ const ModernMatchupCard = ({
                       className={
                         showCoach && awayCoach
                           ? "h-[19px] max-w-[66px] w-auto object-contain shrink-0"
-                          : "h-[21px] max-w-[116px] w-auto object-contain shrink-0"
+                          : "h-[19px] max-w-[64px] w-auto object-contain shrink-0"
                       }
                       onError={handleAwayImgError}
                     />
@@ -778,14 +784,115 @@ const SeriesModal = ({
     const homeTotalShots = Number(h.home_shots || (homeS1 + homeS2 + homeS3 + homeSOT));
 
     return {
-      away: { g1: awayG1, g2: awayG2, g3: awayG3, got: awayGOT, totalG: awayTotalG, totalS: awayTotalShots },
-      home: { g1: homeG1, g2: homeG2, g3: homeG3, got: homeGOT, totalG: homeTotalG, totalS: homeTotalShots }
+      away: { g1: awayG1, g2: awayG2, g3: awayG3, got: awayGOT, totalG: awayTotalG, s1: awayS1, s2: awayS2, s3: awayS3, sot: awaySOT, totalS: awayTotalShots },
+      home: { g1: homeG1, g2: homeG2, g3: homeG3, got: homeGOT, totalG: homeTotalG, s1: homeS1, s2: homeS2, s3: homeS3, sot: homeSOT, totalS: homeTotalShots }
     };
   }, [selectedGame, homeStatsObj, awayStatsObj]);
 
+  const retroBoxscoreProps = useMemo(() => {
+    if (!selectedGame || !periodSummary) return null;
+    const a = awayStatsObj as any;
+    const h = homeStatsObj as any;
+    const gameAwayId = Number(selectedGame.away_team_id);
+    const gameHomeId = Number(selectedGame.home_team_id);
+    const gameAwayTeam = gameAwayId === Number(match.home_team_id) ? home : away;
+    const gameHomeTeam = gameHomeId === Number(match.away_team_id) ? away : home;
+    const awayCode = (gameAwayTeam?.abbreviation || 'AWY').toUpperCase();
+    const homeCode = (gameHomeTeam?.abbreviation || 'HOM').toUpperCase();
+
+    const awayWon = Number(a.away_faceoff_won || 0);
+    const homeWon = Number(h.home_faceoff_won || 0);
+    const totalFaceoffs = Number((selectedGame as any).total_faceoffs) || (awayWon + homeWon);
+    const awayShots = periodSummary.away.totalS;
+    const homeShots = periodSummary.home.totalS;
+    const pct = (goals: any, shots: number) => `${Math.round(((Number(goals) || 0) / Math.max(1, shots)) * 100)}%`;
+
+    const statRows: RetroStatRow[] = [
+      { label: 'Shots', away: awayShots, home: homeShots },
+      { label: '1rst Period', away: periodSummary.away.s1, home: periodSummary.home.s1 },
+      { label: '2nd Period', away: periodSummary.away.s2, home: periodSummary.home.s2 },
+      { label: '3rd Period', away: periodSummary.away.s3, home: periodSummary.home.s3 },
+      { label: 'Overtime', away: periodSummary.away.sot, home: periodSummary.home.sot },
+      { label: 'Shooting %', away: pct(selectedGame.away_score, awayShots), home: pct(selectedGame.home_score, homeShots) },
+      { label: 'PowerPlay', away: `${a.away_pp_goals || 0}/${a.away_pp_opps || 0}`, home: `${h.home_pp_goals || 0}/${h.home_pp_opps || 0}` },
+      { label: 'PowerPlay Shots', away: a.away_pp_shots || 0, home: h.home_pp_shots || 0 },
+      { label: 'Shorthanded G', away: a.away_sh_goals || 0, home: h.home_sh_goals || 0 },
+      { label: 'Breakaways', away: `${a.away_breakaway_goals || 0}/${a.away_breakaways || 0}`, home: `${h.home_breakaway_goals || 0}/${h.home_breakaways || 0}` },
+      { label: 'One-Timers', away: `${a.away_onetimer_goals || 0}/${a.away_onetimers || 0}`, home: `${h.home_onetimer_goals || 0}/${h.home_onetimers || 0}` },
+      { label: 'Penalty Shots', away: `${a.away_penalty_shot_goals || 0}/${a.away_penalty_shots || 0}`, home: `${h.home_penalty_shot_goals || 0}/${h.home_penalty_shots || 0}` },
+      { label: 'Faceoffs', away: `${awayWon}/${totalFaceoffs}`, home: `${homeWon}/${totalFaceoffs}` },
+      { label: 'Body Checks', away: a.away_bodychecks || 0, home: h.home_bodychecks || 0 },
+      { label: 'Penalties', away: a.away_pen || 0, home: h.home_pen || 0 },
+      { label: 'Attack Zone', away: formatDayFractionOrTime(a.away_atk), home: formatDayFractionOrTime(h.home_atk) },
+    ];
+
+    const parseToiNum = (toiStr: string) => {
+      if (!toiStr || !toiStr.includes(':')) return 0;
+      const [m, s] = toiStr.split(':').map(Number);
+      return (m || 0) * 60 + (s || 0);
+    };
+
+    const teamRoster = (teamId: number, tCode: string) => {
+      const dbGoalies = gameBoxscore.goalies.filter((g: any) => Number(g.team_id) === teamId);
+      const dbSkaters = gameBoxscore.skaters.filter((s: any) => Number(s.team_id) === teamId);
+      const expectedGoalies = (W_LEAGUE_GOALIES[tCode] || O_LEAGUE_GOALIES[tCode] || []).filter(n => n && n !== '--');
+      const expectedSkaters = (W_LEAGUE_SKATERS[tCode] || O_LEAGUE_SKATERS[tCode] || []).filter(n => n && n !== '--');
+
+      const mergedGoalies = [...dbGoalies];
+      expectedGoalies.forEach((gName) => {
+        if (!mergedGoalies.some(g => (g.name || '').trim().toLowerCase() === gName.trim().toLowerCase())) {
+          mergedGoalies.push({ name: gName, goals: 0, assists: 0, so: 0, ga: 0, saves: 0, shots: 0, savePct: 0, toi: '0:00' });
+        }
+      });
+
+      const mergedSkaters = [...dbSkaters];
+      expectedSkaters.forEach((sName) => {
+        if (!mergedSkaters.some(s => (s.name || '').trim().toLowerCase() === sName.trim().toLowerCase())) {
+          mergedSkaters.push({ name: sName, goals: 0, assists: 0, points: 0, sog: 0, checks: 0, pim: 0, ppp: 0, shp: 0, toi: '0:00' });
+        }
+      });
+
+      mergedGoalies.sort((x, y) => parseToiNum(y.toi) - parseToiNum(x.toi));
+      mergedSkaters.sort((x, y) => {
+        if ((y.points || 0) !== (x.points || 0)) return (y.points || 0) - (x.points || 0);
+        if ((y.goals || 0) !== (x.goals || 0)) return (y.goals || 0) - (x.goals || 0);
+        if ((y.sog || 0) !== (x.sog || 0)) return (y.sog || 0) - (x.sog || 0);
+        if ((y.checks || 0) !== (x.checks || 0)) return (y.checks || 0) - (x.checks || 0);
+        if ((y.pim || 0) !== (x.pim || 0)) return (y.pim || 0) - (x.pim || 0);
+        return parseToiNum(y.toi) - parseToiNum(x.toi);
+      });
+
+      return { goalies: mergedGoalies, skaters: mergedSkaters };
+    };
+
+    return {
+      away: {
+        code: awayCode,
+        name: gameAwayTeam?.team_name || awayCode,
+        logoUrl: (gameAwayTeam as any)?.logo_url,
+        score: selectedGame.away_score ?? periodSummary.away.totalG,
+        ...teamRoster(gameAwayId, awayCode),
+      },
+      home: {
+        code: homeCode,
+        name: gameHomeTeam?.team_name || homeCode,
+        logoUrl: (gameHomeTeam as any)?.logo_url,
+        score: selectedGame.home_score ?? periodSummary.home.totalG,
+        ...teamRoster(gameHomeId, homeCode),
+      },
+      periods: {
+        away: { p1: periodSummary.away.g1, p2: periodSummary.away.g2, p3: periodSummary.away.g3, ot: periodSummary.away.got, total: periodSummary.away.totalG },
+        home: { p1: periodSummary.home.g1, p2: periodSummary.home.g2, p3: periodSummary.home.g3, ot: periodSummary.home.got, total: periodSummary.home.totalG },
+      },
+      statRows,
+      goals: gameBoxscore.scoring,
+      penalties: gameBoxscore.penalties,
+    };
+  }, [selectedGame, periodSummary, homeStatsObj, awayStatsObj, gameBoxscore, match, home, away]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white border border-neutral-300 rounded-lg shadow-2xl overflow-hidden font-sans">
+      <div className="relative w-full max-w-[1220px] max-h-[94vh] flex flex-col bg-white border border-neutral-300 rounded-lg shadow-2xl overflow-hidden font-sans">
         
         <div className="bg-slate-900 text-white p-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -959,6 +1066,9 @@ const SeriesModal = ({
 
           {activeView !== 'overview' && selectedGame && (
             <div className="space-y-4">
+              {retroBoxscoreProps && !gameBoxscore.loading && (
+                <RetroBoxscore {...retroBoxscoreProps} />
+              )}
               <div className="bg-slate-900 text-white p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1325,7 +1435,7 @@ export default function PlayoffBracket() {
   const [selectedLeagueId, setSelectedLeagueId] = useState<number | string>('');
   const [selectedSeries, setSelectedSeries] = useState<{ match: PlayoffMatch; label: string } | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
-  const [displayMode, setDisplayMode] = useState<CardDisplayMode>('banner-coach');
+  const [displayMode, setDisplayMode] = useState<CardDisplayMode>('banner-only');
   const [trophyImgFailed, setTrophyImgFailed] = useState<boolean>(false);
   const [isProjectedBracket, setIsProjectedBracket] = useState<boolean>(false);
 
@@ -2130,8 +2240,9 @@ export default function PlayoffBracket() {
     setSelectedSeries({ match, label });
   };
 
-  // Row height in pixels for the unified grid
-  const ROW_H = 88;
+  // Row height and card column width in pixels for the unified grid
+  const ROW_H = 76;
+  const COL_W = displayMode === 'banner-coach' ? 290 : 230;
   const centerY = (row: number) => (row + 0.5) * ROW_H;
 
   return (
@@ -2248,7 +2359,7 @@ export default function PlayoffBracket() {
       <div className="w-full overflow-x-auto pb-10 px-4 scrollbar-thin">
         <div 
           style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-          className="w-[1600px] mx-auto transition-transform duration-200"
+          className="w-fit mx-auto transition-transform duration-200"
         >
 
           {/* ========================================================= */}
@@ -2263,7 +2374,7 @@ export default function PlayoffBracket() {
               <div className="w-[36px] flex flex-col shrink-0 mr-3">
                 {/* Eastern Conference Vertical Strip (Rows 0 to 6 = 7 rows) */}
                 <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
-                  <div className="w-[32px] h-[580px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                  <div className="w-[32px] h-[490px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
                     <div className="flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5 text-rose-300 shrink-0" />
                       <span>EASTERN CONFERENCE</span>
@@ -2276,7 +2387,7 @@ export default function PlayoffBracket() {
 
                 {/* Western Conference Vertical Strip (Rows 8 to 14 = 7 rows) */}
                 <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
-                  <div className="w-[32px] h-[580px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                  <div className="w-[32px] h-[490px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
                     <div className="flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5 text-blue-300 shrink-0" />
                       <span>WESTERN CONFERENCE</span>
@@ -2288,51 +2399,51 @@ export default function PlayoffBracket() {
               {/* ------------------------------------------------------------- */}
               {/* COLUMN 1: QUARTERFINALS (Rows 0, 2, 4, 6, 8, 10, 12, 14)       */}
               {/* ------------------------------------------------------------- */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 {/* Row 0: QF 1 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 1')} label="Quarter Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 1: Space for SF 1 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 2: QF 2 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 2')} label="Quarter Finals 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 3: Space for East CF */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 4: QF 3 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 3')} label="Quarter Finals 3" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 5: Space for SF 2 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 6: QF 4 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 4')} label="Quarter Finals 4" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 7: Center Spacer */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 8: QF 5 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 5')} label="Quarter Finals 5" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 9: Space for SF 3 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 10: QF 6 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 6')} label="Quarter Finals 6" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 11: Space for West CF */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 12: QF 7 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 7')} label="Quarter Finals 7" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 {/* Row 13: Space for SF 4 */}
                 <div style={{ height: ROW_H }} />
                 {/* Row 14: QF 8 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Quarter Finals 8')} label="Quarter Finals 8" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
               </div>
@@ -2340,48 +2451,41 @@ export default function PlayoffBracket() {
               {/* ------------------------------------------------------------- */}
               {/* CONNECTOR 1: QF -> SF (Forks at Rows 0-2, 4-6, 8-10, 12-14)    */}
               {/* ------------------------------------------------------------- */}
-              <div style={{ height: ROW_H * 15 }} className="w-[40px] shrink-0">
-                <svg width="40" height={ROW_H * 15} viewBox={`0 0 40 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
-                  {/* Fork 1: QF 1 (Row 0) & QF 2 (Row 2) -> SF 1 (Row 1) */}
-                  <path d={`M -1 ${centerY(0)} H 20 V ${centerY(2)} H -1`} />
-                  <path d={`M 20 ${centerY(1)} H 41`} />
-
-                  {/* Fork 2: QF 3 (Row 4) & QF 4 (Row 6) -> SF 2 (Row 5) */}
-                  <path d={`M -1 ${centerY(4)} H 20 V ${centerY(6)} H -1`} />
-                  <path d={`M 20 ${centerY(5)} H 41`} />
-
-                  {/* Fork 3: QF 5 (Row 8) & QF 6 (Row 10) -> SF 3 (Row 9) */}
-                  <path d={`M -1 ${centerY(8)} H 20 V ${centerY(10)} H -1`} />
-                  <path d={`M 20 ${centerY(9)} H 41`} />
-
-                  {/* Fork 4: QF 7 (Row 12) & QF 8 (Row 14) -> SF 4 (Row 13) */}
-                  <path d={`M -1 ${centerY(12)} H 20 V ${centerY(14)} H -1`} />
-                  <path d={`M 20 ${centerY(13)} H 41`} />
+              <div style={{ height: ROW_H * 15 }} className="w-[26px] shrink-0">
+                <svg width="26" height={ROW_H * 15} viewBox={`0 0 26 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
+                  <path d={`M -1 ${centerY(0)} H 13 V ${centerY(2)} H -1`} />
+                  <path d={`M 13 ${centerY(1)} H 27`} />
+                  <path d={`M -1 ${centerY(4)} H 13 V ${centerY(6)} H -1`} />
+                  <path d={`M 13 ${centerY(5)} H 27`} />
+                  <path d={`M -1 ${centerY(8)} H 13 V ${centerY(10)} H -1`} />
+                  <path d={`M 13 ${centerY(9)} H 27`} />
+                  <path d={`M -1 ${centerY(12)} H 13 V ${centerY(14)} H -1`} />
+                  <path d={`M 13 ${centerY(13)} H 27`} />
                 </svg>
               </div>
 
               {/* ------------------------------------------------------------- */}
               {/* COLUMN 2: SEMIFINALS (Rows 1, 5, 9, 13)                        */}
               {/* ------------------------------------------------------------- */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 <div style={{ height: ROW_H }} />
                 {/* Row 1: Semifinal 1 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 5: Semifinal 2 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Semi Finals 2')} label="Semi Finals 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 9: Semifinal 3 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 13: Semifinal 4 */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Semi Finals 4')} label="Semi Finals 4" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H }} />
@@ -2390,30 +2494,27 @@ export default function PlayoffBracket() {
               {/* ------------------------------------------------------------- */}
               {/* CONNECTOR 2: SF -> CF (Forks at Rows 1-5 and 9-13)            */}
               {/* ------------------------------------------------------------- */}
-              <div style={{ height: ROW_H * 15 }} className="w-[40px] shrink-0">
-                <svg width="40" height={ROW_H * 15} viewBox={`0 0 40 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
-                  {/* Fork from SF 1 (Row 1) & SF 2 (Row 5) -> East CF (Row 3) */}
-                  <path d={`M -1 ${centerY(1)} H 20 V ${centerY(5)} H -1`} />
-                  <path d={`M 20 ${centerY(3)} H 41`} />
-
-                  {/* Fork from SF 3 (Row 9) & SF 4 (Row 13) -> West CF (Row 11) */}
-                  <path d={`M -1 ${centerY(9)} H 20 V ${centerY(13)} H -1`} />
-                  <path d={`M 20 ${centerY(11)} H 41`} />
+              <div style={{ height: ROW_H * 15 }} className="w-[26px] shrink-0">
+                <svg width="26" height={ROW_H * 15} viewBox={`0 0 26 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
+                  <path d={`M -1 ${centerY(1)} H 13 V ${centerY(5)} H -1`} />
+                  <path d={`M 13 ${centerY(3)} H 27`} />
+                  <path d={`M -1 ${centerY(9)} H 13 V ${centerY(13)} H -1`} />
+                  <path d={`M 13 ${centerY(11)} H 27`} />
                 </svg>
               </div>
 
               {/* ------------------------------------------------------------- */}
               {/* COLUMN 3: CONFERENCE FINALS (Rows 3, 11)                      */}
               {/* ------------------------------------------------------------- */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 <div style={{ height: ROW_H * 3 }} />
                 {/* Row 3: Conference Final 1 (East) */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 7 }} />
                 {/* Row 11: Conference Final 2 (West) */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
@@ -2422,20 +2523,20 @@ export default function PlayoffBracket() {
               {/* ------------------------------------------------------------- */}
               {/* CONNECTOR 3: CF -> FINALS (Fork from Row 3 to Row 11 into Row 7) */}
               {/* ------------------------------------------------------------- */}
-              <div style={{ height: ROW_H * 15 }} className="w-[50px] shrink-0">
-                <svg width="50" height={ROW_H * 15} viewBox={`0 0 50 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
-                  <path d={`M -1 ${centerY(3)} H 25 V ${centerY(11)} H -1`} />
-                  <path d={`M 25 ${centerY(7)} H 51`} />
+              <div style={{ height: ROW_H * 15 }} className="w-[30px] shrink-0">
+                <svg width="30" height={ROW_H * 15} viewBox={`0 0 30 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
+                  <path d={`M -1 ${centerY(3)} H 15 V ${centerY(11)} H -1`} />
+                  <path d={`M 15 ${centerY(7)} H 31`} />
                 </svg>
               </div>
 
               {/* ------------------------------------------------------------- */}
               {/* COLUMN 4: CHAMPIONSHIP FINALS (Row 7)                         */}
               {/* ------------------------------------------------------------- */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 <div style={{ height: ROW_H * 7 }} />
                 {/* Row 7: Championship Finals */}
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard
                     match={getMatch('Finals')}
                     label="CHAMPIONSHIP FINALS"
@@ -2451,16 +2552,16 @@ export default function PlayoffBracket() {
               {/* ------------------------------------------------------------- */}
               {/* CONNECTOR 4: FINALS -> TROPHY & WINNER SHOWCASE                */}
               {/* ------------------------------------------------------------- */}
-              <div style={{ height: ROW_H * 15 }} className="w-[40px] shrink-0">
-                <svg width="40" height={ROW_H * 15} viewBox={`0 0 40 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
-                  <path d={`M -1 ${centerY(7)} H 41`} />
+              <div style={{ height: ROW_H * 15 }} className="w-[24px] shrink-0">
+                <svg width="24" height={ROW_H * 15} viewBox={`0 0 24 ${ROW_H * 15}`} fill="none" stroke="#0f172a" strokeWidth="2" className="overflow-visible">
+                  <path d={`M -1 ${centerY(7)} H 25`} />
                 </svg>
               </div>
 
               {/* ------------------------------------------------------------- */}
               {/* COLUMN 5: TROPHY & WINNER SHOWCASE (OFF TO THE RIGHT!)        */}
               {/* ------------------------------------------------------------- */}
-              <div className="w-[230px] flex flex-col shrink-0 pl-2">
+              <div className="w-[185px] flex flex-col shrink-0 pl-1">
                 <div style={{ height: ROW_H * 6 }} />
                 {/* Aligned with Finals (Row 7) */}
                 <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
@@ -2500,12 +2601,12 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 1: Semifinals */}
-              <div className="w-[310px] flex flex-col shrink-0">
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Semi Finals 1')} label="Semi Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Semi Finals 3')} label="Semi Finals 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
               </div>
@@ -2519,12 +2620,12 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 2: Conference Finals */}
-              <div className="w-[310px] flex flex-col shrink-0">
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Conference Finals 1')} label="Conference Finals 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 3 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={getMatch('Conference Finals 2')} label="Conference Finals 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
               </div>
@@ -2538,9 +2639,9 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 3: Finals */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 <div style={{ height: ROW_H * 2 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard
                     match={getMatch('Finals')}
                     label="CHAMPIONSHIP FINALS"
@@ -2561,7 +2662,7 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 4: Trophy Showcase */}
-              <div className="w-[230px] flex flex-col shrink-0 pl-2">
+              <div className="w-[185px] flex flex-col shrink-0 pl-1">
                 <div style={{ height: ROW_H }} />
                 <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
                   {renderTrophyShowcase()}
@@ -2581,7 +2682,7 @@ export default function PlayoffBracket() {
               {/* Vertical Conference Labels on Far Left */}
               <div className="w-[36px] flex flex-col shrink-0 mr-3">
                 <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
-                  <div className="w-[32px] h-[580px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                  <div className="w-[32px] h-[490px] bg-[#831843] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-rose-950 [writing-mode:vertical-rl] rotate-180 select-none">
                     <div className="flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5 text-rose-300 shrink-0" />
                       <span>EASTERN CONFERENCE</span>
@@ -2590,7 +2691,7 @@ export default function PlayoffBracket() {
                 </div>
                 <div style={{ height: ROW_H }} />
                 <div style={{ height: ROW_H * 7 }} className="flex items-center justify-center">
-                  <div className="w-[32px] h-[580px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
+                  <div className="w-[32px] h-[490px] bg-[#1e3a8a] text-white rounded-lg flex items-center justify-center font-bold tracking-widest uppercase text-xs shadow-xs border border-blue-950 [writing-mode:vertical-rl] rotate-180 select-none">
                     <div className="flex items-center gap-2">
                       <Shield className="w-3.5 h-3.5 text-blue-300 shrink-0" />
                       <span>WESTERN CONFERENCE</span>
@@ -2600,14 +2701,14 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 1: Opening Round */}
-              <div className="w-[310px] flex flex-col shrink-0">
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[0] || getMatch('Quarter Finals 1')} label="Wild Card 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[1] || getMatch('Quarter Finals 2')} label="Wild Card 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 5 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[2] || getMatch('Quarter Finals 3')} label="Wild Card 3" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[3] || getMatch('Quarter Finals 4')} label="Wild Card 4" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 4 }} />
               </div>
 
@@ -2622,14 +2723,14 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 2: Semifinals */}
-              <div className="w-[310px] flex flex-col shrink-0">
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[4] || getMatch('Semi Finals 1')} label="East Semi 1" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[5] || getMatch('Semi Finals 2')} label="East Semi 2" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 5 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[6] || getMatch('Semi Finals 3')} label="West Semi 1" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[7] || getMatch('Semi Finals 4')} label="West Semi 2" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 4 }} />
               </div>
 
@@ -2644,11 +2745,11 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 3: Conference Finals */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 <div style={{ height: ROW_H }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[8] || getMatch('Conference Finals 1')} label="East Final" conference="east" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 7 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0"><ModernMatchupCard match={matches[9] || getMatch('Conference Finals 2')} label="West Final" conference="west" onSelect={handleCardSelect} displayMode={displayMode} /></div>
                 <div style={{ height: ROW_H * 5 }} />
               </div>
 
@@ -2661,9 +2762,9 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 4: Finals */}
-              <div className="w-[310px] flex flex-col shrink-0">
+              <div style={{ width: COL_W }} className="flex flex-col shrink-0">
                 <div style={{ height: ROW_H * 5 }} />
-                <div style={{ height: ROW_H, width: 310 }} className="flex items-center shrink-0">
+                <div style={{ height: ROW_H, width: COL_W }} className="flex items-center shrink-0">
                   <ModernMatchupCard match={matches[10] || getMatch('Finals')} label="CHAMPIONSHIP FINALS" conference="finals" isChampionship={true} onSelect={handleCardSelect} displayMode={displayMode} />
                 </div>
                 <div style={{ height: ROW_H * 9 }} />
@@ -2677,7 +2778,7 @@ export default function PlayoffBracket() {
               </div>
 
               {/* Col 5: Showcase */}
-              <div className="w-[230px] flex flex-col shrink-0 pl-2">
+              <div className="w-[185px] flex flex-col shrink-0 pl-1">
                 <div style={{ height: ROW_H * 4 }} />
                 <div style={{ height: ROW_H * 3 }} className="flex items-center justify-center">
                   {renderTrophyShowcase()}
