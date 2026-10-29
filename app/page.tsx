@@ -213,6 +213,57 @@ const DEFAULT_BRIEFING = {
   ]
 };
 
+interface RecentGameItem {
+  game_id: number | string;
+  isPlayoff: boolean;
+  roundLabel?: string;
+  home_team_id: number;
+  away_team_id: number;
+  home_abbr: string;
+  away_abbr: string;
+  home_name: string;
+  away_name: string;
+  home_logo: string | null;
+  away_logo: string | null;
+  home_coach?: string;
+  away_coach?: string;
+  home_score: number;
+  away_score: number;
+  isOT: boolean;
+  otLabel: string;
+  home_shots: number | null;
+  away_shots: number | null;
+}
+
+interface PlayoffSeriesSummary {
+  id: string;
+  roundName: string;
+  matchLabel: string;
+  homeAbbr: string;
+  awayAbbr: string;
+  homeName: string;
+  awayName: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
+  homeSeed?: number | string;
+  awaySeed?: number | string;
+  homeWins: number;
+  awayWins: number;
+  seriesLength: number;
+  statusPill: string;
+  isComplete: boolean;
+  leader: 'home' | 'away' | 'tied' | null;
+  games: { gameNumber: number; homeScore: number; awayScore: number; isOT: boolean }[];
+}
+
+function normalizeName(str: string) {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
 export default function HomePage() {
   // Defaulting to 40 (W18)
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
@@ -220,11 +271,33 @@ export default function HomePage() {
   const [standings, setStandings] = useState<any[]>([]);
   const [briefing, setBriefing] = useState<any>(DEFAULT_BRIEFING);
 
+  // Center Hub state
+  const [recentGames, setRecentGames] = useState<RecentGameItem[]>([]);
+  const [gameFilter, setGameFilter] = useState<'ALL' | 'PLAYOFFS' | 'REG'>('ALL');
+  const [playoffSeries, setPlayoffSeries] = useState<PlayoffSeriesSummary[]>([]);
+  const [regStatLeaders, setRegStatLeaders] = useState<{ skaters: any[]; goalies: any[] }>({ skaters: [], goalies: [] });
+  const [poStatLeaders, setPoStatLeaders] = useState<{ skaters: any[]; goalies: any[] }>({ skaters: [], goalies: [] });
+  const [statsPhase, setStatsPhase] = useState<'REG' | 'PLAYOFFS'>('REG');
+  const [leaderTab, setLeaderTab] = useState<'PTS' | 'G' | 'A' | 'GAA' | 'SV%' | 'W'>('PTS');
+  const [showAudioLogs, setShowAudioLogs] = useState<boolean>(false);
+
+  // Expandable Boxscore Drawer State
+  const [expandedGameKey, setExpandedGameKey] = useState<string | null>(null);
+  const [boxscoreDetails, setBoxscoreDetails] = useState<{
+    loading: boolean;
+    scoring: any[];
+    topPlayers: any[];
+  }>({ loading: false, scoring: [], topPlayers: [] });
+
   // Filter seasons based on selected league
   const filteredSeasons = useMemo(() => {
     if (selectedLeague === 'ALL') return ALL_SEASONS;
     return ALL_SEASONS.filter((s) => s.league === selectedLeague);
   }, [selectedLeague]);
+
+  const activeSeasonLabel = useMemo(() => {
+    return ALL_SEASONS.find((s) => s.id === selectedSeason)?.label || `S${selectedSeason}`;
+  }, [selectedSeason]);
 
   // Handle switching league filter buttons
   const handleLeagueChange = (league: string) => {
@@ -245,8 +318,7 @@ export default function HomePage() {
         return res.json();
       })
       .then((data) => setBriefing(data))
-      .catch((err) => {
-        // Fallback to default briefing
+      .catch(() => {
         console.log("Using cached Gazette briefing");
       });
   }, []);
@@ -254,11 +326,22 @@ export default function HomePage() {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadStandings() {
+    async function loadStandingsAndHub() {
       const numericLeagueId = Number(selectedSeason) || 40;
 
       try {
-        const [schedRes, statsRes, teamsRes, standingsRes] = await Promise.all([
+        const [
+          schedRes,
+          statsRes,
+          teamsRes,
+          standingsRes,
+          playoffsRes,
+          poGamesRes,
+          apiStatsRes,
+          regMasterRes,
+          poMasterRes,
+          coachesRes
+        ] = await Promise.all([
           supabase
             .from('league_schedule')
             .select('game_id, home_team_id, away_team_id, played, league_id, home_score, away_score, game_meta')
@@ -266,8 +349,9 @@ export default function HomePage() {
             .order('game_id', { ascending: true }),
           supabase
             .from('league_gamestats')
-            .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats')
-            .eq('league_id', numericLeagueId),
+            .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats, home_coach, away_coach')
+            .eq('league_id', numericLeagueId)
+            .order('game_id', { ascending: false }),
           supabase
             .from('league_teams')
             .select('team_id, team_name, abbreviation, logo_url, coach_id, league_id'),
@@ -278,7 +362,38 @@ export default function HomePage() {
               league_teams(team_id, abbreviation, logo_url, team_name)
             `)
             .eq('season_id', numericLeagueId)
-            .order('pts', { ascending: false })
+            .order('pts', { ascending: false }),
+          supabase
+            .from('league_playoffs')
+            .select('*')
+            .eq('league_id', numericLeagueId)
+            .order('playoff_id', { ascending: true })
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_playoff_gamestats')
+            .select('*')
+            .eq('league_id', numericLeagueId)
+            .order('game_id', { ascending: false })
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('api_stats_with_names')
+            .select('*')
+            .eq('league_id', numericLeagueId)
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_player_stats_master')
+            .select('*')
+            .eq('league_id', numericLeagueId)
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_playoff_player_stats_master')
+            .select('*')
+            .eq('league_id', numericLeagueId)
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_coaches')
+            .select('coach_id, coach_name')
+            .then(r => r, () => ({ data: [] as any[], error: null }))
         ]);
 
         if (!isMounted) return;
@@ -287,6 +402,19 @@ export default function HomePage() {
         const statsData = statsRes.data || [];
         const allTeamsData = teamsRes.data || [];
         const standardData = standingsRes.data || [];
+        const playoffsData = playoffsRes.data || [];
+        const poGamesData = poGamesRes.data || [];
+        const apiStatsData = apiStatsRes.data || [];
+        const regMasterData = regMasterRes.data || [];
+        const poMasterData = poMasterRes.data || [];
+        const coachesData = coachesRes.data || [];
+
+        const coachesMap = new Map<number, string>();
+        coachesData.forEach((c: any) => {
+          if (c.coach_id !== undefined && c.coach_name) {
+            coachesMap.set(Number(c.coach_id), String(c.coach_name).trim());
+          }
+        });
 
         // Champion mapping
         const championMap = new Map<number, boolean>();
@@ -294,10 +422,14 @@ export default function HomePage() {
           if (row.is_champion) championMap.set(Number(row.team_id), true);
         });
 
-        // Team base metadata map
+        // Team base metadata map (prefer row matching numericLeagueId)
         const baseTeamMap = new Map<number, any>();
         allTeamsData.forEach((t: any) => {
-          baseTeamMap.set(Number(t.team_id), t);
+          const tId = Number(t.team_id);
+          const existing = baseTeamMap.get(tId);
+          if (!existing || Number(t.league_id) === numericLeagueId) {
+            baseTeamMap.set(tId, t);
+          }
         });
 
         let freshStandings: any[] = [];
@@ -354,7 +486,8 @@ export default function HomePage() {
               is_champion: Boolean(championMap.get(tId) || savedRow?.is_champion),
               league_teams: {
                 abbreviation: tInfo?.abbreviation || savedRow?.league_teams?.abbreviation || `TM${tId}`,
-                logo_url: tInfo?.logo_url || savedRow?.league_teams?.logo_url || null
+                logo_url: tInfo?.logo_url || savedRow?.league_teams?.logo_url || null,
+                team_name: tInfo?.team_name || savedRow?.league_teams?.team_name || `Team ${tId}`
               }
             };
           });
@@ -401,7 +534,8 @@ export default function HomePage() {
               is_champion: Boolean(championMap.get(num)),
               league_teams: {
                 abbreviation: tInfo?.abbreviation || `TM${num}`,
-                logo_url: tInfo?.logo_url || null
+                logo_url: tInfo?.logo_url || null,
+                team_name: tInfo?.team_name || `Team ${num}`
               }
             };
             return num;
@@ -537,7 +671,8 @@ export default function HomePage() {
               is_champion: Boolean(row.is_champion),
               league_teams: {
                 abbreviation: tInfo?.abbreviation || row.league_teams?.abbreviation || `TM${tId}`,
-                logo_url: tInfo?.logo_url || row.league_teams?.logo_url || null
+                logo_url: tInfo?.logo_url || row.league_teams?.logo_url || null,
+                team_name: tInfo?.team_name || row.league_teams?.team_name || `Team ${tId}`
               }
             };
           });
@@ -553,15 +688,381 @@ export default function HomePage() {
         });
 
         setStandings(freshStandings);
+
+        // Helper to resolve team display info
+        const getTeamDisplay = (rawId: any) => {
+          const tId = Number(rawId);
+          const tObj = baseTeamMap.get(tId) || allTeamsData.find((t: any) => Number(t.team_id) === tId);
+          const stObj = freshStandings.find((s: any) => Number(s.team_id) === tId);
+          const coachId = Number(tObj?.coach_id);
+          return {
+            id: tId,
+            abbr: tObj?.abbreviation || stObj?.league_teams?.abbreviation || `TM${tId}`,
+            name: tObj?.team_name || stObj?.league_teams?.team_name || `Team ${tId}`,
+            logo: tObj?.logo_url || stObj?.league_teams?.logo_url || null,
+            coach: (coachId && coachesMap.get(coachId)) || ''
+          };
+        };
+
+        // Parse OT & Shots from game row
+        const parseGameExtra = (g: any) => {
+          let isOT = false;
+          let otLabel = 'OT';
+          if (g.game_meta) {
+            try {
+              const m = typeof g.game_meta === 'string' ? JSON.parse(g.game_meta) : g.game_meta;
+              if (m?.is_ot === true || m?.is_ot === 'true' || m?.is_ot === 1 || m?.isOT === true) {
+                isOT = true;
+                if (Number(m?.ot_period) > 1) otLabel = `${m.ot_period}OT`;
+              }
+            } catch {}
+          }
+          let homeShots: number | null = null;
+          let awayShots: number | null = null;
+          try {
+            const hS = typeof g.home_stats === 'string' ? JSON.parse(g.home_stats) : g.home_stats;
+            const aS = typeof g.away_stats === 'string' ? JSON.parse(g.away_stats) : g.away_stats;
+            if (hS) {
+              const s = Number(hS.home_shots ?? hS.shots ?? (Number(hS.home_1st_shots || 0) + Number(hS.home_2nd_shots || 0) + Number(hS.home_3rd_shots || 0) + Number(hS.home_ot_shots || 0)));
+              if (!isNaN(s) && s > 0) homeShots = s;
+              if (!isOT && (Number(hS.home_ot_goals) > 0 || Number(hS.home_ot_shots) > 0)) isOT = true;
+            }
+            if (aS) {
+              const s = Number(aS.away_shots ?? aS.shots ?? (Number(aS.away_1st_shots || 0) + Number(aS.away_2nd_shots || 0) + Number(aS.away_3rd_shots || 0) + Number(aS.away_ot_shots || 0)));
+              if (!isNaN(s) && s > 0) awayShots = s;
+              if (!isOT && (Number(aS.away_ot_goals) > 0 || Number(aS.away_ot_shots) > 0)) isOT = true;
+            }
+          } catch {}
+          return { isOT, otLabel, homeShots, awayShots };
+        };
+
+        // 1. Build Recent Games Feed (Playoffs + Regular Season)
+        const playoffLabelById = new Map<number, string>();
+        playoffsData.forEach((p: any) => {
+          if (p.playoff_id) {
+            playoffLabelById.set(Number(p.playoff_id), p.round_name || p.match_label || 'PLAYOFFS');
+          }
+        });
+
+        const recentPoItems: RecentGameItem[] = poGamesData.slice(0, 12).map((g: any) => {
+          const h = getTeamDisplay(g.home_team_id);
+          const a = getTeamDisplay(g.away_team_id);
+          const extra = parseGameExtra(g);
+          return {
+            game_id: g.game_id,
+            isPlayoff: true,
+            roundLabel: playoffLabelById.get(Number(g.playoff_id)) || 'PLAYOFFS',
+            home_team_id: h.id,
+            away_team_id: a.id,
+            home_abbr: h.abbr,
+            away_abbr: a.abbr,
+            home_name: h.name,
+            away_name: a.name,
+            home_logo: h.logo,
+            away_logo: a.logo,
+            home_coach: g.home_coach || h.coach,
+            away_coach: g.away_coach || a.coach,
+            home_score: Number(g.home_score) || 0,
+            away_score: Number(g.away_score) || 0,
+            isOT: extra.isOT,
+            otLabel: extra.otLabel,
+            home_shots: extra.homeShots,
+            away_shots: extra.awayShots
+          };
+        });
+
+        const recentRegItems: RecentGameItem[] = statsData.slice(0, 12).map((g: any) => {
+          const h = getTeamDisplay(g.home_team_id);
+          const a = getTeamDisplay(g.away_team_id);
+          const extra = parseGameExtra(g);
+          return {
+            game_id: g.game_id,
+            isPlayoff: false,
+            home_team_id: h.id,
+            away_team_id: a.id,
+            home_abbr: h.abbr,
+            away_abbr: a.abbr,
+            home_name: h.name,
+            away_name: a.name,
+            home_logo: h.logo,
+            away_logo: a.logo,
+            home_coach: g.home_coach || h.coach,
+            away_coach: g.away_coach || a.coach,
+            home_score: Number(g.home_score) || 0,
+            away_score: Number(g.away_score) || 0,
+            isOT: extra.isOT,
+            otLabel: extra.otLabel,
+            home_shots: extra.homeShots,
+            away_shots: extra.awayShots
+          };
+        });
+
+        setRecentGames([...recentPoItems, ...recentRegItems]);
+
+        // 2. Build Playoff Series Tracker
+        const poGamesAsc = [...poGamesData].sort((a: any, b: any) => Number(a.game_id) - Number(b.game_id));
+        const seriesSummaries: PlayoffSeriesSummary[] = [];
+
+        playoffsData.forEach((p: any) => {
+          const hId = Number(p.home_team_id);
+          const aId = Number(p.away_team_id);
+          if (!hId && !aId) return;
+
+          const h = hId ? getTeamDisplay(hId) : { id: 0, abbr: 'TBD', name: 'TBD', logo: null, coach: '' };
+          const a = aId ? getTeamDisplay(aId) : { id: 0, abbr: 'TBD', name: 'TBD', logo: null, coach: '' };
+
+          const matchedGames = poGamesAsc.filter((g: any) => {
+            if (p.playoff_id && Number(g.playoff_id) === Number(p.playoff_id)) return true;
+            const gh = Number(g.home_team_id);
+            const ga = Number(g.away_team_id);
+            return hId > 0 && aId > 0 && ((gh === hId && ga === aId) || (gh === aId && ga === hId));
+          });
+
+          let homeWins = 0;
+          let awayWins = 0;
+          const gameList: { gameNumber: number; homeScore: number; awayScore: number; isOT: boolean }[] = [];
+
+          matchedGames.forEach((g: any, idx: number) => {
+            const gh = Number(g.home_team_id);
+            const gHomeScore = Number(g.home_score) || 0;
+            const gAwayScore = Number(g.away_score) || 0;
+            const topScore = gh === hId ? gHomeScore : gAwayScore;
+            const botScore = gh === hId ? gAwayScore : gHomeScore;
+            if (topScore > botScore) homeWins++;
+            else if (botScore > topScore) awayWins++;
+            const extra = parseGameExtra(g);
+            gameList.push({
+              gameNumber: idx + 1,
+              homeScore: topScore,
+              awayScore: botScore,
+              isOT: extra.isOT
+            });
+          });
+
+          const seriesLen = Number(p.series_length) || 7;
+          const winsNeeded = Math.floor(seriesLen / 2) + 1;
+          const isComplete = homeWins >= winsNeeded || awayWins >= winsNeeded || Boolean(p.winner_id);
+          let leader: 'home' | 'away' | 'tied' | null = null;
+          if (homeWins > awayWins) leader = 'home';
+          else if (awayWins > homeWins) leader = 'away';
+          else if (homeWins > 0 && homeWins === awayWins) leader = 'tied';
+
+          let statusPill = `BO${seriesLen}`;
+          if (isComplete) {
+            const winAbbr = homeWins >= awayWins ? h.abbr : a.abbr;
+            statusPill = `${winAbbr} WINS ${Math.max(homeWins, awayWins)}-${Math.min(homeWins, awayWins)}`;
+          } else if (homeWins > 0 || awayWins > 0) {
+            if (homeWins === awayWins) {
+              statusPill = `TIED ${homeWins}-${awayWins}`;
+            } else {
+              const leadAbbr = homeWins > awayWins ? h.abbr : a.abbr;
+              statusPill = `${leadAbbr} LEADS ${Math.max(homeWins, awayWins)}-${Math.min(homeWins, awayWins)}`;
+            }
+          }
+
+          seriesSummaries.push({
+            id: String(p.playoff_id || `${hId}-${aId}-${p.match_label}`),
+            roundName: p.round_name || p.match_label || 'Playoff Series',
+            matchLabel: p.match_label || p.round_name || 'Series',
+            homeAbbr: h.abbr,
+            awayAbbr: a.abbr,
+            homeName: h.name,
+            awayName: a.name,
+            homeLogo: h.logo,
+            awayLogo: a.logo,
+            homeSeed: p.home_team_seed ?? undefined,
+            awaySeed: p.away_team_seed ?? undefined,
+            homeWins,
+            awayWins,
+            seriesLength: seriesLen,
+            statusPill,
+            isComplete,
+            leader,
+            games: gameList
+          });
+        });
+
+        // Sort active series with games played first, then completed series
+        seriesSummaries.sort((a, b) => {
+          const aActive = !a.isComplete && (a.homeWins + a.awayWins > 0) ? 1 : 0;
+          const bActive = !b.isComplete && (b.homeWins + b.awayWins > 0) ? 1 : 0;
+          if (bActive !== aActive) return bActive - aActive;
+          return (b.homeWins + b.awayWins) - (a.homeWins + a.awayWins);
+        });
+
+        setPlayoffSeries(seriesSummaries);
+
+        // 3. Build Season Stat Leaders (Regular Season & Playoffs)
+        // Collect unique player IDs that need name resolution
+        const unknownIds = new Set<number>();
+        [...regMasterData, ...poMasterData].forEach((r: any) => {
+          const pid = Number(r.player_id);
+          if (pid > 1 && !r.player_name) unknownIds.add(pid);
+        });
+
+        const playerDbMap = new Map<number, { name: string; pos: string }>();
+        apiStatsData.forEach((s: any) => {
+          const pid = Number(s.player_id);
+          if (pid > 1 && s.player_name) {
+            playerDbMap.set(pid, { name: String(s.player_name).trim(), pos: String(s.pos || s.pos_played || '').toUpperCase() });
+          }
+        });
+
+        if (unknownIds.size > 0) {
+          const idsArr = Array.from(unknownIds).filter(id => !playerDbMap.has(id)).slice(0, 500);
+          if (idsArr.length > 0) {
+            const { data: pRows } = await supabase
+              .from('league_player_database')
+              .select('player_id, player_name, pos')
+              .in('player_id', idsArr);
+            (pRows || []).forEach((p: any) => {
+              if (p.player_id && p.player_name) {
+                playerDbMap.set(Number(p.player_id), {
+                  name: String(p.player_name).trim(),
+                  pos: String(p.pos || '').toUpperCase()
+                });
+              }
+            });
+          }
+        }
+
+        const aggregateMasterRows = (rows: any[]) => {
+          const map = new Map<string, any>();
+          rows.forEach((r: any) => {
+            const pid = Number(r.player_id);
+            const dbInfo = pid > 1 ? playerDbMap.get(pid) : undefined;
+            const pName = String(r.player_name || dbInfo?.name || '').trim();
+            if (!pName || pName === 'Goalie' || pName === 'Skater') return;
+            const pos = String(r.pos_played || dbInfo?.pos || 'F').toUpperCase();
+            const isG = pos === 'G' || Number(r.shots_against || 0) > 0 || Number(r.saves || 0) > 0;
+            const tInfo = getTeamDisplay(r.team_id);
+            const key = `${isG ? 'G' : 'S'}_${pid > 1 ? pid : normalizeName(pName)}`;
+
+            if (!map.has(key)) {
+              map.set(key, {
+                player_id: pid,
+                player_name: pName,
+                team_id: r.team_id,
+                team_abbr: tInfo.abbr,
+                team_name: tInfo.name,
+                logo_url: tInfo.logo,
+                pos: isG ? 'G' : pos,
+                gp: 0,
+                goals: 0,
+                assists: 0,
+                points: 0,
+                wins: 0,
+                shutouts: 0,
+                shots_against: 0,
+                saves: 0,
+                goals_against: 0
+              });
+            }
+            const cur = map.get(key);
+            cur.gp += 1;
+            const g = Number(r.goals || 0);
+            const a = Number(r.assists || 0);
+            cur.goals += g;
+            cur.assists += a;
+            cur.points += (g + a);
+            if (isG) {
+              cur.shots_against += Number(r.shots_against || 0);
+              cur.saves += Number(r.saves || 0);
+              cur.goals_against += Number(r.goals_against || 0);
+              if (r.is_win) cur.wins += 1;
+              if (Number(r.goals_against || 0) === 0 && (Number(r.shots_against || 0) > 0 || r.is_win)) {
+                cur.shutouts += 1;
+              }
+            }
+          });
+
+          const skaters: any[] = [];
+          const goalies: any[] = [];
+          map.forEach((p) => {
+            if (p.pos === 'G') {
+              p.gaa = p.gp > 0 ? Number((p.goals_against / p.gp).toFixed(2)) : 999;
+              p.sv_pct = p.shots_against > 0 ? Number((p.saves / p.shots_against).toFixed(3)) : 0;
+              goalies.push(p);
+            } else {
+              skaters.push(p);
+            }
+          });
+          return { skaters, goalies };
+        };
+
+        // Regular season leaders: prefer api_stats_with_names if populated, else aggregate regMasterData
+        let regSkaters: any[] = [];
+        let regGoalies: any[] = [];
+
+        if (apiStatsData.length > 0) {
+          apiStatsData.forEach((s: any) => {
+            const pName = String(s.player_name || '').trim();
+            if (!pName) return;
+            const pos = String(s.pos_played || s.pos || '').toUpperCase();
+            const isG = pos === 'G' || Number(s.shots_against ?? s.total_shots_against ?? 0) > 0;
+            const tInfo = getTeamDisplay(s.team_id);
+            const gp = Number(s.gp ?? s.games_played ?? 0);
+            if (gp <= 0) return;
+
+            if (isG) {
+              const ga = Number(s.goals_against ?? s.total_goals_against ?? s.ga ?? 0);
+              const sa = Number(s.shots_against ?? s.total_shots_against ?? s.sa ?? 0);
+              const sv = Number(s.saves ?? s.total_saves ?? s.sv ?? 0);
+              regGoalies.push({
+                player_id: s.player_id,
+                player_name: pName,
+                team_abbr: tInfo.abbr || s.team_name || '',
+                team_name: tInfo.name || s.team_name || '',
+                logo_url: s.logo_url || tInfo.logo,
+                pos: 'G',
+                gp,
+                wins: Number(s.wins ?? 0),
+                shutouts: Number(s.shutouts ?? 0),
+                gaa: s.gaa != null && Number(s.gaa) > 0 ? Number(s.gaa) : (gp > 0 ? Number((ga / gp).toFixed(2)) : 999),
+                sv_pct: s.sv_pct != null && Number(s.sv_pct) > 0 ? Number(s.sv_pct) : (sa > 0 ? Number((sv / sa).toFixed(3)) : 0)
+              });
+            } else {
+              const goals = Number(s.total_goals ?? s.goals ?? 0);
+              const assists = Number(s.total_assists ?? s.assists ?? 0);
+              const points = Number(s.total_points ?? s.points ?? (goals + assists));
+              regSkaters.push({
+                player_id: s.player_id,
+                player_name: pName,
+                team_abbr: tInfo.abbr || s.team_name || '',
+                team_name: tInfo.name || s.team_name || '',
+                logo_url: s.logo_url || tInfo.logo,
+                pos: pos || 'F',
+                gp,
+                goals,
+                assists,
+                points
+              });
+            }
+          });
+        } else if (regMasterData.length > 0) {
+          const agg = aggregateMasterRows(regMasterData);
+          regSkaters = agg.skaters;
+          regGoalies = agg.goalies;
+        }
+
+        const poAgg = aggregateMasterRows(poMasterData);
+        setRegStatLeaders({ skaters: regSkaters, goalies: regGoalies });
+        setPoStatLeaders(poAgg);
+
+        if (poAgg.skaters.length > 0 && regSkaters.length === 0) {
+          setStatsPhase('PLAYOFFS');
+        } else {
+          setStatsPhase('REG');
+        }
       } catch (err) {
-        console.error("DEBUG - Error loading standings:", err);
+        console.error("DEBUG - Error loading standings and hub:", err);
       }
     }
 
-    loadStandings();
+    loadStandingsAndHub();
 
     // Polling backup every 15s to guarantee fresh standings even if websockets lag
-    const interval = setInterval(loadStandings, 15000);
+    const interval = setInterval(loadStandingsAndHub, 15000);
 
     // Subscribe to real-time changes on league_standings, league_gamestats, and league_schedule
     const channel = supabase
@@ -570,21 +1071,21 @@ export default function HomePage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'league_standings' },
         () => {
-          loadStandings();
+          loadStandingsAndHub();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'league_gamestats' },
         () => {
-          loadStandings();
+          loadStandingsAndHub();
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'league_schedule' },
         () => {
-          loadStandings();
+          loadStandingsAndHub();
         }
       )
       .subscribe();
@@ -595,6 +1096,108 @@ export default function HomePage() {
       supabase.removeChannel(channel);
     };
   }, [selectedSeason]);
+
+  // Toggle and load inline boxscore summary for a recent game
+  const handleToggleBoxscore = async (game: RecentGameItem) => {
+    const key = `${game.isPlayoff ? 'PO' : 'REG'}_${game.game_id}`;
+    if (expandedGameKey === key) {
+      setExpandedGameKey(null);
+      return;
+    }
+    setExpandedGameKey(key);
+    setBoxscoreDetails({ loading: true, scoring: [], topPlayers: [] });
+
+    try {
+      const scoringTable = game.isPlayoff ? 'league_playoff_scoring' : 'league_scoring';
+      const playerTable = game.isPlayoff ? 'league_playoff_player_stats_master' : 'league_player_stats_master';
+
+      const [scRes, plRes] = await Promise.all([
+        supabase.from(scoringTable).select('*').eq('game_id', game.game_id).order('period', { ascending: true }),
+        supabase.from(playerTable).select('*').eq('game_id', game.game_id)
+      ]);
+
+      const scoringRows = scRes.data || [];
+      const playerRows = plRes.data || [];
+
+      const topSkaters = playerRows
+        .filter((p: any) => (Number(p.goals || 0) + Number(p.assists || 0)) > 0)
+        .map((p: any) => ({
+          name: p.player_name || `Player #${p.player_id}`,
+          team_id: Number(p.team_id),
+          g: Number(p.goals || 0),
+          a: Number(p.assists || 0),
+          pts: Number(p.goals || 0) + Number(p.assists || 0)
+        }))
+        .sort((a: any, b: any) => b.pts - a.pts || b.g - a.g)
+        .slice(0, 6);
+
+      setBoxscoreDetails({
+        loading: false,
+        scoring: scoringRows,
+        topPlayers: topSkaters
+      });
+    } catch {
+      setBoxscoreDetails({ loading: false, scoring: [], topPlayers: [] });
+    }
+  };
+
+  // Filtered recent games for scoreboard wire
+  const displayedRecentGames = useMemo(() => {
+    let list = recentGames;
+    if (gameFilter === 'PLAYOFFS') list = recentGames.filter(g => g.isPlayoff);
+    else if (gameFilter === 'REG') list = recentGames.filter(g => !g.isPlayoff);
+    return list.slice(0, 8);
+  }, [recentGames, gameFilter]);
+
+  // Active stat leaders list based on phase & tab
+  const activeLeaderList = useMemo(() => {
+    const source = statsPhase === 'PLAYOFFS' ? poStatLeaders : regStatLeaders;
+    const isGoalieTab = leaderTab === 'GAA' || leaderTab === 'SV%' || leaderTab === 'W';
+
+    if (isGoalieTab) {
+      const minGP = statsPhase === 'PLAYOFFS' ? 2 : 5;
+      let goalies = source.goalies.filter((g: any) => g.gp >= minGP);
+      if (goalies.length === 0) goalies = [...source.goalies];
+
+      if (leaderTab === 'GAA') {
+        return goalies.sort((a, b) => a.gaa - b.gaa || b.wins - a.wins).slice(0, 6);
+      }
+      if (leaderTab === 'SV%') {
+        return goalies.sort((a, b) => b.sv_pct - a.sv_pct || b.wins - a.wins).slice(0, 6);
+      }
+      return goalies.sort((a, b) => b.wins - a.wins || a.gaa - b.gaa).slice(0, 6);
+    }
+
+    const skaters = [...source.skaters];
+    if (leaderTab === 'G') {
+      return skaters.sort((a, b) => b.goals - a.goals || b.points - a.points).slice(0, 6);
+    }
+    if (leaderTab === 'A') {
+      return skaters.sort((a, b) => b.assists - a.assists || b.points - a.points).slice(0, 6);
+    }
+    return skaters.sort((a, b) => b.points - a.points || b.goals - a.goals).slice(0, 6);
+  }, [regStatLeaders, poStatLeaders, statsPhase, leaderTab]);
+
+  const formatLeaderValue = (p: any) => {
+    if (!p) return '-';
+    if (leaderTab === 'GAA') return Number(p.gaa).toFixed(2);
+    if (leaderTab === 'SV%') return Number(p.sv_pct).toFixed(3);
+    if (leaderTab === 'W') return p.wins;
+    if (leaderTab === 'G') return p.goals;
+    if (leaderTab === 'A') return p.assists;
+    return p.points;
+  };
+
+  // All Twitch clips from briefing
+  const allTapeRoomClips = useMemo(() => {
+    const clips: { name: string; url: string; channel: string }[] = [];
+    (briefing?.sections || []).forEach((sec: any) => {
+      (sec.clips || []).forEach((c: any) => {
+        clips.push({ name: c.name, url: c.url, channel: sec.channel });
+      });
+    });
+    return clips;
+  }, [briefing]);
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-2 sm:p-4 md:p-6">
@@ -735,107 +1338,606 @@ export default function HomePage() {
           )}
         </section>
 
-        <main className="col-span-12 md:col-span-6">
-          <div className="flex items-center justify-between border-b-2 border-black pb-1 mb-3">
-            <h2 className="font-black uppercase tracking-tight text-lg">Daily Discord Gazette Briefing</h2>
-            <span className="text-[10px] font-mono uppercase bg-black text-white px-2 py-0.5 tracking-wider">
-              {briefing?.updated_at || 'LIVE WIRE'}
-            </span>
-          </div>
-
-          {briefing ? (
-            <div className="space-y-4">
-              {/* Main Tabloid Headline */}
-              <div className="border-b border-black pb-3">
-                <h3 className="text-2xl font-black uppercase leading-tight tracking-tight mb-1">
-                  {briefing.headline}
-                </h3>
-                <p className="text-xs italic text-neutral-700">
-                  {briefing.subheadline}
+        {/* CENTER COLUMN: FULL LEAGUE HUB */}
+        <main className="col-span-12 md:col-span-6 space-y-6">
+          {/* SECTION 1: RECENT SCOREBOARD & BOXSCORE WIRE */}
+          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
+                    {activeSeasonLabel} WIRE
+                  </span>
+                  <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
+                    Recent Games &amp; Boxscores
+                  </h2>
+                </div>
+                <p className="text-[10px] text-neutral-600 italic mt-0.5">
+                  Click any matchup to inspect scoring summary &amp; top stars
                 </p>
               </div>
 
-              {/* Quote of the Day Box */}
-              {briefing.quote_of_the_day && (
-                <div className="bg-amber-50/70 border-l-4 border-black p-3 my-2">
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-1">
-                    ★ Quote of the Day ★
+              <div className="flex items-center gap-1 font-mono text-[10px]">
+                {(['ALL', 'PLAYOFFS', 'REG'] as const).map((flt) => (
+                  <button
+                    key={flt}
+                    type="button"
+                    onClick={() => setGameFilter(flt)}
+                    className={`px-2 py-0.5 font-bold uppercase border border-black transition-colors cursor-pointer ${
+                      gameFilter === flt
+                        ? 'bg-black text-white'
+                        : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
+                    }`}
+                  >
+                    {flt === 'REG' ? 'REG SEASON' : flt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {displayedRecentGames.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {displayedRecentGames.map((g) => {
+                  const key = `${g.isPlayoff ? 'PO' : 'REG'}_${g.game_id}`;
+                  const isExpanded = expandedGameKey === key;
+                  const awayWon = g.away_score > g.home_score;
+                  const homeWon = g.home_score > g.away_score;
+
+                  return (
+                    <div
+                      key={key}
+                      className={`border border-black transition-all ${
+                        isExpanded ? 'sm:col-span-2 bg-amber-50/60 shadow-sm' : 'bg-[#faf8f3] hover:bg-white'
+                      }`}
+                    >
+                      <div
+                        onClick={() => handleToggleBoxscore(g)}
+                        className="p-2.5 cursor-pointer select-none"
+                      >
+                        <div className="flex items-center justify-between text-[9px] font-mono uppercase mb-1.5 pb-1 border-b border-neutral-200">
+                          <span className={`font-black px-1.5 py-0.2 ${
+                            g.isPlayoff ? 'bg-amber-400 text-black border border-black' : 'bg-neutral-200 text-neutral-800'
+                          }`}>
+                            {g.isPlayoff ? (g.roundLabel || 'PLAYOFFS') : 'REGULAR SEASON'}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {g.home_shots !== null && g.away_shots !== null && (
+                              <span className="text-neutral-500">
+                                SOG {g.away_shots}-{g.home_shots}
+                              </span>
+                            )}
+                            <span className={`font-bold px-1 ${g.isOT ? 'bg-red-700 text-white' : 'text-neutral-700'}`}>
+                              {g.isOT ? `FINAL/${g.otLabel}` : 'FINAL'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Away Row */}
+                        <div className="flex items-center justify-between py-0.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {g.away_logo ? (
+                              <img src={g.away_logo} alt={g.away_abbr} className="w-5 h-5 object-contain shrink-0" />
+                            ) : (
+                              <div className="w-5 h-5 bg-neutral-200 border border-neutral-400 text-[8px] font-mono font-bold flex items-center justify-center shrink-0">
+                                {g.away_abbr.slice(0, 3)}
+                              </div>
+                            )}
+                            <span className={`text-xs uppercase truncate ${awayWon ? 'font-black text-black' : 'font-semibold text-neutral-600'}`}>
+                              {g.away_abbr}
+                            </span>
+                            {g.away_coach && (
+                              <span className="text-[9px] font-mono text-neutral-400 truncate">
+                                ({g.away_coach})
+                              </span>
+                            )}
+                          </div>
+                          <span className={`font-mono text-sm ${awayWon ? 'font-black text-black' : 'font-bold text-neutral-500'}`}>
+                            {g.away_score}
+                          </span>
+                        </div>
+
+                        {/* Home Row */}
+                        <div className="flex items-center justify-between py-0.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {g.home_logo ? (
+                              <img src={g.home_logo} alt={g.home_abbr} className="w-5 h-5 object-contain shrink-0" />
+                            ) : (
+                              <div className="w-5 h-5 bg-neutral-200 border border-neutral-400 text-[8px] font-mono font-bold flex items-center justify-center shrink-0">
+                                {g.home_abbr.slice(0, 3)}
+                              </div>
+                            )}
+                            <span className={`text-xs uppercase truncate ${homeWon ? 'font-black text-black' : 'font-semibold text-neutral-600'}`}>
+                              {g.home_abbr}
+                            </span>
+                            {g.home_coach && (
+                              <span className="text-[9px] font-mono text-neutral-400 truncate">
+                                ({g.home_coach})
+                              </span>
+                            )}
+                          </div>
+                          <span className={`font-mono text-sm ${homeWon ? 'font-black text-black' : 'font-bold text-neutral-500'}`}>
+                            {g.home_score}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Expanded Boxscore Summary */}
+                      {isExpanded && (
+                        <div className="border-t border-black bg-white p-2.5 text-[11px] font-mono space-y-2">
+                          <div className="flex items-center justify-between border-b border-neutral-200 pb-1">
+                            <span className="font-black uppercase text-[10px]">
+                              Game #{g.game_id} Boxscore Summary ({g.away_name} @ {g.home_name})
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedGameKey(null)}
+                              className="text-[10px] font-bold underline hover:text-red-700 cursor-pointer"
+                            >
+                              [CLOSE ×]
+                            </button>
+                          </div>
+
+                          {boxscoreDetails.loading ? (
+                            <div className="py-2 text-center italic text-neutral-500">Loading game tape...</div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <div className="text-[9px] font-black uppercase text-neutral-500 mb-1">
+                                  Scoring Summary ({boxscoreDetails.scoring.length} Goals)
+                                </div>
+                                {boxscoreDetails.scoring.length > 0 ? (
+                                  <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                                    {boxscoreDetails.scoring.map((sc: any, idx: number) => (
+                                      <div key={idx} className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5">
+                                        <span className="font-bold text-neutral-500">P{sc.period} {sc.time_formatted || ''}</span>{' '}
+                                        <span className="font-black text-black">{sc.scorer}</span>
+                                        {sc.assist1 && sc.assist1 !== '--' && (
+                                          <span className="text-neutral-600"> ({sc.assist1}{sc.assist2 && sc.assist2 !== '--' ? `, ${sc.assist2}` : ''})</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] italic text-neutral-400">Detailed goal log unavailable.</div>
+                                )}
+                              </div>
+
+                              <div>
+                                <div className="text-[9px] font-black uppercase text-neutral-500 mb-1">
+                                  Top Performers
+                                </div>
+                                {boxscoreDetails.topPlayers.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {boxscoreDetails.topPlayers.map((tp: any, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between text-[10px] border-b border-neutral-100 pb-0.5">
+                                        <span className="font-bold truncate">{tp.name}</span>
+                                        <span className="font-black shrink-0 ml-2">
+                                          {tp.g}G {tp.a}A ({tp.pts}P)
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] italic text-neutral-400">Player stats summary unavailable.</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs italic text-neutral-500 border border-dashed border-neutral-300">
+                No completed games recorded for {activeSeasonLabel} under this filter.
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-200 text-[10px] font-mono font-bold">
+              <a href="/schedule" className="hover:underline text-blue-900">
+                Full Season Schedule &amp; Boxscores →
+              </a>
+              <a href="/playoffs" className="hover:underline text-blue-900">
+                Playoff Series Hub →
+              </a>
+            </div>
+          </section>
+
+          {/* SECTION 2: PLAYOFF SERIES TRACKER OR CHAMPIONSHIP RACE */}
+          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
+            <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-400 text-black border border-black font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
+                  POSTSEASON
+                </span>
+                <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
+                  {playoffSeries.length > 0 ? `${activeSeasonLabel} Playoff Series Tracker` : `${activeSeasonLabel} Top Table & Cutline Watch`}
+                </h2>
+              </div>
+              <a href="/playoffs" className="text-[10px] font-mono font-bold uppercase underline hover:text-blue-800">
+                Full Bracket →
+              </a>
+            </div>
+
+            {playoffSeries.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {playoffSeries.slice(0, 8).map((ser) => (
+                  <a
+                    key={ser.id}
+                    href="/playoffs"
+                    className="block border border-black bg-[#faf8f3] hover:bg-amber-50/50 p-2.5 transition-colors"
+                  >
+                    <div className="flex items-center justify-between text-[9px] font-mono uppercase mb-1.5 pb-1 border-b border-neutral-200">
+                      <span className="font-bold text-neutral-600 truncate">{ser.matchLabel}</span>
+                      <span className={`font-black px-1.5 py-0.2 ${
+                        ser.isComplete
+                          ? 'bg-black text-white'
+                          : ser.leader
+                          ? 'bg-amber-300 text-black border border-black'
+                          : 'bg-neutral-200 text-neutral-700'
+                      }`}>
+                        {ser.statusPill}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {ser.homeSeed !== undefined && (
+                            <span className="text-[9px] font-mono font-bold text-neutral-400 w-4">
+                              #{ser.homeSeed}
+                            </span>
+                          )}
+                          {ser.homeLogo && (
+                            <img src={ser.homeLogo} alt={ser.homeAbbr} className="w-4 h-4 object-contain shrink-0" />
+                          )}
+                          <span className={`text-xs uppercase truncate ${ser.homeWins > ser.awayWins ? 'font-black' : 'font-semibold text-neutral-700'}`}>
+                            {ser.homeName}
+                          </span>
+                        </div>
+                        <span className="font-mono text-sm font-black">{ser.homeWins}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {ser.awaySeed !== undefined && (
+                            <span className="text-[9px] font-mono font-bold text-neutral-400 w-4">
+                              #{ser.awaySeed}
+                            </span>
+                          )}
+                          {ser.awayLogo && (
+                            <img src={ser.awayLogo} alt={ser.awayAbbr} className="w-4 h-4 object-contain shrink-0" />
+                          )}
+                          <span className={`text-xs uppercase truncate ${ser.awayWins > ser.homeWins ? 'font-black' : 'font-semibold text-neutral-700'}`}>
+                            {ser.awayName}
+                          </span>
+                        </div>
+                        <span className="font-mono text-sm font-black">{ser.awayWins}</span>
+                      </div>
+                    </div>
+
+                    {ser.games.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-neutral-200 font-mono text-[9px]">
+                        {ser.games.map((gm) => (
+                          <span key={gm.gameNumber} className="bg-white border border-neutral-300 px-1 py-0.2 text-neutral-700">
+                            G{gm.gameNumber}: <strong>{gm.homeScore}-{gm.awayScore}</strong>{gm.isOT ? ' OT' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </a>
+                ))}
+              </div>
+            ) : standings.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="border border-neutral-300 bg-[#faf8f3] p-2.5">
+                  <div className="text-[10px] font-mono font-black uppercase border-b border-black pb-1 mb-2">
+                    ★ Top 4 Championship Contenders
                   </div>
-                  <blockquote className="text-sm font-bold italic">
+                  <div className="space-y-1.5">
+                    {standings.slice(0, 4).map((t: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-[10px] w-4">#{idx + 1}</span>
+                          {t.league_teams?.logo_url && (
+                            <img src={t.league_teams.logo_url} alt="" className="w-4 h-4 object-contain" />
+                          )}
+                          <span className="font-bold">{t.league_teams?.team_name || t.league_teams?.abbreviation}</span>
+                        </div>
+                        <span className="font-mono font-black text-xs">{t.pts} PTS</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border border-neutral-300 bg-[#faf8f3] p-2.5">
+                  <div className="text-[10px] font-mono font-black uppercase border-b border-black pb-1 mb-2">
+                    ⚔ Playoff Cutline Battle (Seeds 13–18)
+                  </div>
+                  <div className="space-y-1.5">
+                    {standings.slice(12, 18).map((t: any, idx: number) => {
+                      const seed = idx + 13;
+                      return (
+                        <div key={seed} className={`flex items-center justify-between text-xs ${seed === 16 ? 'border-b border-dashed border-red-700 pb-1' : ''}`}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-[10px] w-5">#{seed}</span>
+                            {t.league_teams?.logo_url && (
+                              <img src={t.league_teams.logo_url} alt="" className="w-4 h-4 object-contain" />
+                            )}
+                            <span className="font-bold">{t.league_teams?.abbreviation}</span>
+                          </div>
+                          <span className="font-mono text-[11px] font-bold">
+                            {t.gp}GP • {t.pts} PTS
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs italic text-neutral-500">No playoff bracket data available for this season.</p>
+            )}
+          </section>
+
+          {/* SECTION 3: LEAGUE STATISTICAL LEADERS SPOTLIGHT */}
+          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
+                  LEADERS
+                </span>
+                <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
+                  {activeSeasonLabel} Statistical Leaders
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-1 font-mono text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setStatsPhase('REG')}
+                  className={`px-2 py-0.5 font-bold uppercase border border-black cursor-pointer ${
+                    statsPhase === 'REG' ? 'bg-black text-white' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
+                  }`}
+                >
+                  REG SEASON
+                </button>
+                {poStatLeaders.skaters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStatsPhase('PLAYOFFS')}
+                    className={`px-2 py-0.5 font-bold uppercase border border-black cursor-pointer ${
+                      statsPhase === 'PLAYOFFS' ? 'bg-amber-400 text-black font-black' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
+                    }`}
+                  >
+                    PLAYOFFS
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Category Sub-Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-neutral-200">
+              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                {([
+                  { id: 'PTS', label: 'POINTS' },
+                  { id: 'G', label: 'GOALS' },
+                  { id: 'A', label: 'ASSISTS' },
+                  { id: 'W', label: 'GOALIE WINS' },
+                  { id: 'GAA', label: 'GAA' },
+                  { id: 'SV%', label: 'SV%' }
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setLeaderTab(tab.id)}
+                    className={`px-2 py-0.5 font-bold uppercase border border-black transition-colors cursor-pointer ${
+                      leaderTab === tab.id ? 'bg-black text-white' : 'bg-white text-neutral-700 hover:bg-neutral-100'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <a href="/stats" className="text-[10px] font-mono font-bold underline hover:text-blue-800">
+                Full Stats Hub →
+              </a>
+            </div>
+
+            {activeLeaderList.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
+                {/* #1 Leader Spotlight Card */}
+                <div className="sm:col-span-5 border border-black bg-[#faf8f3] p-3 flex flex-col justify-between items-center text-center">
+                  <div className="w-full flex items-center justify-between text-[9px] font-mono uppercase text-neutral-500 border-b border-neutral-200 pb-1 mb-2">
+                    <span className="font-black text-black">#1 {leaderTab} LEADER</span>
+                    <span>{activeLeaderList[0].gp} GP</span>
+                  </div>
+
+                  {activeLeaderList[0].logo_url ? (
+                    <img
+                      src={activeLeaderList[0].logo_url}
+                      alt={activeLeaderList[0].team_abbr}
+                      className="w-14 h-14 object-contain my-1"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 bg-neutral-200 border border-black flex items-center justify-center font-mono font-black text-sm my-1">
+                      {activeLeaderList[0].team_abbr || 'NHL'}
+                    </div>
+                  )}
+
+                  <div className="mt-1">
+                    <div className="font-black text-sm uppercase leading-tight text-black">
+                      {activeLeaderList[0].player_name}
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-neutral-500 uppercase">
+                      {activeLeaderList[0].team_name || activeLeaderList[0].team_abbr}
+                    </div>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-neutral-200 w-full">
+                    <div className="text-3xl font-black font-mono leading-none text-black">
+                      {formatLeaderValue(activeLeaderList[0])}
+                    </div>
+                    <div className="text-[9px] font-mono uppercase font-bold text-neutral-500 mt-0.5">
+                      {leaderTab === 'PTS'
+                        ? `${activeLeaderList[0].goals}G • ${activeLeaderList[0].assists}A`
+                        : leaderTab === 'GAA' || leaderTab === 'SV%' || leaderTab === 'W'
+                        ? `${activeLeaderList[0].wins}W • ${activeLeaderList[0].shutouts || 0} SO`
+                        : `${activeLeaderList[0].points} TOTAL PTS`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top 6 Table */}
+                <div className="sm:col-span-7 flex flex-col justify-between border border-neutral-300 bg-white p-2.5">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-black text-[10px] font-mono uppercase text-neutral-500">
+                        <th className="pb-1 text-left">RK</th>
+                        <th className="pb-1 text-left">PLAYER</th>
+                        <th className="pb-1 text-center">TM</th>
+                        <th className="pb-1 text-center">GP</th>
+                        <th className="pb-1 text-right">{leaderTab}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeLeaderList.map((p: any, idx: number) => (
+                        <tr key={idx} className={`border-b border-neutral-100 ${idx === 0 ? 'bg-amber-50/70 font-bold' : ''}`}>
+                          <td className="py-1.5 font-mono text-[11px] font-bold">{idx + 1}</td>
+                          <td className="py-1.5 truncate max-w-[140px] font-bold text-neutral-900">
+                            {p.player_name}
+                          </td>
+                          <td className="py-1.5 text-center">
+                            <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold">
+                              {p.logo_url && (
+                                <img src={p.logo_url} alt="" className="w-3.5 h-3.5 object-contain" />
+                              )}
+                              {p.team_abbr}
+                            </span>
+                          </td>
+                          <td className="py-1.5 text-center font-mono text-[11px] text-neutral-500">{p.gp}</td>
+                          <td className="py-1.5 text-right font-mono font-black text-sm">{formatLeaderValue(p)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs italic text-neutral-500">
+                No player statistics recorded yet for {activeSeasonLabel}.
+              </div>
+            )}
+          </section>
+
+          {/* SECTION 4: COMPACT DISCORD GAZETTE HIGHLIGHTS & TAPE ROOM */}
+          {briefing && (
+            <section className="border-2 border-black bg-white/70 p-3.5 shadow-[3px_3px_0px_#000] space-y-3">
+              <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase">
+                    LOCKER ROOM WIRE
+                  </span>
+                  <h2 className="font-black uppercase tracking-tight text-sm sm:text-base">
+                    Daily Discord Gazette Highlights
+                  </h2>
+                </div>
+                <span className="text-[9px] font-mono uppercase text-neutral-500">
+                  {briefing.updated_at || 'LIVE WIRE'}
+                </span>
+              </div>
+
+              {/* Compact Headline + Quote */}
+              <div className="border-b border-neutral-300 pb-2.5">
+                <h3 className="text-lg sm:text-xl font-black uppercase leading-tight tracking-tight">
+                  {briefing.headline}
+                </h3>
+                {briefing.subheadline && (
+                  <p className="text-xs italic text-neutral-700 mt-0.5">{briefing.subheadline}</p>
+                )}
+              </div>
+
+              {briefing.quote_of_the_day && (
+                <div className="bg-amber-50/80 border-l-4 border-black p-2.5">
+                  <div className="text-[9px] font-mono font-black uppercase tracking-widest text-neutral-500">
+                    ★ Quote of the Day
+                  </div>
+                  <blockquote className="text-xs sm:text-sm font-bold italic mt-0.5">
                     "{briefing.quote_of_the_day.quote}"
                   </blockquote>
-                  <div className="text-[11px] text-right mt-1 font-semibold text-neutral-700">
-                    — {briefing.quote_of_the_day.author} <span className="text-[10px] font-normal italic text-neutral-500">({briefing.quote_of_the_day.context})</span>
+                  <div className="text-[10px] text-right font-semibold text-neutral-700 mt-0.5">
+                    — {briefing.quote_of_the_day.author}{' '}
+                    <span className="font-normal italic text-neutral-500">({briefing.quote_of_the_day.context})</span>
                   </div>
                 </div>
               )}
 
-              {/* Channel Breakdown Columns / Cards */}
-              <div className="space-y-4 mt-2">
-                {briefing.sections?.map((sec: any, idx: number) => (
-                  <div key={idx} className="border border-neutral-300 bg-white/60 p-3.5 shadow-sm">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-[9px] font-black uppercase tracking-wider bg-black text-white px-1.5 py-0.5">
-                        {sec.badge}
-                      </span>
-                      <span className="text-[10px] font-mono text-neutral-500">
-                        #{sec.channel}
-                      </span>
-                    </div>
-
-                    <h4 className="font-bold text-sm text-neutral-900 leading-snug mb-1">
-                      {sec.title}
-                    </h4>
-
-                    <p className="text-xs text-neutral-800 leading-relaxed mb-2 font-serif">
-                      {sec.commentary}
-                    </p>
-
-                    {/* Twitch Highlight Clips */}
-                    {sec.clips && sec.clips.length > 0 && (
-                      <div className="my-2 p-2 bg-purple-50 border border-purple-200">
-                        <div className="text-[10px] font-bold uppercase text-purple-900 mb-1.5 flex items-center gap-1">
-                          <span>📼</span> Tape Room Video Reels:
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {sec.clips.map((clip: any, cIdx: number) => (
-                            <a
-                              key={cIdx}
-                              href={clip.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] font-mono font-bold bg-purple-700 hover:bg-purple-900 text-white px-2 py-1 transition-colors flex items-center gap-1 shadow-xs"
-                            >
-                              <span>▶</span> {clip.name}
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Soundbites / Raw Messages */}
-                    {sec.messages && sec.messages.length > 0 && (
-                      <div className="bg-neutral-100/80 border-t border-neutral-200 pt-2 mt-2 space-y-1 font-mono text-[11px] text-neutral-700">
-                        <div className="text-[9px] uppercase font-bold tracking-wider text-neutral-400">
-                          Intercepted Audio Log:
-                        </div>
-                        {sec.messages.map((m: any, mIdx: number) => (
-                          <div key={mIdx} className="leading-tight">
-                            <span className="text-neutral-400">[{m.time}]</span>{" "}
-                            <span className="font-bold text-neutral-900">{m.author}:</span>{" "}
-                            <span className="italic">{m.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+              {/* Tape Room Clips Strip */}
+              {allTapeRoomClips.length > 0 && (
+                <div className="p-2.5 bg-purple-50 border border-purple-300">
+                  <div className="text-[10px] font-mono font-black uppercase text-purple-950 mb-1.5 flex items-center gap-1.5">
+                    <span>📼</span> Tape Room Highlight Reels:
                   </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-slate-100 p-4 border border-slate-300 italic text-sm text-neutral-600">
-              Fetching daily intelligence from the wire...
-            </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {allTapeRoomClips.map((clip, idx) => (
+                      <a
+                        key={idx}
+                        href={clip.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-mono font-bold bg-purple-700 hover:bg-purple-900 text-white px-2 py-1 transition-colors flex items-center gap-1"
+                      >
+                        <span>▶</span> {clip.name}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Compact 2-Column Dispatches Grid */}
+              {briefing.sections && briefing.sections.length > 0 && (
+                <div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {briefing.sections.map((sec: any, idx: number) => (
+                      <div key={idx} className="border border-neutral-300 bg-[#faf8f3] p-2.5 flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between gap-1 mb-1">
+                            <span className="text-[8px] font-mono font-black uppercase bg-black text-white px-1.5 py-0.5">
+                              {sec.badge}
+                            </span>
+                            <span className="text-[9px] font-mono text-neutral-500">#{sec.channel}</span>
+                          </div>
+                          <h4 className="font-bold text-xs text-neutral-900 leading-snug mb-1">{sec.title}</h4>
+                          <p className="text-[11px] text-neutral-700 leading-snug">{sec.commentary}</p>
+                        </div>
+
+                        {showAudioLogs && sec.messages && sec.messages.length > 0 && (
+                          <div className="bg-neutral-100 border-t border-neutral-200 pt-1.5 mt-2 space-y-1 font-mono text-[10px] text-neutral-700 max-h-32 overflow-y-auto">
+                            {sec.messages.map((m: any, mIdx: number) => (
+                              <div key={mIdx} className="leading-tight">
+                                <span className="text-neutral-400">[{m.time}]</span>{' '}
+                                <span className="font-bold text-black">{m.author}:</span>{' '}
+                                <span className="italic">{m.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAudioLogs(!showAudioLogs)}
+                    className="mt-2.5 w-full py-1 border border-black bg-[#f4f1ea] hover:bg-neutral-200 text-[10px] font-mono font-bold uppercase cursor-pointer"
+                  >
+                    {showAudioLogs ? '▲ Hide Raw Discord Audio Logs' : '▼ Expand Intercepted Discord Audio Logs'}
+                  </button>
+                </div>
+              )}
+            </section>
           )}
         </main>
 
