@@ -373,16 +373,27 @@ const RatingMatrix = ({
 
 // Player Portrait with Fallbacks
 const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; url: string; className?: string }) => {
-  const filename = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
-  const [imgSrc, setImgSrc] = useState(`${url}/${filename}.png`);
-  const [failed, setFailed] = useState(false);
+  const clean = (name || '').trim();
+  const slug = clean.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const candidates = useMemo(() => {
+    if (!clean) return [];
+    return Array.from(new Set([
+      `${url}/${slug}.png`,
+      `${url}/${slug}.jpg`,
+      `${url}/${encodeURIComponent(clean)}.png`,
+      `${url}/${encodeURIComponent(clean)}.jpg`,
+      `${url}/${encodeURIComponent(clean.toLowerCase())}.png`,
+      `${url}/${encodeURIComponent(clean.toLowerCase())}.jpg`,
+    ]));
+  }, [clean, slug, url]);
+
+  const [attemptIdx, setAttemptIdx] = useState(0);
 
   useEffect(() => {
-    setFailed(false);
-    setImgSrc(`${url}/${filename}.png`);
-  }, [name, url, filename]);
+    setAttemptIdx(0);
+  }, [clean, url]);
 
-  if (failed || !name) {
+  if (!clean || attemptIdx >= candidates.length) {
     return (
       <div className={`${className} object-cover border-2 border-black bg-slate-200 flex flex-col items-center justify-center text-slate-500 font-mono shadow-inner`}>
         <UserCheck className="w-8 h-8 opacity-40" />
@@ -393,16 +404,12 @@ const PlayerPortrait = ({ name, url, className = "w-24 h-24" }: { name: string; 
 
   return (
     <img
-      key={name}
-      src={imgSrc}
-      alt={name}
+      key={`${clean}_${attemptIdx}`}
+      src={candidates[attemptIdx]}
+      alt={clean}
       className={`${className} object-cover border-2 border-black bg-slate-100 shadow-sm`}
       onError={() => {
-        if (imgSrc.endsWith('.png')) {
-          setImgSrc(`${url}/${filename}.jpg`);
-        } else {
-          setFailed(true);
-        }
+        setAttemptIdx((prev) => prev + 1);
       }}
     />
   );
@@ -919,6 +926,158 @@ const TeamLogo = ({
   );
 };
 
+let NHL_BANNER_BUCKET_FILES: string[] | null = null;
+let NHL_BANNER_BUCKET_PROMISE: Promise<string[]> | null = null;
+
+const KNOWN_NHL_BANNERS = [
+  'berlin_dutchmen.png',
+  'boston_bruins.png',
+  'brantford_braves.png',
+  'chicago_black_hawks.png',
+  'detroit_cougars.png',
+  'duquesne_athletic_club.png',
+  'galt_professionals.png',
+  'guelph_royals.png',
+  'montreal_canadiens.png',
+  'montreal_shamrocks.png',
+  'montreal_wanderers.png',
+  'new_york_rangers.png',
+  'ottawa_senators.png',
+  'pittsburgh_athletic_club.png',
+  'toronto_maple_leafs.png',
+  'toronto_maple_leafs1.png',
+];
+
+const getNhlBannerBucketFiles = async (): Promise<string[]> => {
+  if (NHL_BANNER_BUCKET_FILES !== null) return NHL_BANNER_BUCKET_FILES;
+  if (NHL_BANNER_BUCKET_PROMISE !== null) return NHL_BANNER_BUCKET_PROMISE;
+
+  NHL_BANNER_BUCKET_PROMISE = (async () => {
+    try {
+      const { data, error } = await supabase.storage.from('nhl banners').list('', { limit: 1000 });
+      if (!error && data && data.length > 0) {
+        const dynamicNames = data
+          .map((item) => item.name)
+          .filter((name) => name && name !== '.emptyFolderPlaceholder');
+        NHL_BANNER_BUCKET_FILES = Array.from(new Set([...dynamicNames, ...KNOWN_NHL_BANNERS]));
+        return NHL_BANNER_BUCKET_FILES;
+      }
+    } catch {}
+    NHL_BANNER_BUCKET_FILES = KNOWN_NHL_BANNERS;
+    return NHL_BANNER_BUCKET_FILES;
+  })();
+
+  return NHL_BANNER_BUCKET_PROMISE;
+};
+
+// Team Banner Component — Replaces text team names with horizontal banners from "nhl banners" bucket
+const TeamBanner = ({
+  teamName,
+  year,
+  className = "h-5 w-[125px] object-contain object-left",
+}: {
+  teamName: string;
+  year?: number | string;
+  className?: string;
+}) => {
+  const cleanName = (teamName || '').trim();
+  const upper = cleanName.toUpperCase();
+  const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
+  const yrStr = year ? String(year).trim() : '';
+  const cacheKey = `nhl_banner_only_${abbr || cleanName}_${slug}_${yrStr || 'base'}`;
+
+  const [bannerUrl, setBannerUrl] = useState<string | null>(() => LOGO_CACHE.get(cacheKey) || null);
+
+  useEffect(() => {
+    if (LOGO_CACHE.has(cacheKey)) {
+      setBannerUrl(LOGO_CACHE.get(cacheKey)!);
+      return;
+    }
+
+    if (!cleanName) {
+      setBannerUrl(null);
+      return;
+    }
+
+    let isCancelled = false;
+    const baseBannerUrl = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/nhl%20banners';
+
+    const mappedFullSlugs = (abbr && NHL_ABBR_TO_FULL_SLUGS[abbr.toUpperCase()]) || [];
+    const nameVariants = Array.from(new Set([
+      slug ? slug.toLowerCase() : null,
+      ...mappedFullSlugs,
+      abbr ? abbr.toLowerCase() : null,
+      cleanName.toLowerCase(),
+    ].filter(Boolean))) as string[];
+
+    getNhlBannerBucketFiles().then((bannerFiles) => {
+      if (isCancelled) return;
+
+      const normVariants = nameVariants.map((v) => v.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const matchedFiles: { file: string; score: number }[] = [];
+
+      for (const file of bannerFiles) {
+        const baseNoExt = file.replace(/\.[^.]+$/, '');
+        const normFile = baseNoExt.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        // Exact normalized match gets highest priority (e.g., montreal_canadiens -> montrealcanadiens, chicago_blackhawks -> chicagoblackhawks)
+        const exactIdx = normVariants.findIndex((nv) => nv.length >= 3 && normFile === nv);
+        const prefixIdx = normVariants.findIndex((nv) => nv.length >= 3 && normFile.startsWith(nv));
+
+        if (exactIdx === -1 && prefixIdx === -1) continue;
+
+        const score = exactIdx !== -1 ? 100 - exactIdx : 50 - prefixIdx;
+        matchedFiles.push({ file, score });
+      }
+
+      matchedFiles.sort((a, b) => b.score - a.score);
+
+      const urls: string[] = matchedFiles.map(
+        (m) => `${baseBannerUrl}/${encodeURIComponent(m.file)}`
+      );
+
+      if (urls.length === 0) {
+        for (const n of nameVariants) {
+          urls.push(`${baseBannerUrl}/${encodeURIComponent(n)}.png`);
+        }
+      }
+
+      const uniqueUrls = Array.from(new Set(urls));
+      resolveLogoUrl(cacheKey, uniqueUrls).then((res) => {
+        if (!isCancelled) {
+          setBannerUrl(res);
+        }
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [cacheKey, cleanName, abbr, slug, yrStr]);
+
+  if (bannerUrl) {
+    return (
+      <img
+        src={bannerUrl}
+        alt={cleanName}
+        title={cleanName}
+        className={`${className} shrink-0`}
+      />
+    );
+  }
+
+  // Fallback if no banner exists in nhl banners for this franchise yet
+  return (
+    <TeamLogo
+      teamName={teamName}
+      year={year}
+      showLabel={true}
+      labelClassName="truncate max-w-[95px] text-[8px]"
+    />
+  );
+};
+
 // Career Year-by-Year Breakdown Table (with Green Heat-Map cells & Team Logo)
 const CareerTable = ({
   careerRows,
@@ -1054,11 +1213,10 @@ const CareerTable = ({
                 <td className="p-1 font-bold border-r border-black/30 bg-slate-100">{yr}</td>
                 {showTeam && (
                   <td className="p-1 border-r border-black/30 font-bold bg-slate-50 text-left pl-1.5">
-                    <TeamLogo
+                    <TeamBanner
                       teamName={teamName}
                       year={yr}
-                      showLabel={true}
-                      bannerClassName="h-5 w-[108px] object-contain object-left"
+                      className="h-5 w-[125px] object-contain object-left"
                     />
                   </td>
                 )}
@@ -2720,19 +2878,23 @@ export default function PlayersPage() {
                                 {/* Team Logo & Career Meta Header */}
                                 <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black pb-2.5">
                                   <div className="flex items-center gap-3.5">
-                                    {/* Prominent Larger Team Logo / Banner Box */}
-                                    <div className="min-w-16 h-16 sm:min-w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                                      <TeamLogo
-                                        teamName={group.primary_team}
-                                        year={group.end_year}
-                                        className="w-12 h-12 sm:w-16 sm:h-16"
-                                        bannerClassName="h-10 sm:h-12 w-32 sm:w-40 object-contain"
+                                    {/* Prominent Player Portrait Box */}
+                                    <div className="shrink-0">
+                                      <PlayerPortrait
+                                        name={group.player_name}
+                                        url={`${SUPABASE_URL}/storage/v1/object/public/${PORTRAIT_BUCKET}`}
+                                        className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg shadow-[3px_3px_0px_rgba(0,0,0,1)]"
                                       />
                                     </div>
                                     <div>
-                                      <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex items-center gap-2">
+                                      <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex flex-wrap items-center gap-2">
                                         <span>{group.player_name}</span>
-                                        <span className="text-emerald-700 font-bold">&bull; {group.primary_team}</span>
+                                        <span className="text-emerald-700 font-bold">&bull;</span>
+                                        <TeamBanner
+                                          teamName={group.primary_team}
+                                          year={group.end_year}
+                                          className="h-5 sm:h-6 w-28 sm:w-36 object-contain object-left"
+                                        />
                                       </div>
                                       <div className="text-[9.5px] text-neutral-700 uppercase font-bold mt-1">
                                         {group.seasons.length} Recorded Seasons ({group.start_year} - {group.end_year}) &bull; Peak OVR: <span className="text-black font-black bg-amber-300 px-1.5 py-0.5 rounded-2xs">{group.best_ovr}</span> &bull; Career Avg: <span className="text-emerald-800 font-black">{group.avg_ovr}</span>
