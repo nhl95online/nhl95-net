@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NHL '95 Online Arena Emulator</title>
+  <title>NHL '95 Online Arena Emulator (1v1 &amp; 2v2 4-Player)</title>
   <style>
     html, body {
       margin: 0;
@@ -52,11 +52,12 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      pointer-events: none;
+      flex-wrap: wrap;
+      gap: 8px;
       z-index: 20;
     }
     .hud-pill {
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.85);
       border: 1px solid #22d3ee;
       color: #22d3ee;
       padding: 4px 10px;
@@ -64,17 +65,51 @@
       font-weight: bold;
       border-radius: 3px;
       text-transform: uppercase;
+      pointer-events: none;
+    }
+    .slot-switcher {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid #475569;
+      padding: 3px 6px;
+      border-radius: 3px;
+      pointer-events: auto;
+    }
+    .slot-btn {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      font-family: monospace;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 7px;
+      border-radius: 2px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .slot-btn.active {
+      background: #f59e0b;
+      color: #000000;
+      border-color: #ffffff;
     }
   </style>
 </head>
 <body>
   <div id="game"></div>
 
-  <!-- Guest (Player 2) Netplay Stream Container -->
+  <!-- Guest (Player 2 / Player 3 / Player 4) Netplay Stream Container -->
   <div id="guest-view">
     <div id="guest-hud">
       <div class="hud-pill" id="guest-status-pill">
-        ⚡ P2 NETPLAY CONNECTED — YOU ARE PLAYER 2 (AWAY)
+        ⚡ NETPLAY CONNECTED — 2v2 / 1v1 LIVE FEED
+      </div>
+      <div class="slot-switcher">
+        <span style="font-size: 10px; color: #94a3b8; margin-right: 2px;">YOUR CONTROLLER PORT:</span>
+        <button type="button" class="slot-btn" id="slot-btn-1" data-slot="1">P2</button>
+        <button type="button" class="slot-btn" id="slot-btn-2" data-slot="2">P3</button>
+        <button type="button" class="slot-btn" id="slot-btn-3" data-slot="3">P4</button>
       </div>
       <div class="hud-pill" id="guest-pad-pill" style="border-color: #f59e0b; color: #f59e0b;">
         CONTROLLER ACTIVE
@@ -91,10 +126,10 @@
       var title = params.get("title") || "W16.zip";
       var role = params.get("role") || "solo"; // 'solo' | 'host' | 'guest'
       var roomId = params.get("roomId") || "";
-
-      var rtcPeer = null;
-      var rtcDataChannel = null;
-      var rtcConnected = false;
+      var guestId = params.get("guestId") || ("guest_" + Math.random().toString(36).slice(2, 8));
+      var guestSlot = parseInt(params.get("slot") || "1", 10); // 1 = P2, 2 = P3, 3 = P4
+      if (isNaN(guestSlot) || guestSlot < 1 || guestSlot > 3) guestSlot = 1;
+      var fourPlayer = params.get("fourPlayer") !== "0"; // Enabled by default so 2v2 (4-player) is always ready
 
       var rtcConfig = {
         iceServers: [
@@ -146,8 +181,12 @@
       } catch (e) {}
 
       window.addEventListener("message", function (ev) {
-        if (ev.data && ev.data.type === "NHL95_CONTROLLER_CONFIG_UPDATE" && ev.data.config) {
+        if (!ev.data || typeof ev.data !== "object") return;
+        if (ev.data.type === "NHL95_CONTROLLER_CONFIG_UPDATE" && ev.data.config) {
           controllerConfig = ev.data.config;
+        } else if (ev.data.type === "NHL95_SET_SLOT" && typeof ev.data.slot === "number") {
+          guestSlot = Math.max(1, Math.min(3, ev.data.slot));
+          updateSlotButtonsUI();
         }
       });
 
@@ -160,45 +199,43 @@
         return false;
       }
 
-      function computeGenesisMask(keysMap, cfg, onPadFound) {
+      // Compute 12-bit Genesis input mask for a specific gamepad (and optionally keyboard)
+      function computePadAndKeyMask(keysMap, specificPad, cfg) {
         var kb = (cfg && cfg.keyboard) || defaultControllerConfig.keyboard;
         var gp = (cfg && cfg.gamepad) || defaultControllerConfig.gamepad;
         var dz = typeof gp.deadzone === "number" ? gp.deadzone : 0.4;
         var useAnalog = gp.useAnalogStick !== false;
 
         var b = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        if (isKeyDown(keysMap, kb.b)) b[0] = 1;
-        if (isKeyDown(keysMap, kb.a)) b[1] = 1;
-        if (isKeyDown(keysMap, kb.mode)) b[2] = 1;
-        if (isKeyDown(keysMap, kb.start)) b[3] = 1;
-        if (isKeyDown(keysMap, kb.up)) b[4] = 1;
-        if (isKeyDown(keysMap, kb.down)) b[5] = 1;
-        if (isKeyDown(keysMap, kb.left)) b[6] = 1;
-        if (isKeyDown(keysMap, kb.right)) b[7] = 1;
-        if (isKeyDown(keysMap, kb.c)) b[8] = 1;
-        if (isKeyDown(keysMap, kb.y)) b[9] = 1;
-        if (isKeyDown(keysMap, kb.x)) b[10] = 1;
-        if (isKeyDown(keysMap, kb.z)) b[11] = 1;
+        if (keysMap) {
+          if (isKeyDown(keysMap, kb.b)) b[0] = 1;
+          if (isKeyDown(keysMap, kb.a)) b[1] = 1;
+          if (isKeyDown(keysMap, kb.mode)) b[2] = 1;
+          if (isKeyDown(keysMap, kb.start)) b[3] = 1;
+          if (isKeyDown(keysMap, kb.up)) b[4] = 1;
+          if (isKeyDown(keysMap, kb.down)) b[5] = 1;
+          if (isKeyDown(keysMap, kb.left)) b[6] = 1;
+          if (isKeyDown(keysMap, kb.right)) b[7] = 1;
+          if (isKeyDown(keysMap, kb.c)) b[8] = 1;
+          if (isKeyDown(keysMap, kb.y)) b[9] = 1;
+          if (isKeyDown(keysMap, kb.x)) b[10] = 1;
+          if (isKeyDown(keysMap, kb.z)) b[11] = 1;
+        }
 
-        if (navigator.getGamepads) {
-          var pads = navigator.getGamepads();
-          var pad = pads[0] || pads[1] || pads[2] || pads[3];
-          if (pad) {
-            if (onPadFound) onPadFound(pad);
-            var btns = pad.buttons || [];
-            if (btns[gp.b] && btns[gp.b].pressed) b[0] = 1;
-            if (btns[gp.a] && btns[gp.a].pressed) b[1] = 1;
-            if (btns[gp.mode] && btns[gp.mode].pressed) b[2] = 1;
-            if (btns[gp.start] && btns[gp.start].pressed) b[3] = 1;
-            if ((btns[gp.up] && btns[gp.up].pressed) || (useAnalog && pad.axes && pad.axes[1] < -dz)) b[4] = 1;
-            if ((btns[gp.down] && btns[gp.down].pressed) || (useAnalog && pad.axes && pad.axes[1] > dz)) b[5] = 1;
-            if ((btns[gp.left] && btns[gp.left].pressed) || (useAnalog && pad.axes && pad.axes[0] < -dz)) b[6] = 1;
-            if ((btns[gp.right] && btns[gp.right].pressed) || (useAnalog && pad.axes && pad.axes[0] > dz)) b[7] = 1;
-            if (btns[gp.c] && btns[gp.c].pressed) b[8] = 1;
-            if (btns[gp.y] && btns[gp.y].pressed) b[9] = 1;
-            if (btns[gp.x] && btns[gp.x].pressed) b[10] = 1;
-            if (btns[gp.z] && btns[gp.z].pressed) b[11] = 1;
-          }
+        if (specificPad) {
+          var btns = specificPad.buttons || [];
+          if (btns[gp.b] && btns[gp.b].pressed) b[0] = 1;
+          if (btns[gp.a] && btns[gp.a].pressed) b[1] = 1;
+          if (btns[gp.mode] && btns[gp.mode].pressed) b[2] = 1;
+          if (btns[gp.start] && btns[gp.start].pressed) b[3] = 1;
+          if ((btns[gp.up] && btns[gp.up].pressed) || (useAnalog && specificPad.axes && specificPad.axes[1] < -dz)) b[4] = 1;
+          if ((btns[gp.down] && btns[gp.down].pressed) || (useAnalog && specificPad.axes && specificPad.axes[1] > dz)) b[5] = 1;
+          if ((btns[gp.left] && btns[gp.left].pressed) || (useAnalog && specificPad.axes && specificPad.axes[0] < -dz)) b[6] = 1;
+          if ((btns[gp.right] && btns[gp.right].pressed) || (useAnalog && specificPad.axes && specificPad.axes[0] > dz)) b[7] = 1;
+          if (btns[gp.c] && btns[gp.c].pressed) b[8] = 1;
+          if (btns[gp.y] && btns[gp.y].pressed) b[9] = 1;
+          if (btns[gp.x] && btns[gp.x].pressed) b[10] = 1;
+          if (btns[gp.z] && btns[gp.z].pressed) b[11] = 1;
         }
 
         var mask = 0;
@@ -208,8 +245,18 @@
         return mask;
       }
 
+      function updateSlotButtonsUI() {
+        for (var s = 1; s <= 3; s++) {
+          var btn = document.getElementById("slot-btn-" + s);
+          if (btn) {
+            if (s === guestSlot) btn.classList.add("active");
+            else btn.classList.remove("active");
+          }
+        }
+      }
+
       // ======================================================================
-      // GUEST MODE (PLAYER 2 JOINING HOST'S GAME)
+      // GUEST MODE (PLAYER 2, PLAYER 3, OR PLAYER 4 JOINING HOST'S GAME)
       // ======================================================================
       if (role === "guest") {
         document.getElementById("game").style.display = "none";
@@ -221,7 +268,26 @@
         var statusPill = document.getElementById("guest-status-pill");
         var padPill = document.getElementById("guest-pad-pill");
 
-        // Setup WebRTC Peer for Guest
+        updateSlotButtonsUI();
+        [1, 2, 3].forEach(function (s) {
+          var btn = document.getElementById("slot-btn-" + s);
+          if (btn) {
+            btn.addEventListener("click", function () {
+              guestSlot = s;
+              updateSlotButtonsUI();
+              statusPill.textContent = "🟢 ACTIVE AS PLAYER " + (guestSlot + 1) + " (PORT " + (guestSlot + 1) + ")";
+              window.parent.postMessage({
+                type: "NHL95_GUEST_SLOT_CHANGED",
+                slot: guestSlot
+              }, "*");
+            });
+          }
+        });
+
+        var rtcPeer = null;
+        var rtcDataChannel = null;
+        var rtcConnected = false;
+
         function initGuestWebRTC() {
           try {
             if (rtcPeer) rtcPeer.close();
@@ -232,7 +298,7 @@
                 window.parent.postMessage({
                   type: "NHL95_NETPLAY_SIGNAL",
                   roomId: roomId,
-                  signal: { kind: "ice", candidate: ev.candidate, from: "guest" }
+                  signal: { kind: "ice", candidate: ev.candidate, from: "guest", guestId: guestId, slot: guestSlot }
                 }, "*");
               }
             };
@@ -243,7 +309,7 @@
                 videoEl.style.display = "block";
                 fallbackImg.style.display = "none";
                 rtcConnected = true;
-                statusPill.textContent = "🟢 60FPS P2P STREAM ACTIVE — PLAYER 2";
+                statusPill.textContent = "🟢 60FPS STREAM — YOU ARE PLAYER " + (guestSlot + 1);
               }
             };
 
@@ -260,19 +326,18 @@
 
         initGuestWebRTC();
 
-        // Notify Host that Guest is ready in the room
         window.parent.postMessage({
           type: "NHL95_NETPLAY_SIGNAL",
           roomId: roomId,
-          signal: { kind: "guest-ready" }
+          signal: { kind: "guest-ready", guestId: guestId, slot: guestSlot }
         }, "*");
 
-        // Handle incoming signals & fallback frames from Host
         window.addEventListener("message", async function (ev) {
           if (!ev.data || typeof ev.data !== "object") return;
           if (ev.data.type === "NHL95_NETPLAY_SIGNAL_IN") {
             var sig = ev.data.signal;
             if (!sig) return;
+            if (sig.targetGuestId && sig.targetGuestId !== guestId) return;
 
             if (sig.kind === "offer" && rtcPeer) {
               try {
@@ -282,7 +347,7 @@
                 window.parent.postMessage({
                   type: "NHL95_NETPLAY_SIGNAL",
                   roomId: roomId,
-                  signal: { kind: "answer", sdp: rtcPeer.localDescription }
+                  signal: { kind: "answer", sdp: rtcPeer.localDescription, guestId: guestId, slot: guestSlot }
                 }, "*");
               } catch (e) {
                 console.warn("Guest SDP answer error:", e);
@@ -295,12 +360,11 @@
               videoEl.style.display = "none";
               fallbackImg.style.display = "block";
               fallbackImg.src = sig.dataUrl;
-              statusPill.textContent = "🟢 RELAY STREAM ACTIVE — PLAYER 2";
+              statusPill.textContent = "🟢 RELAY STREAM — YOU ARE PLAYER " + (guestSlot + 1);
             }
           }
         });
 
-        // Poll Player 2 Gamepad & Keyboard at 60fps and transmit state changes to Host
         var activeKeys = {};
         window.addEventListener("keydown", function (e) {
           activeKeys[e.key] = true;
@@ -309,23 +373,46 @@
           delete activeKeys[e.key];
         });
 
-        var lastMask = -1;
-        function pollGuestControls() {
-          var mask = computeGenesisMask(activeKeys, controllerConfig, function () {
-            padPill.textContent = "🎮 PAD READY";
-          });
+        var lastPrimaryMask = -1;
+        var lastSecondaryMask = -1;
+        var lastSentSlot = guestSlot;
 
-          if (mask !== lastMask) {
-            lastMask = mask;
+        function pollGuestControls() {
+          var pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+          if (pads.length > 0) {
+            padPill.textContent = "🎮 " + pads.length + " PAD" + (pads.length > 1 ? "S" : "") + " READY (P" + (guestSlot + 1) + ")";
+          }
+
+          var primaryMask = computePadAndKeyMask(activeKeys, pads[0] || null, controllerConfig);
+          // If the guest has a 2nd local controller plugged in (for 2v2 couch+online co-op), send it on the next slot!
+          var secondaryMask = pads[1] ? computePadAndKeyMask(null, pads[1], controllerConfig) : -1;
+
+          if (primaryMask !== lastPrimaryMask || secondaryMask !== lastSecondaryMask || guestSlot !== lastSentSlot) {
+            lastPrimaryMask = primaryMask;
+            lastSecondaryMask = secondaryMask;
+            lastSentSlot = guestSlot;
+
+            var packet = { s: guestSlot, m: primaryMask };
+            if (secondaryMask >= 0 && guestSlot < 3) {
+              packet.s2 = guestSlot + 1;
+              packet.m2 = secondaryMask;
+            }
+
             if (rtcDataChannel && rtcDataChannel.readyState === "open") {
               try {
-                rtcDataChannel.send(JSON.stringify({ m: mask }));
+                rtcDataChannel.send(JSON.stringify(packet));
               } catch (e) {}
             } else {
               window.parent.postMessage({
                 type: "NHL95_NETPLAY_SIGNAL",
                 roomId: roomId,
-                signal: { kind: "p2-input", mask: mask }
+                signal: {
+                  kind: "p2-input",
+                  slot: guestSlot,
+                  mask: primaryMask,
+                  slot2: packet.s2,
+                  mask2: packet.m2
+                }
               }, "*");
             }
           }
@@ -336,7 +423,7 @@
       }
 
       // ======================================================================
-      // SOLO OR HOST MODE (RUNS GENESIS PLUS GX EMULATOR)
+      // SOLO OR HOST MODE (RUNS GENESIS PLUS GX EMULATOR WITH 4-PLAYER SUPPORT)
       // ======================================================================
       try {
         if (window.parent && window.parent.__NHL95_LOCAL_FILE) {
@@ -365,65 +452,104 @@
       window.EJS_backgroundColor = "#050608";
       window.EJS_startOnLoaded = autoStart;
 
-      // Apply Player 2 bitmask to EmulatorJS simulateInput(1, idx, val)
-      var prevP2Mask = 0;
-      function applyPlayer2Mask(mask) {
-        var ejs = window.EJS_emulator;
-        if (!ejs || !ejs.gameManager || !ejs.gameManager.simulateInput) return;
-        for (var i = 0; i < 12; i++) {
-          var wasOn = (prevP2Mask >> i) & 1;
-          var isOn = (mask >> i) & 1;
-          if (wasOn !== isOn) {
-            ejs.gameManager.simulateInput(1, i, isOn ? 1 : 0);
-          }
-        }
-        prevP2Mask = mask;
+      // Enable EA 4-Way Play multitap when 4-Player (2-on-2) mode is active
+      if (fourPlayer) {
+        window.EJS_defaultOptions = {
+          "genesis_plus_gx_input_system": "4 way play",
+          "4 way play": "enabled"
+        };
       }
 
-      // Setup WebRTC Host offer when Guest joins the room
-      async function startHostWebRTC() {
+      // Track bitmasks for all 4 Players (0 = P1, 1 = P2, 2 = P3, 3 = P4)
+      var prevPlayerMasks = [0, 0, 0, 0];
+      var remoteSlotActiveUntil = [0, 0, 0, 0];
+
+      function applyPlayerSlotMask(slotIdx, mask, isRemote) {
+        if (slotIdx < 0 || slotIdx > 3) return;
+        if (isRemote) {
+          remoteSlotActiveUntil[slotIdx] = Date.now() + 8000;
+        }
+        var ejs = window.EJS_emulator;
+        if (!ejs || !ejs.gameManager || !ejs.gameManager.simulateInput) return;
+        var prev = prevPlayerMasks[slotIdx] || 0;
+        if (prev === mask) return;
+        for (var i = 0; i < 12; i++) {
+          var wasOn = (prev >> i) & 1;
+          var isOn = (mask >> i) & 1;
+          if (wasOn !== isOn) {
+            ejs.gameManager.simulateInput(slotIdx, i, isOn ? 1 : 0);
+          }
+        }
+        prevPlayerMasks[slotIdx] = mask;
+      }
+
+      // Multi-peer WebRTC map for up to 3 remote Guests (Players 2, 3, and 4) in 2v2!
+      var hostPeers = {};
+      var anyRtcConnected = false;
+
+      async function startHostWebRTCForGuest(targetGuestId) {
         try {
+          var key = targetGuestId || "default_guest";
           var canvas = document.querySelector("#game canvas");
           if (!canvas || !canvas.captureStream) return;
 
-          if (rtcPeer) rtcPeer.close();
-          rtcPeer = new RTCPeerConnection(rtcConfig);
+          if (hostPeers[key] && hostPeers[key].pc) {
+            try { hostPeers[key].pc.close(); } catch (e) {}
+          }
 
+          var pc = new RTCPeerConnection(rtcConfig);
           var stream = canvas.captureStream(60);
           stream.getTracks().forEach(function (track) {
-            rtcPeer.addTrack(track, stream);
+            pc.addTrack(track, stream);
           });
 
-          rtcDataChannel = rtcPeer.createDataChannel("p2-input", {
+          var dc = pc.createDataChannel("p-input", {
             ordered: false,
             maxRetransmits: 0
           });
-          rtcDataChannel.onopen = function () {
-            rtcConnected = true;
+          dc.onopen = function () {
+            anyRtcConnected = true;
           };
-          rtcDataChannel.onmessage = function (ev) {
+          dc.onmessage = function (ev) {
             try {
               var d = JSON.parse(ev.data);
-              if (typeof d.m === "number") applyPlayer2Mask(d.m);
+              var slot = typeof d.s === "number" ? d.s : 1;
+              if (typeof d.m === "number") {
+                applyPlayerSlotMask(slot, d.m, true);
+              }
+              if (typeof d.s2 === "number" && typeof d.m2 === "number") {
+                applyPlayerSlotMask(d.s2, d.m2, true);
+              }
             } catch (e) {}
           };
 
-          rtcPeer.onicecandidate = function (ev) {
+          pc.onicecandidate = function (ev) {
             if (ev.candidate) {
               window.parent.postMessage({
                 type: "NHL95_NETPLAY_SIGNAL",
                 roomId: roomId,
-                signal: { kind: "ice", candidate: ev.candidate, from: "host" }
+                signal: {
+                  kind: "ice",
+                  candidate: ev.candidate,
+                  from: "host",
+                  targetGuestId: targetGuestId
+                }
               }, "*");
             }
           };
 
-          var offer = await rtcPeer.createOffer();
-          await rtcPeer.setLocalDescription(offer);
+          hostPeers[key] = { pc: pc, dc: dc };
+
+          var offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
           window.parent.postMessage({
             type: "NHL95_NETPLAY_SIGNAL",
             roomId: roomId,
-            signal: { kind: "offer", sdp: rtcPeer.localDescription }
+            signal: {
+              kind: "offer",
+              sdp: pc.localDescription,
+              targetGuestId: targetGuestId
+            }
           }, "*");
         } catch (e) {
           console.warn("Host WebRTC offer error:", e);
@@ -436,19 +562,25 @@
           if (ev.data.type === "NHL95_NETPLAY_SIGNAL_IN") {
             var sig = ev.data.signal;
             if (!sig) return;
+            var gKey = sig.guestId || "default_guest";
+
             if (sig.kind === "guest-ready") {
-              startHostWebRTC();
-            } else if (sig.kind === "answer" && rtcPeer) {
+              startHostWebRTCForGuest(sig.guestId);
+            } else if (sig.kind === "answer" && hostPeers[gKey] && hostPeers[gKey].pc) {
               try {
-                await rtcPeer.setRemoteDescription(new RTCSessionDescription(sig.sdp));
-                rtcConnected = true;
+                await hostPeers[gKey].pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+                anyRtcConnected = true;
               } catch (e) {}
-            } else if (sig.kind === "ice" && sig.from === "guest" && rtcPeer) {
+            } else if (sig.kind === "ice" && sig.from === "guest" && hostPeers[gKey] && hostPeers[gKey].pc) {
               try {
-                await rtcPeer.addIceCandidate(new RTCIceCandidate(sig.candidate));
+                await hostPeers[gKey].pc.addIceCandidate(new RTCIceCandidate(sig.candidate));
               } catch (e) {}
             } else if (sig.kind === "p2-input" && typeof sig.mask === "number") {
-              applyPlayer2Mask(sig.mask);
+              var targetSlot = typeof sig.slot === "number" ? sig.slot : 1;
+              applyPlayerSlotMask(targetSlot, sig.mask, true);
+              if (typeof sig.slot2 === "number" && typeof sig.mask2 === "number") {
+                applyPlayerSlotMask(sig.slot2, sig.mask2, true);
+              }
             }
           }
         });
@@ -460,7 +592,7 @@
         var relayCtx = relayCanvas.getContext("2d");
 
         setInterval(function () {
-          if (rtcConnected) return;
+          if (anyRtcConnected) return;
           var srcCanvas = document.querySelector("#game canvas");
           if (!srcCanvas || !relayCtx) return;
           try {
@@ -475,6 +607,7 @@
         }, 120);
       }
 
+      // Poll up to 4 local controllers (Pads 0, 1, 2, 3) + Keyboard for 1v1 or 2v2 (4-Player) play!
       var p1ActiveKeys = {};
       window.addEventListener("keydown", function (e) {
         p1ActiveKeys[e.key] = true;
@@ -483,31 +616,42 @@
         delete p1ActiveKeys[e.key];
       });
 
-      var prevP1Mask = 0;
-      function pollPlayer1CustomControls() {
+      function pollAllFourPlayerControls() {
         var ejs = window.EJS_emulator;
         if (ejs && ejs.gameManager && ejs.gameManager.simulateInput) {
-          var mask = computeGenesisMask(p1ActiveKeys, controllerConfig);
-          if (mask !== prevP1Mask) {
-            for (var i = 0; i < 12; i++) {
-              var wasOn = (prevP1Mask >> i) & 1;
-              var isOn = (mask >> i) & 1;
-              if (wasOn !== isOn) {
-                ejs.gameManager.simulateInput(0, i, isOn ? 1 : 0);
-              }
+          var pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+          var now = Date.now();
+
+          // Player 1 (Port 0): Keyboard + Gamepad #1
+          var mask0 = computePadAndKeyMask(p1ActiveKeys, pads[0] || null, controllerConfig);
+          applyPlayerSlotMask(0, mask0, false);
+
+          // Players 2, 3, 4 (Ports 1, 2, 3): Local Gamepads #2, #3, #4 when not actively controlled by a remote online coach
+          for (var pIdx = 1; pIdx <= 3; pIdx++) {
+            if (now > remoteSlotActiveUntil[pIdx] && pads[pIdx]) {
+              var localPadMask = computePadAndKeyMask(null, pads[pIdx], controllerConfig);
+              applyPlayerSlotMask(pIdx, localPadMask, false);
             }
-            prevP1Mask = mask;
           }
         }
-        requestAnimationFrame(pollPlayer1CustomControls);
+        requestAnimationFrame(pollAllFourPlayerControls);
       }
 
       window.EJS_onGameStart = function () {
         try {
+          var ejs = window.EJS_emulator;
+          if (fourPlayer && ejs && ejs.gameManager && ejs.gameManager.setVariable) {
+            try {
+              ejs.gameManager.setVariable("genesis_plus_gx_input_system", "4 way play");
+              ejs.gameManager.setVariable("4 way play", "enabled");
+            } catch (e) {}
+          }
           window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
-          requestAnimationFrame(pollPlayer1CustomControls);
+          requestAnimationFrame(pollAllFourPlayerControls);
           if (role === "host" && roomId) {
-            setTimeout(startHostWebRTC, 800);
+            setTimeout(function () {
+              startHostWebRTCForGuest("default_guest");
+            }, 800);
           }
         } catch (e) {}
 

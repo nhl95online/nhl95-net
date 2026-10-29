@@ -429,6 +429,13 @@ function isConfiguredKeyActive(activeKeys: Set<string>, keyName: string): boolea
   return false;
 }
 
+export interface ConnectedGamepadSlot {
+  portIndex: number;
+  id: string;
+  buttons: boolean[];
+  axes: number[];
+}
+
 // ============================================================================
 // INTERACTIVE CONTROLLER TESTER, REMAPPING & COACH CLOUD SAVE COMPONENT
 // ============================================================================
@@ -437,6 +444,9 @@ function ControllerTesterPanel({
   gamepadInfo,
   gamepadButtons,
   gamepadAxes,
+  allGamepads,
+  fourPlayerMode,
+  onToggleFourPlayerMode,
   controllerConfig,
   onChangeConfig,
   onSaveCoachConfig,
@@ -451,6 +461,9 @@ function ControllerTesterPanel({
   gamepadInfo: string | null;
   gamepadButtons: boolean[];
   gamepadAxes: number[];
+  allGamepads: ConnectedGamepadSlot[];
+  fourPlayerMode: boolean;
+  onToggleFourPlayerMode: (val: boolean) => void;
   controllerConfig: CoachControllerConfig;
   onChangeConfig: (next: CoachControllerConfig) => void;
   onSaveCoachConfig: () => void;
@@ -465,6 +478,12 @@ function ControllerTesterPanel({
     type: 'keyboard' | 'gamepad';
     control: GenesisControlKey;
   } | null>(null);
+  const [inspectedPort, setInspectedPort] = useState<number>(0); // 0 = P1, 1 = P2, 2 = P3, 3 = P4
+
+  const selectedPad = allGamepads.find(p => p.portIndex === inspectedPort);
+  const activeBtns = selectedPad ? selectedPad.buttons : inspectedPort === 0 ? gamepadButtons : [];
+  const activeAx = selectedPad ? selectedPad.axes : inspectedPort === 0 ? gamepadAxes : [];
+  const includeKeyboard = inspectedPort === 0;
 
   const kb = controllerConfig.keyboard;
   const gp = controllerConfig.gamepad;
@@ -499,7 +518,7 @@ function ControllerTesterPanel({
   // Listen for USB/Bluetooth gamepad button press when remapping a controller button
   useEffect(() => {
     if (!listeningTarget || listeningTarget.type !== 'gamepad') return;
-    const pressedIdx = gamepadButtons.findIndex(Boolean);
+    const pressedIdx = activeBtns.findIndex(Boolean);
     if (pressedIdx !== -1) {
       onChangeConfig({
         ...controllerConfig,
@@ -511,33 +530,33 @@ function ControllerTesterPanel({
       });
       setListeningTarget(null);
     }
-  }, [listeningTarget, gamepadButtons, controllerConfig, onChangeConfig]);
+  }, [listeningTarget, activeBtns, controllerConfig, onChangeConfig]);
 
   const isUp =
-    isConfiguredKeyActive(activeKeys, kb.up) ||
-    Boolean(gamepadButtons[gp.up]) ||
-    (useAnalog && gamepadAxes[1] !== undefined && gamepadAxes[1] < -dz);
+    (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.up)) ||
+    Boolean(activeBtns[gp.up]) ||
+    (useAnalog && activeAx[1] !== undefined && activeAx[1] < -dz);
   const isDown =
-    isConfiguredKeyActive(activeKeys, kb.down) ||
-    Boolean(gamepadButtons[gp.down]) ||
-    (useAnalog && gamepadAxes[1] !== undefined && gamepadAxes[1] > dz);
+    (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.down)) ||
+    Boolean(activeBtns[gp.down]) ||
+    (useAnalog && activeAx[1] !== undefined && activeAx[1] > dz);
   const isLeft =
-    isConfiguredKeyActive(activeKeys, kb.left) ||
-    Boolean(gamepadButtons[gp.left]) ||
-    (useAnalog && gamepadAxes[0] !== undefined && gamepadAxes[0] < -dz);
+    (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.left)) ||
+    Boolean(activeBtns[gp.left]) ||
+    (useAnalog && activeAx[0] !== undefined && activeAx[0] < -dz);
   const isRight =
-    isConfiguredKeyActive(activeKeys, kb.right) ||
-    Boolean(gamepadButtons[gp.right]) ||
-    (useAnalog && gamepadAxes[0] !== undefined && gamepadAxes[0] > dz);
+    (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.right)) ||
+    Boolean(activeBtns[gp.right]) ||
+    (useAnalog && activeAx[0] !== undefined && activeAx[0] > dz);
 
-  const isA = isConfiguredKeyActive(activeKeys, kb.a) || Boolean(gamepadButtons[gp.a]);
-  const isB = isConfiguredKeyActive(activeKeys, kb.b) || Boolean(gamepadButtons[gp.b]);
-  const isC = isConfiguredKeyActive(activeKeys, kb.c) || Boolean(gamepadButtons[gp.c]);
-  const isX = isConfiguredKeyActive(activeKeys, kb.x) || Boolean(gamepadButtons[gp.x]);
-  const isY = isConfiguredKeyActive(activeKeys, kb.y) || Boolean(gamepadButtons[gp.y]);
-  const isZ = isConfiguredKeyActive(activeKeys, kb.z) || Boolean(gamepadButtons[gp.z]);
-  const isStart = isConfiguredKeyActive(activeKeys, kb.start) || Boolean(gamepadButtons[gp.start]);
-  const isMode = isConfiguredKeyActive(activeKeys, kb.mode) || Boolean(gamepadButtons[gp.mode]);
+  const isA = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.a)) || Boolean(activeBtns[gp.a]);
+  const isB = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.b)) || Boolean(activeBtns[gp.b]);
+  const isC = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.c)) || Boolean(activeBtns[gp.c]);
+  const isX = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.x)) || Boolean(activeBtns[gp.x]);
+  const isY = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.y)) || Boolean(activeBtns[gp.y]);
+  const isZ = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.z)) || Boolean(activeBtns[gp.z]);
+  const isStart = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.start)) || Boolean(activeBtns[gp.start]);
+  const isMode = (includeKeyboard && isConfiguredKeyActive(activeKeys, kb.mode)) || Boolean(activeBtns[gp.mode]);
 
   return (
     <div className="bg-neutral-950 text-white border-2 border-black p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-5">
@@ -640,11 +659,77 @@ function ControllerTesterPanel({
         </div>
       </div>
 
+      {/* 4-PLAYER (2-ON-2 EA 4-WAY PLAY) CONTROLLER PORT HUB */}
+      <div className="bg-[#0d1017] border border-neutral-800 rounded p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-2.5">
+          <div>
+            <div className="text-xs font-mono font-black uppercase text-cyan-400 flex items-center gap-2">
+              <Users className="w-4 h-4" /> 4-Player (2-on-2 EA 4-Way Play) Controller Ports
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Supports up to 4 simultaneous controllers (local USB/Bluetooth pads + online netplay coaches for 2-on-2 matches). Click any port to test it below.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 font-mono text-xs font-bold text-amber-300 bg-neutral-900 border border-neutral-700 px-3 py-1.5 rounded cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={fourPlayerMode}
+              onChange={e => onToggleFourPlayerMode(e.target.checked)}
+              className="accent-amber-400"
+            />
+            <span>EA 4-Way Play (2v2 Multitap) Enabled</span>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {[0, 1, 2, 3].map(portIdx => {
+            const padSlot = allGamepads.find(p => p.portIndex === portIdx);
+            const isSelected = inspectedPort === portIdx;
+            return (
+              <button
+                key={portIdx}
+                type="button"
+                onClick={() => setInspectedPort(portIdx)}
+                className={`p-3 rounded border text-left font-mono transition cursor-pointer ${
+                  isSelected
+                    ? 'bg-neutral-900 border-amber-400 ring-1 ring-amber-400'
+                    : 'bg-neutral-950/80 hover:bg-neutral-900 border-neutral-800'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-black uppercase text-amber-400">
+                    Port {portIdx + 1} (P{portIdx + 1})
+                  </span>
+                  <span
+                    className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                      padSlot
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-600'
+                        : portIdx === 0
+                        ? 'bg-blue-950 text-blue-300 border border-blue-700'
+                        : 'bg-neutral-900 text-slate-500 border border-neutral-800'
+                    }`}
+                  >
+                    {padSlot ? '🎮 USB Pad' : portIdx === 0 ? '⌨️ Keyboard' : 'Open / Online'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-300 truncate">
+                  {padSlot
+                    ? padSlot.id
+                    : portIdx === 0
+                    ? 'Keyboard + Primary Pad'
+                    : `Plug in Controller #${portIdx + 1} or Join Online as P${portIdx + 1}`}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: Visual 6-Button Pad + Analog Settings */}
         <div className="lg:col-span-6 flex flex-col items-center justify-center bg-[#0d1017] border border-neutral-800 rounded-lg p-6 relative space-y-5">
           <div className="text-[10px] font-mono uppercase tracking-widest text-slate-400">
-            SEGA MEGA DRIVE / GENESIS 16-BIT PAD ({controllerConfig.presetName.toUpperCase()})
+            TESTING PORT {inspectedPort + 1} (PLAYER {inspectedPort + 1}) • {controllerConfig.presetName.toUpperCase()}
           </div>
 
           <div className="w-full max-w-[440px] bg-gradient-to-b from-neutral-800 to-neutral-900 border-2 border-neutral-600 rounded-[48px] p-6 sm:p-8 shadow-2xl flex items-center justify-between gap-4 relative">
@@ -997,8 +1082,10 @@ function ArenaContent() {
   const [localRomTitle, setLocalRomTitle] = useState<string | null>(null);
   const [localRomRawFile, setLocalRomRawFile] = useState<File | null>(null);
 
-  // Online Head-to-Head Netplay State
+  // Online Head-to-Head & 2-on-2 (4-Player) Netplay State
   const [netplayRole, setNetplayRole] = useState<'solo' | 'host' | 'guest'>('solo');
+  const [netplaySlot, setNetplaySlot] = useState<number>(1); // 1 = Player 2, 2 = Player 3, 3 = Player 4
+  const [fourPlayerMode, setFourPlayerMode] = useState<boolean>(true); // EA 4-Way Play 2v2 Multitap
   const [netplayRoomId, setNetplayRoomId] = useState<string>('');
   const [netplayOpponentName, setNetplayOpponentName] = useState<string>('');
   const [myLobbyStatus, setMyLobbyStatus] = useState<'available' | 'away'>('available');
@@ -1027,11 +1114,12 @@ function ArenaContent() {
   const [vaultCategory, setVaultCategory] = useState<'all' | 'cloud' | 'league' | 'nhl-history' | 'misc'>('cloud');
   const [vaultSearch, setVaultSearch] = useState<string>('');
 
-  // Controller & Keyboard Live State + Coach Saved Controller Profile
+  // Controller & Keyboard Live State + 4-Player Gamepad Slots + Coach Saved Controller Profile
   const [activeKeys, setActiveKeys] = useState<Set<string>>(new Set());
   const [gamepadInfo, setGamepadInfo] = useState<string | null>(null);
   const [gamepadButtons, setGamepadButtons] = useState<boolean[]>([]);
   const [gamepadAxes, setGamepadAxes] = useState<number[]>([]);
+  const [allGamepads, setAllGamepads] = useState<ConnectedGamepadSlot[]>([]);
   const [controllerConfig, setControllerConfig] = useState<CoachControllerConfig>(DEFAULT_CONTROLLER_CONFIG);
   const [isSavingControllerConfig, setIsSavingControllerConfig] = useState<boolean>(false);
   const [controllerSaveBanner, setControllerSaveBanner] = useState<{
@@ -1398,19 +1486,30 @@ function ArenaContent() {
     setActiveArenaTab('ice');
   };
 
-  // Host an Open Match Room that any coach in the Locker Room can join with 1 click
-  const handleHostOpenRoom = () => {
-    const newRoomId = `open_${myPeerId.slice(-4)}_${Date.now().toString(36)}`;
+  // Host an Open Match Room (1v1 or 2v2 4-Player) that any coach in the Locker Room can join with 1 click
+  const handleHostOpenRoom = (isTwoOnTwo = false) => {
+    const newRoomId = `${isTwoOnTwo ? '2v2' : 'open'}_${myPeerId.slice(-4)}_${Date.now().toString(36)}`;
+    if (isTwoOnTwo) setFourPlayerMode(true);
     setNetplayRoomId(newRoomId);
     setNetplayRole('host');
-    setNetplayOpponentName('Waiting for Opponent...');
-    setSentInviteNotice('Open Match Room Created! Any player in the Locker Room can click "Join Game" to drop in as Player 2.');
+    setNetplayOpponentName(isTwoOnTwo ? '2v2 Room (Waiting for P2, P3, P4)' : 'Waiting for Opponent...');
+    setSentInviteNotice(
+      isTwoOnTwo
+        ? '2v2 (4-Player) Match Room Created! Up to 3 coaches in the Locker Room can click Join P2, P3, or P4 to play 2-on-2!'
+        : 'Open Match Room Created! Any player in the Locker Room can click "Join Game" to drop in as Player 2, 3, or 4.'
+    );
     setHasLaunchedGame(true);
     setActiveArenaTab('ice');
   };
 
-  // Accept an incoming challenge or join an Open Match Room as Player 2 (Guest)
-  const handleJoinMatchRoom = (hostPeerId: string, hostName: string, roomId: string, romId: string) => {
+  // Accept an incoming challenge or join an Open Match Room as Player 2, 3, or 4 (Guest)
+  const handleJoinMatchRoom = (
+    hostPeerId: string,
+    hostName: string,
+    roomId: string,
+    romId: string,
+    slot = 1
+  ) => {
     const foundRom = catalog.find(r => r.id.toLowerCase() === romId.toLowerCase());
     if (foundRom) setSelectedRomId(foundRom.id);
 
@@ -1420,14 +1519,16 @@ function ArenaContent() {
       payload: {
         hostPeerId,
         guestPeerId: myPeerId,
-        guestCoachName: myDisplayName,
-        roomId
+        guestCoachName: `${myDisplayName} (P${slot + 1})`,
+        roomId,
+        slot
       }
     });
 
     setIncomingInvite(null);
     setNetplayOpponentName(hostName);
     setNetplayRoomId(roomId);
+    setNetplaySlot(slot);
     setNetplayRole('guest');
     setHasLaunchedGame(true);
     setActiveArenaTab('ice');
@@ -1488,6 +1589,8 @@ function ArenaContent() {
       if (!event.data || typeof event.data !== 'object') return;
       if (event.data.type === 'NHL95_EJS_STARTED') {
         setEmulatorRunning(true);
+      } else if (event.data.type === 'NHL95_GUEST_SLOT_CHANGED' && typeof event.data.slot === 'number') {
+        setNetplaySlot(event.data.slot);
       } else if (event.data.type === 'NHL95_EJS_SAVESTATE' && event.data.state) {
         const stateArr =
           event.data.state instanceof Uint8Array
@@ -1518,7 +1621,7 @@ function ArenaContent() {
     return () => window.removeEventListener('message', handleMessage);
   }, [parseAndDisplayStateBuffer, selectedRom]);
 
-  // Poll Gamepad & Keyboard for Controller Tester and Header Status Pill
+  // Poll up to 4 Gamepads & Keyboard for Controller Tester and Header Status Pill
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       setActiveKeys(prev => {
@@ -1542,11 +1645,31 @@ function ArenaContent() {
     const pollGamepads = () => {
       if (typeof navigator !== 'undefined' && navigator.getGamepads) {
         const pads = navigator.getGamepads();
-        const activePad = Array.from(pads).find(Boolean);
-        if (activePad) {
-          setGamepadInfo(activePad.id);
-          setGamepadButtons(activePad.buttons.map(b => b.pressed));
-          setGamepadAxes([...activePad.axes]);
+        const connected: ConnectedGamepadSlot[] = [];
+        let slotCounter = 0;
+        for (let i = 0; i < pads.length && slotCounter < 4; i++) {
+          const p = pads[i];
+          if (p) {
+            connected.push({
+              portIndex: slotCounter,
+              id: p.id,
+              buttons: p.buttons.map(b => b.pressed),
+              axes: [...p.axes]
+            });
+            slotCounter++;
+          }
+        }
+        setAllGamepads(connected);
+
+        if (connected.length > 0) {
+          const primary = connected[0];
+          setGamepadInfo(
+            connected.length > 1
+              ? `${connected.length} Controllers Connected (${primary.id})`
+              : primary.id
+          );
+          setGamepadButtons(primary.buttons);
+          setGamepadAxes(primary.axes);
         } else {
           setGamepadInfo(null);
           setGamepadButtons([]);
@@ -1808,8 +1931,8 @@ function ArenaContent() {
   const emulatorIframeSrc = useMemo(() => {
     if (!activeRomUrl || !hasLaunchedGame) return null;
     const fileLabel = localRomTitle || resolvedRomFileName || `${selectedRom.id.toUpperCase()}.zip`;
-    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}&role=${netplayRole}&roomId=${encodeURIComponent(netplayRoomId)}&autoStart=1`;
-  }, [activeRomUrl, hasLaunchedGame, localRomTitle, resolvedRomFileName, selectedRom.id, netplayRole, netplayRoomId]);
+    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}&role=${netplayRole}&roomId=${encodeURIComponent(netplayRoomId)}&slot=${netplaySlot}&guestId=${encodeURIComponent(myPeerId)}&fourPlayer=${fourPlayerMode ? '1' : '0'}&autoStart=1`;
+  }, [activeRomUrl, hasLaunchedGame, localRomTitle, resolvedRomFileName, selectedRom.id, netplayRole, netplayRoomId, netplaySlot, myPeerId, fourPlayerMode]);
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-16">
@@ -1916,12 +2039,20 @@ function ArenaContent() {
               </button>
             )}
             <button
-              onClick={handleHostOpenRoom}
+              onClick={() => handleHostOpenRoom(false)}
               className="bg-blue-600 hover:bg-blue-500 text-white border border-blue-400 px-3 py-1.5 text-xs font-mono font-black uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition shadow-xs"
-              title="Open a 2-Player Online Match Room so another coach can join your game"
+              title="Open a 1v1 (2-Player) Online Match Room"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Host 2P Online Game</span>
+              <span>Host 1v1 (2P)</span>
+            </button>
+            <button
+              onClick={() => handleHostOpenRoom(true)}
+              className="bg-cyan-600 hover:bg-cyan-500 text-white border border-cyan-300 px-3 py-1.5 text-xs font-mono font-black uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition shadow-xs"
+              title="Open a 2-on-2 (4-Player EA 4-Way Play) Online Match Room"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Host 2v2 (4P)</span>
             </button>
             <button
               onClick={() => localRomInputRef.current?.click()}
@@ -2007,24 +2138,40 @@ function ArenaContent() {
                 Live scores update about every 15–20 seconds.
               </span>
             </div>
-            <button
-              onClick={handleHostOpenRoom}
-              className="text-xs font-mono font-bold text-blue-700 hover:underline cursor-pointer flex items-center gap-1"
-            >
-              <span>+ Host Open 2P Game</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleHostOpenRoom(false)}
+                className="text-xs font-mono font-bold text-blue-700 hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>+ Host 1v1 (2P)</span>
+              </button>
+              <button
+                onClick={() => handleHostOpenRoom(true)}
+                className="text-xs font-mono font-bold text-cyan-700 hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <span>+ Host 2v2 (4P)</span>
+              </button>
+            </div>
           </div>
 
           <div className="divide-y divide-slate-200">
             {gamesInProgress.length === 0 ? (
               <div className="px-4 py-4 text-xs text-slate-500 font-sans flex items-center justify-between flex-wrap gap-2">
-                <span>No live matches on the ice right now. Start a game below or host a 2-Player room!</span>
-                <button
-                  onClick={handleHostOpenRoom}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-mono text-[11px] font-bold uppercase rounded cursor-pointer"
-                >
-                  Open 2P Match Room
-                </button>
+                <span>No live matches on the ice right now. Start a game below or host a 1v1 (2P) or 2v2 (4-Player) room!</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleHostOpenRoom(false)}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-mono text-[11px] font-bold uppercase rounded cursor-pointer"
+                  >
+                    Open 1v1 Room
+                  </button>
+                  <button
+                    onClick={() => handleHostOpenRoom(true)}
+                    className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-[11px] font-bold uppercase rounded cursor-pointer"
+                  >
+                    Open 2v2 (4P) Room
+                  </button>
+                </div>
               </div>
             ) : (
               gamesInProgress.map(g => {
@@ -2041,7 +2188,7 @@ function ArenaContent() {
                           {g.isVerified && <span className="text-blue-600 text-xs">✔</span>}
                         </div>
                         <div className="text-[10px] font-mono text-slate-500 uppercase">
-                          {g.homeTeam || 'HOME'} • HOST
+                          {g.homeTeam || 'HOME'} • HOST (P1)
                         </div>
                       </div>
                     </div>
@@ -2059,15 +2206,15 @@ function ArenaContent() {
                         <div>
                           <div className="text-sm font-black text-slate-400">&mdash; &ndash; &mdash;</div>
                           <div className="text-[10px] text-slate-500 uppercase">
-                            {isWaitingForP2 ? 'OPEN LOBBY' : 'LINEUP / PREGAME'}
+                            {isWaitingForP2 ? 'OPEN 1v1 / 2v2 LOBBY' : 'LINEUP / PREGAME'}
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {/* Opponent & Join Button */}
-                    <div className="flex items-center gap-3 min-w-[200px] justify-end">
-                      <div className="text-right">
+                    {/* Opponent & Join Port Buttons (P2, P3, P4 for 2v2!) */}
+                    <div className="flex items-center gap-2 min-w-[200px] justify-end flex-wrap">
+                      <div className="text-right mr-1">
                         <div className="font-bold text-sm text-slate-900">
                           {g.opponentName || 'CPU'}
                         </div>
@@ -2077,12 +2224,29 @@ function ArenaContent() {
                       </div>
 
                       {g.roomId && g.peerId !== myPeerId ? (
-                        <button
-                          onClick={() => handleJoinMatchRoom(g.peerId, g.coachName, g.roomId!, g.preferredRomId)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-sans text-xs font-bold rounded cursor-pointer shadow-2xs"
-                        >
-                          Join Game
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleJoinMatchRoom(g.peerId, g.coachName, g.roomId!, g.preferredRomId, 1)}
+                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-[11px] font-black uppercase rounded cursor-pointer shadow-2xs"
+                            title="Join as Player 2"
+                          >
+                            Join P2
+                          </button>
+                          <button
+                            onClick={() => handleJoinMatchRoom(g.peerId, g.coachName, g.roomId!, g.preferredRomId, 2)}
+                            className="px-2 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-[11px] font-black uppercase rounded cursor-pointer shadow-2xs"
+                            title="Join as Player 3 (2-on-2)"
+                          >
+                            P3
+                          </button>
+                          <button
+                            onClick={() => handleJoinMatchRoom(g.peerId, g.coachName, g.roomId!, g.preferredRomId, 3)}
+                            className="px-2 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-[11px] font-black uppercase rounded cursor-pointer shadow-2xs"
+                            title="Join as Player 4 (2-on-2)"
+                          >
+                            P4
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-[11px] font-mono text-slate-400">
                           {g.peerId === myPeerId ? 'Your Match' : 'On Ice'}
@@ -2144,7 +2308,7 @@ function ArenaContent() {
             </div>
           </div>
 
-          {/* NETPLAY BANNER IF IN 2-PLAYER ROOM */}
+          {/* NETPLAY BANNER IF IN 1v1 OR 2v2 ROOM */}
           {(netplayRole !== 'solo' || sentInviteNotice) && (
             <div className="bg-blue-950 border-2 border-blue-400 text-white p-3.5 rounded-xs flex items-center justify-between flex-wrap gap-3 shadow-md">
               <div className="flex items-center gap-2.5">
@@ -2152,20 +2316,46 @@ function ArenaContent() {
                 <div>
                   <div className="text-xs font-mono font-black uppercase text-cyan-300">
                     {netplayRole === 'host'
-                      ? `Hosting 2-Player Online Match (${netplayOpponentName || 'Waiting for Player 2'})`
-                      : `Connected as Player 2 vs ${netplayOpponentName}`}
+                      ? `Hosting Online Match Room — P1 Host (${netplayOpponentName || 'Open for P2 / P3 / P4'})`
+                      : `Connected as Player ${netplaySlot + 1} (Port ${netplaySlot + 1}) vs ${netplayOpponentName}`}
                   </div>
                   <div className="text-[11px] text-slate-300">
-                    {sentInviteNotice || 'Your controller inputs and 60fps video feed are synced live.'}
+                    {sentInviteNotice || 'Up to 4 players (P1, P2, P3, P4) can play 2-on-2 via EA 4-Way Play!'}
                   </div>
                 </div>
               </div>
-              <button
-                onClick={handleLeaveNetplayRoom}
-                className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer"
-              >
-                Leave 2P Room
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {netplayRole === 'guest' && (
+                  <div className="flex items-center gap-1 bg-black/50 border border-blue-400/50 px-2 py-1 rounded text-[10px] font-mono">
+                    <span className="text-slate-300 mr-1">PORT:</span>
+                    {[1, 2, 3].map(s => (
+                      <button
+                        key={s}
+                        onClick={() => {
+                          setNetplaySlot(s);
+                          iframeRef.current?.contentWindow?.postMessage(
+                            { type: 'NHL95_SET_SLOT', slot: s },
+                            '*'
+                          );
+                        }}
+                        className={`px-1.5 py-0.5 rounded font-black cursor-pointer ${
+                          netplaySlot === s
+                            ? 'bg-amber-400 text-black'
+                            : 'bg-blue-900 text-slate-200 hover:bg-blue-800'
+                        }`}
+                      >
+                        P{s + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={handleLeaveNetplayRoom}
+                  className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer"
+                >
+                  Leave Room
+                </button>
+              </div>
             </div>
           )}
 
@@ -2336,11 +2526,18 @@ function ArenaContent() {
                           <span>Start Solo vs CPU</span>
                         </button>
                         <button
-                          onClick={handleHostOpenRoom}
+                          onClick={() => handleHostOpenRoom(false)}
                           className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
                         >
                           <Users className="w-4 h-4" />
-                          <span>Host 2P Online</span>
+                          <span>Host 1v1 (2P)</span>
+                        </button>
+                        <button
+                          onClick={() => handleHostOpenRoom(true)}
+                          className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                        >
+                          <Users className="w-4 h-4" />
+                          <span>Host 2v2 (4P)</span>
                         </button>
                       </div>
                     </div>
@@ -2526,14 +2723,34 @@ function ArenaContent() {
                         {!isMe ? (
                           <>
                             {player.roomId ? (
-                              <button
-                                onClick={() =>
-                                  handleJoinMatchRoom(player.peerId, player.coachName, player.roomId!, player.preferredRomId)
-                                }
-                                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs font-bold rounded cursor-pointer"
-                              >
-                                Join Game
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() =>
+                                    handleJoinMatchRoom(player.peerId, player.coachName, player.roomId!, player.preferredRomId, 1)
+                                  }
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs font-bold rounded cursor-pointer"
+                                >
+                                  Join P2
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleJoinMatchRoom(player.peerId, player.coachName, player.roomId!, player.preferredRomId, 2)
+                                  }
+                                  className="px-2.5 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-xs font-bold rounded cursor-pointer"
+                                  title="Join as Player 3 (2-on-2)"
+                                >
+                                  P3
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleJoinMatchRoom(player.peerId, player.coachName, player.roomId!, player.preferredRomId, 3)
+                                  }
+                                  className="px-2.5 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-xs font-bold rounded cursor-pointer"
+                                  title="Join as Player 4 (2-on-2)"
+                                >
+                                  P4
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={() => handleChallengePlayer(player)}
@@ -2555,12 +2772,20 @@ function ArenaContent() {
                             </button>
                           </>
                         ) : (
-                          <button
-                            onClick={handleHostOpenRoom}
-                            className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-xs font-bold rounded cursor-pointer"
-                          >
-                            Host 2P Room
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleHostOpenRoom(false)}
+                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-xs font-bold rounded cursor-pointer"
+                            >
+                              Host 1v1
+                            </button>
+                            <button
+                              onClick={() => handleHostOpenRoom(true)}
+                              className="px-3 py-1.5 bg-cyan-900 hover:bg-cyan-800 text-cyan-300 font-mono text-xs font-bold rounded cursor-pointer"
+                            >
+                              Host 2v2
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2764,6 +2989,9 @@ function ArenaContent() {
               gamepadInfo={gamepadInfo}
               gamepadButtons={gamepadButtons}
               gamepadAxes={gamepadAxes}
+              allGamepads={allGamepads}
+              fourPlayerMode={fourPlayerMode}
+              onToggleFourPlayerMode={setFourPlayerMode}
               controllerConfig={controllerConfig}
               onChangeConfig={handleUpdateControllerConfig}
               onSaveCoachConfig={handleSaveCoachControllerConfig}
@@ -3015,12 +3243,20 @@ function ArenaContent() {
                 <Users className="w-4 h-4 text-blue-700" />
                 <span>Locker Room ({onlinePlayers.length || 1} Online)</span>
               </div>
-              <button
-                onClick={handleHostOpenRoom}
-                className="text-[10px] font-mono font-black uppercase bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1 rounded cursor-pointer"
-              >
-                + Host 2P Game
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleHostOpenRoom(false)}
+                  className="text-[10px] font-mono font-black uppercase bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded cursor-pointer"
+                >
+                  + 1v1
+                </button>
+                <button
+                  onClick={() => handleHostOpenRoom(true)}
+                  className="text-[10px] font-mono font-black uppercase bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-1 rounded cursor-pointer"
+                >
+                  + 2v2
+                </button>
+              </div>
             </div>
 
             {/* Compact Online Players List */}
@@ -3043,12 +3279,26 @@ function ArenaContent() {
                     </div>
                     {!isMe ? (
                       p.roomId ? (
-                        <button
-                          onClick={() => handleJoinMatchRoom(p.peerId, p.coachName, p.roomId!, p.preferredRomId)}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-black uppercase rounded cursor-pointer shrink-0"
-                        >
-                          Join
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleJoinMatchRoom(p.peerId, p.coachName, p.roomId!, p.preferredRomId, 1)}
+                            className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-black uppercase rounded cursor-pointer"
+                          >
+                            P2
+                          </button>
+                          <button
+                            onClick={() => handleJoinMatchRoom(p.peerId, p.coachName, p.roomId!, p.preferredRomId, 2)}
+                            className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-[10px] font-black uppercase rounded cursor-pointer"
+                          >
+                            P3
+                          </button>
+                          <button
+                            onClick={() => handleJoinMatchRoom(p.peerId, p.coachName, p.roomId!, p.preferredRomId, 3)}
+                            className="px-2 py-1 bg-cyan-700 hover:bg-cyan-600 text-white font-mono text-[10px] font-black uppercase rounded cursor-pointer"
+                          >
+                            P4
+                          </button>
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleChallengePlayer(p)}
