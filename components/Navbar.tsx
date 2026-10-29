@@ -139,6 +139,15 @@ export default function Navbar() {
 
       {/* Desktop Navigation Links Row (Visible on screens >= md) */}
       <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-7 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
+        {/* Online Arena tab (left of Standings) */}
+        <Link 
+          href="/arena" 
+          className="hover:bg-amber-400 transition px-2.5 py-0.5 bg-amber-500 text-black border border-black font-black text-xs rounded-xs shadow-2xs"
+          title="Play NHL 95 in the Browser Online Arena"
+        >
+          🏒 Arena
+        </Link>
+
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
@@ -181,15 +190,6 @@ export default function Navbar() {
 
         <Link href="/awards" className="hover:underline transition">Awards</Link>
         <Link href="/records" className="hover:underline transition">Records</Link>
-
-        {/* Online Arena tab */}
-        <Link 
-          href="/arena" 
-          className="hover:bg-amber-400 transition px-2.5 py-0.5 bg-amber-500 text-black border border-black font-black text-xs rounded-xs shadow-2xs"
-          title="Play NHL 95 in the Browser Online Arena"
-        >
-          🏒 Arena
-        </Link>
 
         {/* Setup Guide tab (to the left of Extras) */}
         <Link href="/setup-guide" className="hover:underline transition text-amber-900 font-black">
