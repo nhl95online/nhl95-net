@@ -2183,36 +2183,50 @@ export default function PlayersPage() {
     async function loadAllDatabaseRecords() {
       setLoading(true);
       try {
-        // Query exact row count from Supabase
-        const { count } = await supabase
-          .from('league_player_database')
-          .select('player_id', { count: 'exact', head: true });
-
-        const totalCount = count && count > 0 ? count : 12000;
+        // Fetch all records in controlled parallel waves with per-chunk retry so all 68,847+ rows always load
         const pageSize = 1000;
-        const chunkRanges: { from: number; to: number }[] = [];
+        const waveSize = 12; // 12,000 rows per parallel wave
+        let all: any[] = [];
+        let offset = 0;
+        let reachedEnd = false;
 
-        // Build chunks up to totalCount + safety margin
-        for (let from = 0; from < totalCount + pageSize; from += pageSize) {
-          chunkRanges.push({ from, to: from + pageSize - 1 });
-        }
-
-        // Fetch all chunks in parallel without stopping early
-        const responses = await Promise.all(
-          chunkRanges.map((range) =>
-            supabase
+        const fetchChunkWithRetry = async (from: number, to: number, retries = 3): Promise<any[]> => {
+          for (let attempt = 0; attempt < retries; attempt++) {
+            const { data, error } = await supabase
               .from('league_player_database')
               .select('*')
-              .range(range.from, range.to)
-          )
-        );
-
-        let all: any[] = [];
-        responses.forEach(({ data, error }) => {
-          if (data && !error && data.length > 0) {
-            all = all.concat(data);
+              .order('player_id', { ascending: true })
+              .range(from, to);
+            if (!error && data) {
+              return data;
+            }
+            await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
           }
-        });
+          return [];
+        };
+
+        while (!reachedEnd && offset < 120000) {
+          const waveRanges: { from: number; to: number }[] = [];
+          for (let i = 0; i < waveSize; i++) {
+            const from = offset + i * pageSize;
+            waveRanges.push({ from, to: from + pageSize - 1 });
+          }
+
+          const waveResults = await Promise.all(
+            waveRanges.map((r) => fetchChunkWithRetry(r.from, r.to))
+          );
+
+          for (const chunk of waveResults) {
+            if (chunk && chunk.length > 0) {
+              all = all.concat(chunk);
+            }
+            if (!chunk || chunk.length < pageSize) {
+              reachedEnd = true;
+            }
+          }
+
+          offset += waveSize * pageSize;
+        }
 
         setAllMasterPlayers(all);
         setLoadedCount(all.length);
