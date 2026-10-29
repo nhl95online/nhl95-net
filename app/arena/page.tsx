@@ -592,6 +592,7 @@ function ArenaContent() {
   const [capturedFileName, setCapturedFileName] = useState<string>('');
   const [parsedGame, setParsedGame] = useState<ParsedGame | null>(null);
   const [parseStatusMessage, setParseStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [isSendingToDiscord, setIsSendingToDiscord] = useState<boolean>(false);
   const [dbTeams, setDbTeams] = useState<any[]>([]);
 
   const myDisplayName = useMemo(() => {
@@ -1046,6 +1047,88 @@ function ArenaContent() {
     URL.revokeObjectURL(url);
   };
 
+  // 1-Click Send Save State directly to the Discord Save State Channel!
+  const handleSendStateToDiscord = async () => {
+    setIsSendingToDiscord(true);
+    try {
+      let stateBytesToSend = capturedStateBytes;
+      let fileNameToSend = capturedFileName;
+
+      // Try grabbing the latest live state from the running emulator if available
+      const iframeWin = iframeRef.current?.contentWindow as any;
+      const ejs = iframeWin?.EJS_emulator;
+      if (ejs && ejs.gameManager && typeof ejs.gameManager.getState === 'function') {
+        const liveRaw: Uint8Array = ejs.gameManager.getState();
+        if (liveRaw && liveRaw.length >= 52000) {
+          stateBytesToSend = ensureRetroArchHeader(liveRaw);
+          const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+          fileNameToSend = `${selectedRom.id.toUpperCase()}_arena_${stamp}.state`;
+          setCapturedStateBytes(stateBytesToSend);
+          setCapturedFileName(fileNameToSend);
+        }
+      }
+
+      if (!stateBytesToSend || stateBytesToSend.length < 52000) {
+        setParseStatusMessage({
+          type: 'error',
+          text: 'No active game state found! Play a game on the Arena Ice (or load a .state file) before sending to Discord.'
+        });
+        setActiveArenaTab('boxscore');
+        return;
+      }
+
+      let scoreSummary = '';
+      try {
+        const seasonCfg = getSeasonConfig(selectedSeasonConfigId);
+        const g = parseSaveStateBuffer(stateBytesToSend, seasonCfg);
+        setParsedGame(g);
+        scoreSummary = `${g.awayTeam.teamCode} ${g.awayTeam.goals} @ ${g.homeTeam.teamCode} ${g.homeTeam.goals}`;
+      } catch {
+        // continue sending raw state even if roster config parse fails
+      }
+
+      const finalName = fileNameToSend || `${selectedRom.id.toUpperCase()}_arena.state`;
+      const formData = new FormData();
+      formData.append(
+        'file',
+        new Blob([new Uint8Array(stateBytesToSend)], { type: 'application/octet-stream' }),
+        finalName
+      );
+      formData.append('fileName', finalName);
+      formData.append('coachName', myDisplayName);
+      formData.append('romLabel', resolvedRomFileName || selectedRom.id.toUpperCase());
+      formData.append('scoreSummary', scoreSummary);
+      formData.append('seasonId', selectedSeasonConfigId);
+
+      const res = await fetch('/api/arena-discord-state', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setParseStatusMessage({
+          type: 'success',
+          text: `Sent ${finalName} (${scoreSummary || 'Save State'}) to Discord ${data.channelName || 'save-state channel'}!`
+        });
+      } else {
+        setParseStatusMessage({
+          type: 'error',
+          text: data.error || 'Could not send save state to Discord.'
+        });
+      }
+      setActiveArenaTab('boxscore');
+    } catch (err: any) {
+      setParseStatusMessage({
+        type: 'error',
+        text: err?.message || 'Error sending save state to Discord.'
+      });
+      setActiveArenaTab('boxscore');
+    } finally {
+      setIsSendingToDiscord(false);
+    }
+  };
+
   const handleLocalRomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1243,6 +1326,15 @@ function ArenaContent() {
 
           {/* Right Quick Actions */}
           <div className="flex items-center gap-2 flex-wrap">
+            {activeArenaTab !== 'ice' && (
+              <button
+                onClick={() => setActiveArenaTab('ice')}
+                className="bg-emerald-500 hover:bg-emerald-400 text-black border border-black px-3.5 py-1.5 text-xs font-mono font-black uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition shadow-xs"
+              >
+                <Play className="w-3.5 h-3.5 fill-black" />
+                <span>Return to Game</span>
+              </button>
+            )}
             <button
               onClick={handleHostOpenRoom}
               className="bg-blue-600 hover:bg-blue-500 text-white border border-blue-400 px-3 py-1.5 text-xs font-mono font-black uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition shadow-xs"
@@ -1258,6 +1350,15 @@ function ArenaContent() {
             >
               <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
               <span>Load Local ROM</span>
+            </button>
+            <button
+              onClick={handleSendStateToDiscord}
+              disabled={isSendingToDiscord}
+              className="bg-[#5865F2] hover:bg-[#4752C4] text-white border border-indigo-300 px-3.5 py-1.5 text-xs font-mono font-black uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition shadow-xs"
+              title="Capture and send the live .state file directly to the Discord Save State channel"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{isSendingToDiscord ? 'Sending to Discord...' : 'Send .State to Discord'}</span>
             </button>
             <button
               onClick={handleCaptureLiveBoxscore}
@@ -1704,6 +1805,15 @@ function ArenaContent() {
                     <span>Test Controller</span>
                   </button>
                   <button
+                    onClick={handleSendStateToDiscord}
+                    disabled={isSendingToDiscord}
+                    className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-3 py-1 text-[11px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shadow-xs"
+                    title="Send the live .state file directly to the Discord Save State channel"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isSendingToDiscord ? 'Sending...' : 'Send .State to Discord'}</span>
+                  </button>
+                  <button
                     onClick={handleCaptureLiveBoxscore}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 text-[11px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shadow-xs"
                   >
@@ -1721,14 +1831,25 @@ function ArenaContent() {
           {activeArenaTab === 'lobby' && (
             <div className="bg-white border-2 border-black p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
               <div className="border-b border-slate-200 pb-4 mb-4">
-                <h2 className="text-xl font-black text-slate-900 font-sans">
-                  Pick an opponent
-                </h2>
-                <p className="text-xs font-bold text-slate-700 mt-1">
-                  {onlinePlayers.length || 1} human player{onlinePlayers.length === 1 ? '' : 's'} online &bull;{' '}
-                  {availableOpponentsCount} available human opponent{availableOpponentsCount === 1 ? '' : 's'} &bull;{' '}
-                  CPU always available
-                </p>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900 font-sans">
+                      Pick an opponent
+                    </h2>
+                    <p className="text-xs font-bold text-slate-700 mt-1">
+                      {onlinePlayers.length || 1} human player{onlinePlayers.length === 1 ? '' : 's'} online &bull;{' '}
+                      {availableOpponentsCount} available human opponent{availableOpponentsCount === 1 ? '' : 's'} &bull;{' '}
+                      CPU always available
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setActiveArenaTab('ice')}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white border-2 border-black font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-[2px_2px_0px_rgba(0,0,0,1)] transition"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Return to Game</span>
+                  </button>
+                </div>
 
                 {/* "I'm open to play" bar (matches King of 94 screenshot) */}
                 <div className="mt-4 flex items-center gap-3 flex-wrap text-xs">
@@ -1904,14 +2025,23 @@ function ArenaContent() {
                 </div>
               </div>
 
-              {/* Bottom Lobby Footer Buttons (Refresh Players / Locker Room Chat) */}
+              {/* Bottom Lobby Footer Buttons (Return to Game / Refresh Players / Locker Room Chat) */}
               <div className="mt-4 flex items-center justify-between flex-wrap gap-3 text-xs">
-                <button
-                  onClick={refreshBucketFiles}
-                  className="px-4 py-2 border border-slate-300 hover:border-black bg-white text-slate-800 font-bold rounded cursor-pointer"
-                >
-                  Refresh players
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setActiveArenaTab('ice')}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Return to Game</span>
+                  </button>
+                  <button
+                    onClick={refreshBucketFiles}
+                    className="px-4 py-2 border border-slate-300 hover:border-black bg-white text-slate-800 font-bold rounded cursor-pointer"
+                  >
+                    Refresh players
+                  </button>
+                </div>
                 <button
                   onClick={() => setIsChatOpen(!isChatOpen)}
                   className="px-4 py-2 border border-slate-300 hover:border-black bg-white text-slate-800 font-bold rounded cursor-pointer flex items-center gap-1.5"
@@ -2077,6 +2207,21 @@ function ArenaContent() {
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
+                    onClick={() => setActiveArenaTab('ice')}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-black uppercase px-3.5 py-2 rounded-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Return to Game</span>
+                  </button>
+                  <button
+                    onClick={handleSendStateToDiscord}
+                    disabled={isSendingToDiscord}
+                    className="bg-[#5865F2] hover:bg-[#4752C4] text-white font-mono text-xs font-black uppercase px-3.5 py-2 rounded-xs cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{isSendingToDiscord ? 'Sending to Discord...' : 'Send .State to Discord'}</span>
+                  </button>
+                  <button
                     onClick={handleCaptureLiveBoxscore}
                     className="bg-amber-500 hover:bg-amber-400 text-black border border-black font-mono text-xs font-black uppercase px-3.5 py-2 rounded-xs cursor-pointer flex items-center gap-1.5 shadow-2xs"
                   >
@@ -2113,6 +2258,14 @@ function ArenaContent() {
 
                 {capturedStateBytes && (
                   <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={handleSendStateToDiscord}
+                      disabled={isSendingToDiscord}
+                      className="bg-[#5865F2] hover:bg-[#4752C4] text-white font-mono text-xs font-black uppercase px-3 py-1.5 rounded-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{isSendingToDiscord ? 'Sending...' : 'Send to Discord Save-State Channel'}</span>
+                    </button>
                     <button
                       onClick={handleDownloadCapturedState}
                       className="bg-emerald-700 hover:bg-emerald-600 text-white font-mono text-xs font-bold uppercase px-3 py-1.5 rounded-xs cursor-pointer flex items-center gap-1.5"
