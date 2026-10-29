@@ -287,6 +287,8 @@
         return;
       }
 
+      var autoStart = params.get("autoStart") === "1";
+
       window.EJS_player = "#game";
       window.EJS_core = "segaMD";
       window.EJS_gameName = title;
@@ -294,7 +296,7 @@
       window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
       window.EJS_color = "#f59e0b";
       window.EJS_backgroundColor = "#050608";
-      window.EJS_startOnLoaded = true;
+      window.EJS_startOnLoaded = autoStart;
 
       // Apply Player 2 bitmask to EmulatorJS simulateInput(1, idx, val)
       var prevP2Mask = 0;

@@ -540,7 +540,8 @@ function ArenaContent() {
   // Arena Sub-navigation Tab ('ice' | 'lobby' | 'vault' | 'controller' | 'boxscore')
   const [activeArenaTab, setActiveArenaTab] = useState<'ice' | 'lobby' | 'vault' | 'controller' | 'boxscore'>('ice');
 
-  // Emulator loading & runtime state
+  // Emulator loading & runtime state (does NOT auto-start until user selects a ROM or clicks Play)
+  const [hasLaunchedGame, setHasLaunchedGame] = useState<boolean>(false);
   const [emulatorRunning, setEmulatorRunning] = useState<boolean>(false);
   const [resolvedRomUrl, setResolvedRomUrl] = useState<string | null>(null);
   const [resolvedRomFileName, setResolvedRomFileName] = useState<string>('');
@@ -635,7 +636,6 @@ function ArenaContent() {
       setResolvedRomFileName(matchedFile);
       setFallbackNotice(null);
     } else {
-      // Automatically boot W16.zip from the "roms" bucket so the game ALWAYS loads & plays immediately!
       const fallbackFile = bucketFiles.find(f => f.toUpperCase() === 'W16.ZIP') || bucketFiles[0] || 'W16.zip';
       const cleanBase = fallbackFile.replace(/\.(zip|bin|md|gen|smd)$/i, '');
       setResolvedRomUrl(
@@ -643,7 +643,7 @@ function ArenaContent() {
       );
       setResolvedRomFileName(fallbackFile);
       setFallbackNotice(
-        `Note: "${selectedRom.id.toUpperCase()}" isn't uploaded to the cloud "roms" bucket yet, so we automatically booted ${fallbackFile} from the "roms" bucket! You can also click "Load Local ROM" to play or upload ${selectedRom.id.toUpperCase()} from your computer.`
+        `Note: "${selectedRom.id.toUpperCase()}" isn't uploaded to the cloud "roms" bucket yet (selected fallback: ${fallbackFile}). Click "Load Local ROM" if you have ${selectedRom.id.toUpperCase()} on your computer.`
       );
     }
   }, [selectedRom, bucketFiles]);
@@ -813,6 +813,7 @@ function ArenaContent() {
     setNetplayRole('host');
     setNetplayOpponentName(target.coachName);
     setSentInviteNotice(`Challenge sent to ${target.coachName}! Hosting Match Room (${selectedRom.id.toUpperCase()})...`);
+    setHasLaunchedGame(true);
     setActiveArenaTab('ice');
   };
 
@@ -823,6 +824,7 @@ function ArenaContent() {
     setNetplayRole('host');
     setNetplayOpponentName('Waiting for Opponent...');
     setSentInviteNotice('Open Match Room Created! Any player in the Locker Room can click "Join Game" to drop in as Player 2.');
+    setHasLaunchedGame(true);
     setActiveArenaTab('ice');
   };
 
@@ -846,6 +848,7 @@ function ArenaContent() {
     setNetplayOpponentName(hostName);
     setNetplayRoomId(roomId);
     setNetplayRole('guest');
+    setHasLaunchedGame(true);
     setActiveArenaTab('ice');
   };
 
@@ -1057,6 +1060,7 @@ function ArenaContent() {
     setResolvedRomFileName(file.name);
     setFallbackNotice(null);
     setEmulatorRunning(false);
+    setHasLaunchedGame(true);
     setActiveArenaTab('ice');
     e.target.value = '';
   };
@@ -1139,10 +1143,10 @@ function ArenaContent() {
   const activeRomTitle = localRomTitle || selectedRom.title;
 
   const emulatorIframeSrc = useMemo(() => {
-    if (!activeRomUrl) return null;
+    if (!activeRomUrl || !hasLaunchedGame) return null;
     const fileLabel = localRomTitle || resolvedRomFileName || `${selectedRom.id.toUpperCase()}.zip`;
-    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}&role=${netplayRole}&roomId=${encodeURIComponent(netplayRoomId)}`;
-  }, [activeRomUrl, localRomTitle, resolvedRomFileName, selectedRom.id, netplayRole, netplayRoomId]);
+    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}&role=${netplayRole}&roomId=${encodeURIComponent(netplayRoomId)}&autoStart=1`;
+  }, [activeRomUrl, hasLaunchedGame, localRomTitle, resolvedRomFileName, selectedRom.id, netplayRole, netplayRoomId]);
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-16">
@@ -1421,7 +1425,7 @@ function ArenaContent() {
           {/* CLOUD-READY "ROMS" BUCKET CARTRIDGES STRIP (ALL FILES IN SUPABASE "roms" BUCKET) */}
           <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-              <span>SUPABASE &ldquo;ROMS&rdquo; BUCKET CARTRIDGES ({bucketRomItems.length} FILES)</span>
+              <span>SELECT A ROM FROM SUPABASE &ldquo;ROMS&rdquo; BUCKET ({bucketRomItems.length} FILES)</span>
               <button
                 onClick={() => setActiveArenaTab('vault')}
                 className="text-amber-700 hover:underline cursor-pointer font-bold"
@@ -1440,6 +1444,8 @@ function ArenaContent() {
                       setLocalRomObjectUrl(null);
                       setLocalRomTitle(null);
                       setSelectedRomId(item.romId);
+                      setHasLaunchedGame(false);
+                      setEmulatorRunning(false);
                       setActiveArenaTab('ice');
                     }}
                     title={`${item.fileName} — ${item.title}`}
@@ -1449,7 +1455,7 @@ function ArenaContent() {
                         : 'bg-[#faf8f5] hover:bg-amber-50 text-black border-slate-300 hover:border-black'
                     }`}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSelected && hasLaunchedGame ? 'bg-emerald-400 animate-ping' : 'bg-emerald-500'}`} />
                     <span>{item.fileName}</span>
                   </button>
                 );
@@ -1558,12 +1564,12 @@ function ArenaContent() {
           </div>
 
           {/* ================================================================= */}
-          {/* TAB 1: ARENA ICE (LIVE EMULATORJS CANVAS)                         */}
+          {/* TAB 1: ARENA ICE (PRE-GAME SELECTOR OR LIVE EMULATORJS CANVAS)    */}
           {/* ================================================================= */}
           <div className={activeArenaTab === 'ice' ? 'block' : 'hidden'}>
             <div className="bg-black border-4 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
               <div className="aspect-[4/3] w-full bg-black relative">
-                {emulatorIframeSrc && (
+                {emulatorIframeSrc ? (
                   <iframe
                     ref={iframeRef}
                     key={emulatorIframeSrc}
@@ -1572,6 +1578,92 @@ function ArenaContent() {
                     className="w-full h-full border-0"
                     allow="autoplay; fullscreen; gamepad"
                   />
+                ) : (
+                  /* PRE-GAME SELECTION SCREEN (NO AUTO-START) */
+                  <div className="w-full h-full bg-gradient-to-b from-[#0b1320] via-[#060a10] to-black text-white p-5 sm:p-8 flex flex-col justify-between overflow-y-auto">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2">
+                      <div>
+                        <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-black">
+                          KING OF 95 • THE CLASSIC COLLECTION
+                        </div>
+                        <div className="text-lg sm:text-2xl font-black font-serif uppercase tracking-tight text-white">
+                          Select Your ROM Cartridge &amp; How to Play
+                        </div>
+                      </div>
+                      <span className="border border-slate-600 text-slate-300 font-mono text-[10px] uppercase px-2.5 py-1 rounded-xs shrink-0">
+                        SEGA GENESIS
+                      </span>
+                    </div>
+
+                    {/* Bucket ROM Selector Grid Inside the Screen */}
+                    <div className="my-4">
+                      <div className="text-[11px] font-mono uppercase text-slate-400 font-bold mb-2 flex items-center justify-between">
+                        <span>1. Choose a ROM from your &ldquo;roms&rdquo; Bucket ({bucketRomItems.length} Available):</span>
+                        <span className="text-amber-400">Selected: {localRomTitle || resolvedRomFileName || 'W16.zip'}</span>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-44 overflow-y-auto pr-1">
+                        {bucketRomItems.map(item => {
+                          const active = item.romId === selectedRom.id && !localRomObjectUrl;
+                          return (
+                            <button
+                              key={item.fileName}
+                              onClick={() => {
+                                if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                                setLocalRomObjectUrl(null);
+                                setLocalRomTitle(null);
+                                setSelectedRomId(item.romId);
+                              }}
+                              className={`p-2 rounded-xs border text-left font-mono transition cursor-pointer ${
+                                active
+                                  ? 'bg-amber-500 text-black border-amber-300 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
+                                  : 'bg-slate-900/90 hover:bg-slate-800 text-white border-slate-700'
+                              }`}
+                            >
+                              <div className="text-xs font-black truncate">{item.fileName}</div>
+                              <div className={`text-[9px] truncate ${active ? 'text-black/80 font-bold' : 'text-slate-400'}`}>
+                                {item.base === '1909' ? '1909 NHA' : `Season ${item.base.toUpperCase()}`}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Selected ROM Summary & Launch Buttons */}
+                    <div className="bg-slate-900/90 border border-slate-700 p-4 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="text-[10px] font-mono uppercase text-emerald-400 font-bold">
+                          READY ON DECK • {localRomTitle || resolvedRomFileName}
+                        </div>
+                        <div className="text-base sm:text-lg font-black font-serif uppercase text-white">
+                          {activeRomTitle}
+                        </div>
+                        <div className="text-xs text-slate-400 font-mono">
+                          {selectedRom.subtitle}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <button
+                          onClick={() => {
+                            setNetplayRole('solo');
+                            setHasLaunchedGame(true);
+                          }}
+                          className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                        >
+                          <Play className="w-4 h-4 fill-black" />
+                          <span>Start Solo vs CPU</span>
+                        </button>
+                        <button
+                          onClick={handleHostOpenRoom}
+                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                        >
+                          <Users className="w-4 h-4" />
+                          <span>Host 2P Online</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -1586,6 +1678,17 @@ function ArenaContent() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                  {hasLaunchedGame && (
+                    <button
+                      onClick={() => {
+                        setHasLaunchedGame(false);
+                        setEmulatorRunning(false);
+                      }}
+                      className="bg-red-700 hover:bg-red-600 text-white px-2.5 py-1 text-[11px] font-bold uppercase rounded-xs cursor-pointer"
+                    >
+                      Change ROM / Stop Game
+                    </button>
+                  )}
                   <button
                     onClick={() => setActiveArenaTab('lobby')}
                     className="bg-blue-700 hover:bg-blue-600 text-white px-2.5 py-1 text-[11px] font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1"
@@ -1790,6 +1893,7 @@ function ArenaContent() {
                     <button
                       onClick={() => {
                         handleLeaveNetplayRoom();
+                        setHasLaunchedGame(true);
                         setActiveArenaTab('ice');
                       }}
                       className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-sans text-xs font-bold rounded cursor-pointer shadow-2xs"
@@ -1922,16 +2026,17 @@ function ArenaContent() {
                           setLocalRomObjectUrl(null);
                           setLocalRomTitle(null);
                           setSelectedRomId(item.id);
+                          setHasLaunchedGame(true);
                           setActiveArenaTab('ice');
                         }}
                         className={`w-full py-1.5 font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1 transition ${
-                          isCurrent
+                          isCurrent && hasLaunchedGame
                             ? 'bg-emerald-700 text-white'
                             : 'bg-black hover:bg-amber-500 hover:text-black text-white'
                         }`}
                       >
                         <Play className="w-3 h-3 fill-current" />
-                        <span>{isCurrent ? 'Currently on Ice' : 'Load Cartridge on Ice'}</span>
+                        <span>{isCurrent && hasLaunchedGame ? 'Currently on Ice' : 'Play This ROM on Ice'}</span>
                       </button>
                     </div>
                   );
@@ -2258,6 +2363,7 @@ function ArenaContent() {
                 <button
                   onClick={() => {
                     handleLeaveNetplayRoom();
+                    setHasLaunchedGame(true);
                     setActiveArenaTab('ice');
                   }}
                   className="w-full text-left p-2.5 bg-white hover:bg-amber-50 border border-slate-300 rounded-xs cursor-pointer transition block"
