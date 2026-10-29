@@ -1172,7 +1172,7 @@ export default function HomePage() {
         });
       }
 
-      // Helper to resolve team abbreviation for a goal or player row
+      // Helper to resolve team abbreviation & logo for a goal or player row
       const resolveRowTeamAbbr = (rawTeam: any, rawTeamId: any): string => {
         if (rawTeam && typeof rawTeam === 'string' && rawTeam.trim()) {
           const cleanT = rawTeam.trim().toUpperCase();
@@ -1186,14 +1186,26 @@ export default function HomePage() {
         return '';
       };
 
+      const resolveLogoForAbbr = (abbr: string): string | null => {
+        if (!abbr) return null;
+        const upper = abbr.trim().toUpperCase();
+        if (upper === (game.home_abbr || '').toUpperCase()) return game.home_logo || null;
+        if (upper === (game.away_abbr || '').toUpperCase()) return game.away_logo || null;
+        const stMatch = standings.find(
+          (s: any) => (s.league_teams?.abbreviation || '').trim().toUpperCase() === upper
+        );
+        return stMatch?.league_teams?.logo_url || null;
+      };
+
       // Also tally G / A / PTS directly from scoringRows by player name
-      const tallyByName = new Map<string, { name: string; team_abbr: string; g: number; a: number; pts: number }>();
-      const addTally = (rawName: any, isGoal: boolean, teamAbbr: string) => {
+      const tallyByName = new Map<string, { name: string; team_abbr: string; team_logo: string | null; g: number; a: number; pts: number }>();
+      const addTally = (rawName: any, isGoal: boolean, teamAbbr: string, teamLogo: string | null) => {
         const clean = String(rawName || '').trim();
         if (!clean || clean === '--' || clean.toLowerCase() === 'none' || clean.toLowerCase() === 'unassisted' || clean.startsWith('Player #')) return;
         const k = clean.toLowerCase();
-        const cur = tallyByName.get(k) || { name: clean, team_abbr: teamAbbr, g: 0, a: 0, pts: 0 };
+        const cur = tallyByName.get(k) || { name: clean, team_abbr: teamAbbr, team_logo: teamLogo, g: 0, a: 0, pts: 0 };
         if (!cur.team_abbr && teamAbbr) cur.team_abbr = teamAbbr;
+        if (!cur.team_logo && teamLogo) cur.team_logo = teamLogo;
         if (isGoal) cur.g += 1;
         else cur.a += 1;
         cur.pts = cur.g + cur.a;
@@ -1202,12 +1214,14 @@ export default function HomePage() {
 
       const enrichedScoringRows = scoringRows.map((sc: any) => {
         const teamAbbr = resolveRowTeamAbbr(sc.team, sc.team_id);
-        addTally(sc.scorer, true, teamAbbr);
-        addTally(sc.assist1, false, teamAbbr);
-        addTally(sc.assist2, false, teamAbbr);
+        const teamLogo = resolveLogoForAbbr(teamAbbr);
+        addTally(sc.scorer, true, teamAbbr, teamLogo);
+        addTally(sc.assist1, false, teamAbbr, teamLogo);
+        addTally(sc.assist2, false, teamAbbr, teamLogo);
         return {
           ...sc,
-          team_abbr: teamAbbr
+          team_abbr: teamAbbr,
+          team_logo: teamLogo
         };
       });
 
@@ -1223,10 +1237,12 @@ export default function HomePage() {
             '';
           const logEntry = resolvedName ? tallyByName.get(resolvedName.toLowerCase()) : undefined;
           const teamAbbr = resolveRowTeamAbbr(p.team, p.team_id) || logEntry?.team_abbr || '';
+          const teamLogo = resolveLogoForAbbr(teamAbbr) || logEntry?.team_logo || null;
           return {
             name: resolvedName,
             team_id: Number(p.team_id),
             team_abbr: teamAbbr,
+            team_logo: teamLogo,
             g: Number(p.goals || 0),
             a: Number(p.assists || 0),
             pts: Number(p.goals || 0) + Number(p.assists || 0)
@@ -1244,7 +1260,12 @@ export default function HomePage() {
           ) || fromScoringLog.find((item) => !usedNames.has(item.name.toLowerCase()));
           if (match) {
             usedNames.add(match.name.toLowerCase());
-            return { ...s, name: match.name, team_abbr: s.team_abbr || match.team_abbr };
+            return {
+              ...s,
+              name: match.name,
+              team_abbr: s.team_abbr || match.team_abbr,
+              team_logo: s.team_logo || match.team_logo
+            };
           }
           return s;
         });
@@ -1655,8 +1676,15 @@ export default function HomePage() {
                                 {boxscoreDetails.scoring.length > 0 ? (
                                   <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
                                     {boxscoreDetails.scoring.map((sc: any, idx: number) => (
-                                      <div key={idx} className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5 flex items-baseline gap-1 flex-wrap">
+                                      <div key={idx} className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5 flex items-center gap-1 flex-wrap">
                                         <span className="font-bold text-neutral-500">P{sc.period} {sc.time_formatted || ''}</span>
+                                        {sc.team_logo && (
+                                          <img
+                                            src={sc.team_logo}
+                                            alt={sc.team_abbr || 'Team'}
+                                            className="w-3.5 h-3.5 object-contain shrink-0"
+                                          />
+                                        )}
                                         {sc.team_abbr && (
                                           <span className="bg-black text-amber-300 font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs">
                                             {sc.team_abbr}
@@ -1683,6 +1711,13 @@ export default function HomePage() {
                                     {boxscoreDetails.topPlayers.map((tp: any, idx: number) => (
                                       <div key={idx} className="flex items-center justify-between text-[10px] border-b border-neutral-100 pb-0.5">
                                         <div className="flex items-center gap-1.5 min-w-0">
+                                          {tp.team_logo && (
+                                            <img
+                                              src={tp.team_logo}
+                                              alt={tp.team_abbr || 'Team'}
+                                              className="w-4 h-4 object-contain shrink-0"
+                                            />
+                                          )}
                                           {tp.team_abbr && (
                                             <span className="bg-neutral-200 border border-neutral-400 text-black font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs shrink-0">
                                               {tp.team_abbr}
