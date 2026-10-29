@@ -1172,23 +1172,43 @@ export default function HomePage() {
         });
       }
 
+      // Helper to resolve team abbreviation for a goal or player row
+      const resolveRowTeamAbbr = (rawTeam: any, rawTeamId: any): string => {
+        if (rawTeam && typeof rawTeam === 'string' && rawTeam.trim()) {
+          const cleanT = rawTeam.trim().toUpperCase();
+          if (cleanT === 'HOME') return game.home_abbr;
+          if (cleanT === 'AWAY') return game.away_abbr;
+          return cleanT;
+        }
+        const tid = Number(rawTeamId);
+        if (tid && tid === Number(game.home_team_id)) return game.home_abbr;
+        if (tid && tid === Number(game.away_team_id)) return game.away_abbr;
+        return '';
+      };
+
       // Also tally G / A / PTS directly from scoringRows by player name
-      const tallyByName = new Map<string, { name: string; g: number; a: number; pts: number }>();
-      const addTally = (rawName: any, isGoal: boolean) => {
+      const tallyByName = new Map<string, { name: string; team_abbr: string; g: number; a: number; pts: number }>();
+      const addTally = (rawName: any, isGoal: boolean, teamAbbr: string) => {
         const clean = String(rawName || '').trim();
         if (!clean || clean === '--' || clean.toLowerCase() === 'none' || clean.toLowerCase() === 'unassisted' || clean.startsWith('Player #')) return;
         const k = clean.toLowerCase();
-        const cur = tallyByName.get(k) || { name: clean, g: 0, a: 0, pts: 0 };
+        const cur = tallyByName.get(k) || { name: clean, team_abbr: teamAbbr, g: 0, a: 0, pts: 0 };
+        if (!cur.team_abbr && teamAbbr) cur.team_abbr = teamAbbr;
         if (isGoal) cur.g += 1;
         else cur.a += 1;
         cur.pts = cur.g + cur.a;
         tallyByName.set(k, cur);
       };
 
-      scoringRows.forEach((sc: any) => {
-        addTally(sc.scorer, true);
-        addTally(sc.assist1, false);
-        addTally(sc.assist2, false);
+      const enrichedScoringRows = scoringRows.map((sc: any) => {
+        const teamAbbr = resolveRowTeamAbbr(sc.team, sc.team_id);
+        addTally(sc.scorer, true, teamAbbr);
+        addTally(sc.assist1, false, teamAbbr);
+        addTally(sc.assist2, false, teamAbbr);
+        return {
+          ...sc,
+          team_abbr: teamAbbr
+        };
       });
 
       const fromScoringLog = Array.from(tallyByName.values()).sort((a, b) => b.pts - a.pts || b.g - a.g);
@@ -1201,9 +1221,12 @@ export default function HomePage() {
             (p.player_name && !String(p.player_name).startsWith('Player #') ? String(p.player_name).trim() : '') ||
             nameById.get(pid) ||
             '';
+          const logEntry = resolvedName ? tallyByName.get(resolvedName.toLowerCase()) : undefined;
+          const teamAbbr = resolveRowTeamAbbr(p.team, p.team_id) || logEntry?.team_abbr || '';
           return {
             name: resolvedName,
             team_id: Number(p.team_id),
+            team_abbr: teamAbbr,
             g: Number(p.goals || 0),
             a: Number(p.assists || 0),
             pts: Number(p.goals || 0) + Number(p.assists || 0)
@@ -1221,13 +1244,13 @@ export default function HomePage() {
           ) || fromScoringLog.find((item) => !usedNames.has(item.name.toLowerCase()));
           if (match) {
             usedNames.add(match.name.toLowerCase());
-            return { ...s, name: match.name };
+            return { ...s, name: match.name, team_abbr: s.team_abbr || match.team_abbr };
           }
           return s;
         });
 
         if (topSkaters.some((s: any) => !s.name)) {
-          topSkaters = fromScoringLog;
+          topSkaters = fromScoringLog.map(item => ({ ...item, team_id: 0 }));
         }
       }
 
@@ -1237,7 +1260,7 @@ export default function HomePage() {
 
       setBoxscoreDetails({
         loading: false,
-        scoring: scoringRows,
+        scoring: enrichedScoringRows,
         topPlayers: topSkaters
       });
     } catch {
@@ -1632,11 +1655,16 @@ export default function HomePage() {
                                 {boxscoreDetails.scoring.length > 0 ? (
                                   <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
                                     {boxscoreDetails.scoring.map((sc: any, idx: number) => (
-                                      <div key={idx} className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5">
-                                        <span className="font-bold text-neutral-500">P{sc.period} {sc.time_formatted || ''}</span>{' '}
+                                      <div key={idx} className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5 flex items-baseline gap-1 flex-wrap">
+                                        <span className="font-bold text-neutral-500">P{sc.period} {sc.time_formatted || ''}</span>
+                                        {sc.team_abbr && (
+                                          <span className="bg-black text-amber-300 font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs">
+                                            {sc.team_abbr}
+                                          </span>
+                                        )}
                                         <span className="font-black text-black">{sc.scorer}</span>
                                         {sc.assist1 && sc.assist1 !== '--' && (
-                                          <span className="text-neutral-600"> ({sc.assist1}{sc.assist2 && sc.assist2 !== '--' ? `, ${sc.assist2}` : ''})</span>
+                                          <span className="text-neutral-600">({sc.assist1}{sc.assist2 && sc.assist2 !== '--' ? `, ${sc.assist2}` : ''})</span>
                                         )}
                                       </div>
                                     ))}
@@ -1654,7 +1682,14 @@ export default function HomePage() {
                                   <div className="space-y-1">
                                     {boxscoreDetails.topPlayers.map((tp: any, idx: number) => (
                                       <div key={idx} className="flex items-center justify-between text-[10px] border-b border-neutral-100 pb-0.5">
-                                        <span className="font-bold truncate">{tp.name}</span>
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          {tp.team_abbr && (
+                                            <span className="bg-neutral-200 border border-neutral-400 text-black font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs shrink-0">
+                                              {tp.team_abbr}
+                                            </span>
+                                          )}
+                                          <span className="font-bold truncate">{tp.name}</span>
+                                        </div>
                                         <span className="font-black shrink-0 ml-2">
                                           {tp.g}G {tp.a}A ({tp.pts}P)
                                         </span>
