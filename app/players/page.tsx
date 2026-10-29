@@ -57,6 +57,19 @@ export const getScaleLevel = (val: any): number => {
   return 6;
 };
 
+// Converts Stick Handling (0 - 15 Sega NHL 95 scale) to 0 - 6 Scale level for heatmap/matrix boxes
+export const getStickHandlingScaleLevel = (val: any): number => {
+  const n = Number(val);
+  if (isNaN(n) || n <= 0) return 0;
+  if (n <= 2) return 1;
+  if (n <= 5) return 2;
+  if (n <= 8) return 3;
+  if (n <= 11) return 4;
+  if (n <= 14) return 5;
+  if (n <= 15) return 6;
+  return getScaleLevel(n);
+};
+
 // Heat-map styling for ratings
 export const getHeatmapColor = (level: number) => {
   switch (level) {
@@ -194,7 +207,12 @@ export const getPlayerRatingAttributes = (player: any) => {
     { key: 'Def Aware', label: 'Def Aware', value: getScaleLevel(getRatingVal(combined, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'Def_Aware', 'defaware', 'DFA', 'defense', 'def')) },
     { key: 'Shot Power', label: 'Shot Power', value: getScaleLevel(getRatingVal(combined, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'Shot_Power', 'power', 'pwr', 'sp')) },
     { key: 'Shot Accuracy', label: 'Shot Accuracy', value: getScaleLevel(getRatingVal(combined, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'shot_accuracy', 'Shot_Accuracy', 'accuracy', 'acc', 'sa')) },
-    { key: 'Stick Handling', label: 'Stick Handling', value: getScaleLevel(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST')) },
+    {
+      key: 'Stick Handling',
+      label: 'Stick Handling',
+      value: getStickHandlingScaleLevel(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST')),
+      rawValue: Math.round(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST')),
+    },
     { key: 'Passing', label: 'Passing', value: getScaleLevel(getRatingVal(combined, 'Passing', 'Pas', 'pas', 'pass', 'Pass', 'PAS', 'PASS', 'passing')) },
     { key: 'Checking', label: 'Checking', value: getScaleLevel(getRatingVal(combined, 'Checking', 'ChK', 'chk', 'CHK', 'check', 'Check', 'checking')) },
     { key: 'Aggression', label: 'Aggression', value: getScaleLevel(getRatingVal(combined, 'Aggression', 'Agr', 'agr', 'AGR', 'agg', 'Agg', 'roughness', 'Roughness', 'rgh', 'aggression')) },
@@ -273,10 +291,11 @@ export const getCareerAverageRatingAttributes = (careerData: any[], fallbackPlay
     });
 
     const avgRaw = validCount > 0 ? rawSum / validCount : 0;
+    const isStH = key === 'Stick Handling';
     return {
       key,
       label,
-      value: getScaleLevel(avgRaw),
+      value: isStH ? getStickHandlingScaleLevel(avgRaw) : getScaleLevel(avgRaw),
       rawValue: Math.round(avgRaw),
     };
   });
@@ -292,7 +311,7 @@ const RatingMatrix = ({
   showHeader = true,
   title = 'Ratings',
 }: {
-  ratings: Array<{ key: string; label: string; value: number }>;
+  ratings: Array<{ key: string; label: string; value: number; rawValue?: number }>;
   showHeader?: boolean;
   title?: string;
 }) => {
@@ -314,6 +333,8 @@ const RatingMatrix = ({
         {ratings.map((item) => {
           const val = Math.max(0, Math.min(6, item.value));
           const color = getHeatmapColor(val);
+          const isStH = item.key === 'Stick Handling';
+          const displaySc = isStH && item.rawValue !== undefined && item.rawValue > 0 ? item.rawValue : val;
           return (
             <div key={item.key} className="grid grid-cols-12 items-center py-0.5 px-1.5 hover:bg-emerald-50/50">
               <span className="col-span-5 font-bold truncate text-slate-800 text-[9px] pl-1">
@@ -340,7 +361,7 @@ const RatingMatrix = ({
                 );
               })}
               <span className="col-span-1 font-mono font-black text-right pr-1 text-slate-900">
-                {val}
+                {displaySc}
               </span>
             </div>
           );
@@ -652,6 +673,47 @@ const resolveLogoUrl = async (cacheKey: string, candidateUrls: string[]): Promis
   return promise;
 };
 
+const NHL_ABBR_TO_FULL_SLUGS: Record<string, string[]> = {
+  ANA: ['anaheim_ducks', 'mighty_ducks_of_anaheim'],
+  ARI: ['arizona_coyotes', 'phoenix_coyotes'],
+  BER: ['berlin_dutchmen'],
+  BOS: ['boston_bruins'],
+  BUF: ['buffalo_sabres'],
+  CAR: ['carolina_hurricanes', 'hartford_whalers'],
+  CBJ: ['columbus_blue_jackets'],
+  CGY: ['calgary_flames', 'atlanta_flames'],
+  CHI: ['chicago_black_hawks', 'chicago_blackhawks'],
+  COL: ['colorado_avalanche', 'quebec_nordiques'],
+  DAL: ['dallas_stars', 'minnesota_north_stars'],
+  DET: ['detroit_cougars', 'detroit_red_wings', 'detroit_falcons'],
+  DTC: ['detroit_cougars', 'detroit_red_wings'],
+  EDM: ['edmonton_oilers'],
+  FLA: ['florida_panthers'],
+  HFD: ['hartford_whalers'],
+  LAK: ['los_angeles_kings'],
+  MIN: ['minnesota_wild', 'minnesota_north_stars'],
+  MTL: ['montreal_canadiens', 'montreal_wanderers', 'montreal_shamrocks', 'montreal_maroons'],
+  NJD: ['new_jersey_devils'],
+  NSH: ['nashville_predators'],
+  NYI: ['new_york_islanders'],
+  NYR: ['new_york_rangers'],
+  OAK: ['oakland_seals', 'california_golden_seals'],
+  OTT: ['ottawa_senators'],
+  PHI: ['philadelphia_flyers'],
+  PIT: ['pittsburgh_penguins', 'pittsburgh_pirates', 'pittsburgh_athletic_club'],
+  QUE: ['quebec_nordiques', 'quebec_bulldogs'],
+  SEA: ['seattle_kraken', 'seattle_metropolitans'],
+  SJS: ['san_jose_sharks'],
+  STL: ['st_louis_blues'],
+  TBL: ['tampa_bay_lightning'],
+  TOR: ['toronto_maple_leafs', 'toronto_st_patricks', 'toronto_arenas'],
+  UTA: ['utah_hockey_club'],
+  VAN: ['vancouver_canucks', 'vancouver_millionaires'],
+  VGK: ['vegas_golden_knights'],
+  WAS: ['washington_capitals'],
+  WPG: ['winnipeg_jets'],
+};
+
 // Team Logo Component with Zero-Flashing Offscreen Resolution
 const TeamLogo = ({
   teamName,
@@ -664,10 +726,10 @@ const TeamLogo = ({
 }) => {
   const cleanName = (teamName || '').trim();
   const upper = cleanName.toUpperCase();
-  const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+  const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
   const abbr = NHL_TEAM_ABBR_MAP[upper] || NHL_TEAM_ABBR_MAP[cleanName] || (upper.length <= 4 ? upper : slug);
   const yrStr = year ? String(year).trim() : '';
-  const cacheKey = `${abbr || cleanName}_${yrStr || 'base'}`;
+  const cacheKey = `${abbr || cleanName}_${slug}_${yrStr || 'base'}`;
 
   const [logoUrl, setLogoUrl] = useState<string | null>(() => LOGO_CACHE.get(cacheKey) || null);
 
@@ -704,60 +766,69 @@ const TeamLogo = ({
     }
 
     const targetYear = parsedYear || rangeStart;
+    const mappedFullSlugs = (abbr && NHL_ABBR_TO_FULL_SLUGS[abbr.toUpperCase()]) || [];
     const nameVariants = Array.from(new Set([
+      ...mappedFullSlugs,
+      slug ? slug.toLowerCase() : null,
       abbr ? abbr.toUpperCase() : null,
       abbr ? abbr.toLowerCase() : null,
-      slug ? slug.toLowerCase() : null,
       cleanName,
     ].filter(Boolean))) as string[];
 
-    // 1. Year specific in buckets/nhl_logos (highest priority)
+    const buckets = ['nhl%20logo', 'nhl%20banners', 'banners', 'teams'];
+
+    // 1. Direct primary match in actual Supabase buckets (nhl logo 1927 vintage & nhl banners) — resolves in 1 request!
+    if (!targetYear || targetYear <= 1967) {
+      for (const n of nameVariants) {
+        const encN = encodeURIComponent(n);
+        urls.push(`${base}/nhl%20logo/${encN}%201927.png`);
+      }
+    }
+    for (const b of ['nhl%20logo', 'nhl%20banners', 'banners', 'teams']) {
+      for (const n of nameVariants) {
+        const encN = encodeURIComponent(n);
+        urls.push(`${base}/${b}/${encN}.png`);
+      }
+    }
+
+    // 2. Official NHL Logo CDN fallback for NHL franchises not yet uploaded to Supabase (EDM, WAS, LAK, PIT, etc.)
+    if (abbr && /^[A-Z]{3}$/.test(abbr.toUpperCase())) {
+      const cdnMap: Record<string, string> = { WAS: 'WSH', DTC: 'DET', HFD: 'CAR', QUE: 'COL', OAK: 'DAL', MNS: 'DAL', PHX: 'ARI' };
+      const cdnAbbr = cdnMap[abbr.toUpperCase()] || abbr.toUpperCase();
+      urls.push(`https://assets.nhle.com/logos/nhl/svg/${cdnAbbr}_light.svg`);
+    }
+
+    // 3. Year specific in nhl logo (including space-separated e.g. "montreal_canadiens 1927.png")
     if (targetYear) {
       for (const n of nameVariants) {
-        urls.push(`${base}/nhl_logos/${n}_${targetYear}.png`);
-        urls.push(`${base}/nhl_logos/${n}-${targetYear}.png`);
-        urls.push(`${base}/nhl_logos/${n}_${targetYear}.jpg`);
-        urls.push(`${base}/nhl_logos/${n}_${targetYear}.PNG`);
-        urls.push(`${base}/nhl_logos/${n}_${targetYear}.svg`);
-        urls.push(`${base}/nhl%20logos/${n}_${targetYear}.png`);
-        urls.push(`${base}/logos/${n}_${targetYear}.png`);
+        const encN = encodeURIComponent(n);
+        urls.push(`${base}/nhl%20logo/${encN}%20${targetYear}.png`);
+        urls.push(`${base}/nhl%20logo/${encN}_${targetYear}.png`);
+        urls.push(`${base}/nhl%20logo/${encN}-${targetYear}.png`);
       }
     }
 
-    // 2. Explicit range matching
+    // 3. Explicit range matching (e.g. BER_1909_1911.png)
     if (rangeStart && rangeEnd) {
       for (const n of nameVariants) {
-        urls.push(`${base}/nhl_logos/${n}_${rangeStart}_${rangeEnd}.png`);
-        urls.push(`${base}/nhl_logos/${n}_${rangeStart}-${rangeEnd}.png`);
-        urls.push(`${base}/nhl_logos/${n}-${rangeStart}-${rangeEnd}.png`);
-        urls.push(`${base}/nhl%20logos/${n}_${rangeStart}_${rangeEnd}.png`);
+        const encN = encodeURIComponent(n);
+        urls.push(`${base}/nhl%20logo/${encN}_${rangeStart}_${rangeEnd}.png`);
+        urls.push(`${base}/nhl%20logo/${encN}_${rangeStart}-${rangeEnd}.png`);
       }
     }
 
-    // 3. Automated era-range matching
+    // 4. Automated era-range matching in nhl logo
     if (targetYear && abbr && NHL_ERA_RANGES[abbr]) {
       const matchingEras = NHL_ERA_RANGES[abbr].filter(
         (era) => targetYear >= era.start && targetYear <= era.end
       );
       for (const era of matchingEras) {
         for (const n of nameVariants) {
-          urls.push(`${base}/nhl_logos/${n}_${era.start}_${era.end}.png`);
-          urls.push(`${base}/nhl_logos/${n}_${era.start}-${era.end}.png`);
-          urls.push(`${base}/nhl_logos/${n}-${era.start}-${era.end}.png`);
-          urls.push(`${base}/nhl%20logos/${n}_${era.start}_${era.end}.png`);
+          const encN = encodeURIComponent(n);
+          urls.push(`${base}/nhl%20logo/${encN}_${era.start}_${era.end}.png`);
+          urls.push(`${base}/nhl%20logo/${encN}_${era.start}-${era.end}.png`);
         }
       }
-    }
-
-    // 4. Base franchise fallback
-    for (const n of nameVariants) {
-      urls.push(`${base}/nhl_logos/${n}.png`);
-      urls.push(`${base}/nhl_logos/${n}.jpg`);
-      urls.push(`${base}/nhl_logos/${n}.PNG`);
-      urls.push(`${base}/nhl_logos/${n}.svg`);
-      urls.push(`${base}/nhl%20logos/${n}.png`);
-      urls.push(`${base}/logos/${n}.png`);
-      urls.push(`${base}/images%20for%20site/${n}.png`);
     }
 
     const uniqueUrls = Array.from(new Set(urls));
@@ -886,9 +957,11 @@ const CareerTable = ({
               ? getScaleLevel(getRatingVal(combined, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'control'))
               : getScaleLevel(getRatingVal(combined, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'shot_power', 'power', 'pwr', 'sp'));
 
+            const rawSthVal = Math.round(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST'));
             const sthOrStr = isGoaliePlayer
               ? getScaleLevel(getRatingVal(combined, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right', 'sr'))
-              : getScaleLevel(getRatingVal(combined, 'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling', 'Stick_Handling', 'stickhandling', 'handling', 'puck_control', 'Puck Control', 'puckcontrol', 'pkc', 'PkC', 'PKC', 'puck_handling', 'Puck Handling', 'stick', 'Stick', 'control', 'Control', 'sh', 'SH', 'st', 'ST'));
+              : getStickHandlingScaleLevel(rawSthVal);
+            const sthOrStrDisplay = isGoaliePlayer ? sthOrStr : rawSthVal;
 
             const shaOrStl = isGoaliePlayer
               ? getScaleLevel(getRatingVal(combined, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left', 'sl'))
@@ -902,14 +975,14 @@ const CareerTable = ({
               ? getScaleLevel(getRatingVal(combined, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left', 'gl'))
               : getScaleLevel(getRatingVal(combined, 'Roughness', 'rgh', 'Rgh', 'RGH', 'Aggression', 'agr', 'roughness'));
 
-            const renderHeatCell = (val: number) => {
+            const renderHeatCell = (val: number, displayVal?: number) => {
               const style = getHeatmapColor(val);
               return (
                 <td
                   className="p-1 border-r border-black/30 font-bold"
                   style={{ backgroundColor: style.bg, color: style.text }}
                 >
-                  {val}
+                  {displayVal !== undefined ? displayVal : val}
                 </td>
               );
             };
@@ -942,7 +1015,7 @@ const CareerTable = ({
                 {renderHeatCell(pkcOrShpw)}
                 {renderHeatCell(chk)}
                 <td className="p-1 border-r border-black/30 font-bold">{hand}</td>
-                {renderHeatCell(sthOrStr)}
+                {renderHeatCell(sthOrStr, sthOrStrDisplay)}
                 {renderHeatCell(shaOrStl)}
                 {renderHeatCell(endOrGvr)}
                 {renderHeatCell(rghOrGvl)}
