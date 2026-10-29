@@ -142,8 +142,8 @@
       <div style="font-size: 14px; font-weight: bold; color: #f59e0b;">
         SYNCING LIVE ICE FEED FROM HOST...
       </div>
-      <div style="font-size: 11px; color: #94a3b8; max-width: 380px;">
-        Waiting for Host's Sega Genesis emulator to stream video frames. Make sure the Host is on the Arena Ice tab.
+      <div style="font-size: 11px; color: #94a3b8; max-width: 400px;">
+        Connecting to Host's Sega Genesis emulator. Both players should stay on the Arena Ice tab while the cartridge boots.
       </div>
     </div>
     <video id="guest-video" autoplay playsinline muted></video>
@@ -152,7 +152,7 @@
 
   <script>
     (function () {
-      // Force preserveDrawingBuffer: true on WebGL contexts so Host canvas capture & frame relay never read a blank black buffer!
+      // 1. Force preserveDrawingBuffer: true on WebGL contexts (both HTMLCanvasElement and OffscreenCanvas)
       try {
         var origGetContext = HTMLCanvasElement.prototype.getContext;
         HTMLCanvasElement.prototype.getContext = function (type, attrs) {
@@ -160,6 +160,32 @@
             attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
           }
           return origGetContext.call(this, type, attrs);
+        };
+        if (typeof OffscreenCanvas !== "undefined" && OffscreenCanvas.prototype && OffscreenCanvas.prototype.getContext) {
+          var origOffscreenGetContext = OffscreenCanvas.prototype.getContext;
+          OffscreenCanvas.prototype.getContext = function (type, attrs) {
+            if (type === "webgl" || type === "webgl2" || type === "experimental-webgl") {
+              attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
+            }
+            return origOffscreenGetContext.call(this, type, attrs);
+          };
+        }
+      } catch (e) {}
+
+      // 2. Hook requestAnimationFrame so Host can copy the WebGL canvas synchronously at the end of the render callback
+      // BEFORE the browser compositor swaps or clears the WebGL drawing buffer!
+      try {
+        var origRAF = window.requestAnimationFrame;
+        window.requestAnimationFrame = function (cb) {
+          return origRAF.call(window, function (ts) {
+            var res = cb(ts);
+            if (typeof window.__NHL95_AFTER_RAF === "function") {
+              try {
+                window.__NHL95_AFTER_RAF(ts);
+              } catch (e) {}
+            }
+            return res;
+          });
         };
       } catch (e) {}
 
@@ -341,14 +367,13 @@
           statusPill.textContent = "🟢 LIVE STREAM ACTIVE — PLAYER " + (guestSlot + 1);
         }
 
-        videoEl.addEventListener("loadeddata", function () {
+        videoEl.addEventListener("playing", function () {
           if (videoEl.videoWidth > 0) {
             hasVideoTrackPlaying = true;
             hasReceivedAnyFeed = true;
             if (waitingEl) waitingEl.style.display = "none";
             fallbackImg.style.display = "none";
             videoEl.style.display = "block";
-            videoEl.play().catch(function () {});
             statusPill.textContent = "🟢 60FPS P2P STREAM — PLAYER " + (guestSlot + 1);
           }
         });
@@ -401,7 +426,6 @@
           }, "*");
         }
 
-        // Announce immediately and keep announcing every 1.5s until feed is active (prevents race condition when joining!)
         announceGuestReady();
         var readyRetryTimer = setInterval(function () {
           if (hasReceivedAnyFeed) {
@@ -409,7 +433,7 @@
             return;
           }
           announceGuestReady();
-        }, 1500);
+        }, 2000);
 
         window.addEventListener("message", async function (ev) {
           if (!ev.data || typeof ev.data !== "object") return;
@@ -556,19 +580,82 @@
         prevPlayerMasks[slotIdx] = mask;
       }
 
-      // Multi-peer WebRTC map + pending Guest queue if Guest joins while Host emulator is still booting
+      // Persistent 2D mirror canvas (320x224) that captures frames synchronously inside requestAnimationFrame
+      var relayCanvas = document.createElement("canvas");
+      relayCanvas.width = 320;
+      relayCanvas.height = 224;
+      var relayCtx = relayCanvas.getContext("2d", { willReadFrequently: true });
+      var lastRafCaptureTime = 0;
+      var hasCapturedValidFrame = false;
+
+      function getActiveEmulatorCanvas() {
+        if (window.EJS_emulator && window.EJS_emulator.canvas && window.EJS_emulator.canvas.width > 0) {
+          return window.EJS_emulator.canvas;
+        }
+        var canvases = document.querySelectorAll("#game canvas");
+        var best = null;
+        var bestArea = 0;
+        for (var i = 0; i < canvases.length; i++) {
+          var c = canvases[i];
+          var area = (c.width || 0) * (c.height || 0);
+          if (area > bestArea) {
+            bestArea = area;
+            best = c;
+          }
+        }
+        return best;
+      }
+
+      function canvasHasNonBlackPixels(ctx) {
+        try {
+          var data = ctx.getImageData(40, 30, 240, 160).data;
+          for (var i = 0; i < data.length; i += 64) {
+            if (data[i] > 4 || data[i + 1] > 4 || data[i + 2] > 4) {
+              return true;
+            }
+          }
+        } catch (e) {}
+        return false;
+      }
+
+      if (role === "host") {
+        window.__NHL95_AFTER_RAF = function (ts) {
+          if (ts - lastRafCaptureTime < 30) return;
+          var srcCanvas = getActiveEmulatorCanvas();
+          if (!srcCanvas || !relayCtx) return;
+          try {
+            relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
+            lastRafCaptureTime = ts;
+            if (!hasCapturedValidFrame && canvasHasNonBlackPixels(relayCtx)) {
+              hasCapturedValidFrame = true;
+            }
+          } catch (e) {}
+        };
+      }
+
       var hostPeers = {};
       var pendingGuests = {};
 
       async function startHostWebRTCForGuest(targetGuestId) {
         var key = targetGuestId || "default_guest";
-        var canvas = document.querySelector("#game canvas");
-        if (!canvas) {
-          // Host emulator is still booting; queue guest so offer is sent as soon as canvas is ready!
+        var srcCanvas = getActiveEmulatorCanvas();
+        if (!srcCanvas) {
           pendingGuests[key] = true;
           return;
         }
         delete pendingGuests[key];
+
+        // Avoid tearing down an in-progress WebRTC handshake if guest-ready retries within 8 seconds
+        if (
+          hostPeers[key] &&
+          hostPeers[key].pc &&
+          hostPeers[key].createdAt &&
+          Date.now() - hostPeers[key].createdAt < 8000 &&
+          hostPeers[key].pc.iceConnectionState !== "failed" &&
+          hostPeers[key].pc.iceConnectionState !== "closed"
+        ) {
+          return;
+        }
 
         try {
           if (hostPeers[key] && hostPeers[key].pc) {
@@ -576,9 +663,11 @@
           }
 
           var pc = new RTCPeerConnection(rtcConfig);
-          if (canvas.captureStream) {
+          // Stream from the 2D relayCanvas (or srcCanvas fallback) so WebRTC never transmits an empty WebGL swapchain
+          var captureTarget = relayCanvas.captureStream ? relayCanvas : srcCanvas;
+          if (captureTarget && captureTarget.captureStream) {
             try {
-              var stream = canvas.captureStream(60);
+              var stream = captureTarget.captureStream(30);
               stream.getTracks().forEach(function (track) {
                 pc.addTrack(track, stream);
               });
@@ -617,7 +706,7 @@
             }
           };
 
-          hostPeers[key] = { pc: pc, dc: dc };
+          hostPeers[key] = { pc: pc, dc: dc, createdAt: Date.now() };
 
           var offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
@@ -663,16 +752,10 @@
           }
         });
 
-        // Continuous frame relay (via WebRTC DataChannel if open, plus Supabase broadcast fallback)
-        // Guarantees Guest ALWAYS sees a live image feed even if WebRTC media tracks are blocked!
-        var relayCanvas = document.createElement("canvas");
-        relayCanvas.width = 320;
-        relayCanvas.height = 224;
-        var relayCtx = relayCanvas.getContext("2d");
+        var isTakingEjsScreenshot = false;
 
-        setInterval(function () {
-          // Flush any pending guests if canvas just became available
-          var srcCanvas = document.querySelector("#game canvas");
+        setInterval(async function () {
+          var srcCanvas = getActiveEmulatorCanvas();
           if (!srcCanvas || !relayCtx) return;
 
           Object.keys(pendingGuests).forEach(function (gId) {
@@ -680,8 +763,35 @@
           });
 
           try {
-            relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
-            var dataUrl = relayCanvas.toDataURL("image/webp", 0.55);
+            // If RAF hasn't updated relayCanvas in the last 90ms (e.g. background tab), draw directly
+            if (performance.now() - lastRafCaptureTime > 90) {
+              relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
+            }
+
+            // If canvas is still black, fall back to EmulatorJS's direct WASM framebuffer screenshot()
+            if (!canvasHasNonBlackPixels(relayCtx) && !isTakingEjsScreenshot) {
+              var ejs = window.EJS_emulator;
+              if (ejs && ejs.gameManager && typeof ejs.gameManager.screenshot === "function") {
+                isTakingEjsScreenshot = true;
+                try {
+                  var shotBytes = await ejs.gameManager.screenshot();
+                  if (shotBytes && shotBytes.length > 100) {
+                    var blob = new Blob([shotBytes], { type: "image/png" });
+                    if (typeof createImageBitmap === "function") {
+                      var bmp = await createImageBitmap(blob);
+                      relayCtx.drawImage(bmp, 0, 0, 320, 224);
+                      bmp.close();
+                    }
+                  }
+                } catch (e) {}
+                isTakingEjsScreenshot = false;
+              }
+            }
+
+            // Don't transmit all-black frames before the Sega logo / game graphics appear
+            if (!canvasHasNonBlackPixels(relayCtx)) return;
+
+            var dataUrl = relayCanvas.toDataURL("image/jpeg", 0.62);
             if (!dataUrl || dataUrl.length < 100) return;
 
             var sentViaDc = false;
@@ -703,7 +813,7 @@
               }, "*");
             }
           } catch (e) {}
-        }, 110);
+        }, 115);
       }
 
       var p1ActiveKeys = {};

@@ -1527,6 +1527,7 @@ function ArenaContent() {
     });
 
     setIncomingInvite(null);
+    setSentInviteNotice(null);
     setNetplayOpponentName(hostName);
     setNetplayRoomId(roomId);
     setNetplaySlot(slot);
