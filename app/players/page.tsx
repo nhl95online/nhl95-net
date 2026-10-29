@@ -714,15 +714,21 @@ const NHL_ABBR_TO_FULL_SLUGS: Record<string, string[]> = {
   WPG: ['winnipeg_jets'],
 };
 
-// Team Logo Component with Zero-Flashing Offscreen Resolution
+// Team Logo / Banner Component with Zero-Flashing Offscreen Resolution
 const TeamLogo = ({
   teamName,
   year,
   className = "w-6 h-6",
+  showLabel = false,
+  labelClassName = "truncate max-w-[85px] text-[8px]",
+  bannerClassName = "h-5 w-[108px] object-contain object-left",
 }: {
   teamName: string;
   year?: number | string;
   className?: string;
+  showLabel?: boolean;
+  labelClassName?: string;
+  bannerClassName?: string;
 }) => {
   const cleanName = (teamName || '').trim();
   const upper = cleanName.toUpperCase();
@@ -775,30 +781,39 @@ const TeamLogo = ({
       cleanName,
     ].filter(Boolean))) as string[];
 
-    const buckets = ['nhl%20logo', 'nhl%20banners', 'banners', 'teams'];
+    const isBos = abbr?.toUpperCase() === 'BOS' || upper.includes('BOSTON');
 
-    // 1. Direct primary match in actual Supabase buckets (nhl logo 1927 vintage & nhl banners) — resolves in 1 request!
-    if (!targetYear || targetYear <= 1967) {
+    // 1. For BOS / Boston Bruins (and post-1967 seasons), check nhl banners first so BOS always displays the clean Boston Bruins banner
+    if (isBos) {
+      for (const n of nameVariants) {
+        const encN = encodeURIComponent(n);
+        urls.push(`${base}/nhl%20banners/${encN}.png`);
+        urls.push(`${base}/banners/${encN}.png`);
+      }
+    }
+
+    // 2. Direct primary match in actual Supabase buckets (nhl logo 1927 vintage & nhl banners) — resolves in 1 request!
+    if (!isBos && (!targetYear || targetYear <= 1967)) {
       for (const n of nameVariants) {
         const encN = encodeURIComponent(n);
         urls.push(`${base}/nhl%20logo/${encN}%201927.png`);
       }
     }
-    for (const b of ['nhl%20logo', 'nhl%20banners', 'banners', 'teams']) {
+    for (const b of ['nhl%20banners', 'banners', 'nhl%20logo', 'teams']) {
       for (const n of nameVariants) {
         const encN = encodeURIComponent(n);
         urls.push(`${base}/${b}/${encN}.png`);
       }
     }
 
-    // 2. Official NHL Logo CDN fallback for NHL franchises not yet uploaded to Supabase (EDM, WAS, LAK, PIT, etc.)
+    // 3. Official NHL Logo CDN fallback for NHL franchises not yet uploaded to Supabase (EDM, WAS, LAK, PIT, etc.)
     if (abbr && /^[A-Z]{3}$/.test(abbr.toUpperCase())) {
       const cdnMap: Record<string, string> = { WAS: 'WSH', DTC: 'DET', HFD: 'CAR', QUE: 'COL', OAK: 'DAL', MNS: 'DAL', PHX: 'ARI' };
       const cdnAbbr = cdnMap[abbr.toUpperCase()] || abbr.toUpperCase();
       urls.push(`https://assets.nhle.com/logos/nhl/svg/${cdnAbbr}_light.svg`);
     }
 
-    // 3. Year specific in nhl logo (including space-separated e.g. "montreal_canadiens 1927.png")
+    // 4. Year specific in nhl logo (including space-separated e.g. "montreal_canadiens 1927.png")
     if (targetYear) {
       for (const n of nameVariants) {
         const encN = encodeURIComponent(n);
@@ -808,7 +823,7 @@ const TeamLogo = ({
       }
     }
 
-    // 3. Explicit range matching (e.g. BER_1909_1911.png)
+    // 5. Explicit range matching (e.g. BER_1909_1911.png)
     if (rangeStart && rangeEnd) {
       for (const n of nameVariants) {
         const encN = encodeURIComponent(n);
@@ -817,7 +832,7 @@ const TeamLogo = ({
       }
     }
 
-    // 4. Automated era-range matching in nhl logo
+    // 6. Automated era-range matching in nhl logo
     if (targetYear && abbr && NHL_ERA_RANGES[abbr]) {
       const matchingEras = NHL_ERA_RANGES[abbr].filter(
         (era) => targetYear >= era.start && targetYear <= era.end
@@ -843,7 +858,42 @@ const TeamLogo = ({
     return () => {
       isCancelled = true;
     };
-  }, [cacheKey, cleanName, abbr, slug, yrStr]);
+  }, [cacheKey, cleanName, abbr, slug, yrStr, upper]);
+
+  const isBannerUrl = Boolean(
+    logoUrl && (logoUrl.includes('/nhl%20banners/') || logoUrl.includes('/banners/'))
+  );
+
+  if (logoUrl && isBannerUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={`${cleanName} ${yrStr || ''}`}
+        className={`${bannerClassName} shrink-0`}
+      />
+    );
+  }
+
+  if (showLabel) {
+    return (
+      <div className="flex items-center gap-1.5">
+        {logoUrl ? (
+          <div className="w-5 h-5 flex items-center justify-center bg-white border border-black/30 rounded-xs p-0.5 shrink-0">
+            <img
+              src={logoUrl}
+              alt={`${cleanName} ${yrStr || ''}`}
+              className="max-w-full max-h-full object-contain shrink-0"
+            />
+          </div>
+        ) : (
+          <div className="w-5 h-5 bg-slate-100 border border-black/40 rounded-xs flex items-center justify-center font-mono font-black text-[7.5px] text-slate-700 uppercase shrink-0 shadow-xs">
+            {abbr || cleanName.slice(0, 3).toUpperCase() || 'NHL'}
+          </div>
+        )}
+        <span className={labelClassName}>{cleanName}</span>
+      </div>
+    );
+  }
 
   if (logoUrl) {
     return (
@@ -997,12 +1047,12 @@ const CareerTable = ({
                 <td className="p-1 font-bold border-r border-black/30 bg-slate-100">{yr}</td>
                 {showTeam && (
                   <td className="p-1 border-r border-black/30 font-bold bg-slate-50 text-left pl-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 flex items-center justify-center bg-white border border-black/30 rounded-xs p-0.5 shrink-0">
-                        <TeamLogo teamName={teamName} year={yr} className="max-w-full max-h-full" />
-                      </div>
-                      <span className="truncate max-w-[85px] text-[8px]">{teamName}</span>
-                    </div>
+                    <TeamLogo
+                      teamName={teamName}
+                      year={yr}
+                      showLabel={true}
+                      bannerClassName="h-5 w-[108px] object-contain object-left"
+                    />
                   </td>
                 )}
                 <td className="p-1 font-bold border-r border-black/30">{pos}</td>
@@ -1282,15 +1332,16 @@ const HockeyCardSpotlight = ({
               <span className="text-neutral-500 block text-[7.5px]">Career Avg</span>
               <span className="font-black text-emerald-700">{ovrAvg} OVR</span>
             </div>
-            <div className="col-span-2 pt-1 border-t border-neutral-200 flex items-center justify-between">
-              <div>
-                <span className="text-neutral-500 block text-[7.5px]">Team</span>
-                <span className="font-black text-slate-900 truncate block text-[9.5px]">
-                  {player.team_default || player.player_info?.source_team || 'NHL 95'}
-                </span>
-              </div>
-              <div className="w-7 h-7 flex items-center justify-center p-0.5 bg-slate-50 border border-black/30 rounded shrink-0">
-                <TeamLogo teamName={player.team_default || player.player_info?.source_team || 'NHL 95'} year={player.player_info?.source_year || player.year} className="max-w-full max-h-full" />
+            <div className="col-span-2 pt-1 border-t border-neutral-200 flex items-center justify-between gap-2">
+              <span className="text-neutral-500 block text-[7.5px] shrink-0">Team</span>
+              <div className="flex items-center justify-end">
+                <TeamLogo
+                  teamName={player.team_default || player.player_info?.source_team || 'NHL 95'}
+                  year={player.player_info?.source_year || player.year}
+                  showLabel={true}
+                  labelClassName="font-black text-slate-900 truncate block text-[9.5px]"
+                  bannerClassName="h-6 w-32 object-contain object-right"
+                />
               </div>
             </div>
           </div>
@@ -1768,16 +1819,15 @@ const CompareView = ({
                         <span className="text-neutral-500 block text-[7px]">OvrAvg</span>
                         <span className="font-black text-emerald-700">{ovrAvg}</span>
                       </div>
-                      <div className="pt-1 border-t border-neutral-300 flex items-center justify-between">
-                        <div>
-                          <span className="text-neutral-500 block text-[7px]">Current Team</span>
-                          <span className="font-black truncate block text-slate-900 text-[8.5px]">
-                            {latest.team_default || latest.player_info?.source_team || 'NHL 95'}
-                          </span>
-                        </div>
-                        <div className="w-6 h-6 flex items-center justify-center p-0.5 bg-slate-50 border border-black/30 rounded shrink-0 ml-1">
-                          <TeamLogo teamName={latest.team_default || latest.player_info?.source_team || 'NHL 95'} year={latest.player_info?.source_year || latest.year} className="max-w-full max-h-full" />
-                        </div>
+                      <div className="pt-1 border-t border-neutral-300">
+                        <span className="text-neutral-500 block text-[7px] mb-0.5">Current Team</span>
+                        <TeamLogo
+                          teamName={latest.team_default || latest.player_info?.source_team || 'NHL 95'}
+                          year={latest.player_info?.source_year || latest.year}
+                          showLabel={true}
+                          labelClassName="font-black truncate block text-slate-900 text-[8.5px]"
+                          bannerClassName="h-5 w-24 object-contain object-left"
+                        />
                       </div>
                     </div>
                   </div>
@@ -2615,12 +2665,13 @@ export default function PlayersPage() {
 
                           {/* Primary Team */}
                           <td className="p-1.5 truncate max-w-[130px] text-neutral-700">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-4 h-4 flex items-center justify-center shrink-0">
-                                <TeamLogo teamName={group.primary_team} year={group.end_year} className="max-w-full max-h-full" />
-                              </div>
-                              <span className="truncate">{group.primary_team}</span>
-                            </div>
+                            <TeamLogo
+                              teamName={group.primary_team}
+                              year={group.end_year}
+                              showLabel={true}
+                              labelClassName="truncate"
+                              bannerClassName="h-5 w-24 object-contain object-left"
+                            />
                           </td>
 
                           {/* Career Span */}
@@ -2662,9 +2713,14 @@ export default function PlayersPage() {
                                 {/* Team Logo & Career Meta Header */}
                                 <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-black pb-2.5">
                                   <div className="flex items-center gap-3.5">
-                                    {/* Prominent Larger Team Logo Box */}
-                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-                                      <TeamLogo teamName={group.primary_team} year={group.end_year} className="w-12 h-12 sm:w-16 sm:h-16" />
+                                    {/* Prominent Larger Team Logo / Banner Box */}
+                                    <div className="min-w-16 h-16 sm:min-w-20 sm:h-20 bg-white border-2 border-black rounded-lg p-2 flex items-center justify-center shrink-0 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                                      <TeamLogo
+                                        teamName={group.primary_team}
+                                        year={group.end_year}
+                                        className="w-12 h-12 sm:w-16 sm:h-16"
+                                        bannerClassName="h-10 sm:h-12 w-32 sm:w-40 object-contain"
+                                      />
                                     </div>
                                     <div>
                                       <div className="text-[13px] sm:text-base font-black uppercase text-slate-950 flex items-center gap-2">
