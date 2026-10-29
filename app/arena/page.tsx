@@ -1392,6 +1392,7 @@ function ArenaContent() {
           setNetplayOpponentName(payload.guestCoachName || 'Player 2');
           setNetplayRoomId(payload.roomId);
           setNetplayRole('host');
+          setHasLaunchedGame(true);
           setActiveArenaTab('ice');
         }
       })

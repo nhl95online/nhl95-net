@@ -30,6 +30,7 @@
       flex-direction: column;
     }
     #guest-video {
+      display: none;
       width: 100%;
       height: 100%;
       object-fit: contain;
@@ -43,6 +44,27 @@
       object-fit: contain;
       background: #000;
       image-rendering: pixelated;
+    }
+    #guest-waiting {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      color: #e2e8f0;
+      gap: 10px;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #334155;
+      border-top-color: #f59e0b;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     #guest-hud {
       position: absolute;
@@ -103,7 +125,7 @@
   <div id="guest-view">
     <div id="guest-hud">
       <div class="hud-pill" id="guest-status-pill">
-        ⚡ NETPLAY CONNECTED — 2v2 / 1v1 LIVE FEED
+        ⚡ CONNECTING TO HOST'S ICE FEED...
       </div>
       <div class="slot-switcher">
         <span style="font-size: 10px; color: #94a3b8; margin-right: 2px;">YOUR CONTROLLER PORT:</span>
@@ -115,12 +137,32 @@
         CONTROLLER ACTIVE
       </div>
     </div>
-    <video id="guest-video" autoplay playsinline></video>
+    <div id="guest-waiting">
+      <div class="spinner"></div>
+      <div style="font-size: 14px; font-weight: bold; color: #f59e0b;">
+        SYNCING LIVE ICE FEED FROM HOST...
+      </div>
+      <div style="font-size: 11px; color: #94a3b8; max-width: 380px;">
+        Waiting for Host's Sega Genesis emulator to stream video frames. Make sure the Host is on the Arena Ice tab.
+      </div>
+    </div>
+    <video id="guest-video" autoplay playsinline muted></video>
     <img id="guest-fallback-img" alt="Live Netplay Feed" />
   </div>
 
   <script>
     (function () {
+      // Force preserveDrawingBuffer: true on WebGL contexts so Host canvas capture & frame relay never read a blank black buffer!
+      try {
+        var origGetContext = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+          if (type === "webgl" || type === "webgl2" || type === "experimental-webgl") {
+            attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
+          }
+          return origGetContext.call(this, type, attrs);
+        };
+      } catch (e) {}
+
       var params = new URLSearchParams(window.location.search);
       var romUrl = params.get("romUrl") || "";
       var title = params.get("title") || "W16.zip";
@@ -129,7 +171,7 @@
       var guestId = params.get("guestId") || ("guest_" + Math.random().toString(36).slice(2, 8));
       var guestSlot = parseInt(params.get("slot") || "1", 10); // 1 = P2, 2 = P3, 3 = P4
       if (isNaN(guestSlot) || guestSlot < 1 || guestSlot > 3) guestSlot = 1;
-      var fourPlayer = params.get("fourPlayer") !== "0"; // Enabled by default so 2v2 (4-player) is always ready
+      var fourPlayer = params.get("fourPlayer") !== "0";
 
       var rtcConfig = {
         iceServers: [
@@ -199,7 +241,6 @@
         return false;
       }
 
-      // Compute 12-bit Genesis input mask for a specific gamepad (and optionally keyboard)
       function computePadAndKeyMask(keysMap, specificPad, cfg) {
         var kb = (cfg && cfg.keyboard) || defaultControllerConfig.keyboard;
         var gp = (cfg && cfg.gamepad) || defaultControllerConfig.gamepad;
@@ -265,6 +306,7 @@
 
         var videoEl = document.getElementById("guest-video");
         var fallbackImg = document.getElementById("guest-fallback-img");
+        var waitingEl = document.getElementById("guest-waiting");
         var statusPill = document.getElementById("guest-status-pill");
         var padPill = document.getElementById("guest-pad-pill");
 
@@ -286,7 +328,30 @@
 
         var rtcPeer = null;
         var rtcDataChannel = null;
-        var rtcConnected = false;
+        var hasVideoTrackPlaying = false;
+        var hasReceivedAnyFeed = false;
+
+        function showFallbackFrame(dataUrl) {
+          if (!dataUrl || hasVideoTrackPlaying) return;
+          hasReceivedAnyFeed = true;
+          if (waitingEl) waitingEl.style.display = "none";
+          videoEl.style.display = "none";
+          fallbackImg.style.display = "block";
+          fallbackImg.src = dataUrl;
+          statusPill.textContent = "🟢 LIVE STREAM ACTIVE — PLAYER " + (guestSlot + 1);
+        }
+
+        videoEl.addEventListener("loadeddata", function () {
+          if (videoEl.videoWidth > 0) {
+            hasVideoTrackPlaying = true;
+            hasReceivedAnyFeed = true;
+            if (waitingEl) waitingEl.style.display = "none";
+            fallbackImg.style.display = "none";
+            videoEl.style.display = "block";
+            videoEl.play().catch(function () {});
+            statusPill.textContent = "🟢 60FPS P2P STREAM — PLAYER " + (guestSlot + 1);
+          }
+        });
 
         function initGuestWebRTC() {
           try {
@@ -306,17 +371,19 @@
             rtcPeer.ontrack = function (ev) {
               if (ev.streams && ev.streams[0]) {
                 videoEl.srcObject = ev.streams[0];
-                videoEl.style.display = "block";
-                fallbackImg.style.display = "none";
-                rtcConnected = true;
-                statusPill.textContent = "🟢 60FPS STREAM — YOU ARE PLAYER " + (guestSlot + 1);
+                videoEl.play().catch(function () {});
               }
             };
 
             rtcPeer.ondatachannel = function (ev) {
               rtcDataChannel = ev.channel;
-              rtcDataChannel.onopen = function () {
-                rtcConnected = true;
+              rtcDataChannel.onmessage = function (msgEv) {
+                try {
+                  var pkt = JSON.parse(msgEv.data);
+                  if (pkt && pkt.f) {
+                    showFallbackFrame(pkt.f);
+                  }
+                } catch (e) {}
               };
             };
           } catch (e) {
@@ -326,11 +393,23 @@
 
         initGuestWebRTC();
 
-        window.parent.postMessage({
-          type: "NHL95_NETPLAY_SIGNAL",
-          roomId: roomId,
-          signal: { kind: "guest-ready", guestId: guestId, slot: guestSlot }
-        }, "*");
+        function announceGuestReady() {
+          window.parent.postMessage({
+            type: "NHL95_NETPLAY_SIGNAL",
+            roomId: roomId,
+            signal: { kind: "guest-ready", guestId: guestId, slot: guestSlot }
+          }, "*");
+        }
+
+        // Announce immediately and keep announcing every 1.5s until feed is active (prevents race condition when joining!)
+        announceGuestReady();
+        var readyRetryTimer = setInterval(function () {
+          if (hasReceivedAnyFeed) {
+            clearInterval(readyRetryTimer);
+            return;
+          }
+          announceGuestReady();
+        }, 1500);
 
         window.addEventListener("message", async function (ev) {
           if (!ev.data || typeof ev.data !== "object") return;
@@ -356,11 +435,8 @@
               try {
                 await rtcPeer.addIceCandidate(new RTCIceCandidate(sig.candidate));
               } catch (e) {}
-            } else if (sig.kind === "frame" && !rtcConnected) {
-              videoEl.style.display = "none";
-              fallbackImg.style.display = "block";
-              fallbackImg.src = sig.dataUrl;
-              statusPill.textContent = "🟢 RELAY STREAM — YOU ARE PLAYER " + (guestSlot + 1);
+            } else if (sig.kind === "frame" && sig.dataUrl) {
+              showFallbackFrame(sig.dataUrl);
             }
           }
         });
@@ -384,7 +460,6 @@
           }
 
           var primaryMask = computePadAndKeyMask(activeKeys, pads[0] || null, controllerConfig);
-          // If the guest has a 2nd local controller plugged in (for 2v2 couch+online co-op), send it on the next slot!
           var secondaryMask = pads[1] ? computePadAndKeyMask(null, pads[1], controllerConfig) : -1;
 
           if (primaryMask !== lastPrimaryMask || secondaryMask !== lastSecondaryMask || guestSlot !== lastSentSlot) {
@@ -452,7 +527,6 @@
       window.EJS_backgroundColor = "#050608";
       window.EJS_startOnLoaded = autoStart;
 
-      // Enable EA 4-Way Play multitap when 4-Player (2-on-2) mode is active
       if (fourPlayer) {
         window.EJS_defaultOptions = {
           "genesis_plus_gx_input_system": "4 way play",
@@ -460,7 +534,6 @@
         };
       }
 
-      // Track bitmasks for all 4 Players (0 = P1, 1 = P2, 2 = P3, 3 = P4)
       var prevPlayerMasks = [0, 0, 0, 0];
       var remoteSlotActiveUntil = [0, 0, 0, 0];
 
@@ -483,33 +556,39 @@
         prevPlayerMasks[slotIdx] = mask;
       }
 
-      // Multi-peer WebRTC map for up to 3 remote Guests (Players 2, 3, and 4) in 2v2!
+      // Multi-peer WebRTC map + pending Guest queue if Guest joins while Host emulator is still booting
       var hostPeers = {};
-      var anyRtcConnected = false;
+      var pendingGuests = {};
 
       async function startHostWebRTCForGuest(targetGuestId) {
-        try {
-          var key = targetGuestId || "default_guest";
-          var canvas = document.querySelector("#game canvas");
-          if (!canvas || !canvas.captureStream) return;
+        var key = targetGuestId || "default_guest";
+        var canvas = document.querySelector("#game canvas");
+        if (!canvas) {
+          // Host emulator is still booting; queue guest so offer is sent as soon as canvas is ready!
+          pendingGuests[key] = true;
+          return;
+        }
+        delete pendingGuests[key];
 
+        try {
           if (hostPeers[key] && hostPeers[key].pc) {
             try { hostPeers[key].pc.close(); } catch (e) {}
           }
 
           var pc = new RTCPeerConnection(rtcConfig);
-          var stream = canvas.captureStream(60);
-          stream.getTracks().forEach(function (track) {
-            pc.addTrack(track, stream);
-          });
+          if (canvas.captureStream) {
+            try {
+              var stream = canvas.captureStream(60);
+              stream.getTracks().forEach(function (track) {
+                pc.addTrack(track, stream);
+              });
+            } catch (e) {}
+          }
 
           var dc = pc.createDataChannel("p-input", {
             ordered: false,
             maxRetransmits: 0
           });
-          dc.onopen = function () {
-            anyRtcConnected = true;
-          };
           dc.onmessage = function (ev) {
             try {
               var d = JSON.parse(ev.data);
@@ -569,7 +648,6 @@
             } else if (sig.kind === "answer" && hostPeers[gKey] && hostPeers[gKey].pc) {
               try {
                 await hostPeers[gKey].pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
-                anyRtcConnected = true;
               } catch (e) {}
             } else if (sig.kind === "ice" && sig.from === "guest" && hostPeers[gKey] && hostPeers[gKey].pc) {
               try {
@@ -585,29 +663,49 @@
           }
         });
 
-        // Fallback frame relay (in case strict NAT blocks direct WebRTC video)
+        // Continuous frame relay (via WebRTC DataChannel if open, plus Supabase broadcast fallback)
+        // Guarantees Guest ALWAYS sees a live image feed even if WebRTC media tracks are blocked!
         var relayCanvas = document.createElement("canvas");
         relayCanvas.width = 320;
         relayCanvas.height = 224;
         var relayCtx = relayCanvas.getContext("2d");
 
         setInterval(function () {
-          if (anyRtcConnected) return;
+          // Flush any pending guests if canvas just became available
           var srcCanvas = document.querySelector("#game canvas");
           if (!srcCanvas || !relayCtx) return;
+
+          Object.keys(pendingGuests).forEach(function (gId) {
+            startHostWebRTCForGuest(gId === "default_guest" ? undefined : gId);
+          });
+
           try {
             relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
-            var dataUrl = relayCanvas.toDataURL("image/webp", 0.5);
-            window.parent.postMessage({
-              type: "NHL95_NETPLAY_SIGNAL",
-              roomId: roomId,
-              signal: { kind: "frame", dataUrl: dataUrl }
-            }, "*");
+            var dataUrl = relayCanvas.toDataURL("image/webp", 0.55);
+            if (!dataUrl || dataUrl.length < 100) return;
+
+            var sentViaDc = false;
+            Object.keys(hostPeers).forEach(function (k) {
+              var peerEntry = hostPeers[k];
+              if (peerEntry && peerEntry.dc && peerEntry.dc.readyState === "open") {
+                try {
+                  peerEntry.dc.send(JSON.stringify({ f: dataUrl }));
+                  sentViaDc = true;
+                } catch (e) {}
+              }
+            });
+
+            if (!sentViaDc) {
+              window.parent.postMessage({
+                type: "NHL95_NETPLAY_SIGNAL",
+                roomId: roomId,
+                signal: { kind: "frame", dataUrl: dataUrl }
+              }, "*");
+            }
           } catch (e) {}
-        }, 120);
+        }, 110);
       }
 
-      // Poll up to 4 local controllers (Pads 0, 1, 2, 3) + Keyboard for 1v1 or 2v2 (4-Player) play!
       var p1ActiveKeys = {};
       window.addEventListener("keydown", function (e) {
         p1ActiveKeys[e.key] = true;
@@ -622,11 +720,9 @@
           var pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
           var now = Date.now();
 
-          // Player 1 (Port 0): Keyboard + Gamepad #1
           var mask0 = computePadAndKeyMask(p1ActiveKeys, pads[0] || null, controllerConfig);
           applyPlayerSlotMask(0, mask0, false);
 
-          // Players 2, 3, 4 (Ports 1, 2, 3): Local Gamepads #2, #3, #4 when not actively controlled by a remote online coach
           for (var pIdx = 1; pIdx <= 3; pIdx++) {
             if (now > remoteSlotActiveUntil[pIdx] && pads[pIdx]) {
               var localPadMask = computePadAndKeyMask(null, pads[pIdx], controllerConfig);
@@ -651,11 +747,10 @@
           if (role === "host" && roomId) {
             setTimeout(function () {
               startHostWebRTCForGuest("default_guest");
-            }, 800);
+            }, 600);
           }
         } catch (e) {}
 
-        // Periodically read live score from Genesis RAM for "Games in progress" board
         setInterval(function () {
           try {
             var ejs = window.EJS_emulator;
