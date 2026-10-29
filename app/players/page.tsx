@@ -2477,7 +2477,7 @@ export default function PlayersPage() {
         <div className="grid grid-cols-12 gap-4">
           
           {/* Left Column: Search, Filters & Grouped Players Table */}
-          <div className="col-span-12 lg:col-span-7 space-y-2.5">
+          <div className="col-span-12 space-y-2.5">
             
             {/* Filter Bar */}
             <div className="bg-[#F5F2E6] border-2 border-black p-2.5 rounded-lg shadow-xs space-y-2">
@@ -2637,9 +2637,9 @@ export default function PlayersPage() {
                       <React.Fragment key={group.player_name}>
                         {/* Main Group Header Row */}
                         <tr
-                          onClick={() => handleSelectGroup(group)}
+                          onClick={() => toggleExpand(group.player_name)}
                           className={`cursor-pointer transition-colors ${
-                            isSelected ? 'bg-amber-100 font-black' : 'hover:bg-slate-100'
+                            isExpanded ? 'bg-amber-100 font-black' : 'hover:bg-slate-100'
                           }`}
                         >
                           {/* Expand/Collapse Button */}
@@ -2739,16 +2739,12 @@ export default function PlayersPage() {
                                       </div>
                                     </div>
                                   </div>
-                                  <span className="text-[8px] text-neutral-700 uppercase font-black bg-[#F5F2E6] px-2.5 py-1 rounded border border-black/30 shadow-2xs">
-                                    Click any row to load season card
-                                  </span>
                                 </div>
 
                                 <CareerTable
                                   careerRows={group.seasons}
                                   isGoaliePlayer={isG}
                                   showTeam={true}
-                                  onSelectSeason={(row) => handleSelectSpecificSeason(row, group.seasons)}
                                 />
                               </div>
                             </td>
@@ -2778,16 +2774,6 @@ export default function PlayersPage() {
 
           </div>
 
-          {/* Right Column: Retro Hockey Card Spotlight */}
-          <div className="col-span-12 lg:col-span-5">
-            <HockeyCardSpotlight
-              player={selected}
-              careerData={selectedCareerData}
-              leagueAverages={leagueAverages}
-              onAddToCompare={toggleComparePlayer}
-              isCompared={selected && comparedPlayers.includes(selected.player_name)}
-            />
-          </div>
 
         </div>
       ) : (
