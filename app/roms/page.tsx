@@ -411,6 +411,12 @@ export default function RomsPage() {
 
             <div className="hidden lg:flex items-center gap-2 pointer-events-auto self-end">
               <Link
+                href="/arena"
+                className="bg-emerald-500 hover:bg-emerald-400 text-black font-mono text-xs font-black uppercase px-4 py-2.5 rounded shadow-lg transition-colors flex items-center gap-2"
+              >
+                <Gamepad2 className="w-4 h-4" /> Play in Online Arena &rarr;
+              </Link>
+              <Link
                 href="/setup-guide?tab=netplay"
                 className="bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-black uppercase px-4 py-2.5 rounded shadow-lg transition-colors flex items-center gap-2"
               >
@@ -653,7 +659,13 @@ export default function RomsPage() {
                       </div>
                     </div>
 
-                    <div className="p-2.5 pt-0 border-t-0">
+                    <div className="p-2.5 pt-0 border-t-0 flex flex-col gap-1.5">
+                      <Link
+                        href={`/arena?rom=${encodeURIComponent(rom.id)}`}
+                        className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-black border border-black font-mono text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1 rounded-xs shadow-xs"
+                      >
+                        <Gamepad2 className="w-3 h-3" /> Play Online
+                      </Link>
                       <button
                         onClick={() => handleDownload([`${rom.year}.zip`, `${rom.year}.bin`, rom.fileName], rom.seasonLabel, rom.downloadUrl, rom.id)}
                         className="w-full py-1.5 bg-black hover:bg-amber-600 text-white font-mono text-[10px] font-bold uppercase transition-colors flex items-center justify-center gap-1 rounded-xs cursor-pointer shadow-xs"
@@ -907,7 +919,13 @@ export default function RomsPage() {
                       </div>
                     </div>
 
-                    <div className="p-2.5 pt-0 border-t-0">
+                    <div className="p-2.5 pt-0 border-t-0 flex flex-col gap-1.5">
+                      <Link
+                        href={`/arena?rom=${encodeURIComponent(rom.id)}`}
+                        className="w-full text-center bg-amber-500 hover:bg-amber-400 text-black border border-black font-mono text-[10px] font-black uppercase py-1.5 transition-colors flex items-center justify-center gap-1 rounded-xs shadow-xs"
+                      >
+                        <Gamepad2 className="w-3 h-3" /> Play Online
+                      </Link>
                       <button
                         onClick={() => handleDownload([`${rom.id.toUpperCase()}.zip`, `${rom.id.toLowerCase()}.zip`, `${rom.id.toUpperCase()}.bin`, `${rom.id.toLowerCase()}.bin`, rom.fileName], rom.seasonName, rom.downloadUrl, rom.id)}
                         className="w-full text-center bg-black hover:bg-amber-600 text-white font-mono text-[10px] font-bold uppercase py-1.5 transition-colors flex items-center justify-center gap-1 rounded-xs cursor-pointer shadow-xs"
@@ -1110,7 +1128,13 @@ export default function RomsPage() {
                     </div>
                   </div>
 
-                  <div className="p-2.5 pt-0 border-t-0">
+                  <div className="p-2.5 pt-0 border-t-0 flex flex-col gap-1.5">
+                    <Link
+                      href={`/arena?rom=${encodeURIComponent(rom.id)}`}
+                      className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-black border border-black font-mono text-[10px] font-black uppercase transition-colors flex items-center justify-center gap-1 rounded-xs shadow-xs"
+                    >
+                      <Gamepad2 className="w-3 h-3" /> Play Online
+                    </Link>
                     <button
                       onClick={() => {
                         const cleanTitle = rom.title.replace(/[:\/\\?*|<">]/g, '').trim();

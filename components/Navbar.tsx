@@ -138,7 +138,7 @@ export default function Navbar() {
       </div>
 
       {/* Desktop Navigation Links Row (Visible on screens >= md) */}
-      <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-8 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
+      <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-7 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
         <Link href="/standings" className="hover:underline transition">Standings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
@@ -182,12 +182,21 @@ export default function Navbar() {
         <Link href="/awards" className="hover:underline transition">Awards</Link>
         <Link href="/records" className="hover:underline transition">Records</Link>
 
+        {/* Online Arena tab */}
+        <Link 
+          href="/arena" 
+          className="hover:bg-amber-400 transition px-2.5 py-0.5 bg-amber-500 text-black border border-black font-black text-xs rounded-xs shadow-2xs"
+          title="Play NHL 95 in the Browser Online Arena"
+        >
+          🏒 Arena
+        </Link>
+
         {/* Setup Guide tab (to the left of Extras) */}
         <Link href="/setup-guide" className="hover:underline transition text-amber-900 font-black">
           Setup Guide
         </Link>
 
-        {/* Desktop Dropdown for Extras (3 subgroups: ROMs, Managers, Stream Overlays) */}
+        {/* Desktop Dropdown for Extras (Arena, ROMs, Managers, Stream Overlays) */}
         <div 
           className="relative" 
           onMouseEnter={() => setIsExtrasOpen(true)} 
@@ -198,6 +207,9 @@ export default function Navbar() {
           </button>
           {isExtrasOpen && (
             <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-56 flex flex-col z-50 shadow-lg">
+              <Link href="/arena" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">
+                Online Arena (Play Now)
+              </Link>
               <Link href="/roms" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
                 ROMs & Files
               </Link>
@@ -224,6 +236,14 @@ export default function Navbar() {
       {/* Mobile Drawer (Visible on screens < md when toggled) */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
+
+          <Link 
+            href="/arena" 
+            onClick={closeMobileMenu}
+            className="py-2 px-3 bg-amber-400/30 hover:bg-amber-400/50 border border-black flex items-center justify-between font-black text-black rounded-xs"
+          >
+            <span>🏒 Online Arena (Play Now)</span> <span>→</span>
+          </Link>
 
           <Link 
             href="/standings" 
@@ -353,6 +373,13 @@ export default function Navbar() {
             </button>
             {isMobileExtrasOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
+                <Link 
+                  href="/arena" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-emerald-900"
+                >
+                  • Online Arena (Play Now)
+                </Link>
                 <Link 
                   href="/roms" 
                   onClick={closeMobileMenu}

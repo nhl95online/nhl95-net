@@ -51,6 +51,21 @@ export function formatTime(seconds: number): string {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
+function sortSkatersForBoxscore(skaters: ParsedSkaterStat[]): ParsedSkaterStat[] {
+  return [...skaters].sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goals !== a.goals) return b.goals - a.goals;
+    if (b.sog !== a.sog) return b.sog - a.sog;
+    if (b.checks !== a.checks) return b.checks - a.checks;
+    if (b.pim !== a.pim) return b.pim - a.pim;
+    return (b.toiSeconds || 0) - (a.toiSeconds || 0);
+  });
+}
+
+function sortGoaliesForBoxscore(goalies: ParsedGoalieStat[]): ParsedGoalieStat[] {
+  return [...goalies].sort((a, b) => (b.toiSeconds || 0) - (a.toiSeconds || 0));
+}
+
 export function parseSaveStateBuffer(
   buffer: Uint8Array,
   config?: Partial<SeasonConfig>
@@ -65,11 +80,22 @@ export function parseSaveStateBuffer(
     throw new Error(`Invalid save state: file size too small (${buffer.length} bytes, minimum 52KB expected).`);
   }
 
-  // Header offset for Genesis Plus GX / RetroArch
-  let offset = 32;
+  // Header offset for Genesis Plus GX / RetroArch ("RASTATE" 32-byte header vs raw core state)
+  const hasRaHeader =
+    buffer[0] === 0x52 && // R
+    buffer[1] === 0x41 && // A
+    buffer[2] === 0x53 && // S
+    buffer[3] === 0x54 && // T
+    buffer[4] === 0x41 && // A
+    buffer[5] === 0x54 && // T
+    buffer[6] === 0x45;   // E
 
-  // Auto-detection fallback if offset 32 isn't aligned
-  if (buffer[48980 + offset] > 30 && buffer[48980] <= 30) {
+  let offset = hasRaHeader ? 32 : 0;
+
+  // Auto-detection fallback if header alignment differs
+  if (!hasRaHeader && buffer[48980] > 32 && buffer[48980 + 32] <= 32) {
+    offset = 32;
+  } else if (hasRaHeader && buffer[48980 + offset] > 32 && buffer[48980] <= 32) {
     offset = 0;
   }
 
@@ -373,13 +399,14 @@ export function parseSaveStateBuffer(
     homeSwapVal *= -1;
   }
 
-  // 9. Format Away Goalies & Skaters
+  // 9. Format Away Goalies & Skaters (Include full roster for boxscore display; sorted by active/stats first)
   const awayRecGoalieIdx = (awayRawPlayerStats[0]?.toi || 0) >= (awayRawPlayerStats[1]?.toi || 0) ? 0 : 1;
-  const awayGoalies: ParsedGoalieStat[] = [];
+  const awayGoaliesUnsorted: ParsedGoalieStat[] = [];
   for (let i = 0; i < awayGCount; i++) {
     const gRaw = awayRawPlayerStats[i];
     if (!gRaw) continue;
     const gName = gRaw.name;
+    if (!gName || gName === '--') continue;
     const gGoals = parsedGoals.filter(g => g.scorer === gName).length;
     const isRec = awayRecGoalieIdx === i;
 
@@ -395,12 +422,7 @@ export function parseSaveStateBuffer(
     const savePct = shots > 0 ? Number(((shots - ga) / shots).toFixed(3)) : 0;
     const so = ga === 0 && isRec && shots > 0 ? 1 : 0;
 
-    // Filter out goalies who did not play
-    if ((gRaw.toi || 0) === 0 && shots === 0 && saves === 0 && ga === 0 && !w && !l && !t && !otl && gGoals === 0 && assists === 0) {
-      continue;
-    }
-
-    awayGoalies.push({
+    awayGoaliesUnsorted.push({
       name: gName,
       pos: 'G',
       team: awayTeamCode,
@@ -422,11 +444,12 @@ export function parseSaveStateBuffer(
     });
   }
 
-  const awaySkaters: ParsedSkaterStat[] = [];
+  const awaySkatersUnsorted: ParsedSkaterStat[] = [];
   for (let i = awayGCount; i < awayTotalSlots; i++) {
     const sRaw = awayRawPlayerStats[i];
     if (!sRaw) continue;
     const sName = sRaw.name;
+    if (!sName || sName === '--') continue;
 
     let ppp = 0;
     let shp = 0;
@@ -438,12 +461,7 @@ export function parseSaveStateBuffer(
       }
     }
 
-    // Filter out skaters who did not play
-    if ((sRaw.toi || 0) === 0 && sRaw.goals === 0 && sRaw.assists === 0 && sRaw.shots === 0 && sRaw.checks === 0 && sRaw.pim === 0 && ppp === 0 && shp === 0) {
-      continue;
-    }
-
-    awaySkaters.push({
+    awaySkatersUnsorted.push({
       name: sName,
       pos: sRaw.pos as 'F' | 'D',
       team: awayTeamCode,
@@ -463,11 +481,12 @@ export function parseSaveStateBuffer(
 
   // 10. Format Home Goalies & Skaters
   const homeRecGoalieIdx = (homeRawPlayerStats[0]?.toi || 0) >= (homeRawPlayerStats[1]?.toi || 0) ? 0 : 1;
-  const homeGoalies: ParsedGoalieStat[] = [];
+  const homeGoaliesUnsorted: ParsedGoalieStat[] = [];
   for (let i = 0; i < homeGCount; i++) {
     const gRaw = homeRawPlayerStats[i];
     if (!gRaw) continue;
     const gName = gRaw.name;
+    if (!gName || gName === '--') continue;
     const gGoals = parsedGoals.filter(g => g.scorer === gName).length;
     const isRec = homeRecGoalieIdx === i;
 
@@ -483,12 +502,7 @@ export function parseSaveStateBuffer(
     const savePct = shots > 0 ? Number(((shots - ga) / shots).toFixed(3)) : 0;
     const so = ga === 0 && isRec && shots > 0 ? 1 : 0;
 
-    // Filter out goalies who did not play
-    if ((gRaw.toi || 0) === 0 && shots === 0 && saves === 0 && ga === 0 && !w && !l && !t && !otl && gGoals === 0 && assists === 0) {
-      continue;
-    }
-
-    homeGoalies.push({
+    homeGoaliesUnsorted.push({
       name: gName,
       pos: 'G',
       team: homeTeamCode,
@@ -510,11 +524,12 @@ export function parseSaveStateBuffer(
     });
   }
 
-  const homeSkaters: ParsedSkaterStat[] = [];
+  const homeSkatersUnsorted: ParsedSkaterStat[] = [];
   for (let i = homeGCount; i < homeTotalSlots; i++) {
     const sRaw = homeRawPlayerStats[i];
     if (!sRaw) continue;
     const sName = sRaw.name;
+    if (!sName || sName === '--') continue;
 
     let ppp = 0;
     let shp = 0;
@@ -526,12 +541,7 @@ export function parseSaveStateBuffer(
       }
     }
 
-    // Filter out skaters who did not play
-    if ((sRaw.toi || 0) === 0 && sRaw.goals === 0 && sRaw.assists === 0 && sRaw.shots === 0 && sRaw.checks === 0 && sRaw.pim === 0 && ppp === 0 && shp === 0) {
-      continue;
-    }
-
-    homeSkaters.push({
+    homeSkatersUnsorted.push({
       name: sName,
       pos: sRaw.pos as 'F' | 'D',
       team: homeTeamCode,
@@ -548,6 +558,11 @@ export function parseSaveStateBuffer(
       toiSeconds: sRaw.toi
     });
   }
+
+  const awayGoalies = sortGoaliesForBoxscore(awayGoaliesUnsorted);
+  const homeGoalies = sortGoaliesForBoxscore(homeGoaliesUnsorted);
+  const awaySkaters = sortSkatersForBoxscore(awaySkatersUnsorted);
+  const homeSkaters = sortSkatersForBoxscore(homeSkatersUnsorted);
 
   const homeTeamStats: ParsedTeamStats = {
     teamCode: homeTeamCode,
