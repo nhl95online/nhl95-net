@@ -2000,7 +2000,7 @@ function ArenaContent() {
               <Tv className="w-6 h-6 text-cyan-400" />
               <div>
                 <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-300 font-black leading-none">
-                  KING OF 95
+                  DARKSIDE OF 95
                 </div>
                 <div className="text-xl sm:text-2xl font-black tracking-tighter uppercase font-serif text-white leading-none mt-0.5">
                   ARENA
@@ -2455,7 +2455,7 @@ function ArenaContent() {
                     <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2">
                       <div>
                         <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-black">
-                          KING OF 95 • THE CLASSIC COLLECTION
+                          DARKSIDE OF 95 • THE CLASSIC COLLECTION
                         </div>
                         <div className="text-lg sm:text-2xl font-black font-serif uppercase tracking-tight text-white">
                           Select Your ROM Cartridge &amp; How to Play
