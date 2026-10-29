@@ -19,18 +19,258 @@
       width: 100%;
       height: 100%;
     }
+    #guest-view {
+      display: none;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #050608;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    #guest-video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      image-rendering: pixelated;
+    }
+    #guest-fallback-img {
+      display: none;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+      image-rendering: pixelated;
+    }
+    #guest-hud {
+      position: absolute;
+      top: 10px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+      z-index: 20;
+    }
+    .hud-pill {
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #22d3ee;
+      color: #22d3ee;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
   </style>
 </head>
 <body>
   <div id="game"></div>
 
+  <!-- Guest (Player 2) Netplay Stream Container -->
+  <div id="guest-view">
+    <div id="guest-hud">
+      <div class="hud-pill" id="guest-status-pill">
+        ⚡ P2 NETPLAY CONNECTED — YOU ARE PLAYER 2 (AWAY)
+      </div>
+      <div class="hud-pill" id="guest-pad-pill" style="border-color: #f59e0b; color: #f59e0b;">
+        CONTROLLER ACTIVE
+      </div>
+    </div>
+    <video id="guest-video" autoplay playsinline></video>
+    <img id="guest-fallback-img" alt="Live Netplay Feed" />
+  </div>
+
   <script>
     (function () {
       var params = new URLSearchParams(window.location.search);
       var romUrl = params.get("romUrl") || "";
-      var title = params.get("title") || "NHL95.bin";
+      var title = params.get("title") || "W16.zip";
+      var role = params.get("role") || "solo"; // 'solo' | 'host' | 'guest'
+      var roomId = params.get("roomId") || "";
 
-      // If parent window provided a local File/Blob, create object URL in this window's origin
+      var rtcPeer = null;
+      var rtcDataChannel = null;
+      var rtcConnected = false;
+
+      var rtcConfig = {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun.cloudflare.com:3478" }
+        ]
+      };
+
+      // ======================================================================
+      // GUEST MODE (PLAYER 2 JOINING HOST'S GAME)
+      // ======================================================================
+      if (role === "guest") {
+        document.getElementById("game").style.display = "none";
+        var guestView = document.getElementById("guest-view");
+        guestView.style.display = "flex";
+
+        var videoEl = document.getElementById("guest-video");
+        var fallbackImg = document.getElementById("guest-fallback-img");
+        var statusPill = document.getElementById("guest-status-pill");
+        var padPill = document.getElementById("guest-pad-pill");
+
+        // Setup WebRTC Peer for Guest
+        function initGuestWebRTC() {
+          try {
+            if (rtcPeer) rtcPeer.close();
+            rtcPeer = new RTCPeerConnection(rtcConfig);
+
+            rtcPeer.onicecandidate = function (ev) {
+              if (ev.candidate) {
+                window.parent.postMessage({
+                  type: "NHL95_NETPLAY_SIGNAL",
+                  roomId: roomId,
+                  signal: { kind: "ice", candidate: ev.candidate, from: "guest" }
+                }, "*");
+              }
+            };
+
+            rtcPeer.ontrack = function (ev) {
+              if (ev.streams && ev.streams[0]) {
+                videoEl.srcObject = ev.streams[0];
+                videoEl.style.display = "block";
+                fallbackImg.style.display = "none";
+                rtcConnected = true;
+                statusPill.textContent = "🟢 60FPS P2P STREAM ACTIVE — PLAYER 2";
+              }
+            };
+
+            rtcPeer.ondatachannel = function (ev) {
+              rtcDataChannel = ev.channel;
+              rtcDataChannel.onopen = function () {
+                rtcConnected = true;
+              };
+            };
+          } catch (e) {
+            console.warn("Guest WebRTC init error:", e);
+          }
+        }
+
+        initGuestWebRTC();
+
+        // Notify Host that Guest is ready in the room
+        window.parent.postMessage({
+          type: "NHL95_NETPLAY_SIGNAL",
+          roomId: roomId,
+          signal: { kind: "guest-ready" }
+        }, "*");
+
+        // Handle incoming signals & fallback frames from Host
+        window.addEventListener("message", async function (ev) {
+          if (!ev.data || typeof ev.data !== "object") return;
+          if (ev.data.type === "NHL95_NETPLAY_SIGNAL_IN") {
+            var sig = ev.data.signal;
+            if (!sig) return;
+
+            if (sig.kind === "offer" && rtcPeer) {
+              try {
+                await rtcPeer.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+                var answer = await rtcPeer.createAnswer();
+                await rtcPeer.setLocalDescription(answer);
+                window.parent.postMessage({
+                  type: "NHL95_NETPLAY_SIGNAL",
+                  roomId: roomId,
+                  signal: { kind: "answer", sdp: rtcPeer.localDescription }
+                }, "*");
+              } catch (e) {
+                console.warn("Guest SDP answer error:", e);
+              }
+            } else if (sig.kind === "ice" && sig.from === "host" && rtcPeer) {
+              try {
+                await rtcPeer.addIceCandidate(new RTCIceCandidate(sig.candidate));
+              } catch (e) {}
+            } else if (sig.kind === "frame" && !rtcConnected) {
+              videoEl.style.display = "none";
+              fallbackImg.style.display = "block";
+              fallbackImg.src = sig.dataUrl;
+              statusPill.textContent = "🟢 RELAY STREAM ACTIVE — PLAYER 2";
+            }
+          }
+        });
+
+        // Poll Player 2 Gamepad & Keyboard at 60fps and transmit state changes to Host
+        var activeKeys = {};
+        window.addEventListener("keydown", function (e) {
+          activeKeys[e.key] = true;
+        });
+        window.addEventListener("keyup", function (e) {
+          delete activeKeys[e.key];
+        });
+
+        var lastMask = -1;
+        function pollGuestControls() {
+          var b = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+          // Keyboard mapping for Guest
+          if (activeKeys["x"] || activeKeys["X"]) b[0] = 1; // B (Pass)
+          if (activeKeys["z"] || activeKeys["Z"]) b[1] = 1; // A (Dump/Line Change)
+          if (activeKeys["Shift"]) b[2] = 1;                // Mode
+          if (activeKeys["Enter"]) b[3] = 1;                // Start
+          if (activeKeys["ArrowUp"]) b[4] = 1;
+          if (activeKeys["ArrowDown"]) b[5] = 1;
+          if (activeKeys["ArrowLeft"]) b[6] = 1;
+          if (activeKeys["ArrowRight"]) b[7] = 1;
+          if (activeKeys["c"] || activeKeys["C"]) b[8] = 1; // C (Shoot/Check)
+          if (activeKeys["s"] || activeKeys["S"]) b[9] = 1; // Y
+          if (activeKeys["a"] || activeKeys["A"]) b[10] = 1; // X
+          if (activeKeys["d"] || activeKeys["D"]) b[11] = 1; // Z
+
+          // USB Gamepad mapping for Guest
+          if (navigator.getGamepads) {
+            var pads = navigator.getGamepads();
+            var pad = pads[0] || pads[1] || pads[2] || pads[3];
+            if (pad) {
+              padPill.textContent = "🎮 PAD READY";
+              if (pad.buttons[0] && pad.buttons[0].pressed) b[0] = 1; // B
+              if (pad.buttons[2] && pad.buttons[2].pressed) b[1] = 1; // A
+              if (pad.buttons[8] && pad.buttons[8].pressed) b[2] = 1; // Select/Mode
+              if (pad.buttons[9] && pad.buttons[9].pressed) b[3] = 1; // Start
+              if ((pad.buttons[12] && pad.buttons[12].pressed) || (pad.axes[1] < -0.4)) b[4] = 1;
+              if ((pad.buttons[13] && pad.buttons[13].pressed) || (pad.axes[1] > 0.4)) b[5] = 1;
+              if ((pad.buttons[14] && pad.buttons[14].pressed) || (pad.axes[0] < -0.4)) b[6] = 1;
+              if ((pad.buttons[15] && pad.buttons[15].pressed) || (pad.axes[0] > 0.4)) b[7] = 1;
+              if (pad.buttons[1] && pad.buttons[1].pressed) b[8] = 1; // C
+              if (pad.buttons[3] && pad.buttons[3].pressed) b[9] = 1; // Y
+              if (pad.buttons[4] && pad.buttons[4].pressed) b[10] = 1; // X
+              if (pad.buttons[5] && pad.buttons[5].pressed) b[11] = 1; // Z
+            }
+          }
+
+          var mask = 0;
+          for (var i = 0; i < 12; i++) {
+            if (b[i]) mask |= (1 << i);
+          }
+
+          if (mask !== lastMask) {
+            lastMask = mask;
+            if (rtcDataChannel && rtcDataChannel.readyState === "open") {
+              try {
+                rtcDataChannel.send(JSON.stringify({ m: mask }));
+              } catch (e) {}
+            } else {
+              window.parent.postMessage({
+                type: "NHL95_NETPLAY_SIGNAL",
+                roomId: roomId,
+                signal: { kind: "p2-input", mask: mask }
+              }, "*");
+            }
+          }
+          requestAnimationFrame(pollGuestControls);
+        }
+        requestAnimationFrame(pollGuestControls);
+        return;
+      }
+
+      // ======================================================================
+      // SOLO OR HOST MODE (RUNS GENESIS PLUS GX EMULATOR)
+      // ======================================================================
       try {
         if (window.parent && window.parent.__NHL95_LOCAL_FILE) {
           var localFile = window.parent.__NHL95_LOCAL_FILE;
@@ -56,10 +296,149 @@
       window.EJS_backgroundColor = "#050608";
       window.EJS_startOnLoaded = true;
 
+      // Apply Player 2 bitmask to EmulatorJS simulateInput(1, idx, val)
+      var prevP2Mask = 0;
+      function applyPlayer2Mask(mask) {
+        var ejs = window.EJS_emulator;
+        if (!ejs || !ejs.gameManager || !ejs.gameManager.simulateInput) return;
+        for (var i = 0; i < 12; i++) {
+          var wasOn = (prevP2Mask >> i) & 1;
+          var isOn = (mask >> i) & 1;
+          if (wasOn !== isOn) {
+            ejs.gameManager.simulateInput(1, i, isOn ? 1 : 0);
+          }
+        }
+        prevP2Mask = mask;
+      }
+
+      // Setup WebRTC Host offer when Guest joins the room
+      async function startHostWebRTC() {
+        try {
+          var canvas = document.querySelector("#game canvas");
+          if (!canvas || !canvas.captureStream) return;
+
+          if (rtcPeer) rtcPeer.close();
+          rtcPeer = new RTCPeerConnection(rtcConfig);
+
+          var stream = canvas.captureStream(60);
+          stream.getTracks().forEach(function (track) {
+            rtcPeer.addTrack(track, stream);
+          });
+
+          rtcDataChannel = rtcPeer.createDataChannel("p2-input", {
+            ordered: false,
+            maxRetransmits: 0
+          });
+          rtcDataChannel.onopen = function () {
+            rtcConnected = true;
+          };
+          rtcDataChannel.onmessage = function (ev) {
+            try {
+              var d = JSON.parse(ev.data);
+              if (typeof d.m === "number") applyPlayer2Mask(d.m);
+            } catch (e) {}
+          };
+
+          rtcPeer.onicecandidate = function (ev) {
+            if (ev.candidate) {
+              window.parent.postMessage({
+                type: "NHL95_NETPLAY_SIGNAL",
+                roomId: roomId,
+                signal: { kind: "ice", candidate: ev.candidate, from: "host" }
+              }, "*");
+            }
+          };
+
+          var offer = await rtcPeer.createOffer();
+          await rtcPeer.setLocalDescription(offer);
+          window.parent.postMessage({
+            type: "NHL95_NETPLAY_SIGNAL",
+            roomId: roomId,
+            signal: { kind: "offer", sdp: rtcPeer.localDescription }
+          }, "*");
+        } catch (e) {
+          console.warn("Host WebRTC offer error:", e);
+        }
+      }
+
+      if (role === "host" && roomId) {
+        window.addEventListener("message", async function (ev) {
+          if (!ev.data || typeof ev.data !== "object") return;
+          if (ev.data.type === "NHL95_NETPLAY_SIGNAL_IN") {
+            var sig = ev.data.signal;
+            if (!sig) return;
+            if (sig.kind === "guest-ready") {
+              startHostWebRTC();
+            } else if (sig.kind === "answer" && rtcPeer) {
+              try {
+                await rtcPeer.setRemoteDescription(new RTCSessionDescription(sig.sdp));
+                rtcConnected = true;
+              } catch (e) {}
+            } else if (sig.kind === "ice" && sig.from === "guest" && rtcPeer) {
+              try {
+                await rtcPeer.addIceCandidate(new RTCIceCandidate(sig.candidate));
+              } catch (e) {}
+            } else if (sig.kind === "p2-input" && typeof sig.mask === "number") {
+              applyPlayer2Mask(sig.mask);
+            }
+          }
+        });
+
+        // Fallback frame relay (in case strict NAT blocks direct WebRTC video)
+        var relayCanvas = document.createElement("canvas");
+        relayCanvas.width = 320;
+        relayCanvas.height = 224;
+        var relayCtx = relayCanvas.getContext("2d");
+
+        setInterval(function () {
+          if (rtcConnected) return;
+          var srcCanvas = document.querySelector("#game canvas");
+          if (!srcCanvas || !relayCtx) return;
+          try {
+            relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
+            var dataUrl = relayCanvas.toDataURL("image/webp", 0.5);
+            window.parent.postMessage({
+              type: "NHL95_NETPLAY_SIGNAL",
+              roomId: roomId,
+              signal: { kind: "frame", dataUrl: dataUrl }
+            }, "*");
+          } catch (e) {}
+        }, 120);
+      }
+
       window.EJS_onGameStart = function () {
         try {
           window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
+          if (role === "host" && roomId) {
+            setTimeout(startHostWebRTC, 800);
+          }
         } catch (e) {}
+
+        // Periodically read live score from Genesis RAM for "Games in progress" board
+        setInterval(function () {
+          try {
+            var ejs = window.EJS_emulator;
+            if (!ejs || !ejs.gameManager || !ejs.gameManager.getState) return;
+            var s = ejs.gameManager.getState();
+            if (!s || s.length < 52000) return;
+            var hasRa = s[0] === 0x52 && s[1] === 0x41 && s[2] === 0x53 && s[3] === 0x54;
+            var off = hasRa ? 32 : 0;
+            if (!hasRa && s[48980] > 32 && s[48980 + 32] <= 32) off = 32;
+            var homeTeamByte = s[48980 + off];
+            var awayTeamByte = s[48982 + off];
+            var homeGoals = s[49812 + off];
+            var awayGoals = s[50682 + off];
+            if (homeTeamByte <= 32 && awayTeamByte <= 32 && homeGoals < 50 && awayGoals < 50) {
+              window.parent.postMessage({
+                type: "NHL95_LIVE_TELEMETRY",
+                homeTeamByte: homeTeamByte,
+                awayTeamByte: awayTeamByte,
+                homeGoals: homeGoals,
+                awayGoals: awayGoals
+              }, "*");
+            }
+          } catch (e) {}
+        }, 15000);
       };
 
       window.EJS_onSaveState = function (data) {
