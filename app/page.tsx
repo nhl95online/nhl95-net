@@ -340,7 +340,8 @@ export default function HomePage() {
           apiStatsRes,
           regMasterRes,
           poMasterRes,
-          coachesRes
+          coachesRes,
+          rostersRes
         ] = await Promise.all([
           supabase
             .from('league_schedule')
@@ -393,6 +394,11 @@ export default function HomePage() {
           supabase
             .from('league_coaches')
             .select('coach_id, coach_name')
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_rosters')
+            .select('player_id, player_name, pos')
+            .eq('league_id', numericLeagueId)
             .then(r => r, () => ({ data: [] as any[], error: null }))
         ]);
 
@@ -408,6 +414,7 @@ export default function HomePage() {
         const regMasterData = regMasterRes.data || [];
         const poMasterData = poMasterRes.data || [];
         const coachesData = coachesRes.data || [];
+        const rostersData = rostersRes.data || [];
 
         const coachesMap = new Map<number, string>();
         coachesData.forEach((c: any) => {
@@ -907,6 +914,12 @@ export default function HomePage() {
             playerDbMap.set(pid, { name: String(s.player_name).trim(), pos: String(s.pos || s.pos_played || '').toUpperCase() });
           }
         });
+        rostersData.forEach((r: any) => {
+          const pid = Number(r.player_id);
+          if (pid > 1 && r.player_name) {
+            playerDbMap.set(pid, { name: String(r.player_name).trim(), pos: String(r.pos || '').toUpperCase() });
+          }
+        });
 
         if (unknownIds.size > 0) {
           const idsArr = Array.from(unknownIds).filter(id => !playerDbMap.has(id)).slice(0, 500);
@@ -1119,16 +1132,107 @@ export default function HomePage() {
       const scoringRows = scRes.data || [];
       const playerRows = plRes.data || [];
 
-      const topSkaters = playerRows
+      // Build player ID -> player_name map from scoring rows, league_player_database, and league_rosters
+      const nameById = new Map<number, string>();
+      scoringRows.forEach((sc: any) => {
+        if (sc.scorer_id && sc.scorer && !String(sc.scorer).startsWith('Player #')) {
+          nameById.set(Number(sc.scorer_id), String(sc.scorer).trim());
+        }
+        if (sc.assist1_id && sc.assist1 && sc.assist1 !== '--' && !String(sc.assist1).startsWith('Player #')) {
+          nameById.set(Number(sc.assist1_id), String(sc.assist1).trim());
+        }
+        if (sc.assist2_id && sc.assist2 && sc.assist2 !== '--' && !String(sc.assist2).startsWith('Player #')) {
+          nameById.set(Number(sc.assist2_id), String(sc.assist2).trim());
+        }
+      });
+
+      const missingIds = Array.from(
+        new Set(
+          playerRows
+            .map((p: any) => Number(p.player_id))
+            .filter((id: number) => !isNaN(id) && id > 0 && !nameById.has(id))
+        )
+      );
+
+      if (missingIds.length > 0) {
+        const [dbByPid, dbById, rosterByPid] = await Promise.all([
+          supabase.from('league_player_database').select('player_id, player_name').in('player_id', missingIds).then(r => r, () => ({ data: null })),
+          supabase.from('league_player_database').select('id, player_name').in('id', missingIds).then(r => r, () => ({ data: null })),
+          supabase.from('league_rosters').select('player_id, player_name').in('player_id', missingIds).then(r => r, () => ({ data: null }))
+        ]);
+
+        (dbByPid.data || []).forEach((row: any) => {
+          if (row.player_id && row.player_name) nameById.set(Number(row.player_id), String(row.player_name).trim());
+        });
+        (dbById.data || []).forEach((row: any) => {
+          if (row.id && row.player_name) nameById.set(Number(row.id), String(row.player_name).trim());
+        });
+        (rosterByPid.data || []).forEach((row: any) => {
+          if (row.player_id && row.player_name) nameById.set(Number(row.player_id), String(row.player_name).trim());
+        });
+      }
+
+      // Also tally G / A / PTS directly from scoringRows by player name
+      const tallyByName = new Map<string, { name: string; g: number; a: number; pts: number }>();
+      const addTally = (rawName: any, isGoal: boolean) => {
+        const clean = String(rawName || '').trim();
+        if (!clean || clean === '--' || clean.toLowerCase() === 'none' || clean.toLowerCase() === 'unassisted' || clean.startsWith('Player #')) return;
+        const k = clean.toLowerCase();
+        const cur = tallyByName.get(k) || { name: clean, g: 0, a: 0, pts: 0 };
+        if (isGoal) cur.g += 1;
+        else cur.a += 1;
+        cur.pts = cur.g + cur.a;
+        tallyByName.set(k, cur);
+      };
+
+      scoringRows.forEach((sc: any) => {
+        addTally(sc.scorer, true);
+        addTally(sc.assist1, false);
+        addTally(sc.assist2, false);
+      });
+
+      const fromScoringLog = Array.from(tallyByName.values()).sort((a, b) => b.pts - a.pts || b.g - a.g);
+
+      let topSkaters = playerRows
         .filter((p: any) => (Number(p.goals || 0) + Number(p.assists || 0)) > 0)
-        .map((p: any) => ({
-          name: p.player_name || `Player #${p.player_id}`,
-          team_id: Number(p.team_id),
-          g: Number(p.goals || 0),
-          a: Number(p.assists || 0),
-          pts: Number(p.goals || 0) + Number(p.assists || 0)
-        }))
-        .sort((a: any, b: any) => b.pts - a.pts || b.g - a.g)
+        .map((p: any) => {
+          const pid = Number(p.player_id);
+          const resolvedName =
+            (p.player_name && !String(p.player_name).startsWith('Player #') ? String(p.player_name).trim() : '') ||
+            nameById.get(pid) ||
+            '';
+          return {
+            name: resolvedName,
+            team_id: Number(p.team_id),
+            g: Number(p.goals || 0),
+            a: Number(p.assists || 0),
+            pts: Number(p.goals || 0) + Number(p.assists || 0)
+          };
+        })
+        .sort((a: any, b: any) => b.pts - a.pts || b.g - a.g);
+
+      // If any skater row still lacks a resolved name, match from the scoring log or use the scoring log directly
+      if (fromScoringLog.length > 0 && (topSkaters.length === 0 || topSkaters.some((s: any) => !s.name))) {
+        const usedNames = new Set(topSkaters.map((s: any) => s.name.toLowerCase()).filter(Boolean));
+        topSkaters = topSkaters.map((s: any) => {
+          if (s.name) return s;
+          const match = fromScoringLog.find(
+            ( item ) => !usedNames.has(item.name.toLowerCase()) && item.g === s.g && item.a === s.a
+          ) || fromScoringLog.find((item) => !usedNames.has(item.name.toLowerCase()));
+          if (match) {
+            usedNames.add(match.name.toLowerCase());
+            return { ...s, name: match.name };
+          }
+          return s;
+        });
+
+        if (topSkaters.some((s: any) => !s.name)) {
+          topSkaters = fromScoringLog;
+        }
+      }
+
+      topSkaters = topSkaters
+        .filter((s: any) => Boolean(s.name))
         .slice(0, 6);
 
       setBoxscoreDetails({
@@ -1206,8 +1310,48 @@ export default function HomePage() {
         <p className="text-xs sm:text-sm italic">"Welcome to the Darkside of NHL95"</p>
       </header>
 
-      {/* Real-World NHL Current News Wire Bar */}
-      {briefing?.nhl_wire && briefing.nhl_wire.length > 0 && (
+      {/* Real-World NHL Current News Wire Bar (only shown when live/updated articles exist, not static placeholders) */}
+      {(() => {
+        const STATIC_TITLES = new Set([
+          'NHL Offseason: Trade Buzz Intensifies as Training Camps Near',
+          'Scouting Reports: Top Prospects Gear Up for Rookie Showcase',
+          'Free Agency Rewind: Big Moves That Shifted Division Balance',
+          'NHL - The Home of the Puck',
+          'The Competing Website',
+          'The Other Sega Hockey Game'
+        ]);
+        const liveWire = (briefing?.nhl_wire || []).filter(
+          (story: any) =>
+            story?.title &&
+            story?.link &&
+            story.link !== 'https://www.nhl.com' &&
+            !STATIC_TITLES.has(String(story.title).trim())
+        );
+        if (liveWire.length === 0) return null;
+        return (
+          <div className="border-y-2 border-black py-1.5 px-3 mb-6 bg-neutral-100 flex items-center gap-3 overflow-hidden text-xs">
+            <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
+              NHL.com Updates
+            </span>
+            <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap no-scrollbar text-neutral-800">
+              {liveWire.map((story: any, sIdx: number) => (
+                <a
+                  key={sIdx}
+                  href={story.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold hover:text-blue-800 hover:underline flex items-center gap-1.5"
+                >
+                  <span>•</span>
+                  <span>{story.title}</span>
+                  <span className="text-[10px] text-neutral-500 font-normal">({story.date})</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+      {false && (
         <div className="border-y-2 border-black py-1.5 px-3 mb-6 bg-neutral-100 flex items-center gap-3 overflow-hidden text-xs">
           <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
             NHL.com Updates
