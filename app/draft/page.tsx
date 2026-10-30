@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { 
   Trophy, Clock, CheckCircle2, Search, Filter, Sparkles, UserCheck, 
   AlertCircle, ChevronDown, ChevronRight, Layers, ArrowRight, Shield, 
   Flame, ExternalLink, RefreshCw, Send, PlusCircle, HelpCircle, Eye,
-  SlidersHorizontal, Check, Award, Calendar, Star, Lock, Unlock, Timer
+  SlidersHorizontal, Check, Award, Calendar, Star, Lock, Unlock, Timer,
+  Users, MessageSquare
 } from 'lucide-react';
 import { useCoachAuth } from '@/lib/coach-auth';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
@@ -1400,6 +1401,284 @@ export default function DraftPage() {
 
   const [isTogglingDraftStatus, setIsTogglingDraftStatus] = useState(false);
 
+  // =========================================================================
+  // LIVE DRAFT WAR ROOM PRESENCE (ONLINE COACHES COUNT) & REALTIME CHAT
+  // =========================================================================
+  const [myDraftPeerId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.sessionStorage.getItem('nhl95_draft_peer_id');
+      if (saved) return saved;
+      const generated = `draft_${Math.random().toString(36).slice(2, 10)}`;
+      window.sessionStorage.setItem('nhl95_draft_peer_id', generated);
+      return generated;
+    }
+    return `draft_${Math.random().toString(36).slice(2, 10)}`;
+  });
+
+  const [onlineDraftPresence, setOnlineDraftPresence] = useState<
+    Array<{
+      peerId: string;
+      coachId?: number | null;
+      coachName: string;
+      isLoggedIn: boolean;
+      activeDraft?: string;
+      updatedAt: number;
+    }>
+  >([]);
+
+  const [draftChatMessages, setDraftChatMessages] = useState<
+    Array<{
+      id: string;
+      sender: string;
+      text: string;
+      draftBadge?: string;
+      isSystem?: boolean;
+      sentAt: number;
+    }>
+  >(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('nhl95_draft_war_room_chat_v1');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed.slice(-60);
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [draftChatInput, setDraftChatInput] = useState('');
+  const draftChannelRef = useRef<any>(null);
+  const draftChatEndRef = useRef<HTMLDivElement | null>(null);
+
+  const myDraftPresencePayload = useMemo(() => {
+    return {
+      peerId: myDraftPeerId,
+      coachId: currentCoach?.coach_id ?? null,
+      coachName: isLoggedIn && currentCoach?.coach_name ? currentCoach.coach_name : 'Guest Scout',
+      isLoggedIn: Boolean(isLoggedIn && currentCoach),
+      activeDraft: activeFloorSeasonMeta?.seasonBadge || 'O02 (1928)',
+      updatedAt: Date.now()
+    };
+  }, [myDraftPeerId, currentCoach, isLoggedIn, activeFloorSeasonMeta?.seasonBadge]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('nhl95_draft_war_room_chat_v1', JSON.stringify(draftChatMessages.slice(-60)));
+      } catch {}
+    }
+  }, [draftChatMessages]);
+
+  useEffect(() => {
+    const channel = supabase.channel('nhl95-draft-war-room', {
+      config: {
+        presence: { key: myDraftPeerId },
+        broadcast: { self: false, ack: false }
+      }
+    });
+
+    channel
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        const list: Array<{
+          peerId: string;
+          coachId?: number | null;
+          coachName: string;
+          isLoggedIn: boolean;
+          activeDraft?: string;
+          updatedAt: number;
+        }> = [];
+        Object.values(state).forEach((entries: any) => {
+          if (Array.isArray(entries) && entries.length > 0) {
+            list.push(entries[0]);
+          }
+        });
+        // Deduplicate logged-in coaches by coachName (keeping self first)
+        const seenCoaches = new Set<string>();
+        const deduped = list.filter(entry => {
+          if (entry.isLoggedIn && entry.coachName) {
+            const key = entry.coachName.trim().toLowerCase();
+            if (seenCoaches.has(key)) return false;
+            seenCoaches.add(key);
+          }
+          return true;
+        });
+        deduped.sort((a, b) => {
+          if (a.peerId === myDraftPeerId) return -1;
+          if (b.peerId === myDraftPeerId) return 1;
+          if (a.isLoggedIn && !b.isLoggedIn) return -1;
+          if (!a.isLoggedIn && b.isLoggedIn) return 1;
+          return a.coachName.localeCompare(b.coachName);
+        });
+        setOnlineDraftPresence(deduped);
+      })
+      .on('broadcast', { event: 'draft-chat' }, ({ payload }) => {
+        if (!payload) return;
+        setDraftChatMessages(prev => {
+          if (prev.some(m => m.id === payload.id)) return prev;
+          return [...prev.slice(-59), payload];
+        });
+      })
+      .on('broadcast', { event: 'draft-pick-made' }, ({ payload }) => {
+        if (!payload || !payload.newDraftRow) return;
+        const incoming: DraftData = payload.newDraftRow;
+        setData(prev => {
+          const exists = prev.some(
+            d => String(d.leagueId) === String(incoming.leagueId) && Number(d.pk) === Number(incoming.pk)
+          );
+          if (exists) {
+            return prev.map(d =>
+              String(d.leagueId) === String(incoming.leagueId) && Number(d.pk) === Number(incoming.pk)
+                ? incoming
+                : d
+            );
+          }
+          return [incoming, ...prev];
+        });
+      })
+      .subscribe(async status => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track(myDraftPresencePayload);
+        }
+      });
+
+    draftChannelRef.current = channel;
+    return () => {
+      supabase.removeChannel(channel);
+      draftChannelRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myDraftPeerId]);
+
+  useEffect(() => {
+    if (draftChannelRef.current) {
+      draftChannelRef.current.track(myDraftPresencePayload).catch(() => {});
+    }
+  }, [myDraftPresencePayload]);
+
+  const loggedInDraftCoaches = useMemo(() => {
+    const list = onlineDraftPresence.filter(p => p.isLoggedIn);
+    if (isLoggedIn && currentCoach?.coach_name) {
+      const hasSelf = list.some(
+        p => p.coachName.trim().toLowerCase() === currentCoach.coach_name.trim().toLowerCase()
+      );
+      if (!hasSelf) {
+        return [
+          {
+            peerId: myDraftPeerId,
+            coachId: currentCoach.coach_id,
+            coachName: currentCoach.coach_name,
+            isLoggedIn: true,
+            activeDraft: activeFloorSeasonMeta?.seasonBadge || 'O02 (1928)',
+            updatedAt: Date.now()
+          },
+          ...list
+        ];
+      }
+    }
+    return list;
+  }, [onlineDraftPresence, isLoggedIn, currentCoach, myDraftPeerId, activeFloorSeasonMeta?.seasonBadge]);
+
+  const handleSendDraftChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = draftChatInput.trim();
+    if (!trimmed) return;
+    const senderName = isLoggedIn && currentCoach?.coach_name ? currentCoach.coach_name : 'Guest Scout';
+    const msg = {
+      id: `dchat_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      sender: senderName,
+      text: trimmed,
+      draftBadge: activeFloorSeasonMeta?.seasonBadge || 'Draft',
+      isSystem: false,
+      sentAt: Date.now()
+    };
+    setDraftChatMessages(prev => [...prev.slice(-59), msg]);
+    setDraftChatInput('');
+    draftChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'draft-chat',
+      payload: msg
+    });
+  };
+
+  const activeDiscordChannelLabel = useMemo(() => {
+    const badgeUpper = (activeFloorSeasonMeta?.seasonBadge || '').toUpperCase();
+    const isO6 =
+      (activeFloorSeasonMeta?.leagueType || '').toUpperCase() === 'O' ||
+      badgeUpper.startsWith('O') ||
+      Number(floorLeagueId) === 39 ||
+      (Number(floorLeagueId) >= 54 && Number(floorLeagueId) <= 70);
+    return isO6 ? 'Original 6 - Draft (#draft)' : 'The W - Draft (#draft-official)';
+  }, [activeFloorSeasonMeta, floorLeagueId]);
+
+  const [isPushingDiscordPick, setIsPushingDiscordPick] = useState(false);
+
+  const handlePushPickToDiscord = async (pick: DraftData) => {
+    if (!pick || !pick.player || pick.player === 'N/A') return;
+    setIsPushingDiscordPick(true);
+    try {
+      const nextSlotAfterPick = projectedFloorRows.find(
+        r =>
+          (r.rd > pick.rd || (r.rd === pick.rd && r.pk > pick.pk)) &&
+          (!r.player || r.player === 'N/A')
+      );
+      const discordNotification = {
+        playerName: pick.player,
+        pos: pick.pos,
+        ovr: pick.ovr,
+        teamName: pick.team,
+        coachName: pick.coachName || null,
+        logoUrl: pick.logo || null,
+        round: pick.rd,
+        pickNumber: pick.pk,
+        seasonBadge: pick.seasonBadge || activeFloorSeasonMeta?.seasonBadge,
+        leagueType: pick.leagueType || activeFloorSeasonMeta?.leagueType || floorLeague,
+        leagueId: Number(pick.leagueId || floorLeagueId),
+        transactionType: pick.transaction || 'Drafted',
+        nextOnClock: nextSlotAfterPick
+          ? {
+              team: nextSlotAfterPick.team,
+              teamId: nextSlotAfterPick.teamId,
+              coachId: nextSlotAfterPick.coachId || null,
+              coachName: nextSlotAfterPick.coachName || null,
+              discordHandle:
+                nextSlotAfterPick.coachId && coachHandlesMap.get(Number(nextSlotAfterPick.coachId))
+                  ? coachHandlesMap.get(Number(nextSlotAfterPick.coachId))
+                  : null,
+              rd: nextSlotAfterPick.rd,
+              pk: nextSlotAfterPick.pk,
+              clockWindowMinutes: Number(nextSlotAfterPick.rd) === 1 ? 10 : 5
+            }
+          : null
+      };
+
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'announce_pick',
+          discordNotification
+        })
+      });
+      const json = await res.json();
+      const dRes = json?.discordResult;
+      if (dRes?.posted) {
+        setSubmitSuccessMessage(`📢 Pushed Pick #${pick.pk} (${pick.player} → ${pick.team}) to Discord: ${dRes.channelLabel}!`);
+        setTimeout(() => setSubmitSuccessMessage(null), 5000);
+      } else {
+        setSubmitSuccessMessage(
+          `📢 Pick #${pick.pk} (${pick.player}) queued for ${dRes?.channelLabel || activeDiscordChannelLabel} (Note: ensure DigitalHockeyOnline bot has the 'BOTS' role in Original 6 - Golden Era -> #draft).`
+        );
+        setTimeout(() => setSubmitSuccessMessage(null), 8000);
+      }
+    } catch (err: any) {
+      alert(`Could not push pick to Discord: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsPushingDiscordPick(false);
+    }
+  };
+
   const handleToggleDraftStart = async (targetLeagueId: string, startNow: boolean) => {
     if (!isUltraMagnusAdmin) return;
     setIsTogglingDraftStatus(true);
@@ -2112,8 +2391,33 @@ export default function DraftPage() {
         setData(prev => prev.map(d => (d.draftId === targetSlot.draftId ? newDraftData : d)));
       }
 
+      // Broadcast live pick to all coaches in the Draft War Room & post system alert in Draft Chat
+      const sysChatMsg = {
+        id: `dchat_pick_${Date.now()}_${targetSlot.pk}`,
+        sender: 'WAR ROOM WIRE',
+        text: `🚨 PICK #${targetSlot.pk} (Rd ${targetSlot.rd}): ${targetSlot.team}${
+          targetSlot.coachName ? ` (${targetSlot.coachName})` : ''
+        } selects ${player.player_name} (${player.pos}, OVR ${player.ovr})!`,
+        draftBadge: targetSlot.seasonBadge,
+        isSystem: true,
+        sentAt: Date.now()
+      };
+      setDraftChatMessages(prev => [...prev.slice(-59), sysChatMsg]);
+      draftChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'draft-chat',
+        payload: sysChatMsg
+      });
+      draftChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'draft-pick-made',
+        payload: { newDraftRow: newDraftData }
+      });
+
       setPodium(newDraftData);
-      setSubmitSuccessMessage(`🎉 SELECTION SUBMITTED: ${targetSlot.team} selects ${player.player_name} with Pick #${targetSlot.pk} (Rd ${targetSlot.rd}) for ${targetSlot.seasonBadge}!`);
+      setSubmitSuccessMessage(
+        `🎉 SELECTION SUBMITTED: ${targetSlot.team} selects ${player.player_name} with Pick #${targetSlot.pk} (Rd ${targetSlot.rd}) for ${targetSlot.seasonBadge} • Pushed to ${activeDiscordChannelLabel}!`
+      );
       setTimeout(() => setSubmitSuccessMessage(null), 6000);
 
       // Reset form
@@ -2365,7 +2669,7 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         <header className="bg-[#fdfaf5] border-2 border-black border-b-4 px-4 sm:px-6 py-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Left: Title & Active Draft Badge */}
-          <div className="text-left">
+          <div className="text-left space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-none">
                 The Draft Floor
@@ -2373,10 +2677,34 @@ export default function DraftPage() {
               <span className="bg-black text-amber-300 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest border border-black">
                 Active: {activeFloorSeasonMeta?.seasonBadge || 'W19 (2014)'}
               </span>
+              <span className="bg-emerald-900 text-emerald-200 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 border border-black inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                {loggedInDraftCoaches.length} Coach{loggedInDraftCoaches.length === 1 ? '' : 'es'} Logged In
+              </span>
+              <span className="bg-indigo-950 text-indigo-200 font-mono text-[10px] font-black uppercase px-2 py-0.5 border border-black">
+                📡 Discord: {activeDiscordChannelLabel}
+              </span>
             </div>
-            <p className="text-[11px] uppercase tracking-wider font-sans font-bold text-neutral-600 mt-1">
+            <p className="text-[11px] uppercase tracking-wider font-sans font-bold text-neutral-600">
               Official War Room, Rookie Prospects & Franchise Future Draft Capital
             </p>
+            {loggedInDraftCoaches.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span className="text-[10px] font-mono font-black uppercase text-slate-600">
+                  Online Coaches:
+                </span>
+                {loggedInDraftCoaches.map((c) => (
+                  <span
+                    key={`hdr-coach-${c.peerId}-${c.coachName}`}
+                    className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-950 border border-black px-2 py-0.5 text-[10px] font-mono font-black uppercase"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                    {c.coachName}
+                    {c.activeDraft ? <span className="text-emerald-700 font-normal">({c.activeDraft.split(' ')[0]})</span> : null}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Right: Navigation Buttons & Concurrent Live Draft Switcher */}
@@ -3047,19 +3375,29 @@ export default function DraftPage() {
                 {/* SELECTED PICKS IN THIS DRAFT (Always visible in Draft Area to show who picked whom) */}
                 {selectedPicksForFloor.length > 0 && (
                   <div className="mt-4 pt-3 border-t-2 border-black">
-                    <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                       <span className="font-mono text-[10px] font-black uppercase tracking-wider bg-emerald-800 text-white px-2 py-0.5 border border-black">
                         ✓ Selected Picks in {activeFloorSeasonMeta?.seasonBadge} ({selectedPicksForFloor.length})
                       </span>
-                      <span className="text-[10px] font-mono font-bold text-slate-600 uppercase">
-                        Click any pick to inspect player card
-                      </span>
+                      <button
+                        type="button"
+                        disabled={isPushingDiscordPick}
+                        onClick={() => handlePushPickToDiscord(selectedPicksForFloor[selectedPicksForFloor.length - 1])}
+                        className="bg-indigo-900 hover:bg-indigo-800 disabled:opacity-50 text-white font-mono text-[10px] font-black uppercase px-2.5 py-0.5 border border-black cursor-pointer flex items-center gap-1"
+                        title={`Push latest pick to ${activeDiscordChannelLabel}`}
+                      >
+                        <Send className="w-3 h-3 text-amber-300" />
+                        <span>
+                          {isPushingDiscordPick
+                            ? 'Pushing to Discord...'
+                            : `📢 Push Pick #${selectedPicksForFloor[selectedPicksForFloor.length - 1].pk} to ${activeDiscordChannelLabel}`}
+                        </span>
+                      </button>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
                       {selectedPicksForFloor.map((pick) => (
-                        <button
+                        <div
                           key={`selected-summary-${pick.leagueId}-${pick.rd}-${pick.pk}`}
-                          type="button"
                           onClick={() => setPodium(pick)}
                           className="flex items-center justify-between gap-2 bg-emerald-50 hover:bg-emerald-100 border border-black px-2.5 py-1.5 text-left transition-colors cursor-pointer"
                         >
@@ -3078,10 +3416,19 @@ export default function DraftPage() {
                               </div>
                             </div>
                           </div>
-                          <span className="text-[9px] font-mono font-black uppercase bg-white text-emerald-900 px-1.5 py-0.5 border border-black shrink-0">
-                            Picked
-                          </span>
-                        </button>
+                          <button
+                            type="button"
+                            disabled={isPushingDiscordPick}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePushPickToDiscord(pick);
+                            }}
+                            className="text-[9px] font-mono font-black uppercase bg-indigo-950 hover:bg-indigo-800 text-amber-300 px-1.5 py-0.5 border border-black shrink-0 cursor-pointer"
+                            title={`Push Pick #${pick.pk} to ${activeDiscordChannelLabel}`}
+                          >
+                            📢 Discord
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -3251,6 +3598,145 @@ export default function DraftPage() {
                       });
                     })()}
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* LIVE DRAFT WAR ROOM CHAT & ONLINE COACHES ROSTER */}
+            <div className="bg-[#fdfaf5] border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                {/* Left 4 cols: Coaches Logged In / Online in War Room */}
+                <div className="lg:col-span-4 bg-white border-2 border-black p-3 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 border-b-2 border-black pb-2 mb-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-emerald-700" />
+                        <span className="font-mono text-xs font-black uppercase text-black">
+                          Coaches Logged In
+                        </span>
+                      </div>
+                      <span className="bg-emerald-800 text-white font-mono text-[10px] font-black uppercase px-2 py-0.5 border border-black inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                        {loggedInDraftCoaches.length} Online
+                      </span>
+                    </div>
+
+                    {loggedInDraftCoaches.length === 0 ? (
+                      <div className="text-xs italic text-slate-500 py-4 text-center">
+                        No coaches currently signed in on the Draft Floor.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                        {loggedInDraftCoaches.map((c) => {
+                          const isMe =
+                            isLoggedIn &&
+                            currentCoach?.coach_name &&
+                            c.coachName.trim().toLowerCase() === currentCoach.coach_name.trim().toLowerCase();
+                          return (
+                            <div
+                              key={`warroom-coach-${c.peerId}-${c.coachName}`}
+                              className="flex items-center justify-between gap-2 bg-emerald-50/80 border border-black px-2.5 py-1.5 text-xs font-mono"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse shrink-0" />
+                                <span className="font-black uppercase text-black truncate">
+                                  {c.coachName}
+                                </span>
+                                {isMe && (
+                                  <span className="text-[9px] font-black uppercase bg-black text-amber-300 px-1 py-0">
+                                    YOU
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-bold uppercase text-slate-600 shrink-0">
+                                {c.activeDraft || activeFloorSeasonMeta?.seasonBadge}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-neutral-300 flex items-center justify-between text-[10px] font-mono font-bold uppercase text-slate-600">
+                    <span>Total Visitors in War Room: { Math.max(onlineDraftPresence.length, loggedInDraftCoaches.length) }</span>
+                    <span>Discord: {activeDiscordChannelLabel}</span>
+                  </div>
+                </div>
+
+                {/* Right 8 cols: Live Draft War Room Chat */}
+                <div className="lg:col-span-8 bg-white border-2 border-black p-3 flex flex-col">
+                  <div className="flex items-center justify-between gap-2 border-b-2 border-black pb-2 mb-2.5 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <MessageSquare className="w-4 h-4 text-amber-600" />
+                      <span className="font-mono text-xs font-black uppercase text-black">
+                        Live Draft War Room Chat
+                      </span>
+                      <span className="text-[10px] font-mono font-bold uppercase bg-yellow-100 text-black px-2 py-0.5 border border-black">
+                        {activeFloorSeasonMeta?.seasonBadge}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
+                      Real-time coach chat &amp; live pick wire
+                    </span>
+                  </div>
+
+                  <div className="flex-1 bg-[#fdfaf5] border border-black/30 p-2.5 h-44 max-h-44 overflow-y-auto space-y-1.5 font-sans text-xs mb-2.5">
+                    {draftChatMessages.length === 0 ? (
+                      <div className="h-full flex items-center justify-center text-slate-400 italic text-xs">
+                        No messages in the Draft War Room yet. Say hello or talk draft strategy!
+                      </div>
+                    ) : (
+                      draftChatMessages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={`px-2.5 py-1.5 border ${
+                            msg.isSystem
+                              ? 'bg-amber-100 border-black font-mono font-black text-black'
+                              : 'bg-white border-neutral-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-black uppercase text-black">{msg.sender}</span>
+                              {msg.draftBadge && (
+                                <span className="bg-neutral-200 text-black px-1 py-0 border border-black/20 text-[9px] font-bold uppercase">
+                                  {msg.draftBadge}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-slate-400">
+                              {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-900 mt-0.5 break-words">{msg.text}</div>
+                        </div>
+                      ))
+                    )}
+                    <div ref={draftChatEndRef} />
+                  </div>
+
+                  <form onSubmit={handleSendDraftChat} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={draftChatInput}
+                      onChange={(e) => setDraftChatInput(e.target.value)}
+                      placeholder={
+                        isLoggedIn && currentCoach
+                          ? `Message Draft War Room as Coach ${currentCoach.coach_name}...`
+                          : 'Sign in or type a message to the Draft War Room...'
+                      }
+                      className="flex-1 bg-white border-2 border-black px-3 py-1.5 text-xs font-sans focus:outline-none focus:bg-yellow-50"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!draftChatInput.trim()}
+                      className="bg-black hover:bg-neutral-800 disabled:opacity-40 text-amber-300 font-mono text-xs font-black uppercase px-4 py-1.5 border-2 border-black cursor-pointer flex items-center gap-1.5 shrink-0"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send</span>
+                    </button>
+                  </form>
                 </div>
               </div>
             </div>

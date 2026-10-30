@@ -349,14 +349,20 @@ async function resolvePlayerPortraitUrl(playerName: string): Promise<string | un
   return undefined;
 }
 
-async function postDraftPickToDiscord(notif?: DraftDiscordNotification) {
-  if (!notif || !notif.playerName) return;
+async function postDraftPickToDiscord(notif?: DraftDiscordNotification): Promise<{
+  posted: boolean;
+  channelId: string;
+  channelLabel: string;
+  error?: string;
+}> {
+  if (!notif || !notif.playerName) {
+    return { posted: false, channelId: '', channelLabel: '', error: 'Missing notification payload' };
+  }
 
   const botToken = process.env.DISCORD_BOT_TOKEN || '';
-  const draftWebhookUrl = process.env.DISCORD_DRAFT_WEBHOOK_URL || '';
-  const fallbackWebhookUrl = process.env.DISCORD_WEBHOOK_URL || '';
 
-  // Route Original 6 drafts to #draft (1459581429271892080) and W drafts to #draft-official (1484345470158376960)
+  // Strictly route Original 6 drafts to Original 6 - Golden Era -> #draft (1459581429271892080)
+  // and W League drafts to The W -> #draft-official (1484345470158376960)
   const badgeUpper = (notif.seasonBadge || '').toUpperCase();
   const isOriginal6 =
     (notif.leagueType || '').toUpperCase() === 'O' ||
@@ -365,12 +371,15 @@ async function postDraftPickToDiscord(notif?: DraftDiscordNotification) {
     notif.leagueId === 39 ||
     (Number(notif.leagueId) >= 54 && Number(notif.leagueId) <= 70);
 
-  const primaryChannelId = isOriginal6 ? '1459581429271892080' : '1484345470158376960';
-  const secondaryChannelId = isOriginal6 ? '1484345470158376960' : '1459581429271892080';
+  const targetChannelId = isOriginal6
+    ? process.env.DISCORD_O6_DRAFT_CHANNEL_ID || '1459581429271892080'
+    : process.env.DISCORD_W_DRAFT_CHANNEL_ID || '1484345470158376960';
 
-  const targetChannelIds = process.env.DISCORD_DRAFT_CHANNEL_ID
-    ? process.env.DISCORD_DRAFT_CHANNEL_ID.split(',').map(s => s.trim()).filter(Boolean)
-    : [primaryChannelId, secondaryChannelId];
+  const channelLabel = isOriginal6 ? 'Original 6 - Draft (#draft)' : 'The W - Draft (#draft-official)';
+
+  const leagueWebhookUrl = isOriginal6
+    ? process.env.DISCORD_O6_DRAFT_WEBHOOK_URL || ''
+    : process.env.DISCORD_W_DRAFT_WEBHOOK_URL || process.env.DISCORD_DRAFT_WEBHOOK_URL || '';
 
   const teamLogoUrl = resolveTeamLogoUrl(notif.teamName, notif.logoUrl);
   const portraitUrl = await resolvePlayerPortraitUrl(notif.playerName);
@@ -421,13 +430,13 @@ async function postDraftPickToDiscord(notif?: DraftDiscordNotification) {
     ...(fields.length > 0 ? { fields } : {}),
     ...(rightThumbnailUrl ? { thumbnail: { url: rightThumbnailUrl } } : {}),
     footer: {
-      text: `NHL95.net Draft War Room • ${notif.seasonBadge || ''} • Rd 1: 10m | Rd 2: 5m`,
+      text: `NHL95.net Draft War Room • ${notif.seasonBadge || ''} • ${channelLabel} • Rd 1: 10m | Rd 2: 5m`,
       ...(teamLogoUrl ? { icon_url: teamLogoUrl } : {})
     },
     timestamp: new Date().toISOString()
   };
 
-  let headline = `🚨 **PICK IS IN!** **${notif.teamName}**${
+  let headline = `🚨 **PICK IS IN! (${notif.seasonBadge || (isOriginal6 ? 'Original 6' : 'W League')})** **${notif.teamName}**${
     notif.coachName ? ` (${notif.coachName})` : ''
   } selects **${notif.playerName}** with Pick **#${notif.pickNumber}** (Rd ${notif.round})!`;
 
@@ -448,48 +457,52 @@ async function postDraftPickToDiscord(notif?: DraftDiscordNotification) {
     embeds: [embed]
   };
 
-  if (draftWebhookUrl) {
+  if (leagueWebhookUrl) {
     try {
-      const whRes = await fetch(draftWebhookUrl, {
+      const whRes = await fetch(leagueWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (whRes.ok) return;
+      if (whRes.ok) {
+        return { posted: true, channelId: targetChannelId, channelLabel };
+      }
     } catch (e) {
       console.error('Draft webhook post error:', e);
     }
   }
 
+  let lastError = '';
   if (botToken) {
-    for (const chId of targetChannelIds) {
-      try {
-        const botRes = await fetch(`https://discord.com/api/v10/channels/${chId}/messages`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bot ${botToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
-        if (botRes.ok) return;
-      } catch (e) {
-        console.error(`Draft bot post to channel ${chId} failed:`, e);
-      }
-    }
-  }
-
-  if (fallbackWebhookUrl) {
     try {
-      await fetch(fallbackWebhookUrl, {
+      const botRes = await fetch(`https://discord.com/api/v10/channels/${targetChannelId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(payload)
       });
-    } catch (e) {
-      console.error('Fallback draft webhook error:', e);
+      if (botRes.ok) {
+        return { posted: true, channelId: targetChannelId, channelLabel };
+      }
+      const errText = await botRes.text();
+      lastError = `Discord API ${botRes.status} on ${channelLabel} (${targetChannelId}): ${errText}`;
+      console.error(lastError);
+    } catch (e: any) {
+      lastError = e?.message || 'Bot request failed';
+      console.error(`Draft bot post to channel ${targetChannelId} failed:`, e);
     }
+  } else {
+    lastError = 'Queued for 24/7 Discord Draft Bot daemon';
   }
+
+  return {
+    posted: false,
+    channelId: targetChannelId,
+    channelLabel,
+    error: lastError || 'Queued for 24/7 Discord Draft Bot daemon'
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -552,11 +565,12 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: updateErr.message }, { status: 400 });
         }
 
+        let discordResult = null;
         if (updated && updated.length > 0 && discordNotification) {
-          await postDraftPickToDiscord(discordNotification);
+          discordResult = await postDraftPickToDiscord(discordNotification);
         }
 
-        return NextResponse.json({ data: updated || [] });
+        return NextResponse.json({ data: updated || [], discordResult });
       }
 
       if (Array.isArray(rowsToInsert) && rowsToInsert.length > 0) {
@@ -572,14 +586,24 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: insErr.message }, { status: 400 });
         }
 
+        let discordResult = null;
         if (insertedAll && insertedAll.length > 0 && discordNotification) {
-          await postDraftPickToDiscord(discordNotification);
+          discordResult = await postDraftPickToDiscord(discordNotification);
         }
 
-        return NextResponse.json({ data: insertedAll || [] });
+        return NextResponse.json({ data: insertedAll || [], discordResult });
       }
 
       return NextResponse.json({ error: 'Missing draftId or rowsToInsert' }, { status: 400 });
+    }
+
+    if (action === 'announce_pick') {
+      const { discordNotification } = body as { discordNotification: DraftDiscordNotification };
+      if (!discordNotification) {
+        return NextResponse.json({ error: 'Missing discordNotification' }, { status: 400 });
+      }
+      const discordResult = await postDraftPickToDiscord(discordNotification);
+      return NextResponse.json({ discordResult });
     }
 
     if (action === 'upload_capital') {

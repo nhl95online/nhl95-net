@@ -4599,6 +4599,192 @@ class NHL95SaveStateBot(discord.Client):
                         print(f"   Notice: Could not scan history in #{channel.name}: {e}")
             print("✅ Startup catch-up scan complete! Now listening live 24/7 for new save states...\n")
 
+        if not getattr(self, "_draft_watcher_started", False):
+            self._draft_watcher_started = True
+            self._announced_draft_ids = set()
+            asyncio.create_task(self.draft_picks_watcher_loop())
+
+    async def draft_picks_watcher_loop(self) -> None:
+        """Watches public.league_drafts for new picks in active drafts (e.g. O02 = 54, W19 = 41)
+        and posts them to the appropriate Discord draft channel (#draft for Original 6, #draft-official for The W)."""
+        O6_DRAFT_CHANNEL_ID = int(os.getenv("DISCORD_O6_DRAFT_CHANNEL_ID", "1459581429271892080"))
+        W_DRAFT_CHANNEL_ID = int(os.getenv("DISCORD_W_DRAFT_CHANNEL_ID", "1484345470158376960"))
+
+        LEAGUE_BADGE_MAP = {
+            41: "W19 (2014)",
+            42: "W20 (2015)",
+            43: "W21 (2016)",
+            44: "W22 (2017)",
+            54: "O02 (1928)",
+            55: "O03 (1929)",
+            56: "O04 (1930)",
+        }
+
+        TEAM_USER_ID_MAP = {
+            "AUTOBAHN": "692039117499793469",
+            "BARRIE": "882284979441258567",
+            "BAYTOWN": "241253413722128385",
+            "BETTY FORD": "1211045587483623484",
+            "DEVIL HILL": "378302345894821909",
+            "DEVIN HILL": "378302345894821909",
+            "EASTER ISLAND": "873331397782294569",
+            "GRAND RIVER": "692183787509121046",
+            "HAMILTON": "932744327191490651",
+            "HIGHLAND": "694697891733831761",
+            "INGLEWOOD": "939897819681161296",
+            "ITALY": "373576219129806859",
+            "KAROLINA": "918583918838546443",
+            "MINNESOTA": "691684263698890878",
+            "MARYHILL": "1049531278531252224",
+            "MINHATTRICK": "144973906070077440",
+            "NORTH BAY": "897864347764789290",
+            "ORANGE COUNTY": "1009697012737921055",
+            "PITT": "874726051790594051",
+            "PROVIDENCE": "904808850681638923",
+            "RICHFIELD": "691747327261671534",
+            "ROCKFORD": "291228680825470978",
+            "SOUTH HILLS": "1042251245609549824",
+            "SUMTER": "874999566200635393",
+            "SUGAR VALLEY": "628241421781958684",
+            "TAIPEI": "802225742523531325",
+            "THUNDER BAY": "694688440440193186",
+            "TEGUCIGALPA": "582240735793774618",
+            "VALHALLA": "869668599550332958",
+            "WOODLYNNE": "204681486484373505",
+            "BOSTON": "378302345894821909",
+            "CHICAGO": "939897819681161296",
+            "DETROIT": "918583918838546443",
+            "MONTREAL": "869668599550332958",
+            "NEW YORK": "291228680825470978",
+            "TORONTO": "932744327191490651",
+        }
+
+        while not self.is_closed():
+            try:
+                rows = await asyncio.to_thread(
+                    supabase_get,
+                    "league_drafts",
+                    "select=*,league_player_database(player_name,pos,ratings),league_teams(team_name,coach_name,logo_url)&league_id=gte.41&order=league_id.asc,pick_number.asc",
+                )
+                if isinstance(rows, list) and rows:
+                    by_league: Dict[int, List[Dict[str, Any]]] = {}
+                    for r in rows:
+                        lid = int(r.get("league_id") or 0)
+                        if lid >= 41:
+                            by_league.setdefault(lid, []).append(r)
+
+                    for lid, lrows in by_league.items():
+                        lrows.sort(key=lambda x: int(x.get("pick_number") or 0))
+                        filled = [r for r in lrows if r.get("player_id") is not None]
+                        if not filled:
+                            continue
+
+                        is_o6 = lid >= 54
+                        ch_id = O6_DRAFT_CHANNEL_ID if is_o6 else W_DRAFT_CHANNEL_ID
+                        ch = self.get_channel(ch_id)
+                        if ch is None:
+                            try:
+                                ch = await self.fetch_channel(ch_id)
+                            except Exception:
+                                ch = None
+                        if ch is None or not isinstance(ch, discord.TextChannel):
+                            continue
+
+                        # Inspect recent messages in target channel so we don't duplicate
+                        recent_texts: List[str] = []
+                        try:
+                            async for m in ch.history(limit=25):
+                                txt = (m.content or "") + " " + " ".join((e.title or "") + " " + (e.description or "") for e in (m.embeds or []))
+                                recent_texts.append(txt.lower())
+                        except Exception:
+                            continue
+
+                        badge = LEAGUE_BADGE_MAP.get(lid, f"{'O' if is_o6 else 'W'} Draft ({lid})")
+                        for idx, pick_row in enumerate(filled):
+                            did = int(pick_row.get("draft_id") or 0)
+                            if did in self._announced_draft_ids:
+                                continue
+                            pk_num = int(pick_row.get("pick_number") or 1)
+                            rd_num = int(pick_row.get("round") or 1)
+                            p_obj = pick_row.get("league_player_database") or {}
+                            if isinstance(p_obj, list):
+                                p_obj = p_obj[0] if p_obj else {}
+                            t_obj = pick_row.get("league_teams") or {}
+                            if isinstance(t_obj, list):
+                                t_obj = t_obj[0] if t_obj else {}
+
+                            p_name = str(p_obj.get("player_name") or "").strip()
+                            if not p_name or p_name.upper() == "N/A":
+                                continue
+
+                            # Check if already announced in channel
+                            already = any(p_name.lower() in rt and f"#{pk_num}" in rt for rt in recent_texts)
+                            if already:
+                                self._announced_draft_ids.add(did)
+                                continue
+
+                            t_name = str(t_obj.get("team_name") or "Team").strip()
+                            c_name = str(t_obj.get("coach_name") or "").strip()
+                            p_pos = str(p_obj.get("pos") or "F").strip()
+
+                            # Find next open slot in this draft
+                            next_open = next(
+                                (s for s in lrows if int(s.get("pick_number") or 0) > pk_num and s.get("player_id") is None),
+                                None,
+                            )
+
+                            headline = (
+                                f"🚨 **PICK IS IN! ({badge})** **{t_name}**"
+                                f"{f' ({c_name})' if c_name else ''} selects **{p_name}** ({p_pos}) "
+                                f"with Pick **#{pk_num}** (Rd {rd_num})!"
+                            )
+
+                            embed = discord.Embed(
+                                title=f"Round {rd_num} • Pick #{pk_num} — {p_name} ({p_pos})",
+                                description=(
+                                    f"With Pick **#{pk_num}** (Round {rd_num}), **{t_name}**"
+                                    f"{f' (Coach **{c_name}**)' if c_name else ''} selects **{p_name}** (**{p_pos}**)!"
+                                ),
+                                color=0xF59E0B,
+                                timestamp=datetime.now(timezone.utc),
+                            )
+                            embed.set_author(name=f"{badge} • OFFICIAL DRAFT SELECTION — {t_name}")
+                            embed.set_footer(text=f"NHL95.net Draft War Room • {badge}")
+
+                            if next_open:
+                                nt_obj = next_open.get("league_teams") or {}
+                                if isinstance(nt_obj, list):
+                                    nt_obj = nt_obj[0] if nt_obj else {}
+                                nt_name = str(nt_obj.get("team_name") or "Next Team").strip()
+                                nc_name = str(nt_obj.get("coach_name") or "").strip()
+                                npk = int(next_open.get("pick_number") or (pk_num + 1))
+                                nrd = int(next_open.get("round") or rd_num)
+                                win_mins = 10 if nrd == 1 else 5
+                                mention_str = ""
+                                for kw, uid in TEAM_USER_ID_MAP.items():
+                                    if kw in nt_name.upper():
+                                        mention_str = f"<@{uid}>"
+                                        break
+                                coach_disp = " • ".join(filter(None, [f"Coach **{nc_name}**" if nc_name else "", mention_str]))
+                                embed.add_field(
+                                    name=f"⏱️ On The Clock Next ({win_mins}:00 Window)",
+                                    value=f"Pick **#{npk}** (Rd {nrd}) — **{nt_name}**{f' ({coach_disp})' if coach_disp else ''}",
+                                    inline=False,
+                                )
+                                headline += (
+                                    f"\n⏱️ **On The Clock Next ({win_mins}:00 Window):** "
+                                    f"Pick **#{npk}** (Rd {nrd}) — **{nt_name}**"
+                                    f"{f' — {mention_str}' if mention_str else ''}"
+                                )
+
+                            await ch.send(content=headline, embed=embed)
+                            self._announced_draft_ids.add(did)
+                            print(f"📢 Announced {badge} Pick #{pk_num} ({p_name} -> {t_name}) in #{ch.name}")
+            except Exception as e:
+                print(f"Draft watcher note: {e}")
+
+            await asyncio.sleep(10)
+
     async def process_season_games_command(self, message: discord.Message) -> None:
         if message.author.bot:
             return
