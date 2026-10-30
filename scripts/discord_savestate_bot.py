@@ -4662,9 +4662,13 @@ class NHL95SaveStateBot(discord.Client):
         while not self.is_closed():
             try:
                 rows = await asyncio.to_thread(
-                    supabase_get,
+                    supabase.select,
                     "league_drafts",
-                    "select=*,league_player_database(player_name,pos,ratings),league_teams(team_name,coach_name,logo_url)&league_id=gte.41&order=league_id.asc,pick_number.asc",
+                    {
+                        "select": "*,league_player_database(player_name,pos,ratings),league_teams(team_name,coach_name,logo_url)",
+                        "league_id": "gte.41",
+                        "order": "league_id.asc,pick_number.asc",
+                    },
                 )
                 if isinstance(rows, list) and rows:
                     by_league: Dict[int, List[Dict[str, Any]]] = {}
