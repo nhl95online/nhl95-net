@@ -45,8 +45,21 @@ async function ensureLeagueExists(supabase: any, leagueId: number, rows?: any[])
       leagueLevel = `W${String(wNum).padStart(2, '0')}`;
     }
   }
+  const isO6 = leagueLevel.startsWith('O');
   await supabase.from('leagues').upsert(
-    [{ league_id: numId, league_level: leagueLevel, nhl_year: sampleYear }],
+    [
+      {
+        league_id: numId,
+        league_name: leagueLevel,
+        nhl_year: sampleYear,
+        status: 'Upcoming',
+        playoff_teams: isO6 ? 6 : 16,
+        playoff_config: isO6 ? { format: '5,5,7', rounds: 3 } : { format: '7,7,7,7', rounds: 4 },
+        rules_json: isO6
+          ? { icing: 'Y', teams: '6', layout: '4x Opps', offside: 'N', penalties: 'N', roster_size: '5F, 3D, 2G', game_per_team: '20', manual_goalie: 'Y', period_length: 5, draft_started: false }
+          : { icing: 'Y', teams: '29', layout: '2x Opps', offside: 'N', penalties: 'Y', roster_size: '5F, 3D, 2G', game_per_team: '56', manual_goalie: 'Y', period_length: 5, draft_started: false }
+      }
+    ],
     { onConflict: 'league_id', ignoreDuplicates: true }
   );
 }
@@ -653,6 +666,56 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json({ data: insertedRows || [tradePayload] });
+    }
+
+    if (action === 'set_draft_status') {
+      const { leagueId, draftStarted } = body as {
+        leagueId: number;
+        draftStarted: boolean;
+      };
+      const numId = Number(leagueId);
+      if (!numId || isNaN(numId)) {
+        return NextResponse.json({ error: 'Invalid leagueId' }, { status: 400 });
+      }
+
+      await ensureLeagueExists(supabase, numId);
+
+      const { data: existingLeague } = await supabase
+        .from('leagues')
+        .select('rules_json')
+        .eq('league_id', numId)
+        .maybeSingle();
+
+      let currentRules: Record<string, any> = {};
+      if (existingLeague?.rules_json) {
+        try {
+          currentRules =
+            typeof existingLeague.rules_json === 'string'
+              ? JSON.parse(existingLeague.rules_json)
+              : { ...existingLeague.rules_json };
+        } catch {}
+      }
+
+      const updatedRules = {
+        ...currentRules,
+        draft_started: Boolean(draftStarted),
+        draft_started_at: draftStarted ? new Date().toISOString() : null
+      };
+
+      const { error: updErr } = await supabase
+        .from('leagues')
+        .update({ rules_json: updatedRules })
+        .eq('league_id', numId);
+
+      if (updErr) {
+        return NextResponse.json({ error: updErr.message }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        leagueId: numId,
+        draftStarted: Boolean(draftStarted),
+        rules_json: updatedRules
+      });
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

@@ -26,6 +26,7 @@ interface SeasonOption {
   year: number;
   draftDate?: string | null;
   status?: string | null;
+  draftStarted?: boolean;
 }
 
 interface DraftData {
@@ -696,10 +697,12 @@ export default function DraftPage() {
         rawLeagues.forEach((l: any) => {
           const lId = String(l.league_id !== undefined ? l.league_id : (l.id || l.season_id));
           let draftDate = l.draft_date || l.draft_datetime || l.start_date || null;
+          let draftStarted = false;
           if (l.rules_json) {
             try {
               const r = typeof l.rules_json === 'string' ? JSON.parse(l.rules_json) : l.rules_json;
               draftDate = draftDate || r.draft_date || r.draft_datetime || r.draft_time;
+              draftStarted = r.draft_started === true || String(r.draft_started).toLowerCase() === 'true';
             } catch {}
           }
 
@@ -721,7 +724,8 @@ export default function DraftPage() {
             leagueType: resolved.prefix,
             year: resolved.year,
             draftDate,
-            status: l.status || null
+            status: l.status || null,
+            draftStarted
           });
         });
 
@@ -1327,33 +1331,88 @@ export default function DraftPage() {
   }, [rookiePool, draftedPlayerMap, prospectSearch, prospectPos, prospectStatus, prospectTypeFilter]);
 
   // =========================================================================
-  // DRAFT DATE LOCK & COUNTDOWN LOGIC
+  // DRAFT START BUTTON LOCK & COUNTDOWN LOGIC
+  // A draft only starts when UltraMagnus clicks the Start Draft button for that specific leagueId.
   // =========================================================================
+  // Exclusive check for Coach UltraMagnus's profile ONLY (allows starting/stopping drafts & making proxy selections)
+  const isUltraMagnusAdmin = useMemo(() => {
+    if (!isLoggedIn || !currentCoach) return false;
+    const normName = String(currentCoach.coach_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normEmail = String(currentCoach.email || '').toLowerCase().trim();
+    return (
+      Number(currentCoach.coach_id) === 15 ||
+      normName === 'ultramagnus' ||
+      normEmail === 'wn95hl@gmail.com'
+    );
+  }, [isLoggedIn, currentCoach]);
+
+  const [isTogglingDraftStatus, setIsTogglingDraftStatus] = useState(false);
+
+  const handleToggleDraftStart = async (targetLeagueId: string, startNow: boolean) => {
+    if (!isUltraMagnusAdmin) return;
+    setIsTogglingDraftStatus(true);
+    try {
+      const res = await fetch('/api/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set_draft_status',
+          leagueId: Number(targetLeagueId),
+          draftStarted: startNow
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to update draft status');
+
+      setSeasons(prev =>
+        prev.map(s => (s.leagueId === String(targetLeagueId) ? { ...s, draftStarted: startNow } : s))
+      );
+
+      if (startNow) {
+        setPickClockStartMs(Date.now());
+        setIsPickClockPaused(false);
+        setPausedRemainingMs(null);
+      }
+    } catch (err: any) {
+      alert(`Could not update draft status: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsTogglingDraftStatus(false);
+    }
+  };
+
   const draftLockStatus = useMemo(() => {
-    if (!activeFloorSeasonMeta?.draftDate) {
-      return { isLocked: false, timeRemaining: null, targetDate: null };
+    const isStarted = Boolean(activeFloorSeasonMeta?.draftStarted);
+
+    if (isStarted) {
+      return { isLocked: false, reason: 'STARTED' as const, timeRemaining: null, targetDate: null };
     }
 
-    const targetDate = new Date(activeFloorSeasonMeta.draftDate);
-    const targetMs = targetDate.getTime();
-    if (isNaN(targetMs)) {
-      return { isLocked: false, timeRemaining: null, targetDate: null };
+    if (activeFloorSeasonMeta?.draftDate) {
+      const targetDate = new Date(activeFloorSeasonMeta.draftDate);
+      const targetMs = targetDate.getTime();
+      if (!isNaN(targetMs)) {
+        const diff = targetMs - currentTime;
+        if (diff > 0) {
+          const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+          const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+          const minutes = Math.floor((diff / (1000 * 60)) % 60);
+          const seconds = Math.floor((diff / 1000) % 60);
+          return {
+            isLocked: true,
+            reason: 'NOT_STARTED' as const,
+            timeRemaining: { days, hours, minutes, seconds, totalMs: diff },
+            targetDate
+          };
+        }
+      }
     }
 
-    const diff = targetMs - currentTime;
-    if (diff <= 0) {
-      return { isLocked: false, timeRemaining: null, targetDate };
-    }
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((diff / (1000 * 60)) % 60);
-    const seconds = Math.floor((diff / 1000) % 60);
-
+    // Even without a scheduled date, the draft stays locked until UltraMagnus clicks Start Draft
     return {
       isLocked: true,
-      timeRemaining: { days, hours, minutes, seconds, totalMs: diff },
-      targetDate
+      reason: 'NOT_STARTED' as const,
+      timeRemaining: null,
+      targetDate: null
     };
   }, [activeFloorSeasonMeta, currentTime]);
 
@@ -1721,18 +1780,6 @@ export default function DraftPage() {
     }
   };
 
-  // Exclusive check for Coach UltraMagnus's profile ONLY (allows making proxy selections for coaches who are unable)
-  const isUltraMagnusAdmin = useMemo(() => {
-    if (!isLoggedIn || !currentCoach) return false;
-    const normName = String(currentCoach.coach_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const normEmail = String(currentCoach.email || '').toLowerCase().trim();
-    return (
-      Number(currentCoach.coach_id) === 15 ||
-      normName === 'ultramagnus' ||
-      normEmail === 'wn95hl@gmail.com'
-    );
-  }, [isLoggedIn, currentCoach]);
-
   // Check if Currently Logged-in Coach is On The Clock
   const isCurrentCoachOnClock = useMemo(() => {
     if (!isLoggedIn || !currentCoach) return false;
@@ -1827,7 +1874,11 @@ export default function DraftPage() {
   const handleSubmitPick = async (e: React.FormEvent) => {
     e.preventDefault();
     if (draftLockStatus.isLocked) {
-      alert(`The draft is locked until ${draftLockStatus.targetDate?.toLocaleString()}.`);
+      alert(
+        draftLockStatus.targetDate
+          ? `The ${activeFloorSeasonMeta?.seasonBadge} draft is locked until ${draftLockStatus.targetDate.toLocaleString()} (or until started by the Commissioner).`
+          : `The ${activeFloorSeasonMeta?.seasonBadge} draft is currently on standby and has not been started yet.`
+      );
       return;
     }
     if (!isLoggedIn) {
@@ -2316,18 +2367,25 @@ export default function DraftPage() {
 
             {activeDrafts.length > 1 && (
               <div className="flex items-center lg:justify-end gap-1.5 flex-wrap font-mono">
-                <span className="text-[10px] font-black uppercase text-slate-600">Live Drafts:</span>
+                <span className="text-[10px] font-black uppercase text-slate-600">Upcoming &amp; Live Drafts:</span>
                 {activeDrafts.map(s => {
                   const isCurrent = s.leagueId === floorLeagueId;
                   return (
                     <button
                       key={s.leagueId}
                       onClick={() => switchToDraft(s)}
-                      className={`px-2 py-0.5 text-[11px] font-black uppercase border border-black cursor-pointer transition-all ${
+                      className={`px-2 py-0.5 text-[11px] font-black uppercase border border-black cursor-pointer transition-all flex items-center gap-1 ${
                         isCurrent ? 'bg-amber-300 text-black font-black' : 'bg-white text-black hover:bg-yellow-100'
                       }`}
                     >
-                      {s.seasonBadge}
+                      <span>{s.seasonBadge}</span>
+                      <span
+                        className={`text-[9px] px-1 py-0 border border-black ${
+                          s.draftStarted ? 'bg-emerald-600 text-white' : 'bg-neutral-200 text-neutral-700'
+                        }`}
+                      >
+                        {s.draftStarted ? 'LIVE' : 'STANDBY'}
+                      </span>
                     </button>
                   );
                 })}
@@ -2337,50 +2395,77 @@ export default function DraftPage() {
         </header>
 
         {/* ========================================================================= */}
-        {/* DRAFT LOCKED COUNTDOWN BANNER (WHEN DRAFT IS SCHEDULED IN FUTURE) */}
+        {/* DRAFT LOCKED / NOT STARTED BANNER (EACH DRAFT STARTS INDEPENDENTLY) */}
         {/* ========================================================================= */}
-        {draftLockStatus.isLocked && draftLockStatus.timeRemaining && (
+        {draftLockStatus.isLocked && (
           <div className="bg-[#121418] border-4 border-amber-400 text-white p-4 sm:p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-4 font-mono">
             <div className="flex items-center gap-3 text-left">
               <div className="w-12 h-12 bg-amber-400 text-black flex items-center justify-center border-2 border-black shrink-0 font-black">
                 <Lock className="w-6 h-6" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 tracking-wider animate-pulse">
-                    DRAFT LOCKED
+                    DRAFT STANDBY (NOT STARTED)
                   </span>
                   <span className="text-amber-300 text-xs font-black tracking-widest uppercase">
-                    {activeFloorSeasonMeta?.seasonBadge} SCHEDULED EVENT
+                    {activeFloorSeasonMeta?.seasonBadge}
                   </span>
                 </div>
                 <p className="text-xs text-neutral-300 font-sans mt-0.5">
-                  Official draft selections commence on <strong className="text-white">{draftLockStatus.targetDate?.toLocaleString()}</strong>.
+                  {draftLockStatus.targetDate ? (
+                    <>
+                      Scheduled for <strong className="text-white">{draftLockStatus.targetDate.toLocaleString()}</strong>. Picks unlock as soon as the Commissioner starts this draft.
+                    </>
+                  ) : (
+                    <>
+                      Picks for <strong className="text-white">{activeFloorSeasonMeta?.seasonBadge}</strong> are currently locked on standby until the Commissioner clicks <strong className="text-amber-300">Start Draft</strong>. (Each draft starts independently.)
+                    </>
+                  )}
                 </p>
               </div>
             </div>
 
-            {/* Retro Segmented Digital Timer */}
-            <div className="flex items-center gap-2 bg-black/80 border-2 border-neutral-700 p-2 text-center shrink-0">
-              <div className="px-2">
-                <div className="text-xl sm:text-2xl font-black text-amber-300">{draftLockStatus.timeRemaining.days}</div>
-                <div className="text-[8px] uppercase text-neutral-400 font-bold">Days</div>
-              </div>
-              <span className="text-amber-300 font-black">:</span>
-              <div className="px-2">
-                <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.hours).padStart(2, '0')}</div>
-                <div className="text-[8px] uppercase text-neutral-400 font-bold">Hours</div>
-              </div>
-              <span className="text-amber-300 font-black">:</span>
-              <div className="px-2">
-                <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.minutes).padStart(2, '0')}</div>
-                <div className="text-[8px] uppercase text-neutral-400 font-bold">Mins</div>
-              </div>
-              <span className="text-amber-300 font-black">:</span>
-              <div className="px-2">
-                <div className="text-xl sm:text-2xl font-black text-emerald-400">{String(draftLockStatus.timeRemaining.seconds).padStart(2, '0')}</div>
-                <div className="text-[8px] uppercase text-neutral-400 font-bold">Secs</div>
-              </div>
+            <div className="flex items-center gap-3 flex-wrap shrink-0">
+              {draftLockStatus.timeRemaining && (
+                <div className="flex items-center gap-2 bg-black/80 border-2 border-neutral-700 p-2 text-center shrink-0">
+                  <div className="px-2">
+                    <div className="text-xl sm:text-2xl font-black text-amber-300">{draftLockStatus.timeRemaining.days}</div>
+                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Days</div>
+                  </div>
+                  <span className="text-amber-300 font-black">:</span>
+                  <div className="px-2">
+                    <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.hours).padStart(2, '0')}</div>
+                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Hours</div>
+                  </div>
+                  <span className="text-amber-300 font-black">:</span>
+                  <div className="px-2">
+                    <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.minutes).padStart(2, '0')}</div>
+                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Mins</div>
+                  </div>
+                  <span className="text-amber-300 font-black">:</span>
+                  <div className="px-2">
+                    <div className="text-xl sm:text-2xl font-black text-emerald-400">{String(draftLockStatus.timeRemaining.seconds).padStart(2, '0')}</div>
+                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Secs</div>
+                  </div>
+                </div>
+              )}
+
+              {isUltraMagnusAdmin && (
+                <button
+                  type="button"
+                  disabled={isTogglingDraftStatus}
+                  onClick={() => handleToggleDraftStart(floorLeagueId, true)}
+                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black uppercase text-xs px-4 py-3 border-2 border-black shadow-[3px_3px_0px_#000] cursor-pointer flex items-center gap-2 transition-all"
+                >
+                  <Unlock className="w-4 h-4 text-black shrink-0" />
+                  <span>
+                    {isTogglingDraftStatus
+                      ? 'Starting Draft...'
+                      : `▶ START ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -2471,35 +2556,77 @@ export default function DraftPage() {
                   </div>
                 )}
 
-                {/* Exclusive UltraMagnus Proxy Selection Control (Visible ONLY to UltraMagnus's profile) */}
-                {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
-                  <div className="bg-amber-300 border-2 border-black text-black p-2.5 mb-3 font-mono text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-[2px_2px_0px_#000]">
-                    <div className="flex items-center gap-2 font-black uppercase">
-                      <Shield className="w-4 h-4 text-black shrink-0" />
-                      <span>
-                        👑 ULTRAMAGNUS PROXY PICK ACCESS: You can submit selections for any coach unable to pick
-                      </span>
+                {/* Exclusive UltraMagnus Commissioner & Proxy Selection Control (Visible ONLY to UltraMagnus's profile) */}
+                {isUltraMagnusAdmin && (
+                  <div className="bg-amber-300 border-2 border-black text-black p-2.5 mb-3 font-mono text-xs flex flex-col gap-2 shadow-[2px_2px_0px_#000]">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-black uppercase">
+                        <Shield className="w-4 h-4 text-black shrink-0" />
+                        <span>
+                          👑 ULTRAMAGNUS COMMISSIONER CONTROLS ({activeFloorSeasonMeta?.seasonBadge})
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {activeFloorSeasonMeta?.draftStarted ? (
+                          <button
+                            type="button"
+                            disabled={isTogglingDraftStatus}
+                            onClick={() => handleToggleDraftStart(floorLeagueId, false)}
+                            className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white border-2 border-black px-3 py-1 text-[11px] font-black uppercase cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>
+                              {isTogglingDraftStatus
+                                ? 'Updating...'
+                                : `⏸ PAUSE / STOP ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
+                            </span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isTogglingDraftStatus}
+                            onClick={() => handleToggleDraftStart(floorLeagueId, true)}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white border-2 border-black px-3 py-1 text-[11px] font-black uppercase cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            <span>
+                              {isTogglingDraftStatus
+                                ? 'Starting...'
+                                : `▶ START ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
+                            </span>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <select
-                      value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
-                      onChange={(e) => {
-                        const [rStr, pStr] = e.target.value.split('-');
-                        const chosen = projectedFloorRows.find(
-                          s => s.rd === Number(rStr) && s.pk === Number(pStr)
-                        );
-                        setOverridePickSlot(chosen || null);
-                      }}
-                      className="bg-black text-amber-300 border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
-                      title="Select any open pick slot to draft on behalf of that coach"
-                    >
-                      {projectedFloorRows
-                        .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
-                        .map(s => (
-                          <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
-                            Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
-                          </option>
-                        ))}
-                    </select>
+
+                    {!draftLockStatus.isLocked && (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-black/30 pt-2">
+                        <span className="text-[11px] font-bold uppercase">
+                          Proxy Pick Access (submit for any coach unable to pick):
+                        </span>
+                        <select
+                          value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
+                          onChange={(e) => {
+                            const [rStr, pStr] = e.target.value.split('-');
+                            const chosen = projectedFloorRows.find(
+                              s => s.rd === Number(rStr) && s.pk === Number(pStr)
+                            );
+                            setOverridePickSlot(chosen || null);
+                          }}
+                          className="bg-black text-amber-300 border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
+                          title="Select any open pick slot to draft on behalf of that coach"
+                        >
+                          {projectedFloorRows
+                            .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
+                            .map(s => (
+                              <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
+                                Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
 
