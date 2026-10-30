@@ -522,9 +522,35 @@ export default function DraftPage() {
     async function fetchData() {
       setLoading(true);
       try {
-        // Fetch all relevant tables in parallel
-        const [draftsRes, teamsRes, coachesRes, leaguesRes, seasonsRes, standingsRes, tradesRes, statsRes, schedRes] = await Promise.all([
-          supabase.from('league_drafts').select('*, league_player_database (*), league_teams (*)'),
+        // Fetch all relevant tables in parallel (paginate league_drafts past Supabase's 1000-row default limit)
+        const [
+          draftsPage1Res,
+          draftsPage2Res,
+          draftsPage3Res,
+          teamsRes,
+          coachesRes,
+          leaguesRes,
+          seasonsRes,
+          standingsRes,
+          tradesRes,
+          statsRes,
+          schedRes
+        ] = await Promise.all([
+          supabase
+            .from('league_drafts')
+            .select('*, league_player_database (*), league_teams (*)')
+            .order('draft_id', { ascending: true })
+            .range(0, 999),
+          supabase
+            .from('league_drafts')
+            .select('*, league_player_database (*), league_teams (*)')
+            .order('draft_id', { ascending: true })
+            .range(1000, 1999),
+          supabase
+            .from('league_drafts')
+            .select('*, league_player_database (*), league_teams (*)')
+            .order('draft_id', { ascending: true })
+            .range(2000, 2999),
           supabase.from('league_teams').select('*'),
           supabase.from('league_coaches').select('*'),
           supabase.from('leagues').select('*'),
@@ -535,7 +561,11 @@ export default function DraftPage() {
           supabase.from('league_schedule').select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, played')
         ]);
 
-        const rawDrafts = draftsRes.data || [];
+        const rawDrafts = [
+          ...(draftsPage1Res.data || []),
+          ...(draftsPage2Res.data || []),
+          ...(draftsPage3Res.data || [])
+        ];
         const rawTeams = teamsRes.data || [];
         const rawCoaches = coachesRes.data || [];
         const rawLeagues = leaguesRes.data || [];
@@ -1281,17 +1311,39 @@ export default function DraftPage() {
     return () => { cancelled = true; };
   }, [rookieClassYear, activeFloorSeasonMeta?.leagueType, rookieYearOverride, seasons]);
 
-  // Rookies & Free Agents already selected in the active draft (player_id -> pick)
+  // Rookies & Free Agents already selected in the active draft (player_id -> pick, plus normalized name match)
   const draftedPlayerMap = useMemo(() => {
     const map = new Map<string, DraftData>();
+    const byNormName = new Map<string, DraftData>();
+    const norm = (s: string) =>
+      String(s || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
     data.forEach(d => {
       if (d.leagueId !== floorLeagueId) return;
-      if (d.playerId === undefined || d.playerId === null) return;
-      if (!d.player || d.player === 'N/A') return;
-      map.set(String(d.playerId), d);
+      if (!d.player || d.player === 'N/A' || d.player.trim() === '') return;
+      if (d.playerId !== undefined && d.playerId !== null) {
+        map.set(String(d.playerId), d);
+      }
+      const n = norm(d.player);
+      if (n) byNormName.set(n, d);
     });
+
+    // Also map any rookiePool entry whose normalized name matches a drafted player
+    rookiePool.forEach(p => {
+      const idKey = String(p.player_id);
+      if (!map.has(idKey)) {
+        const match = byNormName.get(norm(p.player_name));
+        if (match) map.set(idKey, match);
+      }
+    });
+
     return map;
-  }, [data, floorLeagueId]);
+  }, [data, floorLeagueId, rookiePool]);
 
   const availableRookies = useMemo(
     () => rookiePool.filter(p => !draftedPlayerMap.has(String(p.player_id))),
@@ -1865,9 +1917,9 @@ export default function DraftPage() {
   }, [pastDraftsData]);
 
   const filteredDbPlayers = useMemo(() => {
-    if (!coachSearch.trim()) return rookiePool.slice(0, 10);
+    if (!coachSearch.trim()) return availableRookies.slice(0, 10);
     const q = coachSearch.toLowerCase().trim();
-    return rookiePool
+    return availableRookies
       .filter(
         p =>
           p.player_name.toLowerCase().includes(q) ||
@@ -1877,7 +1929,7 @@ export default function DraftPage() {
           (p.prospectType || '').toLowerCase().includes(q)
       )
       .slice(0, 14);
-  }, [rookiePool, coachSearch]);
+  }, [availableRookies, coachSearch]);
 
   // Only the coach that owns the pick on the clock — OR Coach UltraMagnus (acting on behalf of a coach unable to pick) — may submit it.
   // (If the franchise has no linked coach, any signed-in coach may submit.)
