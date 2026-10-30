@@ -471,7 +471,7 @@ export default function DraftPage() {
   const [rookieYearOverride, setRookieYearOverride] = useState<number | null>(null);
   const [prospectSearch, setProspectSearch] = useState('');
   const [prospectPos, setProspectPos] = useState<string>('ALL');
-  const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('AVAILABLE');
+  const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('ALL');
   const [prospectTypeFilter, setProspectTypeFilter] = useState<'ALL' | 'ROOKIE' | 'FREE_AGENT'>('ALL');
 
   // Draft order generator (draft rounds worst -> best, waiver rounds best -> worst)
@@ -1609,13 +1609,17 @@ export default function DraftPage() {
     return buildDraftSlotsForLeague(floorLeagueId);
   }, [data, floorLeagueId, buildDraftSlotsForLeague]);
 
+  // Selected picks already made in the active draft on the floor
+  const selectedPicksForFloor = useMemo<DraftData[]>(() => {
+    return projectedFloorRows.filter(d => d.player && d.player !== 'N/A' && d.player.trim() !== '');
+  }, [projectedFloorRows]);
+
   // Filtered Draft Floor Data (1 Draft at a time)
+  // Always keeps selected picks visible alongside open slots by default (or filters to Selected Picks Only when toggled)
   const filteredData = useMemo(() => {
-    const hasSubmitted = projectedFloorRows.some(d => d.player && d.player !== 'N/A');
     return projectedFloorRows.filter(d => {
-      const isCapitalRow = (!d.player || d.player === "N/A");
-      const viewMatch = showCapital ? isCapitalRow : (hasSubmitted ? !isCapitalRow : true);
-      if (!viewMatch) return false;
+      const isCapitalRow = !d.player || d.player === "N/A" || d.player.trim() === "";
+      if (showCapital && isCapitalRow) return false;
       
       if (searchQuery.trim()) {
         const search = searchQuery.toLowerCase().trim();
@@ -1851,9 +1855,9 @@ export default function DraftPage() {
   }, [pastDraftsData]);
 
   const filteredDbPlayers = useMemo(() => {
-    if (!coachSearch.trim()) return availableRookies.slice(0, 8);
+    if (!coachSearch.trim()) return rookiePool.slice(0, 10);
     const q = coachSearch.toLowerCase().trim();
-    return availableRookies
+    return rookiePool
       .filter(
         p =>
           p.player_name.toLowerCase().includes(q) ||
@@ -1862,8 +1866,8 @@ export default function DraftPage() {
           (p.orig_nhl_team || '').toLowerCase().includes(q) ||
           (p.prospectType || '').toLowerCase().includes(q)
       )
-      .slice(0, 12);
-  }, [availableRookies, coachSearch]);
+      .slice(0, 14);
+  }, [rookiePool, coachSearch]);
 
   // Only the coach that owns the pick on the clock — OR Coach UltraMagnus (acting on behalf of a coach unable to pick) — may submit it.
   // (If the franchise has no linked coach, any signed-in coach may submit.)
@@ -2850,63 +2854,78 @@ export default function DraftPage() {
                       <div className="mt-1 bg-white border-2 border-black shadow-md max-h-48 overflow-y-auto divide-y divide-black/10">
                         {filteredDbPlayers.length === 0 ? (
                           <div className="p-2.5 text-xs italic text-slate-500">
-                            No available rookies or free agents match your search.
+                            No rookies or free agents match your search.
                           </div>
                         ) : (
-                          filteredDbPlayers.map((player) => (
-                            <button
-                              type="button"
-                              key={player.player_id}
-                              onClick={() => {
-                                setCoachSelectedPlayer(player);
-                                setCoachSearch(player.player_name);
-                                setPodium({
-                                  team: nextEmptyPickSlot.team,
-                                  teamId: nextEmptyPickSlot.teamId,
-                                  coachId: nextEmptyPickSlot.coachId,
-                                  coachName: nextEmptyPickSlot.coachName,
-                                  rd: nextEmptyPickSlot.rd,
-                                  pk: nextEmptyPickSlot.pk,
-                                  player: player.player_name,
-                                  playerId: player.player_id,
-                                  pos: player.pos,
-                                  ovr: player.ovr,
-                                  transaction: "Coach Selection Preview",
-                                  logo: nextEmptyPickSlot.logo,
-                                  year: nextEmptyPickSlot.year,
-                                  leagueId: nextEmptyPickSlot.leagueId,
-                                  seasonBadge: nextEmptyPickSlot.seasonBadge,
-                                  seasonName: nextEmptyPickSlot.seasonName,
-                                  leagueType: nextEmptyPickSlot.leagueType,
-                                  ratings: player.ratings,
-                                  playerInfo: player.player_info
-                                });
-                              }}
-                              className="w-full text-left p-2 hover:bg-yellow-100 flex items-center justify-between text-xs font-sans transition-colors cursor-pointer"
-                            >
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-bold uppercase text-black">{player.player_name}</span>
-                                <span className="text-[10px] font-mono bg-neutral-100 px-1 py-0.5 border border-black/20">{player.pos}</span>
-                                <span
-                                  className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 border border-black ${
-                                    player.isFreeAgent
-                                      ? 'bg-emerald-200 text-emerald-950'
-                                      : 'bg-amber-300 text-black'
-                                  }`}
-                                >
-                                  {player.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}
+                          filteredDbPlayers.map((player) => {
+                            const pickedBy = draftedPlayerMap.get(String(player.player_id));
+                            return (
+                              <button
+                                type="button"
+                                key={player.player_id}
+                                onClick={() => {
+                                  if (pickedBy) {
+                                    setPodium(pickedBy);
+                                    return;
+                                  }
+                                  setCoachSelectedPlayer(player);
+                                  setCoachSearch(player.player_name);
+                                  setPodium({
+                                    team: nextEmptyPickSlot.team,
+                                    teamId: nextEmptyPickSlot.teamId,
+                                    coachId: nextEmptyPickSlot.coachId,
+                                    coachName: nextEmptyPickSlot.coachName,
+                                    rd: nextEmptyPickSlot.rd,
+                                    pk: nextEmptyPickSlot.pk,
+                                    player: player.player_name,
+                                    playerId: player.player_id,
+                                    pos: player.pos,
+                                    ovr: player.ovr,
+                                    transaction: "Coach Selection Preview",
+                                    logo: nextEmptyPickSlot.logo,
+                                    year: nextEmptyPickSlot.year,
+                                    leagueId: nextEmptyPickSlot.leagueId,
+                                    seasonBadge: nextEmptyPickSlot.seasonBadge,
+                                    seasonName: nextEmptyPickSlot.seasonName,
+                                    leagueType: nextEmptyPickSlot.leagueType,
+                                    ratings: player.ratings,
+                                    playerInfo: player.player_info
+                                  });
+                                }}
+                                className={`w-full text-left p-2 flex items-center justify-between text-xs font-sans transition-colors cursor-pointer ${
+                                  pickedBy ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-yellow-100'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold uppercase text-black">{player.player_name}</span>
+                                  <span className="text-[10px] font-mono bg-neutral-100 px-1 py-0.5 border border-black/20">{player.pos}</span>
+                                  <span
+                                    className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 border border-black ${
+                                      player.isFreeAgent
+                                        ? 'bg-emerald-200 text-emerald-950'
+                                        : 'bg-amber-300 text-black'
+                                    }`}
+                                  >
+                                    {player.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}
+                                  </span>
+                                  {pickedBy ? (
+                                    <span className="text-[10px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
+                                      ✓ PICKED BY {pickedBy.team}{pickedBy.coachName ? ` (${pickedBy.coachName})` : ''} &bull; Rd {pickedBy.rd}, Pk #{pickedBy.pk}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-500 font-serif italic">
+                                      {player.isFreeAgent
+                                        ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
+                                        : player.team_default}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="font-mono font-black text-xs bg-black text-white px-1.5 py-0.5 shrink-0">
+                                  OVR {player.ovr}
                                 </span>
-                                <span className="text-[10px] text-slate-500 font-serif italic">
-                                  {player.isFreeAgent
-                                    ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
-                                    : player.team_default}
-                                </span>
-                              </div>
-                              <span className="font-mono font-black text-xs bg-black text-white px-1.5 py-0.5 shrink-0">
-                                OVR {player.ovr}
-                              </span>
-                            </button>
-                          ))
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     )}
@@ -2960,6 +2979,49 @@ export default function DraftPage() {
                     </div>
                   </div>
                 </form>
+
+                {/* SELECTED PICKS IN THIS DRAFT (Always visible in Draft Area to show who picked whom) */}
+                {selectedPicksForFloor.length > 0 && (
+                  <div className="mt-4 pt-3 border-t-2 border-black">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="font-mono text-[10px] font-black uppercase tracking-wider bg-emerald-800 text-white px-2 py-0.5 border border-black">
+                        ✓ Selected Picks in {activeFloorSeasonMeta?.seasonBadge} ({selectedPicksForFloor.length})
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-600 uppercase">
+                        Click any pick to inspect player card
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {selectedPicksForFloor.map((pick) => (
+                        <button
+                          key={`selected-summary-${pick.leagueId}-${pick.rd}-${pick.pk}`}
+                          type="button"
+                          onClick={() => setPodium(pick)}
+                          className="flex items-center justify-between gap-2 bg-emerald-50 hover:bg-emerald-100 border border-black px-2.5 py-1.5 text-left transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono text-[10px] font-black bg-black text-amber-300 px-1.5 py-0.5 shrink-0">
+                              Rd {pick.rd} &bull; #{pick.pk}
+                            </span>
+                            {pick.logo && <img src={pick.logo} className="w-4 h-4 object-contain shrink-0" alt="" />}
+                            <div className="min-w-0">
+                              <div className="text-xs font-black uppercase text-black truncate">
+                                {pick.player}{' '}
+                                {pick.pos ? <span className="text-[10px] font-mono text-slate-600">({pick.pos}{pick.ovr ? `, OVR ${pick.ovr}` : ''})</span> : null}
+                              </div>
+                              <div className="text-[10px] font-mono font-bold uppercase text-emerald-900 truncate">
+                                Picked by {pick.team}{pick.coachName ? ` (${pick.coachName})` : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-mono font-black uppercase bg-white text-emerald-900 px-1.5 py-0.5 border border-black shrink-0">
+                            Picked
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* TOP RIGHT: THE HOCKEY CARD SPOTLIGHT */}
@@ -3020,7 +3082,9 @@ export default function DraftPage() {
                   onClick={() => setShowCapital(!showCapital)}
                   className="bg-neutral-900 text-white px-3 py-1.5 text-xs font-bold uppercase hover:bg-neutral-800 border-2 border-black shrink-0 cursor-pointer shadow-xs"
                 >
-                  {showCapital ? "View Selections" : "View Capital Picks"}
+                  {showCapital
+                    ? "Show All Slots (Selected + Open)"
+                    : `Selected Picks Only (${selectedPicksForFloor.length})`}
                 </button>
               </div>
 
@@ -3096,7 +3160,11 @@ export default function DraftPage() {
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
                             className={`cursor-pointer hover:bg-yellow-50 transition-colors ${
-                              isPodiumActive ? 'bg-yellow-100 font-bold ring-2 ring-inset ring-black' : ''
+                              isPodiumActive
+                                ? 'bg-yellow-100 font-bold ring-2 ring-inset ring-black'
+                                : !isEmptyPick
+                                  ? 'bg-emerald-50/70'
+                                  : ''
                             }`}
                           >
                             <td className="py-2.5 px-3 whitespace-nowrap">
@@ -3123,7 +3191,12 @@ export default function DraftPage() {
                                   [OPEN CAPITAL SLOT]
                                 </span>
                               ) : (
-                                d.player
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-black font-black">{d.player}</span>
+                                  <span className="inline-flex items-center gap-1 text-[9.5px] font-mono font-black uppercase text-emerald-900 bg-emerald-200/80 px-1.5 py-0.5 border border-black w-fit">
+                                    ✓ Picked by {d.team}{d.coachName ? ` (${d.coachName})` : ''}
+                                  </span>
+                                </div>
                               )}
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono">
@@ -3390,8 +3463,8 @@ export default function DraftPage() {
                             <td className="py-2 px-3">
                               <div className="flex items-center gap-2">
                                 {pickedBy ? (
-                                  <span className="font-mono text-[10px] font-black uppercase text-red-800">
-                                    Drafted &mdash; {pickedBy.team} (Rd {pickedBy.rd}, Pk #{pickedBy.pk})
+                                  <span className="font-mono text-[10px] font-black uppercase text-red-800 bg-red-50 px-1.5 py-0.5 border border-red-800/40">
+                                    ✓ Picked by {pickedBy.team}{pickedBy.coachName ? ` (${pickedBy.coachName})` : ''} &bull; Rd {pickedBy.rd}, Pk #{pickedBy.pk}
                                   </span>
                                 ) : canSelect ? (
                                   <button
