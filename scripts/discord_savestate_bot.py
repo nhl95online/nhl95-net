@@ -4665,7 +4665,7 @@ class NHL95SaveStateBot(discord.Client):
                     supabase.select,
                     "league_drafts",
                     {
-                        "select": "*,league_player_database(player_name,pos,ratings),league_teams(team_name,coach_name,logo_url)",
+                        "select": "*,league_player_database(player_name,pos,ratings),league_teams(team_id,team_name,abbreviation,logo_url,coach_id)",
                         "league_id": "gte.41",
                         "order": "league_id.asc,pick_number.asc",
                     },
