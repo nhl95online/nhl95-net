@@ -452,6 +452,7 @@ export default function DraftPage() {
   const [data, setData] = useState<DraftData[]>([]);
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
   const [teamsMap, setTeamsMap] = useState<Map<number, TeamInfo>>(new Map());
+  const [coachHandlesMap, setCoachHandlesMap] = useState<Map<number, string>>(new Map());
   const [standingsRows, setStandingsRows] = useState<any[]>([]);
   // Rookie prospect pool for the active draft (league_player_database where rookie = true)
   const [rookiePool, setRookiePool] = useState<DatabasePlayer[]>([]);
@@ -492,8 +493,11 @@ export default function DraftPage() {
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState<string | null>(null);
   const [overridePickSlot, setOverridePickSlot] = useState<DraftData | null>(null);
 
-  // Countdown timer clock state for draft lock
+  // Countdown timer clock state for draft lock & per-pick clock window (Rd 1 = 10m, Rd 2+ = 5m)
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [pickClockStartMs, setPickClockStartMs] = useState<number>(Date.now());
+  const [isPickClockPaused, setIsPickClockPaused] = useState<boolean>(false);
+  const [pausedRemainingMs, setPausedRemainingMs] = useState<number | null>(null);
 
   // Interval ticker for live countdown
   useEffect(() => {
@@ -633,13 +637,17 @@ export default function DraftPage() {
         ];
         setStandingsRows(mergedStandings);
 
-        // Build coaches map (ID -> Name)
+        // Build coaches map (ID -> Name & Discord Handle/ID)
         const coachMap = new Map<number, string>();
+        const handlesMap = new Map<number, string>();
         rawCoaches.forEach((c: any) => {
           const id = Number(c.coach_id ?? c.id);
           const name = String(c.coach_name ?? c.name ?? `Coach #${id}`).trim();
           coachMap.set(id, name);
+          const dHandle = String(c.discord_id ?? c.discord_handle ?? '').trim();
+          if (dHandle) handlesMap.set(id, dHandle);
         });
+        setCoachHandlesMap(handlesMap);
 
         // Build teams map with coach linkage
         const compiledTeamsMap = new Map<number, TeamInfo>();
@@ -787,7 +795,7 @@ export default function DraftPage() {
               }
             }
 
-            const seasonMeta = combinedSeasonMap.get(resolvedLeagueId) || resolveSeasonInfo(resolvedLeagueId, "", rawYear);
+            const seasonMeta: any = combinedSeasonMap.get(resolvedLeagueId) || resolveSeasonInfo(resolvedLeagueId, "", rawYear);
             const rawTeamId = d.team_id ?? t?.team_id;
             const teamIdNum = rawTeamId !== undefined && rawTeamId !== null ? Number(rawTeamId) : undefined;
             const teamDetails = teamIdNum ? compiledTeamsMap.get(teamIdNum) : undefined;
@@ -809,9 +817,9 @@ export default function DraftPage() {
               logo: teamDetails?.logo_url || t?.logo_url || "",
               year: seasonMeta.year,
               leagueId: resolvedLeagueId,
-              seasonBadge: seasonMeta.seasonBadge,
-              seasonName: seasonMeta.seasonName,
-              leagueType: seasonMeta.leagueType,
+              seasonBadge: seasonMeta.seasonBadge || seasonMeta.badge,
+              seasonName: seasonMeta.seasonName || seasonMeta.name,
+              leagueType: seasonMeta.leagueType || seasonMeta.prefix,
               ratings: p?.ratings || null,
               playerInfo: p?.player_info || null
             };
@@ -1191,8 +1199,8 @@ export default function DraftPage() {
   const buildDraftSlotsForLeague = React.useCallback((targetLeagueId: string): Array<DraftData & { origTeamId?: number; origTeamAbbr?: string; origTeamName?: string }> => {
     if (teamsMap.size === 0) return [];
     const leagueIdNum = Number(targetLeagueId);
-    const meta = seasons.find(s => s.leagueId === targetLeagueId) || resolveSeasonInfo(targetLeagueId);
-    const targetType = meta?.leagueType || 'W';
+    const meta: any = seasons.find(s => s.leagueId === targetLeagueId) || resolveSeasonInfo(targetLeagueId);
+    const targetType = meta?.leagueType || meta?.prefix || 'W';
 
     let sourceLeagueId = leagueIdNum;
     let teamIds = Array.from(teamsMap.values())
@@ -1428,6 +1436,87 @@ export default function DraftPage() {
     }
   }, [activeTab, floorLeagueId, data, availableRookies, nextEmptyPickSlot, podium]);
 
+  // =========================================================================
+  // PICK CLOCK WINDOW ENGINE (Round 1 = 10 Min Window, Round 2+ = 5 Min Window)
+  // =========================================================================
+  const pickWindowMinutes = useMemo(() => {
+    return Number(nextEmptyPickSlot?.rd) === 1 ? 10 : 5;
+  }, [nextEmptyPickSlot?.rd]);
+
+  const pickWindowTotalMs = pickWindowMinutes * 60 * 1000;
+  const pickClockStorageKey = `nhl95_draft_clock_${floorLeagueId}_${nextEmptyPickSlot?.rd || 1}_${nextEmptyPickSlot?.pk || 1}`;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(pickClockStorageKey);
+    if (saved) {
+      const parsed = Number(saved);
+      if (!isNaN(parsed) && parsed > 0) {
+        setPickClockStartMs(parsed);
+        setIsPickClockPaused(false);
+        setPausedRemainingMs(null);
+        return;
+      }
+    }
+    const now = Date.now();
+    window.localStorage.setItem(pickClockStorageKey, String(now));
+    setPickClockStartMs(now);
+    setIsPickClockPaused(false);
+    setPausedRemainingMs(null);
+  }, [pickClockStorageKey]);
+
+  const pickClockRemainingMs = useMemo(() => {
+    if (isPickClockPaused && pausedRemainingMs !== null) {
+      return Math.max(0, pausedRemainingMs);
+    }
+    const elapsed = Math.max(0, currentTime - pickClockStartMs);
+    return Math.max(0, pickWindowTotalMs - elapsed);
+  }, [currentTime, pickClockStartMs, pickWindowTotalMs, isPickClockPaused, pausedRemainingMs]);
+
+  const pickClockMinutesStr = String(Math.floor(pickClockRemainingMs / 60000)).padStart(2, '0');
+  const pickClockSecondsStr = String(Math.floor((pickClockRemainingMs % 60000) / 1000)).padStart(2, '0');
+  const pickClockPct = Math.max(0, Math.min(100, (pickClockRemainingMs / pickWindowTotalMs) * 100));
+  const isPickClockExpired = pickClockRemainingMs <= 0;
+
+  const resetPickClock = () => {
+    const now = Date.now();
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(pickClockStorageKey, String(now));
+    }
+    setPickClockStartMs(now);
+    setIsPickClockPaused(false);
+    setPausedRemainingMs(null);
+  };
+
+  const togglePickClockPause = () => {
+    if (isPickClockPaused) {
+      const remaining = pausedRemainingMs ?? pickWindowTotalMs;
+      const newStart = Date.now() - (pickWindowTotalMs - remaining);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(pickClockStorageKey, String(newStart));
+      }
+      setPickClockStartMs(newStart);
+      setIsPickClockPaused(false);
+      setPausedRemainingMs(null);
+    } else {
+      const elapsed = Math.max(0, Date.now() - pickClockStartMs);
+      setPausedRemainingMs(Math.max(0, pickWindowTotalMs - elapsed));
+      setIsPickClockPaused(true);
+    }
+  };
+
+  // Exclusive check for Coach UltraMagnus's profile ONLY (allows making proxy selections for coaches who are unable)
+  const isUltraMagnusAdmin = useMemo(() => {
+    if (!isLoggedIn || !currentCoach) return false;
+    const normName = String(currentCoach.coach_name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normEmail = String(currentCoach.email || '').toLowerCase().trim();
+    return (
+      Number(currentCoach.coach_id) === 15 ||
+      normName === 'ultramagnus' ||
+      normEmail === 'wn95hl@gmail.com'
+    );
+  }, [isLoggedIn, currentCoach]);
+
   // Check if Currently Logged-in Coach is On The Clock
   const isCurrentCoachOnClock = useMemo(() => {
     if (!isLoggedIn || !currentCoach) return false;
@@ -1506,10 +1595,10 @@ export default function DraftPage() {
       .slice(0, 8);
   }, [availableRookies, coachSearch]);
 
-  // Only the coach that owns the pick on the clock may submit it.
+  // Only the coach that owns the pick on the clock — OR Coach UltraMagnus (acting on behalf of a coach unable to pick) — may submit it.
   // (If the franchise has no linked coach, any signed-in coach may submit.)
   const slotHasCoach = !!(nextEmptyPickSlot.coachId || nextEmptyPickSlot.coachName);
-  const coachMayPickNow = isLoggedIn && !!currentCoach && (!slotHasCoach || isCurrentCoachOnClock);
+  const coachMayPickNow = isLoggedIn && !!currentCoach && (!slotHasCoach || isCurrentCoachOnClock || isUltraMagnusAdmin);
 
   // Handle Coach Pick Submission: fills the pre-generated slot in league_drafts
   const handleSubmitPick = async (e: React.FormEvent) => {
@@ -1553,6 +1642,43 @@ export default function DraftPage() {
       const isWaiverPick = (targetSlot.transaction || '').toLowerCase().startsWith('waiver');
       const transaction = coachTransactionNote.trim() || (isWaiverPick ? 'Waiver' : 'Drafted');
 
+      // Find the next empty slot on the clock after this pick
+      const nextSlotAfterThis = projectedFloorRows.find(
+        r =>
+          (r.rd > targetSlot.rd || (r.rd === targetSlot.rd && r.pk > targetSlot.pk)) &&
+          (!r.player || r.player === 'N/A')
+      );
+
+      const discordNotification = {
+        playerName: player.player_name,
+        pos: player.pos,
+        ovr: player.ovr,
+        teamName: targetSlot.team,
+        coachName: targetSlot.coachName || currentCoach?.coach_name || null,
+        logoUrl: targetSlot.logo || null,
+        round: targetSlot.rd,
+        pickNumber: targetSlot.pk,
+        seasonBadge: targetSlot.seasonBadge,
+        leagueType: targetSlot.leagueType || floorLeague,
+        leagueId: Number(targetSlot.leagueId || floorLeagueId),
+        transactionType: transaction,
+        nextOnClock: nextSlotAfterThis
+          ? {
+              team: nextSlotAfterThis.team,
+              teamId: nextSlotAfterThis.teamId,
+              coachId: nextSlotAfterThis.coachId || null,
+              coachName: nextSlotAfterThis.coachName || null,
+              discordHandle:
+                nextSlotAfterThis.coachId && coachHandlesMap.get(Number(nextSlotAfterThis.coachId))
+                  ? coachHandlesMap.get(Number(nextSlotAfterThis.coachId))
+                  : null,
+              rd: nextSlotAfterThis.rd,
+              pk: nextSlotAfterThis.pk,
+              clockWindowMinutes: Number(nextSlotAfterThis.rd) === 1 ? 10 : 5
+            }
+          : null
+      };
+
       let savedDraftId = targetSlot.draftId;
       if (savedDraftId) {
         const res = await fetch('/api/draft', {
@@ -1561,7 +1687,8 @@ export default function DraftPage() {
           body: JSON.stringify({
             action: 'submit_pick',
             draftId: savedDraftId,
-            updatePayload: { player_id: player.player_id, transaction_type: transaction }
+            updatePayload: { player_id: player.player_id, transaction_type: transaction },
+            discordNotification
           })
         });
         const json = await res.json();
@@ -1587,7 +1714,8 @@ export default function DraftPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'submit_pick',
-            rowsToInsert
+            rowsToInsert,
+            discordNotification
           })
         });
         const json = await res.json();
@@ -2120,6 +2248,38 @@ export default function DraftPage() {
                   </div>
                 )}
 
+                {/* Exclusive UltraMagnus Proxy Selection Control (Visible ONLY to UltraMagnus's profile) */}
+                {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
+                  <div className="bg-amber-300 border-2 border-black text-black p-2.5 mb-3 font-mono text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-[2px_2px_0px_#000]">
+                    <div className="flex items-center gap-2 font-black uppercase">
+                      <Shield className="w-4 h-4 text-black shrink-0" />
+                      <span>
+                        👑 ULTRAMAGNUS PROXY PICK ACCESS: You can submit selections for any coach unable to pick
+                      </span>
+                    </div>
+                    <select
+                      value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
+                      onChange={(e) => {
+                        const [rStr, pStr] = e.target.value.split('-');
+                        const chosen = projectedFloorRows.find(
+                          s => s.rd === Number(rStr) && s.pk === Number(pStr)
+                        );
+                        setOverridePickSlot(chosen || null);
+                      }}
+                      className="bg-black text-amber-300 border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
+                      title="Select any open pick slot to draft on behalf of that coach"
+                    >
+                      {projectedFloorRows
+                        .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
+                        .map(s => (
+                          <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
+                            Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-3 mb-4 gap-2">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="w-3 h-3 bg-red-600 rounded-full animate-ping"></span>
@@ -2142,6 +2302,69 @@ export default function DraftPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Per-Pick Clock Window Banner (Round 1 = 10 Mins, Round 2+ = 5 Mins) */}
+                {!draftLockStatus.isLocked && (
+                  <div className="bg-[#121418] text-white border-2 border-black p-3 mb-4 shadow-[3px_3px_0px_rgba(0,0,0,1)] font-mono">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase border border-black ${
+                          isPickClockExpired
+                            ? 'bg-red-600 text-white animate-pulse'
+                            : Number(nextEmptyPickSlot.rd) === 1
+                              ? 'bg-amber-400 text-black'
+                              : 'bg-sky-400 text-black'
+                        }`}>
+                          <Timer className="w-3 h-3 inline-block mr-1 -mt-0.5" />
+                          ROUND {nextEmptyPickSlot.rd} CLOCK &bull; {pickWindowMinutes}:00 WINDOW
+                        </span>
+                        <span className="text-[10px] font-bold text-neutral-300 bg-neutral-800 px-2 py-0.5 border border-neutral-600 uppercase">
+                          RD 1: 10 MIN &bull; RD 2: 5 MIN
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className={`text-lg sm:text-xl font-black px-2.5 py-0.5 border border-neutral-600 bg-black tracking-wider ${
+                          isPickClockExpired
+                            ? 'text-red-500 animate-pulse'
+                            : pickClockRemainingMs <= 60000
+                              ? 'text-amber-400'
+                              : 'text-emerald-400'
+                        }`}>
+                          {isPickClockExpired ? '00:00 (TIME UP)' : `${pickClockMinutesStr}:${pickClockSecondsStr}`}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={togglePickClockPause}
+                          className="text-[10px] font-black uppercase bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 border border-neutral-600 cursor-pointer"
+                        >
+                          {isPickClockPaused ? 'Resume' : 'Pause'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetPickClock}
+                          className="text-[10px] font-black uppercase bg-amber-400 hover:bg-amber-300 text-black px-2 py-1 border border-black cursor-pointer"
+                        >
+                          Reset {pickWindowMinutes}:00
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-1.5 bg-neutral-800 mt-2 overflow-hidden border border-neutral-700">
+                      <div
+                        className={`h-full transition-all duration-500 ${
+                          isPickClockExpired
+                            ? 'bg-red-600'
+                            : pickClockRemainingMs <= 60000
+                              ? 'bg-amber-400'
+                              : 'bg-emerald-400'
+                        }`}
+                        style={{ width: `${pickClockPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Team On Clock Showcase with Coach Assignment */}
                 <div className="bg-white border-2 border-black p-3 mb-4 flex items-center justify-between flex-wrap gap-3">
@@ -2359,7 +2582,13 @@ export default function DraftPage() {
                         ) : (
                           <>
                             <Send className="w-3.5 h-3.5" />
-                            {!nextEmptyPickSlot.teamId ? 'No Open Pick Slot' : !coachMayPickNow && isLoggedIn ? `Waiting on ${nextEmptyPickSlot.team}` : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
+                            {!nextEmptyPickSlot.teamId
+                              ? 'No Open Pick Slot'
+                              : !coachMayPickNow && isLoggedIn
+                                ? `Waiting on ${nextEmptyPickSlot.team}`
+                                : isUltraMagnusAdmin && !isCurrentCoachOnClock
+                                  ? `Submit Pick #${nextEmptyPickSlot.pk} for ${nextEmptyPickSlot.team}`
+                                  : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
                           </>
                         )}
                       </button>
