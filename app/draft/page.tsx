@@ -11,6 +11,12 @@ import {
 } from 'lucide-react';
 import { useCoachAuth } from '@/lib/coach-auth';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
+import {
+  W_LEAGUE_GOALIES,
+  W_LEAGUE_SKATERS,
+  O_LEAGUE_GOALIES,
+  O_LEAGUE_SKATERS
+} from '@/lib/seasons';
 
 interface SeasonOption {
   leagueId: string;
@@ -52,6 +58,10 @@ interface DatabasePlayer {
   player_name: string;
   pos: string;
   team_default: string;
+  orig_nhl_team?: string;
+  rookie?: boolean;
+  isFreeAgent?: boolean;
+  prospectType?: 'ROOKIE' | 'FREE AGENT';
   ratings?: Record<string, any>;
   player_info?: Record<string, any>;
   star_rating?: number | null;
@@ -454,13 +464,14 @@ export default function DraftPage() {
   const [teamsMap, setTeamsMap] = useState<Map<number, TeamInfo>>(new Map());
   const [coachHandlesMap, setCoachHandlesMap] = useState<Map<number, string>>(new Map());
   const [standingsRows, setStandingsRows] = useState<any[]>([]);
-  // Rookie prospect pool for the active draft (league_player_database where rookie = true)
+  // Prospect pool for the active draft (Rookies + Free Agents not on a team from the previous season)
   const [rookiePool, setRookiePool] = useState<DatabasePlayer[]>([]);
   const [rookiePoolLoading, setRookiePoolLoading] = useState(false);
   const [rookieYearOverride, setRookieYearOverride] = useState<number | null>(null);
   const [prospectSearch, setProspectSearch] = useState('');
   const [prospectPos, setProspectPos] = useState<string>('ALL');
   const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('AVAILABLE');
+  const [prospectTypeFilter, setProspectTypeFilter] = useState<'ALL' | 'ROOKIE' | 'FREE_AGENT'>('ALL');
 
   // Draft order generator (draft rounds worst -> best, waiver rounds best -> worst)
   const [draftRoundsInput, setDraftRoundsInput] = useState(2);
@@ -1029,9 +1040,10 @@ export default function DraftPage() {
   }, [seasons, pastLeagueId]);
 
   // =========================================================================
-  // ROOKIE PROSPECT POOL
-  // The rookie class defaults to the draft season's NHL year
-  // (e.g. W19 = 2014 -> 2014 rookies, W20 = 2015 -> 2015 rookies). It can be changed on the Prospects tab.
+  // ROOKIE & FREE AGENT PROSPECT POOL
+  // Includes:
+  //   1. All Rookies (rookie = true) from rookieClassYear
+  //   2. All Players in rookieClassYear who are NOT on a team from the previous season, pegged as Free Agents
   // =========================================================================
   const rookieClassYear = rookieYearOverride ?? (activeFloorSeasonMeta?.year || 2014);
 
@@ -1041,39 +1053,231 @@ export default function DraftPage() {
 
   useEffect(() => {
     let cancelled = false;
+
+    const normalizeProspectName = (name: string) =>
+      String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const normalizeWithFirstNameAlias = (name: string) => {
+      const cleaned = String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[.'’-]/g, ' ')
+        .replace(/\s+/g, ' ');
+      const parts = cleaned.split(' ').filter(Boolean);
+      if (parts.length < 2) return normalizeProspectName(name);
+      const firstMap: Record<string, string> = {
+        alexander: 'alex',
+        michael: 'mike',
+        matthew: 'matt',
+        christopher: 'chris',
+        nicholas: 'nick',
+        niklas: 'nicklas',
+        daniel: 'dan',
+        steven: 'steve',
+        stephen: 'steve',
+        anthony: 'tony',
+        thomas: 'tom',
+        william: 'bill',
+        robert: 'bob',
+        edward: 'ed',
+        joseph: 'joe',
+        zachary: 'zach',
+        bradley: 'brad',
+        patrick: 'pat',
+        samuel: 'sam',
+        benjamin: 'ben',
+        jonathan: 'jon',
+        evgeny: 'evgeni'
+      };
+      const first = firstMap[parts[0]] || parts[0];
+      return `${first}${parts.slice(1).join('')}`.replace(/[^a-z0-9]/g, '');
+    };
+
+    // Resolve the previous season's league_id for this draft class year
+    const resolvePrevLeagueIdForYear = (yr: number): number => {
+      const targetPrefix =
+        yr >= 1920 && yr <= 1945
+          ? 'O'
+          : yr < 1920
+            ? 'V'
+            : rookieYearOverride === null && activeFloorSeasonMeta?.leagueType
+              ? activeFloorSeasonMeta.leagueType
+              : 'W';
+
+      let bestLeagueId = targetPrefix === 'O' ? 39 : 40;
+      let bestYear = -1;
+
+      Object.entries(KNOWN_LEAGUE_SEASON_MAP).forEach(([idStr, meta]) => {
+        const lid = Number(idStr);
+        if (meta.prefix === targetPrefix && meta.year < yr) {
+          if (meta.year > bestYear || (meta.year === bestYear && lid > bestLeagueId)) {
+            bestYear = meta.year;
+            bestLeagueId = lid;
+          }
+        }
+      });
+
+      seasons.forEach(s => {
+        const lid = Number(s.leagueId);
+        if (!isNaN(lid) && s.leagueType === targetPrefix && s.year < yr) {
+          if (s.year > bestYear || (s.year === bestYear && lid > bestLeagueId)) {
+            bestYear = s.year;
+            bestLeagueId = lid;
+          }
+        }
+      });
+
+      return bestLeagueId;
+    };
+
     async function loadRookies() {
       setRookiePoolLoading(true);
-      const { data: rows, error } = await supabase
-        .from('league_player_database')
-        .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
-        .eq('rookie', true)
-        .filter('player_info->>source_year', 'eq', String(rookieClassYear))
-        .limit(1000);
+      const prevLeagueId = resolvePrevLeagueIdForYear(Number(rookieClassYear));
+
+      const [page1Res, page2Res, prevRostersRes, prevStatsRes, prevDraftsRes] = await Promise.all([
+        supabase
+          .from('league_player_database')
+          .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
+          .filter('player_info->>source_year', 'eq', String(rookieClassYear))
+          .range(0, 999),
+        supabase
+          .from('league_player_database')
+          .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
+          .filter('player_info->>source_year', 'eq', String(rookieClassYear))
+          .range(1000, 1999),
+        supabase
+          .from('league_rosters')
+          .select('player_id, player_name, team_id')
+          .eq('league_id', prevLeagueId)
+          .then(r => r, () => ({ data: null, error: null })),
+        supabase
+          .from('api_stats_with_names')
+          .select('player_id, player_name')
+          .eq('league_id', prevLeagueId)
+          .then(r => r, () => ({ data: null, error: null })),
+        supabase
+          .from('league_drafts')
+          .select('player_id, league_player_database(player_name)')
+          .eq('league_id', prevLeagueId)
+          .then(r => r, () => ({ data: null, error: null }))
+      ]);
 
       if (cancelled) return;
-      if (error) {
-        console.error('Failed to load rookie pool:', error.message);
+      if (page1Res.error) {
+        console.error('Failed to load prospect pool:', page1Res.error.message);
       }
 
-      const pool: DatabasePlayer[] = (rows || []).map((p: any) => ({
-        player_id: p.player_id,
-        player_name: p.player_name,
-        pos: p.pos || 'F',
-        team_default: p.player_info?.source_team || p.team_default || 'Free Agent',
-        ratings: p.ratings,
-        player_info: p.player_info,
-        star_rating: p.star_rating,
-        ovr: parsePlayerOvr(p.ratings) || 0
-      }));
+      const rawRows = [...(page1Res.data || []), ...(page2Res.data || [])];
+
+      // Build lookup sets of players who were on a team in the previous season
+      const prevRosterNamesSet = new Set<string>();
+      const prevRosterAliasSet = new Set<string>();
+      const prevRosterIdsSet = new Set<string>();
+
+      const addRosteredPlayer = (name?: string | null, id?: string | number | null) => {
+        if (id !== undefined && id !== null && String(id) !== '0' && String(id) !== '1') {
+          prevRosterIdsSet.add(String(id));
+        }
+        const trimmed = String(name || '').trim();
+        if (!trimmed || trimmed === '--' || trimmed.toUpperCase() === 'N/A') return;
+        const norm = normalizeProspectName(trimmed);
+        if (norm) prevRosterNamesSet.add(norm);
+        const alias = normalizeWithFirstNameAlias(trimmed);
+        if (alias) prevRosterAliasSet.add(alias);
+      };
+
+      // 1. Static season rosters for W18 (Season 40) / W17 (Season 38) and O01 (Season 39)
+      if (prevLeagueId === 40 || prevLeagueId === 38) {
+        Object.values(W_LEAGUE_GOALIES || {}).forEach(list => (list || []).forEach(n => addRosteredPlayer(n)));
+        Object.values(W_LEAGUE_SKATERS || {}).forEach(list => (list || []).forEach(n => addRosteredPlayer(n)));
+      } else if (prevLeagueId === 39) {
+        Object.values(O_LEAGUE_GOALIES || {}).forEach(list => (list || []).forEach(n => addRosteredPlayer(n)));
+        Object.values(O_LEAGUE_SKATERS || {}).forEach(list => (list || []).forEach(n => addRosteredPlayer(n)));
+      }
+
+      // 2. Database league_rosters for the previous season
+      (prevRostersRes.data || []).forEach((r: any) => {
+        if (Number(r.team_id) > 0) {
+          addRosteredPlayer(r.player_name, r.player_id);
+        }
+      });
+
+      // 3. Database api_stats_with_names & league_drafts for the previous season
+      (prevStatsRes.data || []).forEach((s: any) => {
+        addRosteredPlayer(s.player_name, s.player_id);
+      });
+      (prevDraftsRes.data || []).forEach((d: any) => {
+        const dName = Array.isArray(d.league_player_database)
+          ? d.league_player_database[0]?.player_name
+          : d.league_player_database?.player_name;
+        addRosteredPlayer(dName, d.player_id);
+      });
+
+      // Filter & classify players in rookieClassYear:
+      // - Exclude players already on a team from the previous season
+      // - Keep Rookies (rookie === true) as ROOKIE
+      // - Keep unrostered veterans (rookie !== true and not on a previous-season team) and peg them as FREE AGENT
+      const dedupedByNormName = new Map<string, DatabasePlayer>();
+
+      rawRows.forEach((p: any) => {
+        const pName = String(p.player_name || '').trim();
+        if (!pName || pName.toUpperCase() === 'N/A') return;
+
+        const norm = normalizeProspectName(pName);
+        const alias = normalizeWithFirstNameAlias(pName);
+        const pIdStr = String(p.player_id);
+
+        const isOnPrevSeasonTeam =
+          prevRosterIdsSet.has(pIdStr) ||
+          prevRosterNamesSet.has(norm) ||
+          prevRosterAliasSet.has(alias);
+
+        // Exclude anyone who was on a team in the previous season
+        if (isOnPrevSeasonTeam) return;
+
+        const isRookie = p.rookie === true || String(p.rookie).toLowerCase() === 'true';
+        const isFreeAgent = !isRookie;
+        const origTeam = p.player_info?.source_team || p.team_default || '';
+        const ovr = parsePlayerOvr(p.ratings) || 0;
+
+        const candidate: DatabasePlayer = {
+          player_id: p.player_id,
+          player_name: pName,
+          pos: p.pos || 'F',
+          team_default: isFreeAgent ? 'Free Agent' : (origTeam || 'Rookie'),
+          orig_nhl_team: origTeam,
+          rookie: isRookie,
+          isFreeAgent,
+          prospectType: isFreeAgent ? 'FREE AGENT' : 'ROOKIE',
+          ratings: p.ratings,
+          player_info: p.player_info,
+          star_rating: p.star_rating,
+          ovr
+        };
+
+        const existing = dedupedByNormName.get(norm);
+        if (!existing || candidate.ovr > existing.ovr || (candidate.rookie && !existing.rookie)) {
+          dedupedByNormName.set(norm, candidate);
+        }
+      });
+
+      const pool = Array.from(dedupedByNormName.values());
       pool.sort((a, b) => b.ovr - a.ovr || a.player_name.localeCompare(b.player_name));
       setRookiePool(pool);
       setRookiePoolLoading(false);
     }
     loadRookies();
     return () => { cancelled = true; };
-  }, [rookieClassYear]);
+  }, [rookieClassYear, activeFloorSeasonMeta?.leagueType, rookieYearOverride, seasons]);
 
-  // Rookies already selected in the active draft (player_id -> pick)
+  // Rookies & Free Agents already selected in the active draft (player_id -> pick)
   const draftedPlayerMap = useMemo(() => {
     const map = new Map<string, DraftData>();
     data.forEach(d => {
@@ -1090,6 +1294,16 @@ export default function DraftPage() {
     [rookiePool, draftedPlayerMap]
   );
 
+  const rookieCountInPool = useMemo(
+    () => rookiePool.filter(p => !p.isFreeAgent).length,
+    [rookiePool]
+  );
+
+  const freeAgentCountInPool = useMemo(
+    () => rookiePool.filter(p => p.isFreeAgent).length,
+    [rookiePool]
+  );
+
   const prospectPositions = useMemo(
     () => ['ALL', ...Array.from(new Set(rookiePool.map(p => p.pos))).sort()],
     [rookiePool]
@@ -1101,14 +1315,16 @@ export default function DraftPage() {
       const drafted = draftedPlayerMap.has(String(p.player_id));
       if (prospectStatus === 'AVAILABLE' && drafted) return false;
       if (prospectStatus === 'DRAFTED' && !drafted) return false;
+      if (prospectTypeFilter === 'ROOKIE' && p.isFreeAgent) return false;
+      if (prospectTypeFilter === 'FREE_AGENT' && !p.isFreeAgent) return false;
       if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
       if (q) {
-        const hay = `${p.player_name} ${p.pos} ${p.team_default}`.toLowerCase();
+        const hay = `${p.player_name} ${p.pos} ${p.team_default} ${p.orig_nhl_team || ''} ${p.prospectType || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [rookiePool, draftedPlayerMap, prospectSearch, prospectPos, prospectStatus]);
+  }, [rookiePool, draftedPlayerMap, prospectSearch, prospectPos, prospectStatus, prospectTypeFilter]);
 
   // =========================================================================
   // DRAFT DATE LOCK & COUNTDOWN LOGIC
@@ -1591,8 +1807,15 @@ export default function DraftPage() {
     if (!coachSearch.trim()) return availableRookies.slice(0, 8);
     const q = coachSearch.toLowerCase().trim();
     return availableRookies
-      .filter(p => p.player_name.toLowerCase().includes(q) || p.pos.toLowerCase().includes(q) || p.team_default.toLowerCase().includes(q))
-      .slice(0, 8);
+      .filter(
+        p =>
+          p.player_name.toLowerCase().includes(q) ||
+          p.pos.toLowerCase().includes(q) ||
+          p.team_default.toLowerCase().includes(q) ||
+          (p.orig_nhl_team || '').toLowerCase().includes(q) ||
+          (p.prospectType || '').toLowerCase().includes(q)
+      )
+      .slice(0, 12);
   }, [availableRookies, coachSearch]);
 
   // Only the coach that owns the pick on the clock — OR Coach UltraMagnus (acting on behalf of a coach unable to pick) — may submit it.
@@ -2467,11 +2690,13 @@ export default function DraftPage() {
                 {/* Coach Pick Form */}
                 <form onSubmit={handleSubmitPick} className="space-y-4">
                   <div>
-                    <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-800 flex justify-between items-center">
-                      <span>Search & Select Rookie ({rookieClassYear} Prospect Pool • {availableRookies.length} available):</span>
+                    <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-800 flex justify-between items-center flex-wrap gap-1">
+                      <span>
+                        Search & Select Prospect ({rookieClassYear} Rookies & Free Agents • {availableRookies.length} available):
+                      </span>
                       {coachSelectedPlayer && (
                         <span className="text-emerald-700 font-bold">
-                          ✓ Selected: {coachSelectedPlayer.player_name} ({coachSelectedPlayer.pos}, OVR {coachSelectedPlayer.ovr})
+                          ✓ Selected: {coachSelectedPlayer.player_name} ({coachSelectedPlayer.pos}, {coachSelectedPlayer.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}, OVR {coachSelectedPlayer.ovr})
                         </span>
                       )}
                     </label>
@@ -2488,7 +2713,7 @@ export default function DraftPage() {
                           }
                         }}
                         disabled={draftLockStatus.isLocked}
-                        placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE A ROOKIE NAME OR POSITION..."}
+                        placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE A ROOKIE OR FREE AGENT NAME, POSITION, OR 'FREE AGENT'..."}
                         className="w-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
                       />
                     </div>
@@ -2498,7 +2723,7 @@ export default function DraftPage() {
                       <div className="mt-1 bg-white border-2 border-black shadow-md max-h-48 overflow-y-auto divide-y divide-black/10">
                         {filteredDbPlayers.length === 0 ? (
                           <div className="p-2.5 text-xs italic text-slate-500">
-                            No available rookies match your search.
+                            No available rookies or free agents match your search.
                           </div>
                         ) : (
                           filteredDbPlayers.map((player) => (
@@ -2532,12 +2757,25 @@ export default function DraftPage() {
                               }}
                               className="w-full text-left p-2 hover:bg-yellow-100 flex items-center justify-between text-xs font-sans transition-colors cursor-pointer"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-bold uppercase text-black">{player.player_name}</span>
                                 <span className="text-[10px] font-mono bg-neutral-100 px-1 py-0.5 border border-black/20">{player.pos}</span>
-                                <span className="text-[10px] text-slate-500 font-serif italic">{player.team_default}</span>
+                                <span
+                                  className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 border border-black ${
+                                    player.isFreeAgent
+                                      ? 'bg-emerald-200 text-emerald-950'
+                                      : 'bg-amber-300 text-black'
+                                  }`}
+                                >
+                                  {player.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-serif italic">
+                                  {player.isFreeAgent
+                                    ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
+                                    : player.team_default}
+                                </span>
                               </div>
-                              <span className="font-mono font-black text-xs bg-black text-white px-1.5 py-0.5">
+                              <span className="font-mono font-black text-xs bg-black text-white px-1.5 py-0.5 shrink-0">
                                 OVR {player.ovr}
                               </span>
                             </button>
@@ -2817,7 +3055,7 @@ export default function DraftPage() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB: DRAFT PROSPECTS (Rookie class available to draft) */}
+        {/* TAB: DRAFT PROSPECTS (Rookie class + Free Agents not on previous season teams) */}
         {/* ========================================================================= */}
         {activeTab === 'prospects' && (
           <div className="space-y-4">
@@ -2826,10 +3064,10 @@ export default function DraftPage() {
                 <div>
                   <h2 className="text-base sm:text-lg font-black uppercase tracking-tight flex items-center gap-2">
                     <Star className="w-4 h-4 text-amber-500" />
-                    Draft Prospects &bull; {rookieClassYear} Rookie Class
+                    Draft Prospects &bull; {rookieClassYear} Rookies &amp; Free Agents
                   </h2>
                   <p className="text-[11px] font-mono font-bold uppercase text-slate-600 mt-0.5">
-                    Draft: {activeFloorSeasonMeta?.seasonBadge} &bull; {rookiePool.length} rookies &bull;{' '}
+                    Draft: {activeFloorSeasonMeta?.seasonBadge} &bull; {rookiePool.length} total ({rookieCountInPool} rookies, {freeAgentCountInPool} free agents) &bull;{' '}
                     {availableRookies.length} available &bull; {rookiePool.length - availableRookies.length} drafted
                   </p>
                 </div>
@@ -2853,7 +3091,7 @@ export default function DraftPage() {
                           ? 'bg-amber-300 text-black'
                           : 'bg-white text-black hover:bg-neutral-100'
                       }`}
-                      title={`View ${label} Rookie Class`}
+                      title={`View ${label} Rookie & Free Agent Class`}
                     >
                       {label}
                     </button>
@@ -2882,7 +3120,24 @@ export default function DraftPage() {
 
               <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="font-mono text-xs font-black uppercase mr-1">Show:</span>
+                  <span className="font-mono text-xs font-black uppercase mr-1">Type:</span>
+                  {([
+                    { key: 'ALL', label: `All (${rookiePool.length})` },
+                    { key: 'ROOKIE', label: `Rookies (${rookieCountInPool})` },
+                    { key: 'FREE_AGENT', label: `Free Agents (${freeAgentCountInPool})` }
+                  ] as const).map(t => (
+                    <button
+                      key={t.key}
+                      onClick={() => setProspectTypeFilter(t.key)}
+                      className={`px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition-colors ${
+                        prospectTypeFilter === t.key ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+
+                  <span className="font-mono text-xs font-black uppercase ml-3 mr-1">Show:</span>
                   {(['AVAILABLE', 'DRAFTED', 'ALL'] as const).map(s => (
                     <button
                       key={s}
@@ -2911,7 +3166,7 @@ export default function DraftPage() {
                 <div className="relative flex-1 lg:max-w-xs">
                   <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-neutral-400" />
                   <input
-                    placeholder="SEARCH ROOKIES..."
+                    placeholder="SEARCH ROOKIES OR FREE AGENTS..."
                     value={prospectSearch}
                     onChange={(e) => setProspectSearch(e.target.value)}
                     className="bg-white text-black pl-8 pr-3 py-1 text-xs font-bold uppercase w-full focus:outline-none border-2 border-black font-sans"
@@ -2925,7 +3180,7 @@ export default function DraftPage() {
                   <span>On the clock: {nextEmptyPickSlot.team} &bull; Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})</span>
                   <span className="text-white/80">
                     {coachMayPickNow && !draftLockStatus.isLocked
-                      ? 'Click SELECT on a rookie to draft him'
+                      ? 'Click SELECT on a rookie or free agent to draft him'
                       : draftLockStatus.isLocked
                         ? 'Draft is locked until its start date'
                         : isLoggedIn ? `Waiting on ${nextEmptyPickSlot.coachName || nextEmptyPickSlot.team}` : 'Sign in to draft'}
@@ -2934,29 +3189,30 @@ export default function DraftPage() {
               )}
 
               <div className="bg-white border-2 border-black overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs min-w-[700px]">
+                <table className="w-full text-left border-collapse text-xs min-w-[750px]">
                   <thead>
                     <tr className="bg-black text-white text-[10px] uppercase tracking-wider">
                       <th className="py-2.5 px-3 text-center">#</th>
                       <th className="py-2.5 px-3">PLAYER</th>
+                      <th className="py-2.5 px-3 text-center">TYPE</th>
                       <th className="py-2.5 px-3 text-center">POS</th>
                       <th className="py-2.5 px-3 text-center">OVR</th>
                       <th className="py-2.5 px-3 text-center">STARS</th>
-                      <th className="py-2.5 px-3">FROM</th>
+                      <th className="py-2.5 px-3">FROM / DESIGNATION</th>
                       <th className="py-2.5 px-3">STATUS</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {rookiePoolLoading ? (
                       <tr>
-                        <td colSpan={7} className="py-10 text-center italic text-gray-500 font-bold uppercase">
-                          Loading {rookieClassYear} rookie class...
+                        <td colSpan={8} className="py-10 text-center italic text-gray-500 font-bold uppercase">
+                          Loading {rookieClassYear} rookies &amp; free agents...
                         </td>
                       </tr>
                     ) : prospectRows.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-8 text-center italic text-gray-500 font-bold uppercase">
-                          No rookies found for these filters.
+                        <td colSpan={8} className="py-8 text-center italic text-gray-500 font-bold uppercase">
+                          No prospects or free agents found for these filters.
                         </td>
                       </tr>
                     ) : (
@@ -2977,13 +3233,32 @@ export default function DraftPage() {
                               </Link>
                             </td>
                             <td className="py-2 px-3 text-center font-mono">
+                              <span
+                                className={`px-1.5 py-0.5 text-[9.5px] font-black uppercase border border-black inline-block ${
+                                  p.isFreeAgent
+                                    ? 'bg-emerald-200 text-emerald-950'
+                                    : 'bg-amber-300 text-black'
+                                }`}
+                              >
+                                {p.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono">
                               <span className="bg-neutral-100 text-black px-1.5 py-0.5 text-[10px] font-bold border border-black/20">{p.pos}</span>
                             </td>
                             <td className="py-2 px-3 text-center font-mono font-black">{p.ovr || '-'}</td>
                             <td className="py-2 px-3 text-center font-mono">{p.star_rating ?? '-'}</td>
-                            <td className="py-2 px-3 text-gray-600 font-sans text-[11px]">
-                              {p.team_default}
-                              {(p.player_info as any)?.source_league ? ` (${(p.player_info as any).source_league})` : ''}
+                            <td className="py-2 px-3 text-gray-700 font-sans text-[11px]">
+                              {p.isFreeAgent ? (
+                                <span className="font-bold text-emerald-800">
+                                  Free Agent{p.orig_nhl_team ? ` (${p.orig_nhl_team})` : ''}
+                                </span>
+                              ) : (
+                                <>
+                                  {p.team_default}
+                                  {(p.player_info as any)?.source_league ? ` (${(p.player_info as any).source_league})` : ''}
+                                </>
+                              )}
                             </td>
                             <td className="py-2 px-3">
                               <div className="flex items-center gap-2">
