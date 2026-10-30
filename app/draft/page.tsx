@@ -1602,11 +1602,21 @@ export default function DraftPage() {
     return out;
   }, [teamsMap, seasons, standingsRows, draftRoundsInput, waiverRoundsInput, pickOwnerOverrides, tradedPickOwnersByAbbr]);
 
-  // Auto-computed draft order (from standings & teams of the active/previous season) when the draft table doesn't have rows for this draft yet
+  // Auto-computed draft order (from standings & teams of the active/previous season) merged with any persisted DB rows for this draft
   const projectedFloorRows = useMemo<DraftData[]>(() => {
     const existingForLeague = data.filter(d => d.leagueId === floorLeagueId);
-    if (existingForLeague.length > 0) return existingForLeague;
-    return buildDraftSlotsForLeague(floorLeagueId);
+    const builtSlots = buildDraftSlotsForLeague(floorLeagueId);
+    if (existingForLeague.length === 0) return builtSlots;
+    if (existingForLeague.length >= builtSlots.length) return existingForLeague;
+    const byPk = new Map<number, DraftData>();
+    existingForLeague.forEach(row => byPk.set(row.pk, row));
+    const merged = builtSlots.map(slot => byPk.get(slot.pk) || slot);
+    existingForLeague.forEach(row => {
+      if (!builtSlots.some(s => s.pk === row.pk)) {
+        merged.push(row);
+      }
+    });
+    return merged.sort((a, b) => a.pk - b.pk);
   }, [data, floorLeagueId, buildDraftSlotsForLeague]);
 
   // Selected picks already made in the active draft on the floor
@@ -2764,10 +2774,12 @@ export default function DraftPage() {
                   </div>
                 </div>
 
-                {/* No open pick: draft order has not been generated yet (or the draft is complete) */}
-                {!loading && !nextEmptyPickSlot.draftId && (
+                {/* Draft completion notice (or fallback only if 0 slots exist at all) */}
+                {!loading &&
+                  (projectedFloorRows.length === 0 ||
+                    !projectedFloorRows.some(d => !d.player || d.player === 'N/A' || d.player.trim() === '')) && (
                   <div className="bg-amber-50 border-2 border-black p-3 mb-4 text-xs font-sans space-y-2">
-                    {data.some(d => d.leagueId === floorLeagueId) ? (
+                    {projectedFloorRows.length > 0 ? (
                       <div className="font-black uppercase font-mono text-emerald-800">
                         ✓ Draft complete &mdash; no open picks remain for {activeFloorSeasonMeta?.seasonBadge}.
                       </div>
@@ -3024,14 +3036,170 @@ export default function DraftPage() {
                 )}
               </div>
 
-              {/* TOP RIGHT: THE HOCKEY CARD SPOTLIGHT */}
-              <div className="col-span-12 lg:col-span-4 flex flex-col items-center justify-center">
-                <div className="w-full text-center mb-1.5">
-                  <span className="font-mono text-[10px] font-black uppercase tracking-widest text-slate-600 bg-white px-2 py-0.5 border border-black inline-block">
-                    ★ Top-Right Spotlight Deck ★
-                  </span>
+              {/* TOP RIGHT: TOP AVAILABLE PLAYERS FOR THIS DRAFT */}
+              <div className="col-span-12 lg:col-span-4 flex flex-col">
+                <div className="bg-[#fdfaf5] border-2 border-black p-3.5 sm:p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col h-full">
+                  <div className="flex items-center justify-between gap-2 border-b-2 border-black pb-2.5 mb-2.5">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
+                        <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-black">
+                          Top Available Players
+                        </h3>
+                      </div>
+                      <p className="text-[10px] font-mono font-bold uppercase text-slate-600 mt-0.5">
+                        {activeFloorSeasonMeta?.seasonBadge} &bull; {rookieClassYear} Pool &bull; {availableRookies.length} Available
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('prospects')}
+                      className="bg-black text-amber-300 hover:bg-neutral-800 px-2 py-1 text-[10px] font-mono font-black uppercase border border-black cursor-pointer shrink-0"
+                    >
+                      Full Board ({rookiePool.length}) &rarr;
+                    </button>
+                  </div>
+
+                  {/* Quick Type & Position Filters for Top Available */}
+                  <div className="flex flex-wrap items-center gap-1 mb-2.5">
+                    {([
+                      { key: 'ALL', label: 'All' },
+                      { key: 'ROOKIE', label: 'Rookies' },
+                      { key: 'FREE_AGENT', label: 'Free Agents' }
+                    ] as const).map(t => (
+                      <button
+                        key={`top-avail-type-${t.key}`}
+                        type="button"
+                        onClick={() => setProspectTypeFilter(t.key)}
+                        className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                          prospectTypeFilter === t.key
+                            ? 'bg-black text-white'
+                            : 'bg-white text-black hover:bg-neutral-100'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                    <span className="text-slate-400 font-mono text-[10px] mx-0.5">|</span>
+                    {prospectPositions.map(pos => (
+                      <button
+                        key={`top-avail-pos-${pos}`}
+                        type="button"
+                        onClick={() => setProspectPos(pos)}
+                        className={`px-1.5 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                          prospectPos === pos
+                            ? 'bg-amber-300 text-black'
+                            : 'bg-white text-black hover:bg-neutral-100'
+                        }`}
+                      >
+                        {pos}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Top Available Players List */}
+                  <div className="bg-white border-2 border-black divide-y divide-neutral-200 max-h-[420px] overflow-y-auto flex-1">
+                    {rookiePoolLoading ? (
+                      <div className="p-6 text-center text-xs font-mono font-bold uppercase text-slate-500 italic">
+                        Loading {rookieClassYear} top available players...
+                      </div>
+                    ) : (() => {
+                      const topAvail = availableRookies
+                        .filter(p => {
+                          if (prospectTypeFilter === 'ROOKIE' && p.isFreeAgent) return false;
+                          if (prospectTypeFilter === 'FREE_AGENT' && !p.isFreeAgent) return false;
+                          if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
+                          return true;
+                        })
+                        .slice(0, 25);
+
+                      if (topAvail.length === 0) {
+                        return (
+                          <div className="p-6 text-center text-xs font-mono font-bold uppercase text-slate-500 italic">
+                            No available players match this filter.
+                          </div>
+                        );
+                      }
+
+                      return topAvail.map((player, idx) => {
+                        const isSelectedInDesk = coachSelectedPlayer?.player_id === player.player_id;
+                        const canSelectNow = coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
+                        return (
+                          <div
+                            key={`top-avail-${player.player_id}`}
+                            onClick={() => {
+                              if (!draftLockStatus.isLocked) {
+                                setCoachSelectedPlayer(player);
+                                setCoachSearch(player.player_name);
+                              }
+                            }}
+                            className={`px-2.5 py-2 flex items-center justify-between gap-2 text-xs transition-colors ${
+                              !draftLockStatus.isLocked ? 'cursor-pointer hover:bg-yellow-50' : ''
+                            } ${isSelectedInDesk ? 'bg-yellow-100 ring-2 ring-inset ring-black' : ''}`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-[10px] font-black text-slate-500 w-5 text-right shrink-0">
+                                #{idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Link
+                                    href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="font-black uppercase text-black hover:underline truncate"
+                                    title="Open Player Profile"
+                                  >
+                                    {player.player_name}
+                                  </Link>
+                                  <span className="text-[9.5px] font-mono font-bold bg-neutral-100 text-black px-1 py-0 border border-black/30">
+                                    {player.pos}
+                                  </span>
+                                  <span
+                                    className={`text-[8.5px] font-mono font-black uppercase px-1 py-0 border border-black ${
+                                      player.isFreeAgent
+                                        ? 'bg-emerald-200 text-emerald-950'
+                                        : 'bg-amber-300 text-black'
+                                    }`}
+                                  >
+                                    {player.isFreeAgent ? 'FA' : 'ROOKIE'}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] font-sans text-slate-500 truncate">
+                                  {player.isFreeAgent
+                                    ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
+                                    : player.team_default}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="font-mono font-black text-[11px] bg-black text-amber-300 px-1.5 py-0.5 border border-black">
+                                OVR {player.ovr ?? '-'}
+                              </span>
+                              {canSelectNow && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCoachSelectedPlayer(player);
+                                    setCoachSearch(player.player_name);
+                                  }}
+                                  className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                                    isSelectedInDesk
+                                      ? 'bg-emerald-700 text-white'
+                                      : 'bg-red-800 hover:bg-red-900 text-white'
+                                  }`}
+                                >
+                                  {isSelectedInDesk ? '✓ Ready' : 'Select'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
-                <HockeyCardSpotlight draftItem={podium} title="DRAFT PROSPECT" />
               </div>
             </div>
 
