@@ -574,9 +574,50 @@ export async function POST(req: NextRequest) {
       }
 
       if (Array.isArray(rowsToInsert) && rowsToInsert.length > 0) {
-        if (rowsToInsert[0]?.league_id) {
-          await ensureLeagueExists(supabase, Number(rowsToInsert[0].league_id), rowsToInsert);
+        const targetLeagueId = Number(rowsToInsert[0]?.league_id);
+        if (targetLeagueId) {
+          await ensureLeagueExists(supabase, targetLeagueId, rowsToInsert);
+
+          // Prevent duplicate slot insertions if league_drafts already has rows for this league_id
+          const { data: existingLeagueRows } = await supabase
+            .from('league_drafts')
+            .select('*')
+            .eq('league_id', targetLeagueId)
+            .order('pick_number', { ascending: true })
+            .order('draft_id', { ascending: true });
+
+          if (existingLeagueRows && existingLeagueRows.length > 0) {
+            const filledRow = rowsToInsert.find(r => r.player_id !== null && r.player_id !== undefined);
+            if (filledRow) {
+              const targetExisting = existingLeagueRows.find(
+                (er: any) => Number(er.pick_number) === Number(filledRow.pick_number)
+              );
+              if (targetExisting) {
+                await supabase
+                  .from('league_drafts')
+                  .update({
+                    player_id: filledRow.player_id,
+                    transaction_type: filledRow.transaction_type || 'Drafted'
+                  })
+                  .eq('draft_id', Number(targetExisting.draft_id));
+              }
+            }
+
+            const { data: refreshedRows } = await supabase
+              .from('league_drafts')
+              .select('*')
+              .eq('league_id', targetLeagueId)
+              .order('pick_number', { ascending: true })
+              .order('draft_id', { ascending: true });
+
+            let discordResult = null;
+            if (discordNotification) {
+              discordResult = await postDraftPickToDiscord(discordNotification);
+            }
+            return NextResponse.json({ data: refreshedRows || existingLeagueRows, discordResult });
+          }
         }
+
         const { data: insertedAll, error: insErr } = await supabase
           .from('league_drafts')
           .insert(rowsToInsert)

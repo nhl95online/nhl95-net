@@ -15,8 +15,13 @@ import CoachLockOverlay from '@/components/CoachLockOverlay';
 import {
   W_LEAGUE_GOALIES,
   W_LEAGUE_SKATERS,
+  W_LEAGUE_POSITION_COUNTS,
   O_LEAGUE_GOALIES,
-  O_LEAGUE_SKATERS
+  O_LEAGUE_SKATERS,
+  O_LEAGUE_POSITION_COUNTS,
+  TEAM_CITY_ALIASES,
+  W_LEAGUE_COACH_MAP,
+  matchTeamFromList
 } from '@/lib/seasons';
 
 interface SeasonOption {
@@ -249,6 +254,151 @@ const parsePlayerOvr = (ratings: any): number | null => {
   }
 };
 
+const DRAFT_WEIGHT_LOOKUP = [120, 132, 140, 148, 156, 164, 172, 180, 188, 196, 204, 212, 220, 228, 236, 244, 252, 260];
+
+const parseRatingJsonObj = (val: any): Record<string, any> => {
+  if (!val) return {};
+  if (typeof val === 'object') return val;
+  try {
+    let parsed = JSON.parse(val);
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch {}
+    }
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const getDraftRatingVal = (ratingsObj: any, ...aliases: string[]): number => {
+  if (!ratingsObj) return 0;
+  const r = typeof ratingsObj === 'string' ? parseRatingJsonObj(ratingsObj) : ratingsObj;
+  if (!r || typeof r !== 'object') return 0;
+  for (const a of aliases) {
+    if (r[a] !== undefined && r[a] !== null && r[a] !== '') {
+      const num = Number(r[a]);
+      if (!isNaN(num)) return num;
+    }
+  }
+  const normAliases = aliases.map((a) => a.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  for (const [key, val] of Object.entries(r)) {
+    const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normAliases.includes(cleanKey)) {
+      const num = Number(val);
+      if (!isNaN(num)) return num;
+    }
+  }
+  return 0;
+};
+
+const toDraftScaleLevel = (val: any): number => {
+  const n = Number(val);
+  if (isNaN(n) || n <= 0) return 0;
+  if (n <= 6) return Math.round(n);
+  if (n < 29) return 0;
+  if (n <= 38) return 1;
+  if (n <= 47) return 2;
+  if (n <= 62) return 3;
+  if (n <= 80) return 4;
+  if (n <= 98) return 5;
+  return 6;
+};
+
+const toDraftStickHandlingLevel = (val: any): number => {
+  const n = Number(val);
+  if (isNaN(n) || n <= 0) return 0;
+  if (n <= 2) return 1;
+  if (n <= 5) return 2;
+  if (n <= 8) return 3;
+  if (n <= 11) return 4;
+  if (n <= 14) return 5;
+  if (n <= 15) return 6;
+  return toDraftScaleLevel(n);
+};
+
+const getDraftHeatmapBadgeStyle = (level: number): { bg: string; text: string; border: string } => {
+  switch (level) {
+    case 1: return { bg: '#dcfce7', text: '#166534', border: '#86efac' };
+    case 2: return { bg: '#bbf7d0', text: '#166534', border: '#4ade80' };
+    case 3: return { bg: '#86efac', text: '#14532d', border: '#22c55e' };
+    case 4: return { bg: '#4ade80', text: '#052e16', border: '#16a34a' };
+    case 5: return { bg: '#22c55e', text: '#ffffff', border: '#15803d' };
+    case 6: return { bg: '#15803d', text: '#ffffff', border: '#14532d' };
+    default: return { bg: '#f8fafc', text: '#94a3b8', border: '#cbd5e1' };
+  }
+};
+
+const extractDraftPlayerRatings = (ratingsRaw: any, playerInfoRaw: any, posRaw: string | null | undefined, fallbackOvr?: number | null) => {
+  const r = parseRatingJsonObj(ratingsRaw);
+  const info = parseRatingJsonObj(playerInfoRaw);
+  const combined = { ...info, ...r };
+  const cleanPos = String(posRaw || info?.pos || 'F').trim().toUpperCase();
+  const isG = cleanPos === 'G' || cleanPos.includes('GOAL') || cleanPos.includes('GK');
+  const ovr = parsePlayerOvr(r) || parsePlayerOvr(info) || fallbackOvr || 0;
+
+  // Weight
+  const rawWgt = getDraftRatingVal(combined, 'Weight', 'Wgt', 'wgt', 'WGT', 'weight', 'wt');
+  let weightLbs: string | number = '-';
+  if (rawWgt > 0) {
+    if (rawWgt > 50) {
+      weightLbs = Math.round(rawWgt);
+    } else {
+      const idx = Math.max(0, Math.min(DRAFT_WEIGHT_LOOKUP.length - 1, Math.round(rawWgt)));
+      weightLbs = DRAFT_WEIGHT_LOOKUP[idx];
+    }
+  }
+
+  // Handedness
+  let hand = isG ? 'R' : 'L';
+  for (const [k, v] of Object.entries(combined)) {
+    if (v === undefined || v === null || v === '') continue;
+    const ck = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (['hand', 'shoots', 'handedness', 'catch', 'catches', 'shoot', 'shot', 'h'].includes(ck)) {
+      const sv = String(v).trim().toUpperCase();
+      if (sv === '0' || sv.startsWith('L')) { hand = 'L'; break; }
+      if (sv === '1' || sv.startsWith('R')) { hand = 'R'; break; }
+    }
+  }
+
+  if (isG) {
+    const attrs = [
+      { short: 'AGI', label: 'Agility', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI')) },
+      { short: 'SPD', label: 'Speed', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Speed', 'Spd', 'spd', 'SPD')) },
+      { short: 'OFA', label: 'Off Aware', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'OFA', 'off')) },
+      { short: 'DFA', label: 'Def Aware', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'DFA', 'def')) },
+      { short: 'PKC', label: 'Puck Control', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Puck Control', 'pkc', 'PkC', 'PKC', 'puck_control', 'control')) },
+      { short: 'STR', label: 'Stick Right', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Stick Right', 'stR', 'StR', 'str', 'STR', 'stick_right')) },
+      { short: 'STL', label: 'Stick Left', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Stick Left', 'stL', 'StL', 'stl', 'STL', 'stick_left')) },
+      { short: 'GVR', label: 'Glove Right', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Glove Right', 'gvR', 'GvR', 'gvr', 'GVR', 'glove_right')) },
+      { short: 'GVL', label: 'Glove Left', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Glove Left', 'gvL', 'GvL', 'gvl', 'GVL', 'glove_left')) }
+    ];
+    return { isG: true, pos: 'G', ovr, weightLbs, hand, attrs };
+  }
+
+  const sthRaw = Math.round(
+    getDraftRatingVal(
+      combined,
+      'Stick Handling', 'stH', 'StH', 'sth', 'STH', 'st_h', 'ST_H', 'stick_handling',
+      'Puck Control', 'puck_control', 'pkc', 'PkC', 'PKC', 'stick', 'sh', 'st'
+    )
+  );
+  const attrs = [
+    { short: 'AGI', label: 'Agility', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Agility', 'Agl', 'Agi', 'agl', 'agi', 'AGL', 'AGI')) },
+    { short: 'SPD', label: 'Speed', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Speed', 'Spd', 'spd', 'SPD')) },
+    { short: 'OFA', label: 'Off Aware', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Off Aware', 'ofA', 'OfA', 'off_aware', 'OFA', 'offense', 'off')) },
+    { short: 'DFA', label: 'Def Aware', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Def Aware', 'dfA', 'DfA', 'def_aware', 'DFA', 'Defense', 'def')) },
+    { short: 'SHP', label: 'Shot Power', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Shot Power', 'shPW', 'ShPW', 'shP', 'ShP', 'shp', 'SHP', 'Power', 'pwr')) },
+    { short: 'SHA', label: 'Shot Accuracy', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Shot Accuracy', 'shA', 'ShA', 'sha', 'SHA', 'Accuracy', 'acc')) },
+    { short: 'STH', label: 'Stick Handling', level: toDraftStickHandlingLevel(sthRaw), raw: sthRaw },
+    { short: 'PAS', label: 'Passing', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Passing', 'Pas', 'pas', 'PAS', 'pass')) },
+    { short: 'CHK', label: 'Checking', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Checking', 'ChK', 'chk', 'CHK', 'check')) },
+    { short: 'AGR', label: 'Aggression', level: toDraftScaleLevel(getDraftRatingVal(combined, 'Aggression', 'Agr', 'agr', 'AGR', 'agg', 'Roughness', 'rgh')) }
+  ];
+  return { isG: false, pos: cleanPos || 'F', ovr, weightLbs, hand, attrs };
+};
+
 // Player Portrait Component
 const PlayerPortrait = ({ name, className = "w-20 h-20" }: { name: string; className?: string }) => {
   const filename = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
@@ -474,6 +624,12 @@ export default function DraftPage() {
   const [prospectPos, setProspectPos] = useState<string>('ALL');
   const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('ALL');
   const [prospectTypeFilter, setProspectTypeFilter] = useState<'ALL' | 'ROOKIE' | 'FREE_AGENT'>('ALL');
+
+  // Active Team Roster & Player Ratings lookup state
+  const [allYearPlayersByNorm, setAllYearPlayersByNorm] = useState<Record<string, DatabasePlayer>>({});
+  const [prevSeasonDbRosters, setPrevSeasonDbRosters] = useState<Array<{ team_id: number; player_id?: any; player_name: string }>>([]);
+  const [rosterTeamOverrideId, setRosterTeamOverrideId] = useState<number | null>(null);
+  const [rosterPosFilter, setRosterPosFilter] = useState<'ALL' | 'SKATERS' | 'GOALIES'>('ALL');
 
   // Draft order generator (draft rounds worst -> best, waiver rounds best -> worst)
   const [draftRoundsInput, setDraftRoundsInput] = useState(2);
@@ -871,22 +1027,35 @@ export default function DraftPage() {
             };
           });
 
+          // Deduplicate any duplicate (leagueId, pk) slots (preferring rows with a selected player)
+          const dedupedDraftsMap = new Map<string, DraftData>();
+          parsedDrafts.forEach(item => {
+            const slotKey = `${item.leagueId}-${item.pk}`;
+            const existing = dedupedDraftsMap.get(slotKey);
+            const itemHasPlayer = Boolean(item.player && item.player !== 'N/A' && item.player.trim() !== '');
+            const existingHasPlayer = Boolean(existing?.player && existing.player !== 'N/A' && existing.player.trim() !== '');
+            if (!existing || (itemHasPlayer && !existingHasPlayer)) {
+              dedupedDraftsMap.set(slotKey, item);
+            }
+          });
+          const uniqueParsedDrafts = Array.from(dedupedDraftsMap.values());
+
           // Sort drafts by league_id descending, then round, then pick
-          parsedDrafts.sort((a, b) => {
+          uniqueParsedDrafts.sort((a, b) => {
             if (b.year !== a.year) return b.year - a.year;
             if (Number(b.leagueId) !== Number(a.leagueId)) return Number(b.leagueId) - Number(a.leagueId);
             if (a.rd !== b.rd) return a.rd - b.rd;
             return a.pk - b.pk;
           });
 
-          setData(parsedDrafts);
+          setData(uniqueParsedDrafts);
 
           // Spotlight default: Pick #1
-          const activeDraftPicks = parsedDrafts.filter(d => d.leagueId === seasonList[0]?.leagueId && d.player && d.player !== "N/A");
+          const activeDraftPicks = uniqueParsedDrafts.filter(d => d.leagueId === seasonList[0]?.leagueId && d.player && d.player !== "N/A");
           if (activeDraftPicks.length > 0) {
             setPodium(activeDraftPicks[0]);
           } else {
-            const firstValid = parsedDrafts.find(d => d.player && d.player !== "N/A");
+            const firstValid = uniqueParsedDrafts.find(d => d.player && d.player !== "N/A");
             if (firstValid) setPodium(firstValid);
           }
         }
@@ -1175,8 +1344,9 @@ export default function DraftPage() {
     async function loadRookies() {
       setRookiePoolLoading(true);
       const prevLeagueId = resolvePrevLeagueIdForYear(Number(rookieClassYear));
+      const prevClassYear = Number(rookieClassYear) - 1;
 
-      const [page1Res, page2Res, prevRostersRes, prevStatsRes, prevDraftsRes] = await Promise.all([
+      const [page1Res, page2Res, prevYrPage1Res, prevYrPage2Res, prevRostersRes, prevStatsRes, prevDraftsRes] = await Promise.all([
         supabase
           .from('league_player_database')
           .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
@@ -1187,6 +1357,18 @@ export default function DraftPage() {
           .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
           .filter('player_info->>source_year', 'eq', String(rookieClassYear))
           .range(1000, 1999),
+        supabase
+          .from('league_player_database')
+          .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
+          .filter('player_info->>source_year', 'eq', String(prevClassYear))
+          .range(0, 999)
+          .then(r => r, () => ({ data: null, error: null })),
+        supabase
+          .from('league_player_database')
+          .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
+          .filter('player_info->>source_year', 'eq', String(prevClassYear))
+          .range(1000, 1999)
+          .then(r => r, () => ({ data: null, error: null })),
         supabase
           .from('league_rosters')
           .select('player_id, player_name, team_id')
@@ -1210,6 +1392,41 @@ export default function DraftPage() {
       }
 
       const rawRows = [...(page1Res.data || []), ...(page2Res.data || [])];
+      const prevYearRows = [...(prevYrPage1Res?.data || []), ...(prevYrPage2Res?.data || [])];
+
+      // Build complete player lookup map (previous year first, then current draft year overrides so ratings reflect active ROM year)
+      const fullLookup: Record<string, DatabasePlayer> = {};
+      const registerInLookup = (p: any, preferOverwrite: boolean) => {
+        const pName = String(p?.player_name || '').trim();
+        if (!pName || pName.toUpperCase() === 'N/A') return;
+        const ovr = parsePlayerOvr(p.ratings) || 0;
+        const dbObj: DatabasePlayer = {
+          player_id: p.player_id,
+          player_name: pName,
+          pos: p.pos || 'F',
+          team_default: p.team_default || '',
+          orig_nhl_team: p.player_info?.source_team || p.team_default || '',
+          rookie: p.rookie === true || String(p.rookie).toLowerCase() === 'true',
+          ratings: p.ratings,
+          player_info: p.player_info,
+          star_rating: p.star_rating,
+          ovr
+        };
+        const norm = normalizeProspectName(pName);
+        const alias = normalizeWithFirstNameAlias(pName);
+        const idKey = `id:${p.player_id}`;
+        if (preferOverwrite || !fullLookup[idKey]) fullLookup[idKey] = dbObj;
+        if (norm && (preferOverwrite || !fullLookup[norm] || dbObj.ovr >= (fullLookup[norm]?.ovr || 0))) {
+          fullLookup[norm] = dbObj;
+        }
+        if (alias && (preferOverwrite || !fullLookup[alias] || dbObj.ovr >= (fullLookup[alias]?.ovr || 0))) {
+          fullLookup[alias] = dbObj;
+        }
+      };
+      prevYearRows.forEach(p => registerInLookup(p, false));
+      rawRows.forEach(p => registerInLookup(p, true));
+      setAllYearPlayersByNorm(fullLookup);
+      setPrevSeasonDbRosters(prevRostersRes.data || []);
 
       // Build lookup sets of players who were on a team in the previous season
       const prevRosterNamesSet = new Set<string>();
@@ -1935,12 +2152,21 @@ export default function DraftPage() {
 
   // Auto-computed draft order (from standings & teams of the active/previous season) merged with any persisted DB rows for this draft
   const projectedFloorRows = useMemo<DraftData[]>(() => {
-    const existingForLeague = data.filter(d => d.leagueId === floorLeagueId);
+    const rawExisting = data.filter(d => d.leagueId === floorLeagueId);
+    // Deduplicate by pick_number (pk), preferring any row with a selected player
+    const byPk = new Map<number, DraftData>();
+    rawExisting.forEach(row => {
+      const prev = byPk.get(row.pk);
+      const rowHasPlayer = Boolean(row.player && row.player !== 'N/A' && row.player.trim() !== '');
+      const prevHasPlayer = Boolean(prev?.player && prev.player !== 'N/A' && prev.player.trim() !== '');
+      if (!prev || (rowHasPlayer && !prevHasPlayer)) {
+        byPk.set(row.pk, row);
+      }
+    });
+    const existingForLeague = Array.from(byPk.values()).sort((a, b) => a.pk - b.pk);
     const builtSlots = buildDraftSlotsForLeague(floorLeagueId);
     if (existingForLeague.length === 0) return builtSlots;
     if (existingForLeague.length >= builtSlots.length) return existingForLeague;
-    const byPk = new Map<number, DraftData>();
-    existingForLeague.forEach(row => byPk.set(row.pk, row));
     const merged = builtSlots.map(slot => byPk.get(slot.pk) || slot);
     existingForLeague.forEach(row => {
       if (!builtSlots.some(s => s.pk === row.pk)) {
@@ -2019,6 +2245,316 @@ export default function DraftPage() {
       leagueType: currentMeta?.leagueType || 'W'
     } as DraftData;
   }, [projectedFloorRows, floorLeagueId, overridePickSlot, activeFloorSeasonMeta]);
+
+  // Reset manual roster team override whenever switching drafts so it defaults to the active On-The-Clock team
+  useEffect(() => {
+    setRosterTeamOverrideId(null);
+  }, [floorLeagueId]);
+
+  // All franchises participating in the active draft
+  const draftTeamsList = useMemo<TeamInfo[]>(() => {
+    const seen = new Set<number>();
+    const list: TeamInfo[] = [];
+    projectedFloorRows.forEach(r => {
+      const tid = Number(r.teamId);
+      if (tid > 0 && !seen.has(tid)) {
+        seen.add(tid);
+        const t = teamsMap.get(tid);
+        if (t) {
+          list.push(t);
+        } else {
+          list.push({
+            team_id: tid,
+            team_name: r.team,
+            abbreviation: r.team.slice(0, 3).toUpperCase(),
+            logo_url: r.logo || null,
+            league_id: Number(floorLeagueId) || 41,
+            coach_id: r.coachId ? Number(r.coachId) : null,
+            coach_name: r.coachName || null
+          });
+        }
+      }
+    });
+    return list;
+  }, [projectedFloorRows, teamsMap, floorLeagueId]);
+
+  // Logged-in coach's own team in the active draft (if any)
+  const myCoachTeamInDraft = useMemo<TeamInfo | null>(() => {
+    if (!isLoggedIn || !currentCoach) return null;
+    return (
+      draftTeamsList.find(
+        t =>
+          (t.coach_id && Number(t.coach_id) === Number(currentCoach.coach_id)) ||
+          (t.coach_name && t.coach_name.trim().toLowerCase() === currentCoach.coach_name.trim().toLowerCase())
+      ) || null
+    );
+  }, [isLoggedIn, currentCoach, draftTeamsList]);
+
+  // Effective team whose roster & ratings are displayed (defaults to the Active Team On The Clock)
+  const activeRosterTeam = useMemo<TeamInfo | null>(() => {
+    const targetId =
+      rosterTeamOverrideId ??
+      (nextEmptyPickSlot?.teamId ? Number(nextEmptyPickSlot.teamId) : draftTeamsList[0]?.team_id ?? null);
+    if (!targetId) return null;
+    return (
+      draftTeamsList.find(t => Number(t.team_id) === Number(targetId)) ||
+      teamsMap.get(Number(targetId)) ||
+      null
+    );
+  }, [rosterTeamOverrideId, nextEmptyPickSlot, draftTeamsList, teamsMap]);
+
+  // Resolve full Roster + NHL95 1-6 Ratings for activeRosterTeam
+  const activeTeamRosterData = useMemo(() => {
+    if (!activeRosterTeam) return { skaters: [], goalies: [], draftedCount: 0, avgOvr: 0, totalCount: 0 };
+
+    const normName = (name: string) =>
+      String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const normAlias = (name: string) => {
+      const cleaned = String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[.'’-]/g, ' ')
+        .replace(/\s+/g, ' ');
+      const parts = cleaned.split(' ').filter(Boolean);
+      if (parts.length < 2) return normName(name);
+      const firstMap: Record<string, string> = {
+        alexander: 'alex', michael: 'mike', matthew: 'matt', christopher: 'chris',
+        nicholas: 'nick', niklas: 'nicklas', daniel: 'dan', steven: 'steve',
+        stephen: 'steve', anthony: 'tony', thomas: 'tom', william: 'bill',
+        robert: 'bob', edward: 'ed', joseph: 'joe', zachary: 'zach',
+        bradley: 'brad', patrick: 'pat', samuel: 'sam', benjamin: 'ben',
+        jonathan: 'jon', evgeny: 'evgeni'
+      };
+      const first = firstMap[parts[0]] || parts[0];
+      return `${first}${parts.slice(1).join('')}`.replace(/[^a-z0-9]/g, '');
+    };
+
+    const lookupDbPlayer = (name: string, playerId?: string | number | null): DatabasePlayer | undefined => {
+      if (playerId !== undefined && playerId !== null && allYearPlayersByNorm[`id:${playerId}`]) {
+        return allYearPlayersByNorm[`id:${playerId}`];
+      }
+      const n = normName(name);
+      if (n && allYearPlayersByNorm[n]) return allYearPlayersByNorm[n];
+      const a = normAlias(name);
+      if (a && allYearPlayersByNorm[a]) return allYearPlayersByNorm[a];
+      return undefined;
+    };
+
+    const isODraft =
+      activeFloorSeasonMeta?.leagueType === 'O' ||
+      Number(floorLeagueId) === 39 ||
+      Number(floorLeagueId) >= 54;
+
+    const upperAbbr = (activeRosterTeam.abbreviation || '').trim().toUpperCase();
+    const upperName = (activeRosterTeam.team_name || '').trim().toUpperCase();
+
+    let configCode = '';
+    if (isODraft) {
+      if (upperAbbr === 'DET' || upperAbbr === 'DTC' || upperName.includes('DETROIT') || upperName.includes('COUGAR')) configCode = 'DTC';
+      else if (upperAbbr === 'BOS' || upperName.includes('BOSTON') || upperName.includes('BRUIN')) configCode = 'BOS';
+      else if (upperAbbr === 'CHI' || upperName.includes('CHICAGO') || upperName.includes('BLACKHAWK')) configCode = 'CHI';
+      else if (upperAbbr === 'MTL' || upperName.includes('MONTREAL') || upperName.includes('CANADIEN')) configCode = 'MTL';
+      else if (upperAbbr === 'NYR' || upperAbbr === 'NY' || upperName.includes('RANGER') || upperName.includes('NEW YORK')) configCode = 'NYR';
+      else if (upperAbbr === 'TOR' || upperName.includes('TORONTO') || upperName.includes('MAPLE') || upperName.includes('PAT')) configCode = 'TOR';
+    } else {
+      const wCodes = Object.keys(W_LEAGUE_SKATERS || {});
+      for (const code of wCodes) {
+        if (code === upperAbbr) {
+          configCode = code;
+          break;
+        }
+        const matched = matchTeamFromList(code, draftTeamsList);
+        if (matched && Number(matched.team_id) === Number(activeRosterTeam.team_id)) {
+          configCode = code;
+          break;
+        }
+      }
+      if (!configCode) {
+        for (const code of wCodes) {
+          const alias = (TEAM_CITY_ALIASES[code] || code).toUpperCase();
+          if (upperName.includes(alias)) {
+            configCode = code;
+            break;
+          }
+        }
+      }
+    }
+
+    const skatersNames = configCode
+      ? ((isODraft ? O_LEAGUE_SKATERS[configCode] : W_LEAGUE_SKATERS[configCode]) || [])
+      : [];
+    const goaliesNames = configCode
+      ? ((isODraft ? O_LEAGUE_GOALIES[configCode] : W_LEAGUE_GOALIES[configCode]) || [])
+      : [];
+    const posCounts = configCode
+      ? ((isODraft ? O_LEAGUE_POSITION_COUNTS[configCode] : W_LEAGUE_POSITION_COUNTS[configCode]) || {
+          goalies: 2,
+          forwards: 5,
+          defensemen: 3
+        })
+      : { goalies: 2, forwards: 5, defensemen: 3 };
+
+    interface RosterPlayerRow {
+      key: string;
+      playerId?: string | number;
+      name: string;
+      rolePos: string;
+      isGoalie: boolean;
+      isDraftedNow: boolean;
+      draftBadgeText?: string;
+      ovr: number;
+      weightLbs: string | number;
+      hand: string;
+      attrs: Array<{ short: string; label: string; level: number; raw?: number }>;
+      rawRatings?: any;
+      rawPlayerInfo?: any;
+    }
+
+    const seenNorm = new Set<string>();
+    const allRows: RosterPlayerRow[] = [];
+
+    // 1. Players drafted by this team in the current draft
+    const teamDraftedPicks = selectedPicksForFloor.filter(
+      p =>
+        Number(p.teamId) === Number(activeRosterTeam.team_id) ||
+        p.team.trim().toLowerCase() === activeRosterTeam.team_name.trim().toLowerCase()
+    );
+
+    teamDraftedPicks.forEach(pick => {
+      const pName = String(pick.player || '').trim();
+      if (!pName || pName === 'N/A') return;
+      const n = normName(pName);
+      if (n) seenNorm.add(n);
+      const dbP = lookupDbPlayer(pName, pick.playerId);
+      const parsed = extractDraftPlayerRatings(
+        dbP?.ratings || pick.ratings,
+        dbP?.player_info || pick.playerInfo,
+        dbP?.pos || pick.pos || 'F',
+        dbP?.ovr || pick.ovr
+      );
+      allRows.push({
+        key: `drafted-${pick.pk}-${pName}`,
+        playerId: dbP?.player_id ?? pick.playerId,
+        name: pName,
+        rolePos: parsed.isG ? 'G' : (dbP?.pos || pick.pos || 'F'),
+        isGoalie: parsed.isG,
+        isDraftedNow: true,
+        draftBadgeText: `NEW PICK • Rd ${pick.rd}, #${pick.pk}`,
+        ovr: parsed.ovr,
+        weightLbs: parsed.weightLbs,
+        hand: parsed.hand,
+        attrs: parsed.attrs,
+        rawRatings: dbP?.ratings || pick.ratings,
+        rawPlayerInfo: dbP?.player_info || pick.playerInfo
+      });
+    });
+
+    // 2. Returning Skaters from static config
+    skatersNames.forEach((rawName, idx) => {
+      const pName = String(rawName || '').trim();
+      if (!pName || pName === '--' || pName.toUpperCase() === 'N/A') return;
+      const n = normName(pName);
+      if (n && seenNorm.has(n)) return;
+      if (n) seenNorm.add(n);
+
+      const defaultSlotPos = idx < (posCounts.forwards || 5) ? 'F' : 'D';
+      const dbP = lookupDbPlayer(pName);
+      const resolvedPos = dbP?.pos && dbP.pos !== 'G' ? dbP.pos : defaultSlotPos;
+      const parsed = extractDraftPlayerRatings(dbP?.ratings, dbP?.player_info, resolvedPos, dbP?.ovr);
+
+      allRows.push({
+        key: `skater-${idx}-${pName}`,
+        playerId: dbP?.player_id,
+        name: pName,
+        rolePos: defaultSlotPos === 'D' && resolvedPos === 'F' ? 'D' : resolvedPos,
+        isGoalie: false,
+        isDraftedNow: false,
+        ovr: parsed.ovr,
+        weightLbs: parsed.weightLbs,
+        hand: parsed.hand,
+        attrs: parsed.attrs,
+        rawRatings: dbP?.ratings,
+        rawPlayerInfo: dbP?.player_info
+      });
+    });
+
+    // 3. Returning Goalies from static config
+    goaliesNames.forEach((rawName, idx) => {
+      const pName = String(rawName || '').trim();
+      if (!pName || pName === '--' || pName.toUpperCase() === 'N/A') return;
+      const n = normName(pName);
+      if (n && seenNorm.has(n)) return;
+      if (n) seenNorm.add(n);
+
+      const dbP = lookupDbPlayer(pName);
+      const parsed = extractDraftPlayerRatings(dbP?.ratings, dbP?.player_info, 'G', dbP?.ovr);
+
+      allRows.push({
+        key: `goalie-${idx}-${pName}`,
+        playerId: dbP?.player_id,
+        name: pName,
+        rolePos: 'G',
+        isGoalie: true,
+        isDraftedNow: false,
+        ovr: parsed.ovr,
+        weightLbs: parsed.weightLbs,
+        hand: parsed.hand,
+        attrs: parsed.attrs,
+        rawRatings: dbP?.ratings,
+        rawPlayerInfo: dbP?.player_info
+      });
+    });
+
+    // 4. Any additional players in league_rosters for this team_id
+    prevSeasonDbRosters
+      .filter(r => Number(r.team_id) === Number(activeRosterTeam.team_id))
+      .forEach((r, idx) => {
+        const pName = String(r.player_name || '').trim();
+        if (!pName || pName === '--' || pName.toUpperCase() === 'N/A') return;
+        const n = normName(pName);
+        if (n && seenNorm.has(n)) return;
+        if (n) seenNorm.add(n);
+
+        const dbP = lookupDbPlayer(pName, r.player_id);
+        const parsed = extractDraftPlayerRatings(dbP?.ratings, dbP?.player_info, dbP?.pos || 'F', dbP?.ovr);
+
+        allRows.push({
+          key: `dbroster-${idx}-${pName}`,
+          playerId: dbP?.player_id ?? r.player_id,
+          name: pName,
+          rolePos: parsed.isG ? 'G' : (dbP?.pos || 'F'),
+          isGoalie: parsed.isG,
+          isDraftedNow: false,
+          ovr: parsed.ovr,
+          weightLbs: parsed.weightLbs,
+          hand: parsed.hand,
+          attrs: parsed.attrs,
+          rawRatings: dbP?.ratings,
+          rawPlayerInfo: dbP?.player_info
+        });
+      });
+
+    const skaters = allRows.filter(r => !r.isGoalie);
+    const goalies = allRows.filter(r => r.isGoalie);
+    const withOvr = allRows.filter(r => r.ovr > 0);
+    const avgOvr = withOvr.length > 0 ? Math.round(withOvr.reduce((s, r) => s + r.ovr, 0) / withOvr.length) : 0;
+
+    return {
+      skaters,
+      goalies,
+      draftedCount: teamDraftedPicks.length,
+      avgOvr,
+      totalCount: allRows.length
+    };
+  }, [activeRosterTeam, activeFloorSeasonMeta, floorLeagueId, draftTeamsList, selectedPicksForFloor, allYearPlayersByNorm, prevSeasonDbRosters]);
 
   // Keep Spotlight Card synced to active draft class (either first pick made, or #1 available prospect for the team on the clock)
   useEffect(() => {
@@ -3224,6 +3760,53 @@ export default function DraftPage() {
                       )}
                     </label>
 
+                    {coachSelectedPlayer && (() => {
+                      const selParsed = extractDraftPlayerRatings(
+                        coachSelectedPlayer.ratings,
+                        coachSelectedPlayer.player_info,
+                        coachSelectedPlayer.pos,
+                        coachSelectedPlayer.ovr
+                      );
+                      return (
+                        <div className="mb-2 bg-emerald-50 border-2 border-black p-2 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="bg-black text-amber-300 font-black px-1.5 py-0.5 uppercase">
+                              {coachSelectedPlayer.player_name}
+                            </span>
+                            <span className="bg-white border border-black px-1.5 py-0.5 font-black">
+                              POS: {coachSelectedPlayer.pos}
+                            </span>
+                            <span className="bg-white border border-black px-1.5 py-0.5 font-black">
+                              OVR: {selParsed.ovr}
+                            </span>
+                            <span className="bg-white border border-black px-1.5 py-0.5 font-bold">
+                              {selParsed.isG ? 'CATCH' : 'HAND'}: {selParsed.hand}
+                            </span>
+                            {selParsed.weightLbs !== '-' && (
+                              <span className="bg-white border border-black px-1.5 py-0.5 font-bold">
+                                WGT: {selParsed.weightLbs} lbs
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {selParsed.attrs.map(a => {
+                              const hm = getDraftHeatmapBadgeStyle(a.level);
+                              return (
+                                <span
+                                  key={`sel-attr-${a.short}`}
+                                  style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                  className="px-1.5 py-0.5 border font-black uppercase"
+                                  title={`${a.label}: ${a.level}/6`}
+                                >
+                                  {a.short} {a.level}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <div className="relative">
                       <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
                       <input
@@ -3523,6 +4106,7 @@ export default function DraftPage() {
                       return topAvail.map((player, idx) => {
                         const isSelectedInDesk = coachSelectedPlayer?.player_id === player.player_id;
                         const canSelectNow = coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
+                        const pRatings = extractDraftPlayerRatings(player.ratings, player.player_info, player.pos, player.ovr);
                         return (
                           <div
                             key={`top-avail-${player.player_id}`}
@@ -3532,66 +4116,86 @@ export default function DraftPage() {
                                 setCoachSearch(player.player_name);
                               }
                             }}
-                            className={`px-2.5 py-2 flex items-center justify-between gap-2 text-xs transition-colors ${
+                            className={`px-2.5 py-2 flex flex-col gap-1.5 text-xs transition-colors ${
                               !draftLockStatus.isLocked ? 'cursor-pointer hover:bg-yellow-50' : ''
                             } ${isSelectedInDesk ? 'bg-yellow-100 ring-2 ring-inset ring-black' : ''}`}
                           >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-mono text-[10px] font-black text-slate-500 w-5 text-right shrink-0">
-                                #{idx + 1}
-                              </span>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <Link
-                                    href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="font-black uppercase text-black hover:underline truncate"
-                                    title="Open Player Profile"
-                                  >
-                                    {player.player_name}
-                                  </Link>
-                                  <span className="text-[9.5px] font-mono font-bold bg-neutral-100 text-black px-1 py-0 border border-black/30">
-                                    {player.pos}
-                                  </span>
-                                  <span
-                                    className={`text-[8.5px] font-mono font-black uppercase px-1 py-0 border border-black ${
-                                      player.isFreeAgent
-                                        ? 'bg-emerald-200 text-emerald-950'
-                                        : 'bg-amber-300 text-black'
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono text-[10px] font-black text-slate-500 w-5 text-right shrink-0">
+                                  #{idx + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <Link
+                                      href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="font-black uppercase text-black hover:underline truncate"
+                                      title="Open Player Profile"
+                                    >
+                                      {player.player_name}
+                                    </Link>
+                                    <span className="text-[9.5px] font-mono font-bold bg-neutral-100 text-black px-1 py-0 border border-black/30">
+                                      {player.pos}
+                                    </span>
+                                    <span
+                                      className={`text-[8.5px] font-mono font-black uppercase px-1 py-0 border border-black ${
+                                        player.isFreeAgent
+                                          ? 'bg-emerald-200 text-emerald-950'
+                                          : 'bg-amber-300 text-black'
+                                      }`}
+                                    >
+                                      {player.isFreeAgent ? 'FA' : 'ROOKIE'}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-sans text-slate-500 truncate">
+                                    {player.isFreeAgent
+                                      ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
+                                      : player.team_default}
+                                    {pRatings.weightLbs !== '-' ? ` • ${pRatings.weightLbs} lbs • ${pRatings.hand}` : ''}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="font-mono font-black text-[11px] bg-black text-amber-300 px-1.5 py-0.5 border border-black">
+                                  OVR {player.ovr ?? '-'}
+                                </span>
+                                {canSelectNow && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCoachSelectedPlayer(player);
+                                      setCoachSearch(player.player_name);
+                                    }}
+                                    className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                                      isSelectedInDesk
+                                        ? 'bg-emerald-700 text-white'
+                                        : 'bg-red-800 hover:bg-red-900 text-white'
                                     }`}
                                   >
-                                    {player.isFreeAgent ? 'FA' : 'ROOKIE'}
-                                  </span>
-                                </div>
-                                <div className="text-[10px] font-sans text-slate-500 truncate">
-                                  {player.isFreeAgent
-                                    ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
-                                    : player.team_default}
-                                </div>
+                                    {isSelectedInDesk ? '✓ Ready' : 'Select'}
+                                  </button>
+                                )}
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span className="font-mono font-black text-[11px] bg-black text-amber-300 px-1.5 py-0.5 border border-black">
-                                OVR {player.ovr ?? '-'}
-                              </span>
-                              {canSelectNow && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCoachSelectedPlayer(player);
-                                    setCoachSearch(player.player_name);
-                                  }}
-                                  className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
-                                    isSelectedInDesk
-                                      ? 'bg-emerald-700 text-white'
-                                      : 'bg-red-800 hover:bg-red-900 text-white'
-                                  }`}
-                                >
-                                  {isSelectedInDesk ? '✓ Ready' : 'Select'}
-                                </button>
-                              )}
+                            {/* Compact 1-6 Ratings Strip for Top Available Player */}
+                            <div className="flex items-center gap-1 flex-wrap pl-7 font-mono text-[9px]">
+                              {pRatings.attrs.map(a => {
+                                const hm = getDraftHeatmapBadgeStyle(a.level);
+                                return (
+                                  <span
+                                    key={`top-avail-attr-${player.player_id}-${a.short}`}
+                                    style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                    className="px-1 py-0 border font-black uppercase"
+                                    title={`${a.label}: ${a.level}/6`}
+                                  >
+                                    {a.short}:{a.level}
+                                  </span>
+                                );
+                              })}
                             </div>
                           </div>
                         );
@@ -3601,6 +4205,352 @@ export default function DraftPage() {
                 </div>
               </div>
             </div>
+
+            {/* ========================================================================= */}
+            {/* ACTIVE TEAM ROSTER & PLAYER RATINGS (AUTO-SYNCED TO TEAM ON THE CLOCK) */}
+            {/* ========================================================================= */}
+            {activeRosterTeam && (
+              <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b-2 border-black pb-3">
+                  {/* Left: Active Team Identity & Summary */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {activeRosterTeam.logo_url ? (
+                      <img
+                        src={activeRosterTeam.logo_url}
+                        alt={activeRosterTeam.team_name}
+                        className="w-11 h-11 object-contain bg-white border-2 border-black p-1 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 bg-black text-amber-300 font-mono font-black text-xs flex items-center justify-center border-2 border-black shrink-0">
+                        {activeRosterTeam.abbreviation || 'TM'}
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 border border-black ${
+                            Number(activeRosterTeam.team_id) === Number(nextEmptyPickSlot.teamId)
+                              ? 'bg-red-700 text-white'
+                              : 'bg-amber-300 text-black'
+                          }`}
+                        >
+                          {Number(activeRosterTeam.team_id) === Number(nextEmptyPickSlot.teamId)
+                            ? `🎯 ACTIVE TEAM ON THE CLOCK (PICK #${nextEmptyPickSlot.pk})`
+                            : '🔍 FRANCHISE ROSTER & RATINGS'}
+                        </span>
+                        {activeRosterTeam.coach_name && (
+                          <span className="text-[10px] font-mono font-bold uppercase bg-neutral-200 text-black px-2 py-0.5 border border-black/30">
+                            Coach: {activeRosterTeam.coach_name}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-mono font-black uppercase bg-black text-amber-300 px-2 py-0.5 border border-black">
+                          Team Avg OVR: {activeTeamRosterData.avgOvr || '-'}
+                        </span>
+                      </div>
+                      <h3 className="text-base sm:text-xl font-black uppercase tracking-tight text-black mt-0.5">
+                        {activeRosterTeam.team_name} &bull; Current Team Roster &amp; Player Ratings
+                      </h3>
+                      <p className="text-[11px] font-mono font-bold uppercase text-slate-600">
+                        {activeTeamRosterData.totalCount} Rostered Players ({activeTeamRosterData.skaters.length} Skaters, {activeTeamRosterData.goalies.length} Goalies)
+                        {activeTeamRosterData.draftedCount > 0 ? ` • Includes ${activeTeamRosterData.draftedCount} New Pick(s) in ${activeFloorSeasonMeta?.seasonBadge}` : ''}
+                        {' • '}1&ndash;6 NHL &apos;95 Rating Scale
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: Team Switcher & Position Filter */}
+                  <div className="flex flex-wrap items-center gap-2 font-mono">
+                    {rosterTeamOverrideId !== null &&
+                      nextEmptyPickSlot.teamId &&
+                      Number(rosterTeamOverrideId) !== Number(nextEmptyPickSlot.teamId) && (
+                        <button
+                          type="button"
+                          onClick={() => setRosterTeamOverrideId(null)}
+                          className="bg-red-800 hover:bg-red-900 text-white text-[10px] font-black uppercase px-2.5 py-1.5 border-2 border-black cursor-pointer"
+                        >
+                          🎯 On-Clock Team ({nextEmptyPickSlot.team})
+                        </button>
+                      )}
+
+                    {myCoachTeamInDraft &&
+                      Number(activeRosterTeam.team_id) !== Number(myCoachTeamInDraft.team_id) && (
+                        <button
+                          type="button"
+                          onClick={() => setRosterTeamOverrideId(Number(myCoachTeamInDraft.team_id))}
+                          className="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black uppercase px-2.5 py-1.5 border-2 border-black cursor-pointer"
+                        >
+                          👤 My Team ({myCoachTeamInDraft.team_name})
+                        </button>
+                      )}
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase text-slate-700">Team:</span>
+                      <select
+                        value={Number(activeRosterTeam.team_id)}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          if (nextEmptyPickSlot.teamId && val === Number(nextEmptyPickSlot.teamId)) {
+                            setRosterTeamOverrideId(null);
+                          } else {
+                            setRosterTeamOverrideId(val);
+                          }
+                        }}
+                        className="bg-yellow-100 text-black border-2 border-black px-2.5 py-1 text-xs font-black uppercase cursor-pointer"
+                      >
+                        {draftTeamsList.map(t => {
+                          const isOnClock = Number(t.team_id) === Number(nextEmptyPickSlot.teamId);
+                          return (
+                            <option key={`roster-team-opt-${t.team_id}`} value={t.team_id}>
+                              {t.team_name} {t.coach_name ? `(${t.coach_name})` : ''} {isOnClock ? '★ ON CLOCK' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {([
+                        { key: 'ALL', label: `All (${activeTeamRosterData.totalCount})` },
+                        { key: 'SKATERS', label: `Skaters (${activeTeamRosterData.skaters.length})` },
+                        { key: 'GOALIES', label: `Goalies (${activeTeamRosterData.goalies.length})` }
+                      ] as const).map(tab => (
+                        <button
+                          key={`roster-pos-tab-${tab.key}`}
+                          type="button"
+                          onClick={() => setRosterPosFilter(tab.key)}
+                          className={`px-2.5 py-1 text-[10px] font-black uppercase border border-black cursor-pointer ${
+                            rosterPosFilter === tab.key
+                              ? 'bg-black text-amber-300'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
+                {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-black uppercase text-black bg-amber-200 px-2.5 py-0.5 border border-black">
+                        🏒 Skaters &mdash; Forwards &amp; Defensemen ({activeTeamRosterData.skaters.length})
+                      </span>
+                      <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
+                        AGI &bull; SPD &bull; OFA &bull; DFA &bull; SHP &bull; SHA &bull; STH &bull; PAS &bull; CHK &bull; AGR
+                      </span>
+                    </div>
+
+                    <div className="bg-white border-2 border-black overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs min-w-[780px]">
+                        <thead>
+                          <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
+                            <th className="py-2 px-3">PLAYER</th>
+                            <th className="py-2 px-2 text-center">POS</th>
+                            <th className="py-2 px-2 text-center">HAND</th>
+                            <th className="py-2 px-2 text-center">WGT</th>
+                            <th className="py-2 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
+                            <th className="py-2 px-2 text-center" title="Agility (1-6)">AGI</th>
+                            <th className="py-2 px-2 text-center" title="Speed (1-6)">SPD</th>
+                            <th className="py-2 px-2 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                            <th className="py-2 px-2 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                            <th className="py-2 px-2 text-center" title="Shot Power (1-6)">SHP</th>
+                            <th className="py-2 px-2 text-center" title="Shot Accuracy (1-6)">SHA</th>
+                            <th className="py-2 px-2 text-center" title="Stick Handling (1-6)">STH</th>
+                            <th className="py-2 px-2 text-center" title="Passing (1-6)">PAS</th>
+                            <th className="py-2 px-2 text-center" title="Checking (1-6)">CHK</th>
+                            <th className="py-2 px-2 text-center" title="Aggression (1-6)">AGR</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-200 font-mono">
+                          {activeTeamRosterData.skaters.length === 0 ? (
+                            <tr>
+                              <td colSpan={15} className="py-6 text-center italic text-slate-500 font-sans">
+                                No skaters found for {activeRosterTeam.team_name}.
+                              </td>
+                            </tr>
+                          ) : (
+                            activeTeamRosterData.skaters.map(player => (
+                              <tr
+                                key={player.key}
+                                className={
+                                  player.isDraftedNow
+                                    ? 'bg-emerald-50 hover:bg-emerald-100'
+                                    : 'hover:bg-yellow-50'
+                                }
+                              >
+                                <td className="py-2 px-3 font-sans">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Link
+                                      href={`/players?q=${encodeURIComponent(player.name)}${player.playerId ? `&id=${encodeURIComponent(String(player.playerId))}` : ''}`}
+                                      className="font-black uppercase text-black hover:underline"
+                                      title="View in Player Database"
+                                    >
+                                      {player.name}
+                                    </Link>
+                                    {player.isDraftedNow && player.draftBadgeText && (
+                                      <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
+                                        ✓ {player.draftBadgeText}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  <span
+                                    className={`px-1.5 py-0.5 text-[10px] font-black border border-black ${
+                                      player.rolePos === 'D'
+                                        ? 'bg-sky-100 text-sky-950'
+                                        : 'bg-amber-100 text-amber-950'
+                                    }`}
+                                  >
+                                    {player.rolePos}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
+                                  {player.hand}
+                                </td>
+                                <td className="py-2 px-2 text-center text-[11px] text-slate-700">
+                                  {player.weightLbs}
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
+                                    {player.ovr || '-'}
+                                  </span>
+                                </td>
+                                {player.attrs.map(attr => {
+                                  const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                  return (
+                                    <td key={`${player.key}-${attr.short}`} className="py-2 px-1.5 text-center">
+                                      <span
+                                        style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                        className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                        title={
+                                          attr.raw !== undefined
+                                            ? `${attr.label}: ${attr.level}/6 (Raw ${attr.raw})`
+                                            : `${attr.label}: ${attr.level}/6`
+                                        }
+                                      >
+                                        {attr.level || '-'}
+                                      </span>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* GOALIES TABLE */}
+                {(rosterPosFilter === 'ALL' || rosterPosFilter === 'GOALIES') && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-black uppercase text-black bg-sky-200 px-2.5 py-0.5 border border-black">
+                        🥅 Goalies ({activeTeamRosterData.goalies.length})
+                      </span>
+                      <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
+                        AGI &bull; SPD &bull; OFA &bull; DFA &bull; PKC &bull; STR &bull; STL &bull; GVR &bull; GVL
+                      </span>
+                    </div>
+
+                    <div className="bg-white border-2 border-black overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs min-w-[740px]">
+                        <thead>
+                          <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
+                            <th className="py-2 px-3">GOALIE</th>
+                            <th className="py-2 px-2 text-center">POS</th>
+                            <th className="py-2 px-2 text-center">CATCH</th>
+                            <th className="py-2 px-2 text-center">WGT</th>
+                            <th className="py-2 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
+                            <th className="py-2 px-2 text-center" title="Agility (1-6)">AGI</th>
+                            <th className="py-2 px-2 text-center" title="Speed (1-6)">SPD</th>
+                            <th className="py-2 px-2 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                            <th className="py-2 px-2 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                            <th className="py-2 px-2 text-center" title="Puck Control (1-6)">PKC</th>
+                            <th className="py-2 px-2 text-center" title="Stick Right (1-6)">STR</th>
+                            <th className="py-2 px-2 text-center" title="Stick Left (1-6)">STL</th>
+                            <th className="py-2 px-2 text-center" title="Glove Right (1-6)">GVR</th>
+                            <th className="py-2 px-2 text-center" title="Glove Left (1-6)">GVL</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-200 font-mono">
+                          {activeTeamRosterData.goalies.length === 0 ? (
+                            <tr>
+                              <td colSpan={14} className="py-6 text-center italic text-slate-500 font-sans">
+                                No goalies found for {activeRosterTeam.team_name}.
+                              </td>
+                            </tr>
+                          ) : (
+                            activeTeamRosterData.goalies.map(goalie => (
+                              <tr
+                                key={goalie.key}
+                                className={
+                                  goalie.isDraftedNow
+                                    ? 'bg-emerald-50 hover:bg-emerald-100'
+                                    : 'hover:bg-yellow-50'
+                                }
+                              >
+                                <td className="py-2 px-3 font-sans">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Link
+                                      href={`/players?q=${encodeURIComponent(goalie.name)}${goalie.playerId ? `&id=${encodeURIComponent(String(goalie.playerId))}` : ''}`}
+                                      className="font-black uppercase text-black hover:underline"
+                                      title="View in Player Database"
+                                    >
+                                      {goalie.name}
+                                    </Link>
+                                    {goalie.isDraftedNow && goalie.draftBadgeText && (
+                                      <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
+                                        ✓ {goalie.draftBadgeText}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  <span className="px-1.5 py-0.5 text-[10px] font-black border border-black bg-purple-100 text-purple-950">
+                                    G
+                                  </span>
+                                </td>
+                                <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
+                                  {goalie.hand}
+                                </td>
+                                <td className="py-2 px-2 text-center text-[11px] text-slate-700">
+                                  {goalie.weightLbs}
+                                </td>
+                                <td className="py-2 px-2 text-center">
+                                  <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
+                                    {goalie.ovr || '-'}
+                                  </span>
+                                </td>
+                                {goalie.attrs.map(attr => {
+                                  const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                  return (
+                                    <td key={`${goalie.key}-${attr.short}`} className="py-2 px-1.5 text-center">
+                                      <span
+                                        style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                        className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                        title={`${attr.label}: ${attr.level}/6`}
+                                      >
+                                        {attr.level || '-'}
+                                      </span>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* LIVE DRAFT WAR ROOM CHAT & ONLINE COACHES ROSTER */}
             <div className="bg-[#fdfaf5] border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
