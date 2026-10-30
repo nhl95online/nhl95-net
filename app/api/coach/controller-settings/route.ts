@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -8,12 +11,18 @@ const serviceRoleKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   '';
 
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+  Pragma: 'no-cache',
+  Expires: '0'
+};
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const coachId = searchParams.get('coachId');
     if (!coachId) {
-      return NextResponse.json({ error: 'Missing coachId' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing coachId' }, { status: 400, headers: NO_CACHE_HEADERS });
     }
 
     const cleanId = String(coachId).replace(/[^0-9a-zA-Z_-]/g, '');
@@ -23,17 +32,23 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase.storage.from('roms').download(storagePath);
 
     if (error || !data) {
-      return NextResponse.json({ config: null }, { status: 200 });
+      return NextResponse.json({ config: null }, { status: 200, headers: NO_CACHE_HEADERS });
     }
 
     const text = await data.text();
     const parsed = JSON.parse(text);
-    return NextResponse.json({
-      config: parsed.config || parsed,
-      updatedAt: parsed.updatedAt || null
-    });
+    const cfg = parsed.config || parsed;
+    const updatedAt = parsed.updatedAt || cfg?.updatedAt || null;
+
+    return NextResponse.json(
+      {
+        config: cfg,
+        updatedAt
+      },
+      { status: 200, headers: NO_CACHE_HEADERS }
+    );
   } catch (err: any) {
-    return NextResponse.json({ config: null, error: err?.message }, { status: 200 });
+    return NextResponse.json({ config: null, error: err?.message }, { status: 200, headers: NO_CACHE_HEADERS });
   }
 }
 
@@ -47,17 +62,28 @@ export async function POST(req: NextRequest) {
     };
 
     if (!coachId || !config) {
-      return NextResponse.json({ error: 'Missing coachId or controller config' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Missing coachId or controller config' },
+        { status: 400, headers: NO_CACHE_HEADERS }
+      );
     }
 
     const cleanId = String(coachId).replace(/[^0-9a-zA-Z_-]/g, '');
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
+    const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
+    const enrichedConfig = {
+      ...config,
+      updatedAt: config.updatedAt || nowMs
+    };
+
     const payload = {
       coachId: Number(coachId) || cleanId,
       coachName: coachName || `Coach #${cleanId}`,
-      config,
-      updatedAt: new Date().toISOString()
+      config: enrichedConfig,
+      updatedAt: nowIso,
+      updatedAtMs: enrichedConfig.updatedAt
     };
 
     const storagePath = `coach-configs/coach_${cleanId}.json`;
@@ -65,22 +91,36 @@ export async function POST(req: NextRequest) {
 
     const { error } = await supabase.storage.from('roms').upload(storagePath, bytes, {
       contentType: 'application/json',
+      cacheControl: '0',
       upsert: true
     });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // Fallback: if upsert failed due to storage policy, try remove then upload
+      await supabase.storage.from('roms').remove([storagePath]);
+      const retry = await supabase.storage.from('roms').upload(storagePath, bytes, {
+        contentType: 'application/json',
+        cacheControl: '0',
+        upsert: true
+      });
+      if (retry.error) {
+        return NextResponse.json({ error: retry.error.message }, { status: 500, headers: NO_CACHE_HEADERS });
+      }
     }
 
-    return NextResponse.json({
-      success: true,
-      coachId: payload.coachId,
-      updatedAt: payload.updatedAt
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        coachId: payload.coachId,
+        updatedAt: payload.updatedAt,
+        updatedAtMs: payload.updatedAtMs
+      },
+      { status: 200, headers: NO_CACHE_HEADERS }
+    );
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message || 'Failed to save controller settings' },
-      { status: 500 }
+      { status: 500, headers: NO_CACHE_HEADERS }
     );
   }
 }

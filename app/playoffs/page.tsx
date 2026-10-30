@@ -1997,105 +1997,69 @@ export default function PlayoffBracket() {
         return null;
       };
 
-      const assignSlotIfEmpty = (targetMatch: PlayoffMatch, side: 'home' | 'away', adv?: AdvancingTeam | null) => {
-        if (!adv) return;
+      const advanceBracketPair = (targetLabel: string, topFeederLabel: string, botFeederLabel: string) => {
+        const targetMatch = findOrCreateMatch(targetLabel);
         const hasPlayedGames = (targetMatch.results || []).length > 0;
         if (hasPlayedGames) return;
-        if (side === 'home' && !targetMatch.home_team_id) {
-          targetMatch.home_team_id = adv.team_id;
-          targetMatch.home_team_seed = adv.seed !== 99 ? adv.seed : undefined;
-          targetMatch.home_team = adv.team;
-        } else if (side === 'away' && !targetMatch.away_team_id) {
-          targetMatch.away_team_id = adv.team_id;
-          targetMatch.away_team_seed = adv.seed !== 99 ? adv.seed : undefined;
-          targetMatch.away_team = adv.team;
+
+        const wTop = getWinnerFromMatch(
+          compiledMatches.find(m => norm(m.match_label) === norm(topFeederLabel) || norm(m.round_name) === norm(topFeederLabel))
+        );
+        const wBot = getWinnerFromMatch(
+          compiledMatches.find(m => norm(m.match_label) === norm(botFeederLabel) || norm(m.round_name) === norm(botFeederLabel))
+        );
+
+        if (wTop && wBot) {
+          const ordered = [wTop, wBot].sort((a, b) => a.seed - b.seed);
+          targetMatch.home_team_id = ordered[0].team_id;
+          targetMatch.home_team_seed = ordered[0].seed !== 99 ? ordered[0].seed : undefined;
+          targetMatch.home_team = ordered[0].team;
+          targetMatch.away_team_id = ordered[1].team_id;
+          targetMatch.away_team_seed = ordered[1].seed !== 99 ? ordered[1].seed : undefined;
+          targetMatch.away_team = ordered[1].team;
+          return;
+        }
+
+        const singleAdv = wTop || wBot;
+        if (!singleAdv) return;
+        if (
+          Number(targetMatch.home_team_id) === singleAdv.team_id ||
+          Number(targetMatch.away_team_id) === singleAdv.team_id
+        ) {
+          return;
+        }
+
+        const preferredSide: 'home' | 'away' = wTop ? 'home' : 'away';
+        if (preferredSide === 'home' && !targetMatch.home_team_id) {
+          targetMatch.home_team_id = singleAdv.team_id;
+          targetMatch.home_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
+          targetMatch.home_team = singleAdv.team;
+        } else if (preferredSide === 'away' && !targetMatch.away_team_id) {
+          targetMatch.away_team_id = singleAdv.team_id;
+          targetMatch.away_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
+          targetMatch.away_team = singleAdv.team;
+        } else if (!targetMatch.home_team_id) {
+          targetMatch.home_team_id = singleAdv.team_id;
+          targetMatch.home_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
+          targetMatch.home_team = singleAdv.team;
+        } else if (!targetMatch.away_team_id) {
+          targetMatch.away_team_id = singleAdv.team_id;
+          targetMatch.away_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
+          targetMatch.away_team = singleAdv.team;
         }
       };
 
       const hasQuarterFinals = compiledMatches.some(m => norm(m.match_label).includes('quarterfinals'));
       if (hasQuarterFinals) {
-        // 1. East Quarterfinals (QF 1..4) -> East Semifinals (SF 1, SF 2) with Re-Seeding (#1 vs lowest remaining seed)
-        const eastQFWinners = ['Quarter Finals 1', 'Quarter Finals 2', 'Quarter Finals 3', 'Quarter Finals 4']
-          .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
-          .filter(Boolean) as AdvancingTeam[];
-        eastQFWinners.sort((a, b) => a.seed - b.seed);
-
-        if (eastQFWinners.length > 0) {
-          const sf1 = findOrCreateMatch('Semi Finals 1');
-          const sf2 = findOrCreateMatch('Semi Finals 2');
-          if (eastQFWinners.length === 4) {
-            assignSlotIfEmpty(sf1, 'home', eastQFWinners[0]);
-            assignSlotIfEmpty(sf1, 'away', eastQFWinners[3]);
-            assignSlotIfEmpty(sf2, 'home', eastQFWinners[1]);
-            assignSlotIfEmpty(sf2, 'away', eastQFWinners[2]);
-          } else {
-            assignSlotIfEmpty(sf1, 'home', eastQFWinners[0]);
-            assignSlotIfEmpty(sf2, 'home', eastQFWinners[1]);
-            assignSlotIfEmpty(sf2, 'away', eastQFWinners[2]);
-          }
-        }
-
-        // 2. West Quarterfinals (QF 5..8) -> West Semifinals (SF 3, SF 4) with Re-Seeding (#1 vs lowest remaining seed)
-        const westQFWinners = ['Quarter Finals 5', 'Quarter Finals 6', 'Quarter Finals 7', 'Quarter Finals 8']
-          .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
-          .filter(Boolean) as AdvancingTeam[];
-        westQFWinners.sort((a, b) => a.seed - b.seed);
-
-        if (westQFWinners.length > 0) {
-          const sf3 = findOrCreateMatch('Semi Finals 3');
-          const sf4 = findOrCreateMatch('Semi Finals 4');
-          if (westQFWinners.length === 4) {
-            assignSlotIfEmpty(sf3, 'home', westQFWinners[0]);
-            assignSlotIfEmpty(sf3, 'away', westQFWinners[3]);
-            assignSlotIfEmpty(sf4, 'home', westQFWinners[1]);
-            assignSlotIfEmpty(sf4, 'away', westQFWinners[2]);
-          } else {
-            assignSlotIfEmpty(sf3, 'home', westQFWinners[0]);
-            assignSlotIfEmpty(sf4, 'home', westQFWinners[1]);
-            assignSlotIfEmpty(sf4, 'away', westQFWinners[2]);
-          }
-        }
+        advanceBracketPair('Semi Finals 1', 'Quarter Finals 1', 'Quarter Finals 2');
+        advanceBracketPair('Semi Finals 2', 'Quarter Finals 3', 'Quarter Finals 4');
+        advanceBracketPair('Semi Finals 3', 'Quarter Finals 5', 'Quarter Finals 6');
+        advanceBracketPair('Semi Finals 4', 'Quarter Finals 7', 'Quarter Finals 8');
       }
 
-      // 3. Semifinals -> Conference Finals (Re-seeded so higher seed gets Home / top slot)
-      const eastSFWinners = ['Semi Finals 1', 'Semi Finals 2']
-        .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
-        .filter(Boolean) as AdvancingTeam[];
-      eastSFWinners.sort((a, b) => a.seed - b.seed);
-      if (eastSFWinners.length > 0) {
-        const cf1 = findOrCreateMatch('Conference Finals 1');
-        if (cf1.home_team_id && !cf1.away_team_id && eastSFWinners.length === 1 && cf1.home_team_id !== eastSFWinners[0].team_id) {
-          assignSlotIfEmpty(cf1, 'away', eastSFWinners[0]);
-        } else {
-          assignSlotIfEmpty(cf1, 'home', eastSFWinners[0]);
-          assignSlotIfEmpty(cf1, 'away', eastSFWinners[1]);
-        }
-      }
-
-      const westSFWinners = ['Semi Finals 3', 'Semi Finals 4']
-        .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
-        .filter(Boolean) as AdvancingTeam[];
-      westSFWinners.sort((a, b) => a.seed - b.seed);
-      if (westSFWinners.length > 0) {
-        const cf2 = findOrCreateMatch('Conference Finals 2');
-        if (cf2.home_team_id && !cf2.away_team_id && westSFWinners.length === 1 && cf2.home_team_id !== westSFWinners[0].team_id) {
-          assignSlotIfEmpty(cf2, 'away', westSFWinners[0]);
-        } else {
-          assignSlotIfEmpty(cf2, 'home', westSFWinners[0]);
-          assignSlotIfEmpty(cf2, 'away', westSFWinners[1]);
-        }
-      }
-
-      // 4. Conference Finals -> Championship Finals
-      const cfWinners = ['Conference Finals 1', 'Conference Finals 2']
-        .map(lbl => getWinnerFromMatch(compiledMatches.find(m => norm(m.match_label) === norm(lbl) || norm(m.round_name) === norm(lbl))))
-        .filter(Boolean) as AdvancingTeam[];
-      cfWinners.sort((a, b) => a.seed - b.seed);
-      if (cfWinners.length > 0) {
-        const finals = findOrCreateMatch('Finals');
-        assignSlotIfEmpty(finals, 'home', cfWinners[0]);
-        assignSlotIfEmpty(finals, 'away', cfWinners[1]);
-      }
+      advanceBracketPair('Conference Finals 1', 'Semi Finals 1', 'Semi Finals 2');
+      advanceBracketPair('Conference Finals 2', 'Semi Finals 3', 'Semi Finals 4');
+      advanceBracketPair('Finals', 'Conference Finals 1', 'Conference Finals 2');
 
       setMatches(compiledMatches);
     } catch (err) {

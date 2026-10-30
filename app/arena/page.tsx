@@ -270,6 +270,8 @@ function findMatchingBucketFile(rom: ArenaRomItem, bucketFiles: string[]): strin
 // ============================================================================
 export interface CoachControllerConfig {
   presetName: string;
+  preferredPadIndex?: number | null;
+  updatedAt?: number;
   keyboard: {
     b: string;
     a: string;
@@ -516,13 +518,37 @@ function ControllerTesterPanel({
   }, [listeningTarget, controllerConfig, onChangeConfig]);
 
   // Listen for USB/Bluetooth gamepad button press when remapping a controller button
+  // Record which buttons were already held when listening started so held/noisy buttons never auto-trigger
+  const initialPressedButtonsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!listeningTarget || listeningTarget.type !== 'gamepad') {
+      initialPressedButtonsRef.current.clear();
+      return;
+    }
+    const initiallyHeld = new Set<number>();
+    activeBtns.forEach((isDown, idx) => {
+      if (isDown) initiallyHeld.add(idx);
+    });
+    initialPressedButtonsRef.current = initiallyHeld;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listeningTarget]);
+
   useEffect(() => {
     if (!listeningTarget || listeningTarget.type !== 'gamepad') return;
-    const pressedIdx = activeBtns.findIndex(Boolean);
+    // Release any button from initialPressedButtonsRef once it is released
+    activeBtns.forEach((isDown, idx) => {
+      if (!isDown && initialPressedButtonsRef.current.has(idx)) {
+        initialPressedButtonsRef.current.delete(idx);
+      }
+    });
+    const pressedIdx = activeBtns.findIndex(
+      (isDown, idx) => Boolean(isDown) && !initialPressedButtonsRef.current.has(idx)
+    );
     if (pressedIdx !== -1) {
       onChangeConfig({
         ...controllerConfig,
         presetName: 'Custom Coach Mapping',
+        updatedAt: Date.now(),
         gamepad: {
           ...controllerConfig.gamepad,
           [listeningTarget.control]: pressedIdx
@@ -1069,8 +1095,43 @@ function ArenaContent() {
     });
   }, [bucketFiles, catalog]);
 
-  // Arena Sub-navigation Tab ('ice' | 'lobby' | 'vault' | 'controller' | 'boxscore')
-  const [activeArenaTab, setActiveArenaTab] = useState<'ice' | 'lobby' | 'vault' | 'controller' | 'boxscore'>('ice');
+  // Arena Sub-navigation Tab ('ice' | 'lobby' | 'records' | 'vault' | 'controller' | 'boxscore')
+  const [activeArenaTab, setActiveArenaTab] = useState<'ice' | 'lobby' | 'records' | 'vault' | 'controller' | 'boxscore'>('ice');
+
+  // Adaptive AI CPU & All-Time Arena Records State
+  const [arenaRecordsData, setArenaRecordsData] = useState<{
+    aiModel: any;
+    coachLeaderboard: any[];
+    allTimeRecords: any;
+    recentArenaMatches: any[];
+    totalGamesAnalyzed: number;
+  } | null>(null);
+  const [isLoadingRecords, setIsLoadingRecords] = useState<boolean>(false);
+  const [isRecordingArenaMatch, setIsRecordingArenaMatch] = useState<boolean>(false);
+  const [coachSearchFilter, setCoachSearchFilter] = useState<string>('');
+  const [coachSortField, setCoachSortField] = useState<
+    'points' | 'wins' | 'goalsFor' | 'winPct' | 'gpg' | 'checks' | 'oneTimerGoals' | 'shutouts'
+  >('points');
+  const [aiBotPort2Takeover, setAiBotPort2Takeover] = useState<boolean>(false);
+  const [liveAiTelemetry, setLiveAiTelemetry] = useState<{
+    detectedPlaystyle: string;
+    activeCounter: string;
+    oneTimerInputCombos: number;
+    rushBurstCount: number;
+    eastWestCrosses: number;
+    homeOneTimerTries: number;
+    homeBreakawayTries: number;
+    homeChecks: number;
+    weights: {
+      oneTimerDefense: number;
+      breakawayTrap: number;
+      forecheckAggression: number;
+      faceoffCounter: number;
+      slotLockdown: number;
+    };
+  } | null>(null);
+  const lastAiLearnTickAtRef = useRef<number>(0);
+  const lastRecordedMatchSigRef = useRef<string>('');
 
   // Emulator loading & runtime state (does NOT auto-start until user selects a ROM or clicks Play)
   const [hasLaunchedGame, setHasLaunchedGame] = useState<boolean>(false);
@@ -1107,8 +1168,12 @@ function ArenaContent() {
   const lobbyChannelRef = useRef<any>(null);
   const roomChannelRef = useRef<any>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const iceContainerRef = useRef<HTMLDivElement | null>(null);
   const localRomInputRef = useRef<HTMLInputElement | null>(null);
   const loadStateInputRef = useRef<HTMLInputElement | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestStateRef = useRef<Uint8Array | null>(null);
+  const pendingStateResolversRef = useRef<Array<(bytes: Uint8Array | null) => void>>([]);
 
   // Vault Browser filters — default to 'cloud' so the user sees the exact files in the "roms" bucket first
   const [vaultCategory, setVaultCategory] = useState<'all' | 'cloud' | 'league' | 'nhl-history' | 'misc'>('cloud');
@@ -1127,29 +1192,38 @@ function ArenaContent() {
     text: string;
   } | null>(null);
 
-  // Sync active controller config to window & running emulator iframe
-  useEffect(() => {
+  const pushControllerConfigToIframe = useCallback((cfg: CoachControllerConfig) => {
     if (typeof window !== 'undefined') {
-      (window as any).__NHL95_CONTROLLER_CONFIG = controllerConfig;
+      (window as any).__NHL95_CONTROLLER_CONFIG = cfg;
+      try {
+        localStorage.setItem('nhl95_controller_config_active', JSON.stringify(cfg));
+      } catch {}
     }
     try {
       iframeRef.current?.contentWindow?.postMessage(
         {
           type: 'NHL95_CONTROLLER_CONFIG_UPDATE',
-          config: controllerConfig
+          config: cfg
         },
         '*'
       );
     } catch {
       // ignore
     }
-  }, [controllerConfig]);
+  }, []);
 
-  // Auto-load coach's saved controller settings when signed in
+  // Sync active controller config to window & running emulator iframe
+  useEffect(() => {
+    pushControllerConfigToIframe(controllerConfig);
+  }, [controllerConfig, pushControllerConfigToIframe]);
+
+  // Auto-load coach's saved controller settings when signed in (without overwriting newer local changes!)
   useEffect(() => {
     if (!isLoggedIn || !currentCoach?.coach_id) {
       try {
-        const guestLocal = localStorage.getItem('nhl95_controller_config_guest');
+        const guestLocal =
+          localStorage.getItem('nhl95_controller_config_guest') ||
+          localStorage.getItem('nhl95_controller_config_active');
         if (guestLocal) {
           const parsed = JSON.parse(guestLocal);
           if (parsed && parsed.keyboard && parsed.gamepad) {
@@ -1162,6 +1236,7 @@ function ArenaContent() {
 
     const coachId = currentCoach.coach_id;
     const localKey = `nhl95_controller_config_${coachId}`;
+    let localParsed: CoachControllerConfig | null = null;
 
     // Load instant local cache first
     try {
@@ -1169,26 +1244,49 @@ function ArenaContent() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed && parsed.keyboard && parsed.gamepad) {
+          localParsed = parsed;
           setControllerConfig(parsed);
         }
       }
     } catch {}
 
-    // Fetch cloud-saved controller settings from Supabase for this coach
+    // Fetch cloud-saved controller settings from Supabase for this coach (cache-busted)
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/coach/controller-settings?coachId=${encodeURIComponent(String(coachId))}`);
+        const res = await fetch(
+          `/api/coach/controller-settings?coachId=${encodeURIComponent(String(coachId))}&t=${Date.now()}`,
+          { cache: 'no-store' }
+        );
         const data = await res.json();
         if (!cancelled && data?.config && data.config.keyboard && data.config.gamepad) {
-          setControllerConfig(data.config);
-          try {
-            localStorage.setItem(localKey, JSON.stringify(data.config));
-          } catch {}
-          setControllerSaveBanner({
-            type: 'info',
-            text: `Loaded saved controller settings for Coach ${currentCoach.coach_name} (${data.config.presetName || 'Custom'}).`
-          });
+          const cloudCfg: CoachControllerConfig = data.config;
+          const localTime = Number(localParsed?.updatedAt || 0);
+          const cloudTime = Number(cloudCfg.updatedAt || (data.updatedAt ? Date.parse(data.updatedAt) : 0) || 0);
+
+          // Only apply cloud config if local cache is empty or older than cloud config
+          if (!localParsed || cloudTime >= localTime) {
+            setControllerConfig(cloudCfg);
+            try {
+              localStorage.setItem(localKey, JSON.stringify(cloudCfg));
+              localStorage.setItem('nhl95_controller_config_active', JSON.stringify(cloudCfg));
+            } catch {}
+            setControllerSaveBanner({
+              type: 'info',
+              text: `Loaded saved controller settings for Coach ${currentCoach.coach_name} (${cloudCfg.presetName || 'Custom'}).`
+            });
+          } else if (localParsed && localTime > cloudTime) {
+            // Local config is newer than cloud — push local config up to cloud so it never reverts!
+            fetch('/api/coach/controller-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                coachId,
+                coachName: currentCoach.coach_name,
+                config: localParsed
+              })
+            }).catch(() => {});
+          }
         }
       } catch {
         // keep cached or default
@@ -1202,16 +1300,47 @@ function ArenaContent() {
 
   const handleUpdateControllerConfig = useCallback(
     (next: CoachControllerConfig) => {
-      setControllerConfig(next);
+      const stamped: CoachControllerConfig = {
+        ...next,
+        updatedAt: Date.now()
+      };
+      setControllerConfig(stamped);
       try {
+        localStorage.setItem('nhl95_controller_config_active', JSON.stringify(stamped));
         const key =
           isLoggedIn && currentCoach?.coach_id
             ? `nhl95_controller_config_${currentCoach.coach_id}`
             : 'nhl95_controller_config_guest';
-        localStorage.setItem(key, JSON.stringify(next));
+        localStorage.setItem(key, JSON.stringify(stamped));
       } catch {}
+
+      // Auto-save to cloud profile when logged in so changes never revert if coach forgets to click Save
+      if (isLoggedIn && currentCoach?.coach_id) {
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        const cId = currentCoach.coach_id;
+        const cName = currentCoach.coach_name;
+        autoSaveTimerRef.current = setTimeout(async () => {
+          try {
+            const res = await fetch('/api/coach/controller-settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                coachId: cId,
+                coachName: cName,
+                config: stamped
+              })
+            });
+            if (res.ok) {
+              setControllerSaveBanner({
+                type: 'success',
+                text: `Auto-saved controller settings (${stamped.presetName}) for Coach ${cName}.`
+              });
+            }
+          } catch {}
+        }, 450);
+      }
     },
-    [isLoggedIn, currentCoach?.coach_id]
+    [isLoggedIn, currentCoach?.coach_id, currentCoach?.coach_name]
   );
 
   const handleSaveCoachControllerConfig = useCallback(async () => {
@@ -1223,8 +1352,14 @@ function ArenaContent() {
     setIsSavingControllerConfig(true);
     setControllerSaveBanner(null);
     try {
+      const stamped: CoachControllerConfig = {
+        ...controllerConfig,
+        updatedAt: Date.now()
+      };
+      setControllerConfig(stamped);
       const localKey = `nhl95_controller_config_${currentCoach.coach_id}`;
-      localStorage.setItem(localKey, JSON.stringify(controllerConfig));
+      localStorage.setItem(localKey, JSON.stringify(stamped));
+      localStorage.setItem('nhl95_controller_config_active', JSON.stringify(stamped));
 
       const res = await fetch('/api/coach/controller-settings', {
         method: 'POST',
@@ -1232,7 +1367,7 @@ function ArenaContent() {
         body: JSON.stringify({
           coachId: currentCoach.coach_id,
           coachName: currentCoach.coach_name,
-          config: controllerConfig
+          config: stamped
         })
       });
       const data = await res.json();
@@ -1242,7 +1377,7 @@ function ArenaContent() {
 
       setControllerSaveBanner({
         type: 'success',
-        text: `Saved controller settings (${controllerConfig.presetName}) to Coach ${currentCoach.coach_name}'s profile!`
+        text: `Saved controller settings (${stamped.presetName}) to Coach ${currentCoach.coach_name}'s profile!`
       });
     } catch (err: any) {
       setControllerSaveBanner({
@@ -1283,6 +1418,170 @@ function ArenaContent() {
     }
     loadTeams();
   }, []);
+
+  // Load All-Time Arena Records, Coach Leaderboard & Adaptive AI Brain from /api/arena-records
+  const refreshArenaRecords = useCallback(async () => {
+    setIsLoadingRecords(true);
+    try {
+      const res = await fetch(`/api/arena-records?t=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data) {
+        setArenaRecordsData(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsLoadingRecords(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshArenaRecords();
+  }, [refreshArenaRecords]);
+
+  // Sync the Adaptive 95-AI Neural CPU weights & Bot takeover state into the emulator iframe
+  const pushAiConfigToIframe = useCallback(
+    (botOverride?: boolean) => {
+      const aiModel = arenaRecordsData?.aiModel;
+      const myProfile = aiModel?.coachProfiles?.[myDisplayName];
+      const weights = myProfile?.counterWeights || aiModel?.weights || {
+        oneTimerDefense: 0.55,
+        breakawayTrap: 0.55,
+        forecheckAggression: 0.55,
+        faceoffCounter: 0.55,
+        slotLockdown: 0.55
+      };
+      const takeover = typeof botOverride === 'boolean' ? botOverride : aiBotPort2Takeover;
+      try {
+        iframeRef.current?.contentWindow?.postMessage(
+          {
+            type: 'NHL95_AI_CONFIG_UPDATE',
+            aiConfig: {
+              enabled: netplayRole === 'solo',
+              botPort2Takeover: takeover,
+              generation: aiModel?.generation || 1,
+              eloRating: aiModel?.eloRating || 1500,
+              activeStrategy: myProfile?.aiCounterStrategy || 'Adaptive Balanced',
+              weights
+            }
+          },
+          '*'
+        );
+      } catch {}
+    },
+    [arenaRecordsData?.aiModel, myDisplayName, aiBotPort2Takeover, netplayRole]
+  );
+
+  useEffect(() => {
+    pushAiConfigToIframe(aiBotPort2Takeover);
+  }, [aiBotPort2Takeover, pushAiConfigToIframe]);
+
+  // Record a parsed game to /api/arena-records to update Coach Records, All-Time Arena Records & train the AI CPU
+  const recordParsedGameToArenaRecords = useCallback(
+    async (game: ParsedGame, manualTrigger = false) => {
+      try {
+        const homeGoals = Number(game.homeTeam?.goals) || 0;
+        const awayGoals = Number(game.awayTeam?.goals) || 0;
+        const totalShots = (Number(game.homeTeam?.shots) || 0) + (Number(game.awayTeam?.shots) || 0);
+        if (homeGoals === 0 && awayGoals === 0 && totalShots === 0) return;
+
+        const homeCode = (game.homeTeam?.teamCode || 'HOME').toUpperCase();
+        const awayCode = (game.awayTeam?.teamCode || 'AWAY').toUpperCase();
+        const sig = `${selectedRom.id}_${homeCode}_${awayCode}_${homeGoals}_${awayGoals}_${totalShots}`;
+        if (!manualTrigger && lastRecordedMatchSigRef.current === sig) return;
+        lastRecordedMatchSigRef.current = sig;
+
+        setIsRecordingArenaMatch(true);
+        const homeWCoach = W_LEAGUE_COACH_MAP[homeCode]?.coach_name;
+        const awayWCoach = W_LEAGUE_COACH_MAP[awayCode]?.coach_name;
+
+        const isVsAi = netplayRole === 'solo';
+        const homeCoachName =
+          netplayRole === 'guest'
+            ? netplayOpponentName || homeWCoach || myDisplayName
+            : myDisplayName || homeWCoach || 'Home Coach';
+        const awayCoachName = isVsAi
+          ? '95-AI Neural CPU'
+          : netplayRole === 'guest'
+          ? myDisplayName
+          : netplayOpponentName || awayWCoach || 'Away Coach';
+
+        const res = await fetch('/api/arena-records', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'record-match',
+            romId: selectedRom.id.toUpperCase(),
+            seasonLabel: `Arena (${selectedRom.id.toUpperCase()})`,
+            isVsAi,
+            homeCoach: homeCoachName,
+            awayCoach: awayCoachName,
+            homeTeam: homeCode,
+            awayTeam: awayCode,
+            homeGoals,
+            awayGoals,
+            isOvertime:
+              (Number(game.homeTeam?.goalsOT) || 0) > 0 ||
+              (Number(game.awayTeam?.goalsOT) || 0) > 0 ||
+              (Number(game.homeTeam?.shotsOT) || 0) > 0 ||
+              (Number(game.awayTeam?.shotsOT) || 0) > 0,
+            homeShots: Number(game.homeTeam?.shots) || 0,
+            awayShots: Number(game.awayTeam?.shots) || 0,
+            homeChecks: Number(game.homeTeam?.checks) || 0,
+            awayChecks: Number(game.awayTeam?.checks) || 0,
+            homeOneTimerGoals: Number(game.homeTeam?.oneTimerGoals) || 0,
+            homeOneTimerTries: Number(game.homeTeam?.oneTimerTries) || 0,
+            awayOneTimerGoals: Number(game.awayTeam?.oneTimerGoals) || 0,
+            awayOneTimerTries: Number(game.awayTeam?.oneTimerTries) || 0,
+            homeBreakawayGoals: Number(game.homeTeam?.breakawayGoals) || 0,
+            homeBreakawayTries: Number(game.homeTeam?.breakawayTries) || 0,
+            awayBreakawayGoals: Number(game.awayTeam?.breakawayGoals) || 0,
+            awayBreakawayTries: Number(game.awayTeam?.breakawayTries) || 0,
+            homeFaceoffs: Number(game.homeTeam?.faceoffWins) || 0,
+            awayFaceoffs: Number(game.awayTeam?.faceoffWins) || 0,
+            homeAttackZoneSec: (() => {
+              const p = String(game.homeTeam?.attackZoneTime || '0:00').split(':');
+              return p.length === 2 ? (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0) : 0;
+            })(),
+            awayAttackZoneSec: (() => {
+              const p = String(game.awayTeam?.attackZoneTime || '0:00').split(':');
+              return p.length === 2 ? (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0) : 0;
+            })(),
+            homePassPct:
+              (Number(game.homeTeam?.passTries) || 0) > 0
+                ? Math.round(((Number(game.homeTeam?.passComps) || 0) / Number(game.homeTeam?.passTries)) * 100)
+                : 0,
+            awayPassPct:
+              (Number(game.awayTeam?.passTries) || 0) > 0
+                ? Math.round(((Number(game.awayTeam?.passComps) || 0) / Number(game.awayTeam?.passTries)) * 100)
+                : 0,
+            goals: (game.goals || []).map((g: any) => ({
+              period: Number(g.period) || 1,
+              time: String(g.time || '0:00'),
+              seconds: typeof g.seconds === 'number' ? g.seconds : 0,
+              team: String(g.team || ''),
+              scorer: String(g.scorer || '')
+            }))
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data?.success) {
+          await refreshArenaRecords();
+          if (manualTrigger) {
+            setParseStatusMessage({
+              type: 'success',
+              text: `Recorded official Arena match (${awayCode} ${awayGoals} @ ${homeCode} ${homeGoals}) & trained 95-AI Neural CPU (Gen ${data.aiModel?.generation || 1})!`
+            });
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsRecordingArenaMatch(false);
+      }
+    },
+    [selectedRom.id, netplayRole, netplayOpponentName, myDisplayName, refreshArenaRecords]
+  );
 
   // Resolve the selected ROM against the Supabase `roms` bucket and stream extracted .bin via /api/arena-rom-stream
   useEffect(() => {
@@ -1566,6 +1865,7 @@ function ArenaContent() {
     (rawBytes: Uint8Array, sourceLabel: string) => {
       try {
         const normalizedBytes = ensureRetroArchHeader(rawBytes);
+        latestStateRef.current = normalizedBytes;
         setCapturedStateBytes(normalizedBytes);
         setCapturedFileName(sourceLabel);
 
@@ -1576,6 +1876,7 @@ function ArenaContent() {
           type: 'success',
           text: `Parsed ${game.awayTeam.teamCode} (${game.awayTeam.goals}) @ ${game.homeTeam.teamCode} (${game.homeTeam.goals}) from ${sourceLabel}!`
         });
+        recordParsedGameToArenaRecords(game, false);
       } catch (err: any) {
         setParseStatusMessage({
           type: 'error',
@@ -1583,31 +1884,313 @@ function ArenaContent() {
         });
       }
     },
-    [selectedSeasonConfigId]
+    [selectedSeasonConfigId, recordParsedGameToArenaRecords]
   );
+
+  // Toggle Fullscreen for both Host and Guest Coaches
+  const handleToggleFullscreen = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const doc = document as any;
+    const fsEl = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement;
+    if (fsEl) {
+      const exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen;
+      if (exit) {
+        try { exit.call(doc); } catch {}
+      }
+      return;
+    }
+    const container = iceContainerRef.current as any;
+    if (container) {
+      const req = container.requestFullscreen || container.webkitRequestFullscreen || container.mozRequestFullScreen;
+      if (req) {
+        try {
+          req.call(container);
+          return;
+        } catch {}
+      }
+    }
+    try {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'NHL95_TOGGLE_FULLSCREEN' }, '*');
+    } catch {}
+  }, []);
+
+  // Helper to obtain the freshest Save State bytes for EITHER Host OR Guest Coach!
+  const obtainLatestSaveStateBytes = useCallback(async (): Promise<Uint8Array | null> => {
+    try {
+      const iframeWin = iframeRef.current?.contentWindow as any;
+      const ejs = iframeWin?.EJS_emulator;
+      if (ejs && ejs.gameManager && typeof ejs.gameManager.getState === 'function') {
+        const liveRaw: Uint8Array = ejs.gameManager.getState();
+        if (liveRaw && liveRaw.length >= 52000) {
+          const normalized = ensureRetroArchHeader(liveRaw);
+          latestStateRef.current = normalized;
+          setCapturedStateBytes(normalized);
+          const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+          setCapturedFileName(`${selectedRom.id.toUpperCase()}_arena_${stamp}.state`);
+          // Also sync to any connected Guests in the room
+          try {
+            iframeWin.postMessage({ type: 'NHL95_CAPTURE_AND_SYNC_STATE', reason: 'host-capture' }, '*');
+          } catch {}
+          return normalized;
+        }
+      }
+    } catch {}
+
+    // If Guest in an online Netplay Room, request an instant state snapshot from the Host (with 1.8s timeout fallback to cached state)
+    if (netplayRole === 'guest') {
+      const freshFromHost = await new Promise<Uint8Array | null>(resolve => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve(null);
+          }
+        }, 1800);
+
+        pendingStateResolversRef.current.push((bytes: Uint8Array | null) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(bytes);
+          }
+        });
+
+        try {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: 'NHL95_REQUEST_HOST_SAVESTATE', reason: 'guest-demand' },
+            '*'
+          );
+        } catch {}
+        try {
+          roomChannelRef.current?.send({
+            type: 'broadcast',
+            event: 'netplay-signal',
+            payload: { kind: 'request-savestate', guestId: myPeerId, reason: 'guest-demand' }
+          });
+        } catch {}
+      });
+
+      if (freshFromHost && freshFromHost.length >= 52000) {
+        return freshFromHost;
+      }
+    }
+
+    return latestStateRef.current || capturedStateBytes;
+  }, [netplayRole, myPeerId, selectedRom.id, capturedStateBytes]);
+
+  // 1-Click Capture Save State directly from EmulatorJS (Host) OR Synced Stream (Guest)
+  const handleCaptureLiveBoxscore = useCallback(async () => {
+    try {
+      const stateBytes = await obtainLatestSaveStateBytes();
+      if (!stateBytes || stateBytes.length < 52000) {
+        setParseStatusMessage({
+          type: 'error',
+          text: 'Emulator is still booting or no active game state found yet. Start a game on the ice first, then click Capture Boxscore!'
+        });
+        setActiveArenaTab('boxscore');
+        return;
+      }
+
+      const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+      const fileName = `${selectedRom.id.toUpperCase()}_arena_${stamp}.state`;
+      parseAndDisplayStateBuffer(stateBytes, fileName);
+      setActiveArenaTab('boxscore');
+    } catch (err: any) {
+      setParseStatusMessage({
+        type: 'error',
+        text: err?.message || 'Failed to capture live state from the match.'
+      });
+      setActiveArenaTab('boxscore');
+    }
+  }, [obtainLatestSaveStateBytes, parseAndDisplayStateBuffer, selectedRom.id]);
+
+  const handleDownloadCapturedState = () => {
+    const bytes = capturedStateBytes || latestStateRef.current;
+    if (!bytes) return;
+    const blob = new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = capturedFileName || `${selectedRom.id.toUpperCase()}.state`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // 1-Click Send Save State directly to the Discord Save State Channel (Works for BOTH Host & Guest Coaches!)
+  const handleSendStateToDiscord = useCallback(async () => {
+    setIsSendingToDiscord(true);
+    try {
+      const stateBytesToSend = await obtainLatestSaveStateBytes();
+      const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+      const fileNameToSend = capturedFileName || `${selectedRom.id.toUpperCase()}_arena_${stamp}.state`;
+
+      if (!stateBytesToSend || stateBytesToSend.length < 52000) {
+        setParseStatusMessage({
+          type: 'error',
+          text: 'No active game state found! Play a game on the Arena Ice (or load a .state file) before sending to Discord.'
+        });
+        setActiveArenaTab('boxscore');
+        return;
+      }
+
+      setCapturedStateBytes(stateBytesToSend);
+      setCapturedFileName(fileNameToSend);
+
+      let scoreSummary = '';
+      try {
+        const seasonCfg = getSeasonConfig(selectedSeasonConfigId);
+        const g = parseSaveStateBuffer(stateBytesToSend, seasonCfg);
+        setParsedGame(g);
+        scoreSummary = `${g.awayTeam.teamCode} ${g.awayTeam.goals} @ ${g.homeTeam.teamCode} ${g.homeTeam.goals}`;
+        recordParsedGameToArenaRecords(g, false);
+      } catch {
+        // continue sending raw state even if roster config parse fails
+      }
+
+      const finalName = fileNameToSend || `${selectedRom.id.toUpperCase()}_arena.state`;
+      const formData = new FormData();
+      formData.append(
+        'file',
+        new Blob([new Uint8Array(stateBytesToSend)], { type: 'application/octet-stream' }),
+        finalName
+      );
+      formData.append('fileName', finalName);
+      formData.append('coachName', myDisplayName);
+      formData.append('romLabel', resolvedRomFileName || selectedRom.id.toUpperCase());
+      formData.append('scoreSummary', scoreSummary);
+      formData.append('seasonId', selectedSeasonConfigId);
+
+      const res = await fetch('/api/arena-discord-state', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setParseStatusMessage({
+          type: 'success',
+          text: `Sent ${finalName} (${scoreSummary || 'Save State'}) to Discord ${data.channelName || 'save-state channel'}!`
+        });
+      } else {
+        setParseStatusMessage({
+          type: 'error',
+          text: data.error || 'Could not send save state to Discord.'
+        });
+      }
+      setActiveArenaTab('boxscore');
+    } catch (err: any) {
+      setParseStatusMessage({
+        type: 'error',
+        text: err?.message || 'Error sending save state to Discord.'
+      });
+      setActiveArenaTab('boxscore');
+    } finally {
+      setIsSendingToDiscord(false);
+    }
+  }, [
+    obtainLatestSaveStateBytes,
+    capturedFileName,
+    selectedRom.id,
+    selectedSeasonConfigId,
+    myDisplayName,
+    resolvedRomFileName,
+    recordParsedGameToArenaRecords
+  ]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (!event.data || typeof event.data !== 'object') return;
       if (event.data.type === 'NHL95_EJS_STARTED') {
         setEmulatorRunning(true);
+        pushControllerConfigToIframe(controllerConfig);
+        pushAiConfigToIframe();
       } else if (event.data.type === 'NHL95_GUEST_SLOT_CHANGED' && typeof event.data.slot === 'number') {
         setNetplaySlot(event.data.slot);
-      } else if (event.data.type === 'NHL95_EJS_SAVESTATE' && event.data.state) {
+      } else if (
+        (event.data.type === 'NHL95_EJS_SAVESTATE' ||
+          event.data.type === 'NHL95_HOST_SAVESTATE_SYNCED' ||
+          event.data.type === 'NHL95_GUEST_SAVESTATE_SYNCED') &&
+        event.data.state
+      ) {
         const stateArr =
           event.data.state instanceof Uint8Array
             ? event.data.state
             : new Uint8Array(event.data.state);
-        parseAndDisplayStateBuffer(
-          stateArr,
-          `${selectedRom.id.toUpperCase()}_live_${new Date().toISOString().slice(11, 19).replace(/:/g, '')}.state`
-        );
+        const normalized = ensureRetroArchHeader(stateArr);
+        latestStateRef.current = normalized;
+        setCapturedStateBytes(normalized);
+        const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
+        const label = `${selectedRom.id.toUpperCase()}_live_${stamp}.state`;
+        setCapturedFileName(label);
+
+        if (pendingStateResolversRef.current.length > 0) {
+          const resolvers = [...pendingStateResolversRef.current];
+          pendingStateResolversRef.current = [];
+          resolvers.forEach(fn => fn(normalized));
+        }
+
+        if (event.data.type === 'NHL95_EJS_SAVESTATE' || event.data.reason === 'host-saved') {
+          parseAndDisplayStateBuffer(normalized, label);
+        }
+      } else if (event.data.type === 'NHL95_GUEST_TRIGGER_DISCORD_STATE') {
+        handleSendStateToDiscord();
+      } else if (event.data.type === 'NHL95_GUEST_TRIGGER_BOXSCORE') {
+        handleCaptureLiveBoxscore();
+      } else if (event.data.type === 'NHL95_PARENT_FULLSCREEN_FALLBACK') {
+        handleToggleFullscreen();
       } else if (event.data.type === 'NHL95_NETPLAY_SIGNAL' && event.data.signal) {
         roomChannelRef.current?.send({
           type: 'broadcast',
           event: 'netplay-signal',
           payload: event.data.signal
         });
+      } else if (event.data.type === 'NHL95_AI_TELEMETRY') {
+        setLiveAiTelemetry({
+          detectedPlaystyle: event.data.detectedPlaystyle || 'Balanced Attack',
+          activeCounter: event.data.activeCounter || 'Hybrid Slot & Rush Defense',
+          oneTimerInputCombos: Number(event.data.oneTimerInputCombos) || 0,
+          rushBurstCount: Number(event.data.rushBurstCount) || 0,
+          eastWestCrosses: Number(event.data.eastWestCrosses) || 0,
+          homeOneTimerTries: Number(event.data.homeOneTimerTries) || 0,
+          homeBreakawayTries: Number(event.data.homeBreakawayTries) || 0,
+          homeChecks: Number(event.data.homeChecks) || 0,
+          weights: event.data.weights || {
+            oneTimerDefense: 0.55,
+            breakawayTrap: 0.55,
+            forecheckAggression: 0.55,
+            faceoffCounter: 0.55,
+            slotLockdown: 0.55
+          }
+        });
+
+        // Periodically persist live AI learning ticks so the 95-AI Neural CPU permanently learns during gameplay
+        const now = Date.now();
+        const totalActivity =
+          (Number(event.data.homeShots) || 0) +
+          (Number(event.data.awayShots) || 0) +
+          (Number(event.data.oneTimerInputCombos) || 0) +
+          (Number(event.data.rushBurstCount) || 0);
+        if (totalActivity > 2 && now - lastAiLearnTickAtRef.current > 25000) {
+          lastAiLearnTickAtRef.current = now;
+          fetch('/api/arena-records', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'ai-learn-tick',
+              coachName: myDisplayName,
+              homeOneTimers: Number(event.data.homeOneTimerTries) || Number(event.data.oneTimerInputCombos) || 0,
+              homeBreakaways: Number(event.data.homeBreakawayTries) || 0,
+              homeChecks: Number(event.data.homeChecks) || 0,
+              homeShots: Number(event.data.homeShots) || 0,
+              homeAttackZone: Number(event.data.homeAttackZone) || 0,
+              awayAttackZone: Number(event.data.awayAttackZone) || 0,
+              homeGoals: Number(event.data.homeGoals) || 0,
+              awayGoals: Number(event.data.awayGoals) || 0
+            })
+          }).catch(() => {});
+        }
       } else if (event.data.type === 'NHL95_LIVE_TELEMETRY') {
         const hCode = DEFAULT_TEAM_CODES[event.data.homeTeamByte] || 'HOME';
         const aCode = DEFAULT_TEAM_CODES[event.data.awayTeamByte] || 'AWAY';
@@ -1621,12 +2204,48 @@ function ArenaContent() {
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [parseAndDisplayStateBuffer, selectedRom]);
+  }, [
+    parseAndDisplayStateBuffer,
+    selectedRom,
+    controllerConfig,
+    pushControllerConfigToIframe,
+    pushAiConfigToIframe,
+    myDisplayName,
+    handleSendStateToDiscord,
+    handleCaptureLiveBoxscore,
+    handleToggleFullscreen
+  ]);
 
-  // Poll up to 4 Gamepads & Keyboard for Controller Tester and Header Status Pill
+  // Only run 60Hz gamepad/keyboard React state polling when on the 'controller' setup tab!
+  // On the 'ice' tab, avoid 60fps parent React re-renders so the emulator & WebRTC stream run at a locked 60 FPS!
   useEffect(() => {
+    const updateConnectedSummaryOnly = () => {
+      if (typeof navigator === 'undefined' || !navigator.getGamepads) return;
+      const pads = Array.from(navigator.getGamepads()).filter(Boolean) as Gamepad[];
+      const nextInfo =
+        pads.length > 0
+          ? pads.length > 1
+            ? `${pads.length} Controllers Connected (${pads[0].id})`
+            : pads[0].id
+          : null;
+      setGamepadInfo(prev => (prev === nextInfo ? prev : nextInfo));
+    };
+
+    if (activeArenaTab !== 'controller') {
+      updateConnectedSummaryOnly();
+      const slowTimer = setInterval(updateConnectedSummaryOnly, 1500);
+      window.addEventListener('gamepadconnected', updateConnectedSummaryOnly);
+      window.addEventListener('gamepaddisconnected', updateConnectedSummaryOnly);
+      return () => {
+        clearInterval(slowTimer);
+        window.removeEventListener('gamepadconnected', updateConnectedSummaryOnly);
+        window.removeEventListener('gamepaddisconnected', updateConnectedSummaryOnly);
+      };
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       setActiveKeys(prev => {
+        if (prev.has(e.key)) return prev;
         const next = new Set(prev);
         next.add(e.key);
         return next;
@@ -1634,6 +2253,7 @@ function ArenaContent() {
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       setActiveKeys(prev => {
+        if (!prev.has(e.key)) return prev;
         const next = new Set(prev);
         next.delete(e.key);
         return next;
@@ -1687,7 +2307,7 @@ function ArenaContent() {
       window.removeEventListener('keyup', handleKeyUp);
       cancelAnimationFrame(animId);
     };
-  }, []);
+  }, [activeArenaTab]);
 
   // Re-parse if user switches Season Config dropdown
   useEffect(() => {
@@ -1701,138 +2321,6 @@ function ArenaContent() {
       }
     }
   }, [selectedSeasonConfigId, capturedStateBytes, capturedFileName]);
-
-  // 1-Click Capture Save State directly from EmulatorJS instance inside the iframe
-  const handleCaptureLiveBoxscore = () => {
-    try {
-      const iframeWin = iframeRef.current?.contentWindow as any;
-      const ejs = iframeWin?.EJS_emulator;
-      if (!ejs || !ejs.gameManager) {
-        setParseStatusMessage({
-          type: 'error',
-          text: 'Emulator is still booting or not active yet. Start a game on the ice first, then click Capture Boxscore!'
-        });
-        setActiveArenaTab('boxscore');
-        return;
-      }
-
-      const rawState: Uint8Array = ejs.gameManager.getState();
-      if (!rawState || rawState.length < 52000) {
-        setParseStatusMessage({
-          type: 'error',
-          text: `Save state buffer appears incomplete (${rawState?.length || 0} bytes). Wait until the game has booted into a match.`
-        });
-        setActiveArenaTab('boxscore');
-        return;
-      }
-
-      const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
-      const fileName = `${selectedRom.id.toUpperCase()}_arena_${stamp}.state`;
-      parseAndDisplayStateBuffer(rawState, fileName);
-      setActiveArenaTab('boxscore');
-    } catch (err: any) {
-      setParseStatusMessage({
-        type: 'error',
-        text: err?.message || 'Failed to capture live state from the emulator.'
-      });
-      setActiveArenaTab('boxscore');
-    }
-  };
-
-  const handleDownloadCapturedState = () => {
-    if (!capturedStateBytes) return;
-    const blob = new Blob([new Uint8Array(capturedStateBytes)], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = capturedFileName || `${selectedRom.id.toUpperCase()}.state`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  // 1-Click Send Save State directly to the Discord Save State Channel!
-  const handleSendStateToDiscord = async () => {
-    setIsSendingToDiscord(true);
-    try {
-      let stateBytesToSend = capturedStateBytes;
-      let fileNameToSend = capturedFileName;
-
-      // Try grabbing the latest live state from the running emulator if available
-      const iframeWin = iframeRef.current?.contentWindow as any;
-      const ejs = iframeWin?.EJS_emulator;
-      if (ejs && ejs.gameManager && typeof ejs.gameManager.getState === 'function') {
-        const liveRaw: Uint8Array = ejs.gameManager.getState();
-        if (liveRaw && liveRaw.length >= 52000) {
-          stateBytesToSend = ensureRetroArchHeader(liveRaw);
-          const stamp = new Date().toISOString().slice(11, 19).replace(/:/g, '');
-          fileNameToSend = `${selectedRom.id.toUpperCase()}_arena_${stamp}.state`;
-          setCapturedStateBytes(stateBytesToSend);
-          setCapturedFileName(fileNameToSend);
-        }
-      }
-
-      if (!stateBytesToSend || stateBytesToSend.length < 52000) {
-        setParseStatusMessage({
-          type: 'error',
-          text: 'No active game state found! Play a game on the Arena Ice (or load a .state file) before sending to Discord.'
-        });
-        setActiveArenaTab('boxscore');
-        return;
-      }
-
-      let scoreSummary = '';
-      try {
-        const seasonCfg = getSeasonConfig(selectedSeasonConfigId);
-        const g = parseSaveStateBuffer(stateBytesToSend, seasonCfg);
-        setParsedGame(g);
-        scoreSummary = `${g.awayTeam.teamCode} ${g.awayTeam.goals} @ ${g.homeTeam.teamCode} ${g.homeTeam.goals}`;
-      } catch {
-        // continue sending raw state even if roster config parse fails
-      }
-
-      const finalName = fileNameToSend || `${selectedRom.id.toUpperCase()}_arena.state`;
-      const formData = new FormData();
-      formData.append(
-        'file',
-        new Blob([new Uint8Array(stateBytesToSend)], { type: 'application/octet-stream' }),
-        finalName
-      );
-      formData.append('fileName', finalName);
-      formData.append('coachName', myDisplayName);
-      formData.append('romLabel', resolvedRomFileName || selectedRom.id.toUpperCase());
-      formData.append('scoreSummary', scoreSummary);
-      formData.append('seasonId', selectedSeasonConfigId);
-
-      const res = await fetch('/api/arena-discord-state', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setParseStatusMessage({
-          type: 'success',
-          text: `Sent ${finalName} (${scoreSummary || 'Save State'}) to Discord ${data.channelName || 'save-state channel'}!`
-        });
-      } else {
-        setParseStatusMessage({
-          type: 'error',
-          text: data.error || 'Could not send save state to Discord.'
-        });
-      }
-      setActiveArenaTab('boxscore');
-    } catch (err: any) {
-      setParseStatusMessage({
-        type: 'error',
-        text: err?.message || 'Error sending save state to Discord.'
-      });
-      setActiveArenaTab('boxscore');
-    } finally {
-      setIsSendingToDiscord(false);
-    }
-  };
 
   const handleLocalRomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2089,6 +2577,11 @@ function ArenaContent() {
             {[
               { id: 'ice', label: '🏒 Arena Ice', badge: netplayRole !== 'solo' ? '2P NETPLAY' : emulatorRunning ? 'LIVE' : undefined },
               { id: 'lobby', label: '🥊 Locker Room Lobby (VS)', badge: `${onlinePlayers.length || 1} ONLINE` },
+              {
+                id: 'records',
+                label: '🏆 Records & AI Brain',
+                badge: arenaRecordsData?.aiModel ? `AI GEN ${arenaRecordsData.aiModel.generation}` : 'ALL-TIME'
+              },
               { id: 'vault', label: `📚 ROM Vault (${bucketFiles.length} Cloud)` },
               { id: 'controller', label: '🕹️ Controller Setup & Test', badge: gamepadInfo ? 'PAD READY' : undefined },
               { id: 'boxscore', label: '📊 1-Click Boxscore Lab', badge: parsedGame ? 'PARSED' : undefined }
@@ -2440,16 +2933,21 @@ function ArenaContent() {
           {/* TAB 1: ARENA ICE (PRE-GAME SELECTOR OR LIVE EMULATORJS CANVAS)    */}
           {/* ================================================================= */}
           <div className={activeArenaTab === 'ice' ? 'block' : 'hidden'}>
-            <div className="bg-black border-4 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
-              <div className="aspect-[4/3] w-full bg-black relative">
+            <div
+              ref={iceContainerRef}
+              className="bg-black border-4 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden flex flex-col"
+            >
+              <div className="aspect-[4/3] w-full flex-1 bg-black relative">
                 {emulatorIframeSrc ? (
                   <iframe
                     ref={iframeRef}
                     key={emulatorIframeSrc}
                     src={emulatorIframeSrc}
+                    onLoad={() => pushControllerConfigToIframe(controllerConfig)}
                     title={`NHL 95 Emulator - ${activeRomTitle}`}
                     className="w-full h-full border-0"
                     allow="autoplay; fullscreen; gamepad"
+                    allowFullScreen
                   />
                 ) : (
                   /* PRE-GAME SELECTION SCREEN (NO AUTO-START) */
@@ -2584,10 +3082,18 @@ function ArenaContent() {
                     <span>Test Controller</span>
                   </button>
                   <button
+                    onClick={handleToggleFullscreen}
+                    className="bg-amber-500 hover:bg-amber-400 text-black px-3 py-1 text-[11px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shadow-xs"
+                    title="Toggle Fullscreen for Host or Joining Coach (ESC to exit)"
+                  >
+                    <Tv className="w-3.5 h-3.5" />
+                    <span>Fullscreen</span>
+                  </button>
+                  <button
                     onClick={handleSendStateToDiscord}
                     disabled={isSendingToDiscord}
                     className="bg-[#5865F2] hover:bg-[#4752C4] text-white px-3 py-1 text-[11px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shadow-xs"
-                    title="Send the live .state file directly to the Discord Save State channel"
+                    title="Send the live .state file directly to the Discord Save State channel (works for both Host and Guest coaches!)"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>{isSendingToDiscord ? 'Sending...' : 'Send .State to Discord'}</span>
@@ -2595,6 +3101,7 @@ function ArenaContent() {
                   <button
                     onClick={handleCaptureLiveBoxscore}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 text-[11px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shadow-xs"
+                    title="Capture live boxscore from the match (works for both Host and Guest coaches!)"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>Capture Live Boxscore</span>
@@ -2602,6 +3109,74 @@ function ArenaContent() {
                 </div>
               </div>
             </div>
+
+            {/* LIVE 95-AI NEURAL CPU TELEMETRY & ADAPTATION BAR (WHEN PLAYING VS AI) */}
+            {netplayRole === 'solo' && (
+              <div className="mt-3 bg-gradient-to-r from-[#091322] via-[#111e34] to-[#091322] border-2 border-black text-white p-3.5 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-mono text-xs font-black flex flex-col items-center justify-center shrink-0">
+                      <span>95-AI</span>
+                      <span className="text-[8px] text-amber-300">
+                        GEN {arenaRecordsData?.aiModel?.generation || 1}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-black uppercase text-cyan-300">
+                          🧠 95-AI Neural CPU (Adaptive Learning Engine)
+                        </span>
+                        <span className="bg-amber-400/20 text-amber-300 border border-amber-400/40 px-1.5 py-0.2 rounded font-mono text-[10px] font-bold">
+                          ELO {arenaRecordsData?.aiModel?.eloRating || 1520}
+                        </span>
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-mono text-[10px] font-bold">
+                          {liveAiTelemetry
+                            ? `Counter: ${liveAiTelemetry.activeCounter}`
+                            : arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.aiCounterStrategy ||
+                              'Learning Coach Tendencies...'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-300 font-mono mt-0.5">
+                        {liveAiTelemetry ? (
+                          <span>
+                            Detected Style: <strong className="text-amber-300">{liveAiTelemetry.detectedPlaystyle}</strong>{' '}
+                            &bull; 1T Combos: <strong>{liveAiTelemetry.oneTimerInputCombos}</strong> &bull; Rush Bursts:{' '}
+                            <strong>{liveAiTelemetry.rushBurstCount}</strong> &bull; Cross-Ice:{' '}
+                            <strong>{liveAiTelemetry.eastWestCrosses}</strong>
+                          </span>
+                        ) : (
+                          <span>
+                            Scouts your Pass&rarr;Shot one-timer cadence, rush bursts &amp; zone cycle in real time to adapt defense &amp; counter-attacks.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label
+                      className="flex items-center gap-1.5 bg-black/60 border border-cyan-500/50 px-2.5 py-1.5 rounded text-[10px] font-mono font-bold text-cyan-200 cursor-pointer"
+                      title="When enabled during gameplay, the 95-AI Neural Bot directly drives Port 2 with 60Hz adaptive controller inputs!"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={aiBotPort2Takeover}
+                        onChange={e => setAiBotPort2Takeover(e.target.checked)}
+                        className="accent-amber-400"
+                      />
+                      <span>P2 Neural Bot Driver</span>
+                    </label>
+                    <button
+                      onClick={() => setActiveArenaTab('records')}
+                      className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-black font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1"
+                    >
+                      <Trophy className="w-3 h-3" />
+                      <span>Records &amp; AI Lab</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ================================================================= */}
@@ -2618,7 +3193,7 @@ function ArenaContent() {
                     <p className="text-xs font-bold text-slate-700 mt-1">
                       {onlinePlayers.length || 1} human player{onlinePlayers.length === 1 ? '' : 's'} online &bull;{' '}
                       {availableOpponentsCount} available human opponent{availableOpponentsCount === 1 ? '' : 's'} &bull;{' '}
-                      CPU always available
+                      95-AI Neural CPU always available
                     </p>
                   </div>
                   <button
@@ -2661,7 +3236,7 @@ function ArenaContent() {
                 </div>
 
                 <p className="text-[11px] text-slate-500 mt-2">
-                  Choose <strong>Play</strong> to challenge a live coach head-to-head, or click <strong>Play CPU</strong> below to play solo.
+                  Choose <strong>Play</strong> to challenge a live coach head-to-head, or click <strong>Play 95-AI CPU</strong> below to play against the adaptive learning AI.
                 </p>
               </div>
 
@@ -2794,39 +3369,55 @@ function ArenaContent() {
                   );
                 })}
 
-                {/* CPU ROW (Always available — just like King of 94 screenshot) */}
-                <div className="py-3.5 px-2 bg-blue-50/50 flex items-center justify-between flex-wrap gap-3">
+                {/* ADAPTIVE LEARNING 95-AI NEURAL CPU ROW */}
+                <div className="py-4 px-3 bg-gradient-to-r from-slate-900 via-[#0f1d33] to-slate-900 text-white flex items-center justify-between flex-wrap gap-3 rounded-xs my-1">
                   <div className="flex items-center gap-3">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                    <div className="w-9 h-9 rounded bg-blue-900 text-white font-mono font-black text-xs flex items-center justify-center border border-black shrink-0">
-                      CPU
+                    <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                    <div className="w-10 h-10 rounded bg-cyan-500/20 text-cyan-300 font-mono font-black text-xs flex flex-col items-center justify-center border border-cyan-400 shrink-0">
+                      <span>95-AI</span>
+                      <span className="text-[8px] text-amber-300">
+                        G{arenaRecordsData?.aiModel?.generation || 1}
+                      </span>
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900">CPU</span>
-                        <span className="bg-blue-100 text-blue-800 border border-blue-300 text-[10px] font-bold px-2 py-0.2 rounded-full">
-                          Original Genesis AI
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-black text-sm text-white">🧠 95-AI Neural CPU</span>
+                        <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 text-[10px] font-mono font-bold px-2 py-0.2 rounded-full">
+                          Adaptive Learning AI &bull; ELO {arenaRecordsData?.aiModel?.eloRating || 1520}
+                        </span>
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-400/50 text-[10px] font-mono font-bold px-2 py-0.2 rounded-full">
+                          {arenaRecordsData?.aiModel?.totalGamesLearned || arenaRecordsData?.totalGamesAnalyzed || 0} Games Learned
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Original game CPU &bull; all {bucketFiles.length} cloud ROMs &bull; always available
+                      <div className="text-[11px] text-slate-300 mt-0.5 font-mono">
+                        Scouting Report ({myDisplayName}):{' '}
+                        <strong className="text-amber-300">
+                          {arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.preferredTactic || 'Adaptive All-Around'}
+                        </strong>{' '}
+                        &rarr; Active AI Counter:{' '}
+                        <strong className="text-emerald-300">
+                          {arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.aiCounterStrategy || 'Hybrid Slot & Rush Defense'}
+                        </strong>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-500 hidden sm:inline">
-                      Jump in &rarr; <strong className="font-mono text-black">{selectedRom.id.toUpperCase()}</strong>
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setActiveArenaTab('records')}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/40 font-mono text-xs font-bold rounded cursor-pointer"
+                    >
+                      AI Brain &amp; Records
+                    </button>
                     <button
                       onClick={() => {
                         handleLeaveNetplayRoom();
                         setHasLaunchedGame(true);
                         setActiveArenaTab('ice');
                       }}
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-sans text-xs font-bold rounded cursor-pointer shadow-2xs"
+                      className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-black font-mono text-xs font-black uppercase rounded cursor-pointer shadow-2xs"
                     >
-                      Play CPU
+                      Play 95-AI CPU
                     </button>
                   </div>
                 </div>
@@ -2858,6 +3449,362 @@ function ArenaContent() {
                 </button>
                 <div className="text-slate-500">
                   You: <strong>{myLobbyStatus}</strong> &bull; {myDisplayName}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 2B: ALL-TIME ARENA RECORDS, COACH TRACKER & ADAPTIVE AI BRAIN */}
+          {/* ================================================================= */}
+          {(activeArenaTab === 'records' || activeArenaTab === 'lobby' || activeArenaTab === 'ice') && (
+            <div className="space-y-6">
+              {/* 1. ADAPTIVE 95-AI NEURAL CPU BRAIN LAB */}
+              <div className="bg-neutral-950 border-2 border-black text-white p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-neutral-800 pb-4 mb-4">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-black">
+                      NEURAL TELEMETRY &amp; REINFORCEMENT ENGINE
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black uppercase font-serif text-white">
+                      🧠 95-AI Neural CPU — Adaptive Learning Lab
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Learns from every official league &amp; Arena game plus real-time 60Hz controller inputs to counter each coach&apos;s favorite tactics.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={refreshArenaRecords}
+                      disabled={isLoadingRecords}
+                      className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-slate-200 border border-neutral-600 font-mono text-xs font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingRecords ? 'animate-spin' : ''}`} />
+                      <span>Refresh Records</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleLeaveNetplayRoom();
+                        setHasLaunchedGame(true);
+                        setActiveArenaTab('ice');
+                      }}
+                      className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-black font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-black" />
+                      <span>Challenge 95-AI Now</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* AI Summary Metrics Row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5 font-mono">
+                  <div className="bg-[#0d131f] border border-cyan-500/40 p-3 rounded-xs">
+                    <div className="text-[10px] uppercase text-cyan-400 font-bold">NEURAL GENERATION</div>
+                    <div className="text-xl font-black text-white mt-0.5">
+                      GEN {arenaRecordsData?.aiModel?.generation || 1}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {arenaRecordsData?.totalGamesAnalyzed || 0} Total Games Analyzed
+                    </div>
+                  </div>
+                  <div className="bg-[#0d131f] border border-amber-500/40 p-3 rounded-xs">
+                    <div className="text-[10px] uppercase text-amber-400 font-bold">AI ELO RATING</div>
+                    <div className="text-xl font-black text-amber-300 mt-0.5">
+                      {arenaRecordsData?.aiModel?.eloRating || 1520}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Record: {arenaRecordsData?.aiModel?.aiWins || 0}W - {arenaRecordsData?.aiModel?.aiLosses || 0}L -{' '}
+                      {arenaRecordsData?.aiModel?.aiTies || 0}T
+                    </div>
+                  </div>
+                  <div className="bg-[#0d131f] border border-emerald-500/40 p-3 rounded-xs">
+                    <div className="text-[10px] uppercase text-emerald-400 font-bold">SCOUTING DOSSIERS</div>
+                    <div className="text-xl font-black text-emerald-300 mt-0.5">
+                      {Object.keys(arenaRecordsData?.aiModel?.coachProfiles || {}).length ||
+                        arenaRecordsData?.coachLeaderboard?.length ||
+                        0}{' '}
+                      Coaches
+                    </div>
+                    <div className="text-[10px] text-slate-400">Individual Playstyle Profiles</div>
+                  </div>
+                  <div className="bg-[#0d131f] border border-purple-500/40 p-3 rounded-xs">
+                    <div className="text-[10px] uppercase text-purple-300 font-bold">YOUR ACTIVE COUNTER</div>
+                    <div className="text-xs font-black text-white mt-1 truncate">
+                      {liveAiTelemetry?.activeCounter ||
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.aiCounterStrategy ||
+                        'Hybrid Slot & Rush Defense'}
+                    </div>
+                    <div className="text-[10px] text-amber-300 truncate mt-0.5">
+                      Style:{' '}
+                      {liveAiTelemetry?.detectedPlaystyle ||
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.preferredTactic ||
+                        'Balanced Attack'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Neural Weights Bars */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-[#090d14] border border-neutral-800 p-3.5 rounded-xs font-mono text-xs">
+                  {[
+                    {
+                      label: '1-Timer Pass Intercept',
+                      val:
+                        liveAiTelemetry?.weights?.oneTimerDefense ??
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.counterWeights?.oneTimerDefense ??
+                        arenaRecordsData?.aiModel?.weights?.oneTimerDefense ??
+                        0.62,
+                      color: 'bg-amber-400'
+                    },
+                    {
+                      label: '1-3-1 Breakaway Trap',
+                      val:
+                        liveAiTelemetry?.weights?.breakawayTrap ??
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.counterWeights?.breakawayTrap ??
+                        arenaRecordsData?.aiModel?.weights?.breakawayTrap ??
+                        0.6,
+                      color: 'bg-cyan-400'
+                    },
+                    {
+                      label: 'Forecheck Aggression',
+                      val:
+                        liveAiTelemetry?.weights?.forecheckAggression ??
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.counterWeights?.forecheckAggression ??
+                        arenaRecordsData?.aiModel?.weights?.forecheckAggression ??
+                        0.58,
+                      color: 'bg-red-400'
+                    },
+                    {
+                      label: 'Faceoff Draw Timing',
+                      val:
+                        liveAiTelemetry?.weights?.faceoffCounter ??
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.counterWeights?.faceoffCounter ??
+                        arenaRecordsData?.aiModel?.weights?.faceoffCounter ??
+                        0.57,
+                      color: 'bg-emerald-400'
+                    },
+                    {
+                      label: 'High-Slot Lockdown',
+                      val:
+                        liveAiTelemetry?.weights?.slotLockdown ??
+                        arenaRecordsData?.aiModel?.coachProfiles?.[myDisplayName]?.counterWeights?.slotLockdown ??
+                        arenaRecordsData?.aiModel?.weights?.slotLockdown ??
+                        0.64,
+                      color: 'bg-purple-400'
+                    }
+                  ].map(wItem => {
+                    const pct = Math.min(99, Math.max(25, Math.round(Number(wItem.val) * 100)));
+                    return (
+                      <div key={wItem.label} className="space-y-1">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-slate-300 truncate">{wItem.label}</span>
+                          <span className="text-white font-black">{pct}%</span>
+                        </div>
+                        <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
+                          <div className={`h-full ${wItem.color}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. ALL-TIME ARENA RECORDS HALL OF FAME (MOST GOALS, FASTEST GOALS, MOST WINS, ETC.) */}
+              <div className="bg-white border-2 border-black p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                <div className="flex items-center justify-between border-b-2 border-black pb-3 mb-4 flex-wrap gap-2">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-amber-700 font-black">
+                      ALL-TIME ARENA &amp; LEAGUE BOOK OF RECORDS
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black uppercase font-serif text-black flex items-center gap-2">
+                      <Trophy className="w-5 h-5 text-amber-500" />
+                      <span>All-Time Arena Records (Fastest Goals, Most Wins, Single-Game Highs)</span>
+                    </h3>
+                  </div>
+                  <span className="text-xs font-mono text-slate-600 font-bold">
+                    Automatically updated from every game &amp; save state
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    arenaRecordsData?.allTimeRecords?.mostWinsCareer,
+                    arenaRecordsData?.allTimeRecords?.mostGoalsCareer,
+                    arenaRecordsData?.allTimeRecords?.mostGoalsSingleGame,
+                    arenaRecordsData?.allTimeRecords?.mostCombinedGoalsGame,
+                    arenaRecordsData?.allTimeRecords?.fastestGoal,
+                    arenaRecordsData?.allTimeRecords?.fastestTwoGoals,
+                    arenaRecordsData?.allTimeRecords?.fastestThreeGoals,
+                    arenaRecordsData?.allTimeRecords?.fastestOvertimeGoal,
+                    arenaRecordsData?.allTimeRecords?.mostChecksSingleGame,
+                    arenaRecordsData?.allTimeRecords?.mostOneTimersSingleGame,
+                    arenaRecordsData?.allTimeRecords?.biggestBlowout,
+                    arenaRecordsData?.allTimeRecords?.mostShutoutsCareer
+                  ]
+                    .filter(Boolean)
+                    .map((rec: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="border-2 border-black bg-[#faf8f5] p-3.5 rounded-xs flex flex-col justify-between shadow-[2px_2px_0px_rgba(0,0,0,1)]"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[10px] font-mono font-black uppercase tracking-wider text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-xs">
+                              {rec.category}
+                            </span>
+                            {rec.seasonLabel && (
+                              <span className="text-[9px] font-mono text-slate-500 font-bold">
+                                {rec.seasonLabel}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xl font-black font-mono text-black my-1">
+                            {rec.valueLabel}
+                          </div>
+                          <div className="text-xs font-bold text-blue-900 font-sans">
+                            🏆 {rec.holderCoach}
+                            {rec.holderTeam ? ` (${rec.holderTeam})` : ''}
+                          </div>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-600 mt-2 pt-1.5 border-t border-slate-200">
+                          {rec.detail}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* 3. ALL COACHES CAREER RECORD TRACKING TABLE */}
+              <div className="bg-white border-2 border-black p-4 sm:p-6 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b-2 border-black pb-3 mb-4">
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-blue-800 font-black">
+                      OFFICIAL COACH RECORD TRACKING
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black uppercase font-serif text-black">
+                      All Coaches Record Leaderboard ({arenaRecordsData?.coachLeaderboard?.length || 0} Coaches)
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={coachSearchFilter}
+                        onChange={e => setCoachSearchFilter(e.target.value)}
+                        placeholder="Search coach or team..."
+                        className="pl-8 pr-3 py-1.5 text-xs bg-white border border-black rounded-xs font-mono"
+                      />
+                    </div>
+                    <select
+                      value={coachSortField}
+                      onChange={e => setCoachSortField(e.target.value as any)}
+                      className="px-2.5 py-1.5 text-xs bg-neutral-900 text-amber-400 border border-black font-mono font-bold rounded-xs cursor-pointer"
+                    >
+                      <option value="points">Sort: Points (PTS)</option>
+                      <option value="wins">Sort: Most Wins (W)</option>
+                      <option value="goalsFor">Sort: Most Goals (GF)</option>
+                      <option value="winPct">Sort: Win %</option>
+                      <option value="gpg">Sort: Goals Per Game (GPG)</option>
+                      <option value="checks">Sort: Body Checks</option>
+                      <option value="oneTimerGoals">Sort: One-Timer Goals</option>
+                      <option value="shutouts">Sort: Shutouts (SO)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto max-h-[540px] overflow-y-auto border border-black">
+                  <table className="w-full text-left border-collapse font-mono text-xs">
+                    <thead className="bg-neutral-950 text-amber-400 sticky top-0 z-10 text-[10px] uppercase">
+                      <tr>
+                        <th className="py-2.5 px-2.5 border-b border-neutral-800">#</th>
+                        <th className="py-2.5 px-2.5 border-b border-neutral-800">Coach</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">GP</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">W-L-T-OTL</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">PTS</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">WIN%</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">GF</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">GA</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">DIFF</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">GPG</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">SH%</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">CHK</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">1T G</th>
+                        <th className="py-2.5 px-2 border-b border-neutral-800 text-center">SO</th>
+                        <th className="py-2.5 px-2.5 border-b border-neutral-800 text-center">Fastest G</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {(arenaRecordsData?.coachLeaderboard || [])
+                        .filter((c: any) => {
+                          const q = coachSearchFilter.trim().toLowerCase();
+                          if (!q) return true;
+                          return (
+                            c.coachName.toLowerCase().includes(q) ||
+                            (c.favoriteTeam || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .slice()
+                        .sort((a: any, b: any) => (Number(b[coachSortField]) || 0) - (Number(a[coachSortField]) || 0))
+                        .map((c: any, idx: number) => {
+                          const isMe = c.coachName.toLowerCase() === myDisplayName.toLowerCase();
+                          const diff = (Number(c.goalsFor) || 0) - (Number(c.goalsAgainst) || 0);
+                          return (
+                            <tr
+                              key={c.coachKey || c.coachName}
+                              className={
+                                isMe
+                                  ? 'bg-amber-100/90 font-black'
+                                  : idx % 2 === 0
+                                  ? 'bg-white hover:bg-slate-50'
+                                  : 'bg-[#faf8f5] hover:bg-slate-50'
+                              }
+                            >
+                              <td className="py-2 px-2.5 font-black text-slate-500">{idx + 1}</td>
+                              <td className="py-2 px-2.5">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-slate-900">{c.coachName}</span>
+                                  {c.favoriteTeam && (
+                                    <span className="text-[10px] bg-neutral-900 text-amber-400 px-1.5 py-0.2 rounded font-bold">
+                                      {c.favoriteTeam}
+                                    </span>
+                                  )}
+                                  {isMe && (
+                                    <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.2 rounded font-black">
+                                      YOU
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-center font-bold">{c.gp}</td>
+                              <td className="py-2 px-2 text-center font-bold text-slate-800">
+                                {c.wins}-{c.losses}-{c.ties}-{c.otl || 0}
+                              </td>
+                              <td className="py-2 px-2 text-center font-black text-blue-900">{c.points}</td>
+                              <td className="py-2 px-2 text-center">{c.winPct}%</td>
+                              <td className="py-2 px-2 text-center font-bold text-emerald-800">{c.goalsFor}</td>
+                              <td className="py-2 px-2 text-center text-slate-600">{c.goalsAgainst}</td>
+                              <td
+                                className={`py-2 px-2 text-center font-bold ${
+                                  diff > 0 ? 'text-emerald-700' : diff < 0 ? 'text-red-700' : 'text-slate-500'
+                                }`}
+                              >
+                                {diff > 0 ? `+${diff}` : diff}
+                              </td>
+                              <td className="py-2 px-2 text-center">{c.gpg}</td>
+                              <td className="py-2 px-2 text-center">{c.shootingPct}%</td>
+                              <td className="py-2 px-2 text-center">{c.checks}</td>
+                              <td className="py-2 px-2 text-center">{c.oneTimerGoals}</td>
+                              <td className="py-2 px-2 text-center font-bold">{c.shutouts}</td>
+                              <td className="py-2 px-2.5 text-center text-[11px] text-amber-900 font-bold">
+                                {c.fastestGoalLabel || '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -3079,6 +4026,20 @@ function ArenaContent() {
 
                 {capturedStateBytes && (
                   <div className="flex items-center gap-2 flex-wrap">
+                    {parsedGame && (
+                      <button
+                        onClick={() => recordParsedGameToArenaRecords(parsedGame, true)}
+                        disabled={isRecordingArenaMatch}
+                        className="bg-amber-400 hover:bg-amber-300 text-black border border-black font-mono text-xs font-black uppercase px-3 py-1.5 rounded-xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>
+                          {isRecordingArenaMatch
+                            ? 'Recording & Training AI...'
+                            : 'Record Match & Train 95-AI'}
+                        </span>
+                      </button>
+                    )}
                     <button
                       onClick={handleSendStateToDiscord}
                       disabled={isSendingToDiscord}
@@ -3164,6 +4125,55 @@ function ArenaContent() {
               </div>
             </div>
 
+            {/* COACH RECORD SNAPSHOT & ALL-TIME HIGHLIGHTS */}
+            {(() => {
+              const myRec = (arenaRecordsData?.coachLeaderboard || []).find(
+                (c: any) => c.coachName.toLowerCase() === myDisplayName.toLowerCase()
+              );
+              return (
+                <div className="py-3 border-b border-slate-200 font-mono text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase text-slate-500 font-black flex items-center gap-1">
+                      <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                      <span>COACH CAREER RECORD</span>
+                    </span>
+                    <button
+                      onClick={() => setActiveArenaTab('records')}
+                      className="text-[10px] text-blue-700 hover:underline font-bold cursor-pointer"
+                    >
+                      All-Time Records &rarr;
+                    </button>
+                  </div>
+                  {myRec ? (
+                    <div className="grid grid-cols-4 gap-1.5 bg-[#faf8f5] border border-slate-200 p-2 rounded-xs text-center">
+                      <div>
+                        <div className="text-[9px] text-slate-500">W-L-T</div>
+                        <div className="font-black text-slate-900">
+                          {myRec.wins}-{myRec.losses}-{myRec.ties}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-500">PTS</div>
+                        <div className="font-black text-blue-900">{myRec.points}</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-500">WIN%</div>
+                        <div className="font-black text-emerald-800">{myRec.winPct}%</div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] text-slate-500">GOALS</div>
+                        <div className="font-black text-amber-800">{myRec.goalsFor}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-500 bg-[#faf8f5] border border-slate-200 p-2 rounded-xs">
+                      Play a match on the ice or sign in to track your W-L-T, Points, Goals &amp; Fastest Goals!
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="py-3 border-b border-slate-200 text-xs space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-[10px] uppercase text-slate-500 font-bold">
@@ -3216,10 +4226,11 @@ function ArenaContent() {
               )}
 
               <button
-                onClick={() => setActiveArenaTab('lobby')}
-                className="py-2 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold uppercase rounded-xs cursor-pointer transition"
+                onClick={() => setActiveArenaTab('records')}
+                className="py-2 px-3 bg-amber-500 hover:bg-amber-400 text-black border border-black font-black uppercase rounded-xs cursor-pointer transition flex items-center justify-center gap-1"
               >
-                Find Player ({onlinePlayers.length || 1})
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Records &amp; AI</span>
               </button>
 
               <button

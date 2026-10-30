@@ -557,52 +557,30 @@ export async function POST(req: NextRequest) {
           }
         };
 
-        // Check East Quarter Finals (QF 1..4) -> Re-seed into Semi Finals 1 & 2
-        const eastQF = ['Quarter Finals 1', 'Quarter Finals 2', 'Quarter Finals 3', 'Quarter Finals 4']
-          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
-          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
-        if (eastQF.length === 4) {
-          eastQF.sort((a, b) => a.winnerSeed - b.winnerSeed);
-          await upsertNextRoundMatchup('Semi Finals 1', eastQF[0], eastQF[3]);
-          await upsertNextRoundMatchup('Semi Finals 2', eastQF[1], eastQF[2]);
-        }
+        const findSeriesByLabel = (lbl: string) =>
+          seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl));
 
-        // Check West Quarter Finals (QF 5..8) -> Re-seed into Semi Finals 3 & 4
-        const westQF = ['Quarter Finals 5', 'Quarter Finals 6', 'Quarter Finals 7', 'Quarter Finals 8']
-          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
-          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
-        if (westQF.length === 4) {
-          westQF.sort((a, b) => a.winnerSeed - b.winnerSeed);
-          await upsertNextRoundMatchup('Semi Finals 3', westQF[0], westQF[3]);
-          await upsertNextRoundMatchup('Semi Finals 4', westQF[1], westQF[2]);
-        }
+        const advancePairDb = async (targetLbl: string, topLbl: string, botLbl: string) => {
+          const wTop = evaluateSeriesWinner(findSeriesByLabel(topLbl));
+          const wBot = evaluateSeriesWinner(findSeriesByLabel(botLbl));
+          if (!wTop && !wBot) return;
+          if (wTop && wBot) {
+            const ordered = [wTop, wBot].sort((a, b) => a.winnerSeed - b.winnerSeed);
+            await upsertNextRoundMatchup(targetLbl, ordered[0], ordered[1]);
+          } else if (wTop) {
+            await upsertNextRoundMatchup(targetLbl, wTop, null);
+          } else if (wBot) {
+            await upsertNextRoundMatchup(targetLbl, null, wBot);
+          }
+        };
 
-        // Check East Semi Finals (SF 1..2) -> Re-seed into Conference Finals 1
-        const eastSF = ['Semi Finals 1', 'Semi Finals 2']
-          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
-          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
-        if (eastSF.length === 2) {
-          eastSF.sort((a, b) => a.winnerSeed - b.winnerSeed);
-          await upsertNextRoundMatchup('Conference Finals 1', eastSF[0], eastSF[1]);
-        }
-
-        // Check West Semi Finals (SF 3..4) -> Re-seed into Conference Finals 2
-        const westSF = ['Semi Finals 3', 'Semi Finals 4']
-          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
-          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
-        if (westSF.length === 2) {
-          westSF.sort((a, b) => a.winnerSeed - b.winnerSeed);
-          await upsertNextRoundMatchup('Conference Finals 2', westSF[0], westSF[1]);
-        }
-
-        // Check Conference Finals (CF 1..2) -> Finals
-        const cfWins = ['Conference Finals 1', 'Conference Finals 2']
-          .map(lbl => evaluateSeriesWinner(seriesList.find((m: any) => normLbl(m.match_label) === normLbl(lbl) || normLbl(m.round_name) === normLbl(lbl))))
-          .filter(Boolean) as { winnerId: number; winnerSeed: number }[];
-        if (cfWins.length === 2) {
-          cfWins.sort((a, b) => a.winnerSeed - b.winnerSeed);
-          await upsertNextRoundMatchup('Finals', cfWins[0], cfWins[1]);
-        }
+        await advancePairDb('Semi Finals 1', 'Quarter Finals 1', 'Quarter Finals 2');
+        await advancePairDb('Semi Finals 2', 'Quarter Finals 3', 'Quarter Finals 4');
+        await advancePairDb('Semi Finals 3', 'Quarter Finals 5', 'Quarter Finals 6');
+        await advancePairDb('Semi Finals 4', 'Quarter Finals 7', 'Quarter Finals 8');
+        await advancePairDb('Conference Finals 1', 'Semi Finals 1', 'Semi Finals 2');
+        await advancePairDb('Conference Finals 2', 'Semi Finals 3', 'Semi Finals 4');
+        await advancePairDb('Finals', 'Conference Finals 1', 'Conference Finals 2');
       } catch (advErr) {
         console.warn('Non-fatal error advancing playoff bracket round:', advErr);
       }
@@ -1036,7 +1014,8 @@ export async function POST(req: NextRequest) {
         homeTeam: homeTeam || { team_name: homeTeamCode, abbreviation: homeTeamCode },
         awayTeam: awayTeam || { team_name: awayTeamCode, abbreviation: awayTeamCode },
         homeCoachName,
-        awayCoachName
+        awayCoachName,
+        isPlayoffMode
       });
       discordSent = true;
     } catch (discErr) {
@@ -1534,17 +1513,44 @@ async function sendDiscordBoxscore(params: {
   awayTeam: any;
   homeCoachName: string;
   awayCoachName: string;
+  isPlayoffMode?: boolean;
 }) {
   const webhookUrl = process.env.DISCORD_BOXSCORE_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL;
   const botToken = process.env.DISCORD_BOT_TOKEN;
   const channelId = process.env.DISCORD_BOXSCORE_CHANNEL_ID || process.env.DISCORD_CHANNEL_ID;
 
-  if (!webhookUrl && (!botToken || !channelId)) {
-    console.log("No Discord Boxscore Webhook or Channel configured, skipping Discord boxscore push.");
+  if (!webhookUrl && !botToken) {
+    console.log("No Discord Boxscore Webhook or Bot Token configured, skipping Discord boxscore push.");
     return { skipped: true };
   }
 
-  const { game, seasonId, gameId, homeTeam, awayTeam, homeCoachName, awayCoachName } = params;
+  const { game, seasonId, gameId, homeTeam, awayTeam, homeCoachName, awayCoachName, isPlayoffMode } = params;
+
+  // First try rendering and posting the clean retro boxscore.png via scripts/discord_savestate_bot.py
+  try {
+    const { spawn } = await import('child_process');
+    const path = await import('path');
+    const fs = await import('fs');
+    const localAppData = process.env.LOCALAPPDATA || 'C:\\Users\\wn95h\\AppData\\Local';
+    const armPython = path.join(localAppData, 'Programs', 'Python', 'Python312-arm64', 'python.exe');
+    const pythonCmd = fs.existsSync(armPython) ? armPython : 'python';
+    const scriptPath = path.join(process.cwd(), 'scripts', 'discord_savestate_bot.py');
+
+    const pngPosted = await new Promise<boolean>((resolve) => {
+      const child = spawn(pythonCmd, ['-u', scriptPath, '--post-boxscore-stdin'], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      child.on('error', () => resolve(false));
+      child.on('close', (code) => resolve(code === 0));
+      child.stdin.write(JSON.stringify({ game, awayTeam, homeTeam, seasonId, isPlayoffMode: Boolean(isPlayoffMode) }));
+      child.stdin.end();
+    });
+    if (pngPosted) {
+      return { success: true, format: 'png' };
+    }
+  } catch (pyErr) {
+    console.warn("Python boxscore.png render fallback:", pyErr);
+  }
   const awayCode = (game.awayTeam?.teamCode || awayTeam?.abbreviation || 'AWAY').toUpperCase();
   const homeCode = (game.homeTeam?.teamCode || homeTeam?.abbreviation || 'HOME').toUpperCase();
   const awayName = awayTeam?.team_name || W_LEAGUE_COACH_MAP[awayCode]?.city || awayCode;

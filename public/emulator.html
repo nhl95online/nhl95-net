@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NHL '95 Online Arena Emulator (1v1 &amp; 2v2 4-Player)</title>
+  <title>NHL '95 Online Arena Emulator (60FPS 1v1 &amp; 2v2 4-Player)</title>
   <style>
     html, body {
       margin: 0;
@@ -75,8 +75,9 @@
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
       z-index: 20;
+      transition: opacity 0.25s ease;
     }
     .hud-pill {
       background: rgba(0, 0, 0, 0.85);
@@ -116,6 +117,48 @@
       color: #000000;
       border-color: #ffffff;
     }
+    .hud-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: auto;
+    }
+    .hud-action-btn {
+      background: rgba(15, 23, 42, 0.92);
+      color: #ffffff;
+      border: 1px solid #64748b;
+      font-family: monospace;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 4px 9px;
+      border-radius: 3px;
+      cursor: pointer;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .hud-action-btn:hover {
+      background: #f59e0b;
+      color: #000000;
+      border-color: #ffffff;
+    }
+    .hud-action-btn.discord {
+      background: rgba(88, 101, 242, 0.92);
+      border-color: #818cf8;
+    }
+    .hud-action-btn.discord:hover {
+      background: #4752c4;
+      color: #ffffff;
+    }
+    .hud-action-btn.boxscore {
+      background: rgba(5, 150, 105, 0.92);
+      border-color: #34d399;
+    }
+    .hud-action-btn.boxscore:hover {
+      background: #10b981;
+      color: #000000;
+    }
   </style>
 </head>
 <body>
@@ -125,10 +168,10 @@
   <div id="guest-view">
     <div id="guest-hud">
       <div class="hud-pill" id="guest-status-pill">
-        ⚡ CONNECTING TO HOST'S ICE FEED...
+        ⚡ CONNECTING TO HOST'S 60FPS ICE FEED...
       </div>
       <div class="slot-switcher">
-        <span style="font-size: 10px; color: #94a3b8; margin-right: 2px;">YOUR CONTROLLER PORT:</span>
+        <span style="font-size: 10px; color: #94a3b8; margin-right: 2px;">PORT:</span>
         <button type="button" class="slot-btn" id="slot-btn-1" data-slot="1">P2</button>
         <button type="button" class="slot-btn" id="slot-btn-2" data-slot="2">P3</button>
         <button type="button" class="slot-btn" id="slot-btn-3" data-slot="3">P4</button>
@@ -136,14 +179,25 @@
       <div class="hud-pill" id="guest-pad-pill" style="border-color: #f59e0b; color: #f59e0b;">
         CONTROLLER ACTIVE
       </div>
+      <div class="hud-actions">
+        <button type="button" class="hud-action-btn discord" id="guest-send-state-btn" title="Capture live save state from match and send to Discord">
+          📤 SEND .STATE
+        </button>
+        <button type="button" class="hud-action-btn boxscore" id="guest-boxscore-btn" title="Capture live boxscore from match">
+          📊 BOXSCORE
+        </button>
+        <button type="button" class="hud-action-btn" id="guest-fullscreen-btn" title="Toggle Fullscreen (or double-click ice)">
+          ⛶ FULLSCREEN
+        </button>
+      </div>
     </div>
     <div id="guest-waiting">
       <div class="spinner"></div>
       <div style="font-size: 14px; font-weight: bold; color: #f59e0b;">
-        SYNCING LIVE ICE FEED FROM HOST...
+        SYNCING 60FPS LIVE ICE FEED FROM HOST...
       </div>
       <div style="font-size: 11px; color: #94a3b8; max-width: 400px;">
-        Connecting to Host's Sega Genesis emulator. Both players should stay on the Arena Ice tab while the cartridge boots.
+        Connecting to Host's Sega Genesis emulator. Both coaches can play at 60 FPS, toggle Fullscreen, and send the Save State!
       </div>
     </div>
     <video id="guest-video" autoplay playsinline muted></video>
@@ -152,7 +206,7 @@
 
   <script>
     (function () {
-      // 1. Force preserveDrawingBuffer: true on WebGL contexts (both HTMLCanvasElement and OffscreenCanvas)
+      // 1. Force preserveDrawingBuffer: true and desynchronized low-latency on WebGL contexts
       try {
         var origGetContext = HTMLCanvasElement.prototype.getContext;
         HTMLCanvasElement.prototype.getContext = function (type, attrs) {
@@ -172,8 +226,7 @@
         }
       } catch (e) {}
 
-      // 2. Hook requestAnimationFrame so Host can copy the WebGL canvas synchronously at the end of the render callback
-      // BEFORE the browser compositor swaps or clears the WebGL drawing buffer!
+      // 2. Hook requestAnimationFrame so Host can blit the WebGL canvas at 60 FPS on GPU
       try {
         var origRAF = window.requestAnimationFrame;
         window.requestAnimationFrame = function (cb) {
@@ -187,6 +240,16 @@
             return res;
           });
         };
+      } catch (e) {}
+
+      // 3. Clear any cached EmulatorJS control overrides in localStorage so EJS never hijacks coach settings
+      try {
+        for (var kIdx = localStorage.length - 1; kIdx >= 0; kIdx--) {
+          var lsKey = localStorage.key(kIdx);
+          if (lsKey && (lsKey.indexOf("EJS-") === 0 || lsKey.indexOf("ejs_") === 0)) {
+            localStorage.removeItem(lsKey);
+          }
+        }
       } catch (e) {}
 
       var params = new URLSearchParams(window.location.search);
@@ -209,6 +272,7 @@
 
       var defaultControllerConfig = {
         presetName: "Standard Xbox / PS / 8BitDo",
+        preferredPadIndex: null,
         keyboard: {
           b: "x",
           a: "z",
@@ -241,20 +305,134 @@
         }
       };
 
+      function normalizeControllerConfig(raw) {
+        if (!raw || typeof raw !== "object") return defaultControllerConfig;
+        return {
+          presetName: raw.presetName || defaultControllerConfig.presetName,
+          preferredPadIndex: typeof raw.preferredPadIndex === "number" ? raw.preferredPadIndex : null,
+           updatedAt: raw.updatedAt || 0,
+          keyboard: Object.assign({}, defaultControllerConfig.keyboard, raw.keyboard || {}),
+          gamepad: Object.assign({}, defaultControllerConfig.gamepad, raw.gamepad || {})
+        };
+      }
+
       var controllerConfig = defaultControllerConfig;
       try {
         if (window.parent && window.parent.__NHL95_CONTROLLER_CONFIG) {
-          controllerConfig = window.parent.__NHL95_CONTROLLER_CONFIG;
+          controllerConfig = normalizeControllerConfig(window.parent.__NHL95_CONTROLLER_CONFIG);
+        } else {
+          var savedActive = localStorage.getItem("nhl95_controller_config_active");
+          if (savedActive) {
+            controllerConfig = normalizeControllerConfig(JSON.parse(savedActive));
+          }
         }
       } catch (e) {}
+
+      // Adaptive 95-AI Neural CPU Configuration & Real-Time Learning State
+      var aiCpuConfig = {
+        enabled: role === "solo",
+        botPort2Takeover: false,
+        generation: 1,
+        eloRating: 1500,
+        activeStrategy: "Adaptive Balanced",
+        weights: {
+          oneTimerDefense: 0.55,
+          breakawayTrap: 0.55,
+          forecheckAggression: 0.55,
+          faceoffCounter: 0.55,
+          slotLockdown: 0.55
+        }
+      };
+
+      var aiLiveTracker = {
+        lastPassTs: 0,
+        oneTimerInputCombos: 0,
+        rushBurstCount: 0,
+        bodyCheckPresses: 0,
+        totalInputFrames: 0,
+        eastWestCrosses: 0,
+        lastDirMask: 0,
+        prevP1Mask: 0,
+        botPhase: 0,
+        lastRamHomeGoals: 0,
+        lastRamAwayGoals: 0
+      };
+
+      // Binary <-> Base64 helpers for syncing ~55KB Genesis save states between Host and Guest
+      function uint8ToBase64(bytes) {
+        var binary = "";
+        var chunkSize = 0x8000;
+        for (var i = 0; i < bytes.length; i += chunkSize) {
+          var sub = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+          binary += String.fromCharCode.apply(null, sub);
+        }
+        return btoa(binary);
+      }
+
+      function base64ToUint8(b64) {
+        var bin = atob(b64);
+        var out = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) {
+          out[i] = bin.charCodeAt(i);
+        }
+        return out;
+      }
+
+      // Cross-browser Fullscreen Toggle Helper (works for both Guest and Host!)
+      function toggleFullscreenElement(targetEl) {
+        var doc = document;
+        var fsEl = doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement;
+        if (!fsEl) {
+          var el = targetEl || doc.documentElement;
+          var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+          if (req) {
+            try {
+              var p = req.call(el);
+              if (p && typeof p.catch === "function") {
+                p.catch(function () {
+                  // If iframe element fullscreen failed, ask parent container to fullscreen
+                  window.parent.postMessage({ type: "NHL95_PARENT_FULLSCREEN_FALLBACK" }, "*");
+                });
+              }
+            } catch (e) {
+              window.parent.postMessage({ type: "NHL95_PARENT_FULLSCREEN_FALLBACK" }, "*");
+            }
+          } else {
+            window.parent.postMessage({ type: "NHL95_PARENT_FULLSCREEN_FALLBACK" }, "*");
+          }
+        } else {
+          var exit = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+          if (exit) {
+            try { exit.call(doc); } catch (e) {}
+          }
+        }
+      }
 
       window.addEventListener("message", function (ev) {
         if (!ev.data || typeof ev.data !== "object") return;
         if (ev.data.type === "NHL95_CONTROLLER_CONFIG_UPDATE" && ev.data.config) {
-          controllerConfig = ev.data.config;
+          controllerConfig = normalizeControllerConfig(ev.data.config);
+        } else if (ev.data.type === "NHL95_AI_CONFIG_UPDATE" && ev.data.aiConfig) {
+          var ac = ev.data.aiConfig;
+          if (typeof ac.enabled === "boolean") aiCpuConfig.enabled = ac.enabled;
+          if (typeof ac.botPort2Takeover === "boolean") {
+            aiCpuConfig.botPort2Takeover = ac.botPort2Takeover;
+            if (!ac.botPort2Takeover) {
+              applyPlayerSlotMask(1, 0, false);
+            }
+          }
+          if (typeof ac.generation === "number") aiCpuConfig.generation = ac.generation;
+          if (typeof ac.eloRating === "number") aiCpuConfig.eloRating = ac.eloRating;
+          if (ac.activeStrategy) aiCpuConfig.activeStrategy = ac.activeStrategy;
+          if (ac.weights && typeof ac.weights === "object") {
+            aiCpuConfig.weights = Object.assign({}, aiCpuConfig.weights, ac.weights);
+          }
         } else if (ev.data.type === "NHL95_SET_SLOT" && typeof ev.data.slot === "number") {
           guestSlot = Math.max(1, Math.min(3, ev.data.slot));
           updateSlotButtonsUI();
+        } else if (ev.data.type === "NHL95_TOGGLE_FULLSCREEN") {
+          var target = role === "guest" ? document.getElementById("guest-view") : document.documentElement;
+          toggleFullscreenElement(target);
         }
       });
 
@@ -312,6 +490,29 @@
         return mask;
       }
 
+      // Compute primary player mask across preferred pad or any active pad (protects against virtual HID devices at pads[0])
+      function computePrimaryCoachMask(keysMap, pads, cfg, allowMultiPadFallback) {
+        var mask = computePadAndKeyMask(keysMap, null, cfg);
+        if (!pads || pads.length === 0) return mask;
+
+        var prefIdx = cfg && typeof cfg.preferredPadIndex === "number" ? cfg.preferredPadIndex : null;
+        if (prefIdx !== null && pads[prefIdx]) {
+          mask |= computePadAndKeyMask(null, pads[prefIdx], cfg);
+          return mask;
+        }
+
+        // Always read pads[0]
+        mask |= computePadAndKeyMask(null, pads[0], cfg);
+
+        // If in online match (or if pads[0] is a silent virtual device), also check other connected pads for this coach
+        if (allowMultiPadFallback && pads.length > 1) {
+          for (var i = 1; i < pads.length; i++) {
+            mask |= computePadAndKeyMask(null, pads[i], cfg);
+          }
+        }
+        return mask;
+      }
+
       function updateSlotButtonsUI() {
         for (var s = 1; s <= 3; s++) {
           var btn = document.getElementById("slot-btn-" + s);
@@ -335,6 +536,9 @@
         var waitingEl = document.getElementById("guest-waiting");
         var statusPill = document.getElementById("guest-status-pill");
         var padPill = document.getElementById("guest-pad-pill");
+        var fsBtn = document.getElementById("guest-fullscreen-btn");
+        var sendStateBtn = document.getElementById("guest-send-state-btn");
+        var boxscoreBtn = document.getElementById("guest-boxscore-btn");
 
         updateSlotButtonsUI();
         [1, 2, 3].forEach(function (s) {
@@ -343,7 +547,7 @@
             btn.addEventListener("click", function () {
               guestSlot = s;
               updateSlotButtonsUI();
-              statusPill.textContent = "🟢 ACTIVE AS PLAYER " + (guestSlot + 1) + " (PORT " + (guestSlot + 1) + ")";
+              statusPill.textContent = "🟢 60FPS ACTIVE — PLAYER " + (guestSlot + 1) + " (PORT " + (guestSlot + 1) + ")";
               window.parent.postMessage({
                 type: "NHL95_GUEST_SLOT_CHANGED",
                 slot: guestSlot
@@ -352,10 +556,90 @@
           }
         });
 
+        // Fullscreen support for Joining Coach (Guest)
+        if (fsBtn) {
+          fsBtn.addEventListener("click", function () {
+            toggleFullscreenElement(guestView);
+          });
+        }
+        guestView.addEventListener("dblclick", function (ev) {
+          if (ev.target && (ev.target.tagName === "BUTTON" || ev.target.closest("#guest-hud"))) return;
+          toggleFullscreenElement(guestView);
+        });
+        document.addEventListener("fullscreenchange", function () {
+          if (!fsBtn) return;
+          var isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+          fsBtn.textContent = isFs ? "✕ EXIT FULLSCREEN" : "⛶ FULLSCREEN";
+        });
+
         var rtcPeer = null;
         var rtcDataChannel = null;
         var hasVideoTrackPlaying = false;
         var hasReceivedAnyFeed = false;
+        var incomingStateBuffers = {};
+
+        function requestStateFromHost(reason) {
+          var reqPkt = {
+            kind: "request-savestate",
+            guestId: guestId,
+            reason: reason || "sync"
+          };
+          if (rtcDataChannel && rtcDataChannel.readyState === "open") {
+            try {
+              rtcDataChannel.send(JSON.stringify(reqPkt));
+            } catch (e) {}
+          }
+          window.parent.postMessage({
+            type: "NHL95_NETPLAY_SIGNAL",
+            roomId: roomId,
+            signal: reqPkt
+          }, "*");
+        }
+
+        if (sendStateBtn) {
+          sendStateBtn.addEventListener("click", function () {
+            sendStateBtn.textContent = "⏳ SENDING...";
+            requestStateFromHost("guest-send-discord");
+            window.parent.postMessage({ type: "NHL95_GUEST_TRIGGER_DISCORD_STATE" }, "*");
+            setTimeout(function () {
+              sendStateBtn.textContent = "📤 SEND .STATE";
+            }, 3000);
+          });
+        }
+
+        if (boxscoreBtn) {
+          boxscoreBtn.addEventListener("click", function () {
+            requestStateFromHost("guest-boxscore");
+            window.parent.postMessage({ type: "NHL95_GUEST_TRIGGER_BOXSCORE" }, "*");
+          });
+        }
+
+        function handleIncomingStateChunk(pkt) {
+          if (!pkt || !pkt.id || typeof pkt.idx !== "number" || typeof pkt.total !== "number" || !pkt.chunk) return;
+          var entry = incomingStateBuffers[pkt.id];
+          if (!entry) {
+            entry = { total: pkt.total, parts: new Array(pkt.total), received: 0, reason: pkt.reason || "sync" };
+            incomingStateBuffers[pkt.id] = entry;
+          }
+          if (!entry.parts[pkt.idx]) {
+            entry.parts[pkt.idx] = pkt.chunk;
+            entry.received++;
+          }
+          if (entry.received >= entry.total) {
+            var fullB64 = entry.parts.join("");
+            delete incomingStateBuffers[pkt.id];
+            try {
+              var stateBytes = base64ToUint8(fullB64);
+              if (stateBytes && stateBytes.length >= 52000) {
+                window.parent.postMessage({
+                  type: "NHL95_GUEST_SAVESTATE_SYNCED",
+                  state: stateBytes,
+                  reason: entry.reason
+                }, "*");
+              }
+            } catch (e) {}
+          }
+        }
 
         function showFallbackFrame(dataUrl) {
           if (!dataUrl || hasVideoTrackPlaying) return;
@@ -367,6 +651,18 @@
           statusPill.textContent = "🟢 LIVE STREAM ACTIVE — PLAYER " + (guestSlot + 1);
         }
 
+        function notifyHostVideoPlaying() {
+          var okPkt = { kind: "video-ok", guestId: guestId };
+          if (rtcDataChannel && rtcDataChannel.readyState === "open") {
+            try { rtcDataChannel.send(JSON.stringify(okPkt)); } catch (e) {}
+          }
+          window.parent.postMessage({
+            type: "NHL95_NETPLAY_SIGNAL",
+            roomId: roomId,
+            signal: okPkt
+          }, "*");
+        }
+
         videoEl.addEventListener("playing", function () {
           if (videoEl.videoWidth > 0) {
             hasVideoTrackPlaying = true;
@@ -375,6 +671,20 @@
             fallbackImg.style.display = "none";
             videoEl.style.display = "block";
             statusPill.textContent = "🟢 60FPS P2P STREAM — PLAYER " + (guestSlot + 1);
+            notifyHostVideoPlaying();
+          }
+        });
+
+        videoEl.addEventListener("loadedmetadata", function () {
+          if (videoEl.videoWidth > 0) {
+            hasVideoTrackPlaying = true;
+            hasReceivedAnyFeed = true;
+            if (waitingEl) waitingEl.style.display = "none";
+            fallbackImg.style.display = "none";
+            videoEl.style.display = "block";
+            statusPill.textContent = "🟢 60FPS P2P STREAM — PLAYER " + (guestSlot + 1);
+            videoEl.play().catch(function () {});
+            notifyHostVideoPlaying();
           }
         });
 
@@ -394,6 +704,14 @@
             };
 
             rtcPeer.ontrack = function (ev) {
+              try {
+                if (ev.receiver && "playoutDelayHint" in ev.receiver) {
+                  ev.receiver.playoutDelayHint = 0;
+                }
+                if (ev.receiver && "jitterBufferTarget" in ev.receiver) {
+                  ev.receiver.jitterBufferTarget = 0;
+                }
+              } catch (e) {}
               if (ev.streams && ev.streams[0]) {
                 videoEl.srcObject = ev.streams[0];
                 videoEl.play().catch(function () {});
@@ -402,11 +720,19 @@
 
             rtcPeer.ondatachannel = function (ev) {
               rtcDataChannel = ev.channel;
+              rtcDataChannel.onopen = function () {
+                if (hasVideoTrackPlaying) notifyHostVideoPlaying();
+                // Request an initial save state sync once connected
+                requestStateFromHost("initial-sync");
+              };
               rtcDataChannel.onmessage = function (msgEv) {
                 try {
                   var pkt = JSON.parse(msgEv.data);
-                  if (pkt && pkt.f) {
+                  if (!pkt) return;
+                  if (pkt.f) {
                     showFallbackFrame(pkt.f);
+                  } else if (pkt.kind === "state-chunk") {
+                    handleIncomingStateChunk(pkt);
                   }
                 } catch (e) {}
               };
@@ -437,6 +763,10 @@
 
         window.addEventListener("message", async function (ev) {
           if (!ev.data || typeof ev.data !== "object") return;
+          if (ev.data.type === "NHL95_REQUEST_HOST_SAVESTATE") {
+            requestStateFromHost(ev.data.reason || "parent-request");
+            return;
+          }
           if (ev.data.type === "NHL95_NETPLAY_SIGNAL_IN") {
             var sig = ev.data.signal;
             if (!sig) return;
@@ -461,6 +791,8 @@
               } catch (e) {}
             } else if (sig.kind === "frame" && sig.dataUrl) {
               showFallbackFrame(sig.dataUrl);
+            } else if (sig.kind === "state-chunk") {
+              handleIncomingStateChunk(sig);
             }
           }
         });
@@ -472,30 +804,27 @@
         window.addEventListener("keyup", function (e) {
           delete activeKeys[e.key];
         });
+        window.addEventListener("blur", function () {
+          activeKeys = {};
+        });
 
         var lastPrimaryMask = -1;
-        var lastSecondaryMask = -1;
         var lastSentSlot = guestSlot;
 
         function pollGuestControls() {
           var pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
           if (pads.length > 0) {
-            padPill.textContent = "🎮 " + pads.length + " PAD" + (pads.length > 1 ? "S" : "") + " READY (P" + (guestSlot + 1) + ")";
+            padPill.textContent =
+              "🎮 " + controllerConfig.presetName.slice(0, 18).toUpperCase() + " (P" + (guestSlot + 1) + ")";
           }
 
-          var primaryMask = computePadAndKeyMask(activeKeys, pads[0] || null, controllerConfig);
-          var secondaryMask = pads[1] ? computePadAndKeyMask(null, pads[1], controllerConfig) : -1;
+          var primaryMask = computePrimaryCoachMask(activeKeys, pads, controllerConfig, true);
 
-          if (primaryMask !== lastPrimaryMask || secondaryMask !== lastSecondaryMask || guestSlot !== lastSentSlot) {
+          if (primaryMask !== lastPrimaryMask || guestSlot !== lastSentSlot) {
             lastPrimaryMask = primaryMask;
-            lastSecondaryMask = secondaryMask;
             lastSentSlot = guestSlot;
 
             var packet = { s: guestSlot, m: primaryMask };
-            if (secondaryMask >= 0 && guestSlot < 3) {
-              packet.s2 = guestSlot + 1;
-              packet.m2 = secondaryMask;
-            }
 
             if (rtcDataChannel && rtcDataChannel.readyState === "open") {
               try {
@@ -508,9 +837,7 @@
                 signal: {
                   kind: "p2-input",
                   slot: guestSlot,
-                  mask: primaryMask,
-                  slot2: packet.s2,
-                  mask2: packet.m2
+                  mask: primaryMask
                 }
               }, "*");
             }
@@ -522,7 +849,7 @@
       }
 
       // ======================================================================
-      // SOLO OR HOST MODE (RUNS GENESIS PLUS GX EMULATOR WITH 4-PLAYER SUPPORT)
+      // SOLO OR HOST MODE (RUNS GENESIS PLUS GX EMULATOR AT 60FPS NTSC)
       // ======================================================================
       try {
         if (window.parent && window.parent.__NHL95_LOCAL_FILE) {
@@ -551,12 +878,28 @@
       window.EJS_backgroundColor = "#050608";
       window.EJS_startOnLoaded = autoStart;
 
-      if (fourPlayer) {
-        window.EJS_defaultOptions = {
-          "genesis_plus_gx_input_system": "4 way play",
-          "4 way play": "enabled"
-        };
-      }
+      // Clear EJS_defaultControls so EmulatorJS's built-in gamepad/keyboard handler never overrides Coach Controller Settings
+      window.EJS_defaultControls = {
+        0: {},
+        1: {},
+        2: {},
+        3: {}
+      };
+
+      // Force 60Hz NTSC-U and zero frameskip so every ROM runs at a locked 60 FPS instead of 50Hz PAL
+      window.EJS_defaultOptions = Object.assign(
+        {
+          "genesis_plus_gx_region_detect": "ntsc-u",
+          "genesis_plus_gx_frameskip": "disabled",
+          "genesis_plus_gx_vscroll": "per-pixel"
+        },
+        fourPlayer
+          ? {
+              "genesis_plus_gx_input_system": "4 way play",
+              "4 way play": "enabled"
+            }
+          : {}
+      );
 
       var prevPlayerMasks = [0, 0, 0, 0];
       var remoteSlotActiveUntil = [0, 0, 0, 0];
@@ -564,7 +907,7 @@
       function applyPlayerSlotMask(slotIdx, mask, isRemote) {
         if (slotIdx < 0 || slotIdx > 3) return;
         if (isRemote) {
-          remoteSlotActiveUntil[slotIdx] = Date.now() + 8000;
+          remoteSlotActiveUntil[slotIdx] = Date.now() + 15000;
         }
         var ejs = window.EJS_emulator;
         if (!ejs || !ejs.gameManager || !ejs.gameManager.simulateInput) return;
@@ -580,11 +923,18 @@
         prevPlayerMasks[slotIdx] = mask;
       }
 
-      // Persistent 2D mirror canvas (320x224) that captures frames synchronously inside requestAnimationFrame
+      // GPU-accelerated 2D mirror canvas (320x224) WITHOUT willReadFrequently so 60FPS blits never stall the GPU
       var relayCanvas = document.createElement("canvas");
       relayCanvas.width = 320;
       relayCanvas.height = 224;
-      var relayCtx = relayCanvas.getContext("2d", { willReadFrequently: true });
+      var relayCtx = relayCanvas.getContext("2d", { alpha: false, desynchronized: true });
+
+      // Tiny 16x16 probe canvas used ONLY during initial boot until the first non-black frame appears
+      var probeCanvas = document.createElement("canvas");
+      probeCanvas.width = 16;
+      probeCanvas.height = 16;
+      var probeCtx = probeCanvas.getContext("2d", { willReadFrequently: true });
+
       var lastRafCaptureTime = 0;
       var hasCapturedValidFrame = false;
 
@@ -606,11 +956,15 @@
         return best;
       }
 
-      function canvasHasNonBlackPixels(ctx) {
+      function checkFirstFrameNonBlack(sourceCanvas) {
+        if (hasCapturedValidFrame) return true;
+        if (!probeCtx || !sourceCanvas) return false;
         try {
-          var data = ctx.getImageData(40, 30, 240, 160).data;
-          for (var i = 0; i < data.length; i += 64) {
+          probeCtx.drawImage(sourceCanvas, 0, 0, 16, 16);
+          var data = probeCtx.getImageData(0, 0, 16, 16).data;
+          for (var i = 0; i < data.length; i += 4) {
             if (data[i] > 4 || data[i + 1] > 4 || data[i + 2] > 4) {
+              hasCapturedValidFrame = true;
               return true;
             }
           }
@@ -620,21 +974,77 @@
 
       if (role === "host") {
         window.__NHL95_AFTER_RAF = function (ts) {
-          if (ts - lastRafCaptureTime < 30) return;
           var srcCanvas = getActiveEmulatorCanvas();
           if (!srcCanvas || !relayCtx) return;
           try {
             relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
             lastRafCaptureTime = ts;
-            if (!hasCapturedValidFrame && canvasHasNonBlackPixels(relayCtx)) {
-              hasCapturedValidFrame = true;
-            }
           } catch (e) {}
         };
       }
 
       var hostPeers = {};
       var pendingGuests = {};
+
+      // Capture live save state on Host and broadcast to all connected Guests (and parent window)
+      function captureAndBroadcastHostState(reason, targetGuestId) {
+        try {
+          var ejs = window.EJS_emulator;
+          if (!ejs || !ejs.gameManager || typeof ejs.gameManager.getState !== "function") return;
+          var rawState = ejs.gameManager.getState();
+          if (!rawState || rawState.length < 52000) return;
+
+          // Keep Host's own parent window synced
+          window.parent.postMessage({
+            type: "NHL95_HOST_SAVESTATE_SYNCED",
+            state: rawState,
+            reason: reason || "sync"
+          }, "*");
+
+          if (role !== "host" || !roomId) return;
+
+          var b64 = uint8ToBase64(rawState);
+          var chunkSize = 12000;
+          var totalChunks = Math.ceil(b64.length / chunkSize);
+          var snapId = "st_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 5);
+
+          for (var idx = 0; idx < totalChunks; idx++) {
+            var chunkStr = b64.slice(idx * chunkSize, (idx + 1) * chunkSize);
+            var pkt = {
+              kind: "state-chunk",
+              id: snapId,
+              idx: idx,
+              total: totalChunks,
+              chunk: chunkStr,
+              reason: reason || "sync",
+              targetGuestId: targetGuestId
+            };
+
+            var sentOnDc = false;
+            Object.keys(hostPeers).forEach(function (k) {
+              if (targetGuestId && k !== targetGuestId && k !== "default_guest") return;
+              var peerEntry = hostPeers[k];
+              if (peerEntry && peerEntry.dc && peerEntry.dc.readyState === "open") {
+                try {
+                  peerEntry.dc.send(JSON.stringify(pkt));
+                  sentOnDc = true;
+                } catch (e) {}
+              }
+            });
+
+            // Always also send via Supabase room broadcast if explicitly requested or no DC open
+            if (!sentOnDc || (reason && reason !== "auto-sync")) {
+              window.parent.postMessage({
+                type: "NHL95_NETPLAY_SIGNAL",
+                roomId: roomId,
+                signal: pkt
+              }, "*");
+            }
+          }
+        } catch (e) {
+          console.warn("Could not capture/broadcast host save state:", e);
+        }
+      }
 
       async function startHostWebRTCForGuest(targetGuestId) {
         var key = targetGuestId || "default_guest";
@@ -645,7 +1055,6 @@
         }
         delete pendingGuests[key];
 
-        // Avoid tearing down an in-progress WebRTC handshake if guest-ready retries within 8 seconds
         if (
           hostPeers[key] &&
           hostPeers[key].pc &&
@@ -663,13 +1072,28 @@
           }
 
           var pc = new RTCPeerConnection(rtcConfig);
-          // Stream from the 2D relayCanvas (or srcCanvas fallback) so WebRTC never transmits an empty WebGL swapchain
           var captureTarget = relayCanvas.captureStream ? relayCanvas : srcCanvas;
           if (captureTarget && captureTarget.captureStream) {
             try {
-              var stream = captureTarget.captureStream(30);
+              // Capture at a full 60 FPS for buttery-smooth netplay on both connections
+              var stream = captureTarget.captureStream(60);
               stream.getTracks().forEach(function (track) {
-                pc.addTrack(track, stream);
+                if (track.kind === "video" && "contentHint" in track) {
+                  try { track.contentHint = "motion"; } catch (e) {}
+                }
+                var sender = pc.addTrack(track, stream);
+                if (sender && typeof sender.getParameters === "function" && typeof sender.setParameters === "function") {
+                  try {
+                    var params = sender.getParameters() || {};
+                    if (!params.encodings || !params.encodings.length) {
+                      params.encodings = [{}];
+                    }
+                    params.encodings[0].maxFramerate = 60;
+                    params.encodings[0].maxBitrate = 2500000;
+                    params.degradationPreference = "maintain-framerate";
+                    sender.setParameters(params).catch(function () {});
+                  } catch (e) {}
+                }
               });
             } catch (e) {}
           }
@@ -681,6 +1105,15 @@
           dc.onmessage = function (ev) {
             try {
               var d = JSON.parse(ev.data);
+              if (!d) return;
+              if (d.kind === "video-ok") {
+                if (hostPeers[key]) hostPeers[key].videoOk = true;
+                return;
+              }
+              if (d.kind === "request-savestate") {
+                captureAndBroadcastHostState(d.reason || "guest-request", d.guestId || targetGuestId);
+                return;
+              }
               var slot = typeof d.s === "number" ? d.s : 1;
               if (typeof d.m === "number") {
                 applyPlayerSlotMask(slot, d.m, true);
@@ -706,7 +1139,7 @@
             }
           };
 
-          hostPeers[key] = { pc: pc, dc: dc, createdAt: Date.now() };
+          hostPeers[key] = { pc: pc, dc: dc, createdAt: Date.now(), videoOk: false };
 
           var offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
@@ -727,6 +1160,10 @@
       if (role === "host" && roomId) {
         window.addEventListener("message", async function (ev) {
           if (!ev.data || typeof ev.data !== "object") return;
+          if (ev.data.type === "NHL95_CAPTURE_AND_SYNC_STATE") {
+            captureAndBroadcastHostState(ev.data.reason || "host-manual");
+            return;
+          }
           if (ev.data.type === "NHL95_NETPLAY_SIGNAL_IN") {
             var sig = ev.data.signal;
             if (!sig) return;
@@ -734,6 +1171,11 @@
 
             if (sig.kind === "guest-ready") {
               startHostWebRTCForGuest(sig.guestId);
+            } else if (sig.kind === "video-ok") {
+              if (hostPeers[gKey]) hostPeers[gKey].videoOk = true;
+              if (hostPeers["default_guest"]) hostPeers["default_guest"].videoOk = true;
+            } else if (sig.kind === "request-savestate") {
+              captureAndBroadcastHostState(sig.reason || "guest-request", sig.guestId);
             } else if (sig.kind === "answer" && hostPeers[gKey] && hostPeers[gKey].pc) {
               try {
                 await hostPeers[gKey].pc.setRemoteDescription(new RTCSessionDescription(sig.sdp));
@@ -752,9 +1194,8 @@
           }
         });
 
-        var isTakingEjsScreenshot = false;
-
-        setInterval(async function () {
+        // Lightweight fallback frame sender ONLY while a guest is still waiting for WebRTC video track to start
+        setInterval(function () {
           var srcCanvas = getActiveEmulatorCanvas();
           if (!srcCanvas || !relayCtx) return;
 
@@ -762,42 +1203,33 @@
             startHostWebRTCForGuest(gId === "default_guest" ? undefined : gId);
           });
 
+          // Check if any peer still needs JPEG fallback (if all peers have WebRTC video playing, skip CPU/GPU readback completely!)
+          var peerKeys = Object.keys(hostPeers);
+          if (peerKeys.length === 0) return;
+
+          var anyPeerNeedsFallback = false;
+          for (var i = 0; i < peerKeys.length; i++) {
+            var pe = hostPeers[peerKeys[i]];
+            if (pe && !pe.videoOk) {
+              anyPeerNeedsFallback = true;
+              break;
+            }
+          }
+          if (!anyPeerNeedsFallback) return;
+
           try {
-            // If RAF hasn't updated relayCanvas in the last 90ms (e.g. background tab), draw directly
             if (performance.now() - lastRafCaptureTime > 90) {
               relayCtx.drawImage(srcCanvas, 0, 0, 320, 224);
             }
+            if (!checkFirstFrameNonBlack(relayCanvas)) return;
 
-            // If canvas is still black, fall back to EmulatorJS's direct WASM framebuffer screenshot()
-            if (!canvasHasNonBlackPixels(relayCtx) && !isTakingEjsScreenshot) {
-              var ejs = window.EJS_emulator;
-              if (ejs && ejs.gameManager && typeof ejs.gameManager.screenshot === "function") {
-                isTakingEjsScreenshot = true;
-                try {
-                  var shotBytes = await ejs.gameManager.screenshot();
-                  if (shotBytes && shotBytes.length > 100) {
-                    var blob = new Blob([shotBytes], { type: "image/png" });
-                    if (typeof createImageBitmap === "function") {
-                      var bmp = await createImageBitmap(blob);
-                      relayCtx.drawImage(bmp, 0, 0, 320, 224);
-                      bmp.close();
-                    }
-                  }
-                } catch (e) {}
-                isTakingEjsScreenshot = false;
-              }
-            }
-
-            // Don't transmit all-black frames before the Sega logo / game graphics appear
-            if (!canvasHasNonBlackPixels(relayCtx)) return;
-
-            var dataUrl = relayCanvas.toDataURL("image/jpeg", 0.62);
+            var dataUrl = relayCanvas.toDataURL("image/jpeg", 0.58);
             if (!dataUrl || dataUrl.length < 100) return;
 
             var sentViaDc = false;
-            Object.keys(hostPeers).forEach(function (k) {
+            peerKeys.forEach(function (k) {
               var peerEntry = hostPeers[k];
-              if (peerEntry && peerEntry.dc && peerEntry.dc.readyState === "open") {
+              if (peerEntry && !peerEntry.videoOk && peerEntry.dc && peerEntry.dc.readyState === "open") {
                 try {
                   peerEntry.dc.send(JSON.stringify({ f: dataUrl }));
                   sentViaDc = true;
@@ -813,43 +1245,177 @@
               }, "*");
             }
           } catch (e) {}
-        }, 115);
+        }, 160);
       }
 
       var p1ActiveKeys = {};
       window.addEventListener("keydown", function (e) {
         p1ActiveKeys[e.key] = true;
-      });
+      }, true);
       window.addEventListener("keyup", function (e) {
         delete p1ActiveKeys[e.key];
+      }, true);
+      window.addEventListener("blur", function () {
+        p1ActiveKeys = {};
       });
+
+      function neutralizeBuiltInEjsInput() {
+        try {
+          var ejs = window.EJS_emulator;
+          if (!ejs) return;
+          // Clear EmulatorJS's internal controls map so it never fires default button mappings
+          if (ejs.controls) {
+            ejs.controls = [{}, {}, {}, {}];
+          }
+          if (ejs.defaultControls) {
+            ejs.defaultControls = [{}, {}, {}, {}];
+          }
+          if (ejs.gamepad) {
+            ejs.gamepad.events = [];
+            ejs.gamepad.step = function () {};
+            ejs.gamepad.loop = function () {};
+            ejs.gamepad.update = function () {};
+          }
+        } catch (e) {}
+      }
+
+      // Observe human coach's live P1 inputs to detect One-Timer combos, Rush speed bursts, and East-West cross-crease passes
+      function trackCoachLiveInputs(mask0, now) {
+        var prev = aiLiveTracker.prevP1Mask;
+        aiLiveTracker.prevP1Mask = mask0;
+        if (mask0 !== 0) {
+          aiLiveTracker.totalInputFrames++;
+        }
+
+        // Bit 0 = B (Pass / Switch), Bit 1 = A (Dump / Hook), Bit 8 = C (Shoot / Speed Burst / Body Check)
+        var passPressedEdge = (mask0 & 1) && !(prev & 1);
+        var shootPressedEdge = (mask0 & (1 << 8)) && !(prev & (1 << 8));
+        var hookPressedEdge = (mask0 & (1 << 1)) && !(prev & (1 << 1));
+
+        if (passPressedEdge) {
+          aiLiveTracker.lastPassTs = now;
+        }
+        if (shootPressedEdge) {
+          if (now - aiLiveTracker.lastPassTs <= 460) {
+            aiLiveTracker.oneTimerInputCombos++;
+          } else {
+            aiLiveTracker.rushBurstCount++;
+          }
+        }
+        if (hookPressedEdge) {
+          aiLiveTracker.bodyCheckPresses++;
+        }
+
+        // Directional bits: 4=Up, 5=Down, 6=Left, 7=Right
+        var horizMask = mask0 & ((1 << 6) | (1 << 7));
+        if (horizMask && horizMask !== aiLiveTracker.lastDirMask) {
+          if (aiLiveTracker.lastDirMask !== 0) {
+            aiLiveTracker.eastWestCrosses++;
+          }
+          aiLiveTracker.lastDirMask = horizMask;
+        }
+      }
+
+      // Compute Port 2 Neural Bot controller bitmask when AI Bot Override is toggled on
+      function computeNeuralBotPort2Mask(mask0, now) {
+        aiLiveTracker.botPhase = (aiLiveTracker.botPhase + 1) % 240;
+        var w = aiCpuConfig.weights || {};
+        var oneTimerW = typeof w.oneTimerDefense === "number" ? w.oneTimerDefense : 0.55;
+        var rushTrapW = typeof w.breakawayTrap === "number" ? w.breakawayTrap : 0.55;
+        var forecheckW = typeof w.forecheckAggression === "number" ? w.forecheckAggression : 0.55;
+        var slotW = typeof w.slotLockdown === "number" ? w.slotLockdown : 0.55;
+
+        var botMask = 0;
+        var phase = aiLiveTracker.botPhase;
+
+        // Mirror P1 horizontal lane to cut off passing/skating angle (Slot Lockdown + One-Timer Interceptor)
+        var p1Left = (mask0 >> 6) & 1;
+        var p1Right = (mask0 >> 7) & 1;
+        var p1Up = (mask0 >> 4) & 1;
+        var p1Down = (mask0 >> 5) & 1;
+
+        if (p1Left) botMask |= (1 << 6);
+        else if (p1Right) botMask |= (1 << 7);
+        else if (phase % 60 < 24 && slotW > 0.5) {
+          botMask |= ((phase % 120) < 60) ? (1 << 6) : (1 << 7);
+        }
+
+        // North-South gap control: if P1 charges up-ice and Breakaway Trap is high, drop back to protect slot; otherwise attack down-ice
+        if (p1Up && rushTrapW >= 0.58 && (phase % 30 < 20)) {
+          botMask |= (1 << 5); // Backcheck / protect net
+        } else if (p1Down && forecheckW >= 0.55) {
+          botMask |= (1 << 5);
+        } else {
+          // Attack / drive net cycles
+          botMask |= (phase % 90 < 58) ? (1 << 5) : (1 << 4);
+        }
+
+        // Counter-One-Timer: if P1 just pressed Pass (B), immediately fire B/C intercept to break up cross-crease pass
+        if (now - aiLiveTracker.lastPassTs < Math.round(140 + oneTimerW * 220)) {
+          if (phase % 6 < 3) botMask |= 1; // B (Poke / Intercept pass)
+          else botMask |= (1 << 8); // C (Check receiver)
+        } else if (phase % Math.max(12, Math.round(36 - forecheckW * 18)) === 0) {
+          // Periodic C burst / body check or one-timer shot
+          botMask |= (1 << 8);
+        } else if (phase % 42 === 10) {
+          // Tactical pass / switch player (B)
+          botMask |= 1;
+        } else if (phase % 42 === 16) {
+          // Follow pass with immediate one-timer shot (C)
+          botMask |= (1 << 8);
+        }
+
+        return botMask;
+      }
 
       function pollAllFourPlayerControls() {
         var ejs = window.EJS_emulator;
         if (ejs && ejs.gameManager && ejs.gameManager.simulateInput) {
+          neutralizeBuiltInEjsInput();
           var pads = navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
           var now = Date.now();
 
-          var mask0 = computePadAndKeyMask(p1ActiveKeys, pads[0] || null, controllerConfig);
+          // In online Host mode, combine any active local gamepad for Player 1 so virtual HID devices at pads[0] never block the coach's controller
+          var isOnlineHost = role === "host" && Boolean(roomId);
+          var mask0 = computePrimaryCoachMask(p1ActiveKeys, pads, controllerConfig, isOnlineHost);
           applyPlayerSlotMask(0, mask0, false);
 
-          for (var pIdx = 1; pIdx <= 3; pIdx++) {
-            if (now > remoteSlotActiveUntil[pIdx] && pads[pIdx]) {
-              var localPadMask = computePadAndKeyMask(null, pads[pIdx], controllerConfig);
-              applyPlayerSlotMask(pIdx, localPadMask, false);
+          if (aiCpuConfig.enabled && !isOnlineHost) {
+            trackCoachLiveInputs(mask0, now);
+          }
+
+          // Only map secondary local pads to P2..P4 in Solo mode (when not in an online room or when remote slot is inactive and a local button is actually pressed)
+          if (!isOnlineHost) {
+            if (aiCpuConfig.enabled && aiCpuConfig.botPort2Takeover && now > remoteSlotActiveUntil[1]) {
+              var aiMask = computeNeuralBotPort2Mask(mask0, now);
+              applyPlayerSlotMask(1, aiMask, false);
+            }
+            for (var pIdx = 1; pIdx <= 3; pIdx++) {
+              if (pIdx === 1 && aiCpuConfig.enabled && aiCpuConfig.botPort2Takeover) continue;
+              if (now > remoteSlotActiveUntil[pIdx] && pads[pIdx]) {
+                var localPadMask = computePadAndKeyMask(null, pads[pIdx], controllerConfig);
+                applyPlayerSlotMask(pIdx, localPadMask, false);
+              }
             }
           }
         }
         requestAnimationFrame(pollAllFourPlayerControls);
       }
 
+      var lastSyncedScoreKey = "";
+
       window.EJS_onGameStart = function () {
         try {
+          neutralizeBuiltInEjsInput();
           var ejs = window.EJS_emulator;
-          if (fourPlayer && ejs && ejs.gameManager && ejs.gameManager.setVariable) {
+          if (ejs && ejs.gameManager && ejs.gameManager.setVariable) {
             try {
-              ejs.gameManager.setVariable("genesis_plus_gx_input_system", "4 way play");
-              ejs.gameManager.setVariable("4 way play", "enabled");
+              ejs.gameManager.setVariable("genesis_plus_gx_region_detect", "ntsc-u");
+              ejs.gameManager.setVariable("genesis_plus_gx_frameskip", "disabled");
+              if (fourPlayer) {
+                ejs.gameManager.setVariable("genesis_plus_gx_input_system", "4 way play");
+                ejs.gameManager.setVariable("4 way play", "enabled");
+              }
             } catch (e) {}
           }
           window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
@@ -857,7 +1423,7 @@
           if (role === "host" && roomId) {
             setTimeout(function () {
               startHostWebRTCForGuest("default_guest");
-            }, 600);
+            }, 500);
           }
         } catch (e) {}
 
@@ -874,7 +1440,94 @@
             var awayTeamByte = s[48982 + off];
             var homeGoals = s[49812 + off];
             var awayGoals = s[50682 + off];
+
+            // Extract live RAM tactical stats for 95-AI Neural Engine
+            var homeShots = s[49808 + off] || 0;
+            var awayShots = s[50678 + off] || 0;
+            var homeChecks = s[49830 + off] || 0;
+            var awayChecks = s[50700 + off] || 0;
+            var homeOneTimerTries = s[49840 + off] || 0;
+            var homeOneTimerGoals = s[49842 + off] || 0;
+            var awayOneTimerTries = s[50710 + off] || 0;
+            var awayOneTimerGoals = s[50712 + off] || 0;
+            var homeBreakawayTries = s[49844 + off] || 0;
+            var homeBreakawayGoals = s[49846 + off] || 0;
+            var awayBreakawayTries = s[50714 + off] || 0;
+            var awayBreakawayGoals = s[50716 + off] || 0;
+            var homeFaceoffWins = s[49818 + off] || 0;
+            var awayFaceoffWins = s[50688 + off] || 0;
+            var homeAttackZone = ((s[49824 + off] || 0) << 8) | (s[49825 + off] || 0);
+            var awayAttackZone = ((s[50694 + off] || 0) << 8) | (s[50695 + off] || 0);
+
             if (homeTeamByte <= 32 && awayTeamByte <= 32 && homeGoals < 50 && awayGoals < 50) {
+              // Real-time 95-AI Neural weight adaptation based on live RAM + controller telemetry
+              if (aiCpuConfig.enabled) {
+                var w = aiCpuConfig.weights;
+                if (homeOneTimerTries > 2 || aiLiveTracker.oneTimerInputCombos > 4) {
+                  w.oneTimerDefense = Math.min(0.99, +(w.oneTimerDefense + 0.025).toFixed(3));
+                }
+                if (homeBreakawayTries > 1 || aiLiveTracker.rushBurstCount > 12) {
+                  w.breakawayTrap = Math.min(0.99, +(w.breakawayTrap + 0.02).toFixed(3));
+                }
+                if (homeChecks > 8 || aiLiveTracker.bodyCheckPresses > 8) {
+                  w.forecheckAggression = Math.min(0.99, +(w.forecheckAggression + 0.02).toFixed(3));
+                }
+                if (homeShots > 10 || homeGoals > awayGoals) {
+                  w.slotLockdown = Math.min(0.99, +(w.slotLockdown + 0.025).toFixed(3));
+                }
+                if (homeFaceoffWins > awayFaceoffWins) {
+                  w.faceoffCounter = Math.min(0.99, +(w.faceoffCounter + 0.02).toFixed(3));
+                }
+
+                // Determine live detected playstyle & counter
+                var detectedPlaystyle = "Balanced Attack";
+                var activeCounter = "Hybrid Slot & Rush Defense";
+                if (homeOneTimerTries >= 3 || aiLiveTracker.oneTimerInputCombos >= 6) {
+                  detectedPlaystyle = "Cross-Crease One-Timer Heavy";
+                  activeCounter = "Cross-Crease Pass Interceptor";
+                } else if (homeBreakawayTries >= 2 || aiLiveTracker.rushBurstCount >= 18) {
+                  detectedPlaystyle = "North-South Speed Burst Rush";
+                  activeCounter = "Neutral-Zone 1-3-1 Rush Trap";
+                } else if (homeChecks >= 10 || aiLiveTracker.bodyCheckPresses >= 12) {
+                  detectedPlaystyle = "Heavy Physical Forecheck";
+                  activeCounter = "Quick-Outlet Counter Hit";
+                } else if (homeAttackZone > 90) {
+                  detectedPlaystyle = "Sustained Zone Cycle";
+                  activeCounter = "High-Press Box +1 Collapse";
+                }
+                aiCpuConfig.activeStrategy = activeCounter;
+
+                window.parent.postMessage({
+                  type: "NHL95_AI_TELEMETRY",
+                  homeTeamByte: homeTeamByte,
+                  awayTeamByte: awayTeamByte,
+                  homeGoals: homeGoals,
+                  awayGoals: awayGoals,
+                  homeShots: homeShots,
+                  awayShots: awayShots,
+                  homeChecks: homeChecks,
+                  awayChecks: awayChecks,
+                  homeOneTimerTries: homeOneTimerTries,
+                  homeOneTimerGoals: homeOneTimerGoals,
+                  awayOneTimerTries: awayOneTimerTries,
+                  awayOneTimerGoals: awayOneTimerGoals,
+                  homeBreakawayTries: homeBreakawayTries,
+                  homeBreakawayGoals: homeBreakawayGoals,
+                  awayBreakawayTries: awayBreakawayTries,
+                  awayBreakawayGoals: awayBreakawayGoals,
+                  homeFaceoffWins: homeFaceoffWins,
+                  awayFaceoffWins: awayFaceoffWins,
+                  homeAttackZone: homeAttackZone,
+                  awayAttackZone: awayAttackZone,
+                  oneTimerInputCombos: aiLiveTracker.oneTimerInputCombos,
+                  rushBurstCount: aiLiveTracker.rushBurstCount,
+                  eastWestCrosses: aiLiveTracker.eastWestCrosses,
+                  detectedPlaystyle: detectedPlaystyle,
+                  activeCounter: activeCounter,
+                  weights: w
+                }, "*");
+              }
+
               window.parent.postMessage({
                 type: "NHL95_LIVE_TELEMETRY",
                 homeTeamByte: homeTeamByte,
@@ -882,15 +1535,25 @@
                 homeGoals: homeGoals,
                 awayGoals: awayGoals
               }, "*");
+
+              // Also keep both Host and Guest save-state buffers automatically synced!
+              var scoreKey = homeTeamByte + "_" + awayTeamByte + "_" + homeGoals + "_" + awayGoals;
+              if (role === "host" && roomId) {
+                captureAndBroadcastHostState(scoreKey !== lastSyncedScoreKey ? "score-change" : "auto-sync");
+                lastSyncedScoreKey = scoreKey;
+              }
             }
           } catch (e) {}
-        }, 15000);
+        }, 7000);
       };
 
       window.EJS_onSaveState = function (data) {
         try {
           if (data && data.state) {
             window.parent.postMessage({ type: "NHL95_EJS_SAVESTATE", state: data.state }, "*");
+            if (role === "host" && roomId) {
+              captureAndBroadcastHostState("host-saved");
+            }
           }
         } catch (e) {}
       };
