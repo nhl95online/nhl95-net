@@ -1460,7 +1460,8 @@ function ArenaContent() {
               enabled: netplayRole === 'solo',
               botPort2Takeover: takeover,
               generation: aiModel?.generation || 1,
-              eloRating: aiModel?.eloRating || 1500,
+              gamesLearned: aiModel?.gamesLearned || arenaRecordsData?.totalGamesAnalyzed || 0,
+              eloRating: aiModel?.eloRating || 1200,
               activeStrategy: myProfile?.aiCounterStrategy || 'Adaptive Balanced',
               weights
             }
@@ -1511,6 +1512,7 @@ function ArenaContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'record-match',
+            sessionId: `${myPeerId}_${selectedRom.id}_${awayCode}_${homeCode}`,
             romId: selectedRom.id.toUpperCase(),
             seasonLabel: `Arena (${selectedRom.id.toUpperCase()})`,
             isVsAi,
@@ -1580,7 +1582,7 @@ function ArenaContent() {
         setIsRecordingArenaMatch(false);
       }
     },
-    [selectedRom.id, netplayRole, netplayOpponentName, myDisplayName, refreshArenaRecords]
+    [myPeerId, selectedRom.id, netplayRole, netplayOpponentName, myDisplayName, refreshArenaRecords]
   );
 
   // Resolve the selected ROM against the Supabase `roms` bucket and stream extracted .bin via /api/arena-rom-stream
@@ -2134,6 +2136,18 @@ function ArenaContent() {
         if (event.data.type === 'NHL95_EJS_SAVESTATE' || event.data.reason === 'host-saved') {
           parseAndDisplayStateBuffer(normalized, label);
         }
+      } else if (event.data.type === 'NHL95_ARENA_AUTO_STATE' && event.data.state) {
+        try {
+          const stateArr =
+            event.data.state instanceof Uint8Array
+              ? event.data.state
+              : new Uint8Array(event.data.state);
+          const normalized = ensureRetroArchHeader(stateArr);
+          latestStateRef.current = normalized;
+          const seasonCfg = getSeasonConfig(selectedSeasonConfigId);
+          const g = parseSaveStateBuffer(normalized, seasonCfg);
+          recordParsedGameToArenaRecords(g, false);
+        } catch {}
       } else if (event.data.type === 'NHL95_GUEST_TRIGGER_DISCORD_STATE') {
         handleSendStateToDiscord();
       } else if (event.data.type === 'NHL95_GUEST_TRIGGER_BOXSCORE') {
@@ -2207,6 +2221,8 @@ function ArenaContent() {
   }, [
     parseAndDisplayStateBuffer,
     selectedRom,
+    selectedSeasonConfigId,
+    recordParsedGameToArenaRecords,
     controllerConfig,
     pushControllerConfigToIframe,
     pushAiConfigToIframe,
@@ -3464,13 +3480,13 @@ function ArenaContent() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-neutral-800 pb-4 mb-4">
                   <div>
                     <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-black">
-                      NEURAL TELEMETRY &amp; REINFORCEMENT ENGINE
+                      ONLINE ARENA NEURAL TELEMETRY &amp; REINFORCEMENT ENGINE
                     </div>
                     <h2 className="text-xl sm:text-2xl font-black uppercase font-serif text-white">
-                      🧠 95-AI Neural CPU — Adaptive Learning Lab
+                      🧠 95-AI Neural CPU — Progressive Arena Learning Lab
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Learns from every official league &amp; Arena game plus real-time 60Hz controller inputs to counter each coach&apos;s favorite tactics.
+                      Gets smarter, faster, and harder the more games it plays in the Online Arena — learning 60Hz pass/shot timings, one-timer lanes, and rush tendencies exclusively from live Arena games.
                     </p>
                   </div>
 
@@ -3614,15 +3630,15 @@ function ArenaContent() {
                 <div className="flex items-center justify-between border-b-2 border-black pb-3 mb-4 flex-wrap gap-2">
                   <div>
                     <div className="text-[10px] font-mono uppercase tracking-widest text-amber-700 font-black">
-                      ALL-TIME ARENA &amp; LEAGUE BOOK OF RECORDS
+                      ONLINE ARENA EXCLUSIVE BOOK OF RECORDS
                     </div>
                     <h3 className="text-lg sm:text-xl font-black uppercase font-serif text-black flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-amber-500" />
-                      <span>All-Time Arena Records (Fastest Goals, Most Wins, Single-Game Highs)</span>
+                      <span>All-Time Online Arena Records (Fastest Goals, Most Wins, Single-Game Highs)</span>
                     </h3>
                   </div>
                   <span className="text-xs font-mono text-slate-600 font-bold">
-                    Automatically updated from every game &amp; save state
+                    Strictly for games played online through the NHL95.NET Arena
                   </span>
                 </div>
 
@@ -3679,10 +3695,10 @@ function ArenaContent() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b-2 border-black pb-3 mb-4">
                   <div>
                     <div className="text-[10px] font-mono uppercase tracking-widest text-blue-800 font-black">
-                      OFFICIAL COACH RECORD TRACKING
+                      ONLINE ARENA COACH RECORD TRACKING
                     </div>
                     <h3 className="text-lg sm:text-xl font-black uppercase font-serif text-black">
-                      All Coaches Record Leaderboard ({arenaRecordsData?.coachLeaderboard?.length || 0} Coaches)
+                      Online Arena Coach Leaderboard ({arenaRecordsData?.coachLeaderboard?.length || 0} Coaches)
                     </h3>
                   </div>
 

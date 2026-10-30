@@ -63,6 +63,7 @@ export interface AdaptiveAiModelState {
 
 export interface StoredArenaMatch {
   id: string;
+  sessionId?: string;
   signature: string;
   playedAt: string;
   romLabel: string;
@@ -114,22 +115,22 @@ interface StoredArenaData {
 }
 
 const DEFAULT_AI_MODEL: AdaptiveAiModelState = {
-  generation: 14,
-  eloRating: 1385,
-  gamesLearned: 42,
-  wins: 24,
-  losses: 15,
-  ties: 3,
-  goalsFor: 158,
-  goalsAgainst: 129,
-  lastLearnedSummary: 'Neural weights calibrated on W-League & Arena save-state telemetry (Slot One-Timer Defense +18%, Breakaway Gap Control +15%).',
+  generation: 1,
+  eloRating: 1200,
+  gamesLearned: 0,
+  wins: 0,
+  losses: 0,
+  ties: 0,
+  goalsFor: 0,
+  goalsAgainst: 0,
+  lastLearnedSummary: '95-AI Neural CPU online — learns exclusively from live games played in the NHL95.NET Online Arena and scales difficulty with every game.',
   globalWeights: {
-    oneTimerDefense: 74,
-    breakawayTrap: 71,
-    slotCoverage: 78,
-    forecheckAggression: 69,
-    faceoffTimingSkill: 76,
-    clutchFactor: 80
+    oneTimerDefense: 55,
+    breakawayTrap: 55,
+    slotCoverage: 58,
+    forecheckAggression: 54,
+    faceoffTimingSkill: 56,
+    clutchFactor: 60
   },
   coachProfiles: {}
 };
@@ -144,17 +145,24 @@ async function loadStoredArenaData(supabase: any): Promise<StoredArenaData> {
     if (!error && data) {
       const text = await data.text();
       const parsed = JSON.parse(text);
+      const matches: StoredArenaMatch[] = Array.isArray(parsed.matches) ? parsed.matches : [];
+      const rawAi = parsed.aiModel || {};
+      // If storage had the old pre-seeded default (gamesLearned: 42, generation: 14) with 0 Arena matches, reset to clean Arena-only baseline
+      const isLegacyPreseed = matches.length === 0 && rawAi.gamesLearned === 42 && rawAi.generation === 14;
+      const aiModel: AdaptiveAiModelState = isLegacyPreseed
+        ? { ...DEFAULT_AI_MODEL, coachProfiles: {} }
+        : {
+            ...DEFAULT_AI_MODEL,
+            ...rawAi,
+            globalWeights: {
+              ...DEFAULT_AI_MODEL.globalWeights,
+              ...(rawAi.globalWeights || {})
+            },
+            coachProfiles: rawAi.coachProfiles || {}
+          };
       return {
-        aiModel: {
-          ...DEFAULT_AI_MODEL,
-          ...(parsed.aiModel || {}),
-          globalWeights: {
-            ...DEFAULT_AI_MODEL.globalWeights,
-            ...(parsed.aiModel?.globalWeights || {})
-          },
-          coachProfiles: parsed.aiModel?.coachProfiles || {}
-        },
-        matches: Array.isArray(parsed.matches) ? parsed.matches : [],
+        aiModel,
+        matches,
         updatedAt: parsed.updatedAt || new Date().toISOString()
       };
     }
@@ -334,33 +342,13 @@ function updateAiModelFromTelemetry(
 export async function GET() {
   try {
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-
-    const [storedArena, dbGamesRes, dbPlayoffGamesRes, dbCoachesRes] = await Promise.all([
-      loadStoredArenaData(supabase),
-      supabase
-        .from('league_gamestats')
-        .select('game_id, league_id, home_coach_id, home_coach, home_score, home_stats, away_coach_id, away_coach, away_score, away_stats, game_meta, game_length')
-        .order('game_id', { ascending: false })
-        .limit(600),
-      supabase
-        .from('league_playoff_gamestats')
-        .select('game_id, league_id, home_coach_id, home_coach, home_score, home_stats, away_coach_id, away_coach, away_score, away_stats, game_meta, game_length')
-        .order('game_id', { ascending: false })
-        .limit(300),
-      supabase
-        .from('league_coaches')
-        .select('coach_id, coach_name')
-    ]);
-
-    const coachIdToName = new Map<number, string>();
-    (dbCoachesRes.data || []).forEach((c: any) => {
-      if (c.coach_id && c.coach_name) {
-        coachIdToName.set(Number(c.coach_id), String(c.coach_name).trim());
-      }
-    });
+    const storedArena = await loadStoredArenaData(supabase);
 
     interface CoachAgg {
+      coachKey: string;
       coachName: string;
+      favoriteTeam: string;
+      teamCounts: Record<string, number>;
       gp: number;
       wins: number;
       losses: number;
@@ -374,6 +362,7 @@ export async function GET() {
       gpg: number;
       shotsFor: number;
       shootingPct: number;
+      checks: number;
       totalChecks: number;
       oneTimerGoals: number;
       breakawayGoals: number;
@@ -394,7 +383,10 @@ export async function GET() {
       let entry = coachMap.get(key);
       if (!entry) {
         entry = {
+          coachKey: key,
           coachName: clean,
+          favoriteTeam: '',
+          teamCounts: {},
           gp: 0,
           wins: 0,
           losses: 0,
@@ -408,6 +400,7 @@ export async function GET() {
           gpg: 0,
           shotsFor: 0,
           shootingPct: 0,
+          checks: 0,
           totalChecks: 0,
           oneTimerGoals: 0,
           breakawayGoals: 0,
@@ -424,17 +417,17 @@ export async function GET() {
       return entry;
     };
 
-    const singleGameGoalsRecords: Array<{ coachName: string; value: number; detail: string; romLabel: string }> = [];
-    const combinedGameGoalsRecords: Array<{ coachName: string; value: number; detail: string; romLabel: string }> = [];
-    const checksSingleGameRecords: Array<{ coachName: string; value: number; detail: string; romLabel: string }> = [];
-    const oneTimerSingleGameRecords: Array<{ coachName: string; value: number; detail: string; romLabel: string }> = [];
-    const blowoutRecords: Array<{ coachName: string; value: number; detail: string; romLabel: string }> = [];
-    const fastestOpeningGoals: Array<{ coachName: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
-    const fastestTwoGoalsList: Array<{ coachName: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
-    const fastestThreeGoalsList: Array<{ coachName: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
-    const fastestOtGoalsList: Array<{ coachName: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
+    const singleGameGoalsRecords: Array<{ coachName: string; team: string; value: number; detail: string; romLabel: string }> = [];
+    const combinedGameGoalsRecords: Array<{ coachName: string; team: string; value: number; detail: string; romLabel: string }> = [];
+    const checksSingleGameRecords: Array<{ coachName: string; team: string; value: number; detail: string; romLabel: string }> = [];
+    const oneTimerSingleGameRecords: Array<{ coachName: string; team: string; value: number; detail: string; romLabel: string }> = [];
+    const blowoutRecords: Array<{ coachName: string; team: string; value: number; detail: string; romLabel: string }> = [];
+    const fastestOpeningGoals: Array<{ coachName: string; team: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
+    const fastestTwoGoalsList: Array<{ coachName: string; team: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
+    const fastestThreeGoalsList: Array<{ coachName: string; team: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
+    const fastestOtGoalsList: Array<{ coachName: string; team: string; seconds: number; value: string; detail: string; romLabel: string }> = [];
 
-    // 1. Process stored Arena matches (which contain exact goal-by-goal timestamps!)
+    // Process ONLY games played online in the NHL95.NET Arena (storedArena.matches)
     for (const m of storedArena.matches) {
       const hName = m.homeCoach || 'Home Coach';
       const aName = m.awayCoach || 'Away Coach';
@@ -458,14 +451,18 @@ export async function GET() {
         const c = getOrCreateCoach(cName);
         c.gp++;
         c.arenaGamesPlayed++;
+        if (myTeam) {
+          c.teamCounts[myTeam] = (c.teamCounts[myTeam] || 0) + 1;
+        }
         c.goalsFor += gf;
         c.goalsAgainst += ga;
         c.shotsFor += shots;
+        c.checks += checks;
         c.totalChecks += checks;
         c.oneTimerGoals += oneTimers;
         c.breakawayGoals += breakaways;
         if (gf > c.mostGoalsInGame) c.mostGoalsInGame = gf;
-        if (ga === 0) c.shutouts++;
+        if (ga === 0 && (gf > 0 || shots > 0)) c.shutouts++;
 
         if (gf > ga) {
           c.wins++;
@@ -486,6 +483,7 @@ export async function GET() {
 
         singleGameGoalsRecords.push({
           coachName: cName,
+          team: myTeam || '',
           value: gf,
           detail: `${myTeam} ${gf} vs ${oppTeam} ${ga} (vs ${oppName})`,
           romLabel: m.romLabel || 'W16'
@@ -494,8 +492,9 @@ export async function GET() {
         if (checks > 0) {
           checksSingleGameRecords.push({
             coachName: cName,
+            team: myTeam || '',
             value: checks,
-            detail: `${checks} Checks • ${myTeam} vs ${oppTeam}`,
+            detail: `${checks} Checks • ${myTeam} vs ${oppTeam} (${oppName})`,
             romLabel: m.romLabel || 'W16'
           });
         }
@@ -503,17 +502,19 @@ export async function GET() {
         if (oneTimers > 0) {
           oneTimerSingleGameRecords.push({
             coachName: cName,
+            team: myTeam || '',
             value: oneTimers,
-            detail: `${oneTimers} 1T Goals • ${myTeam} vs ${oppTeam}`,
+            detail: `${oneTimers} 1T Goals • ${myTeam} vs ${oppTeam} (${oppName})`,
             romLabel: m.romLabel || 'W16'
           });
         }
 
-        if (gf - ga >= 3) {
+        if (gf > ga) {
           blowoutRecords.push({
             coachName: cName,
+            team: myTeam || '',
             value: gf - ga,
-            detail: `+${gf - ga} Diff (${myTeam} ${gf} - ${ga} ${oppTeam})`,
+            detail: `+${gf - ga} Diff (${myTeam} ${gf} - ${ga} ${oppTeam} vs ${oppName})`,
             romLabel: m.romLabel || 'W16'
           });
         }
@@ -546,6 +547,7 @@ export async function GET() {
 
       combinedGameGoalsRecords.push({
         coachName: `${aName} vs ${hName}`,
+        team: `${m.awayTeam}@${m.homeTeam}`,
         value: hGoals + aGoals,
         detail: `${m.awayTeam} ${aGoals} @ ${m.homeTeam} ${hGoals}`,
         romLabel: m.romLabel || 'W16'
@@ -556,6 +558,7 @@ export async function GET() {
         const label = `${formatTime(m.fastestGoalSec)} (P${m.fastestGoalPeriod || 1})`;
         fastestOpeningGoals.push({
           coachName: fCoach,
+          team: m.fastestGoalTeam || '',
           seconds: m.fastestGoalSec + ((m.fastestGoalPeriod || 1) - 1) * 300,
           value: label,
           detail: `${m.fastestGoalScorer || 'Scorer'} (${m.fastestGoalTeam || ''}) • ${m.awayTeam} @ ${m.homeTeam}`,
@@ -565,13 +568,14 @@ export async function GET() {
         const coachObj = coachMap.get(fCoach.toLowerCase());
         if (coachObj && (coachObj.fastestGoalSec === null || m.fastestGoalSec < coachObj.fastestGoalSec)) {
           coachObj.fastestGoalSec = m.fastestGoalSec;
-          coachObj.fastestGoalLabel = `${label} by ${m.fastestGoalScorer || 'Skater'}`;
+          coachObj.fastestGoalLabel = `${label} (${m.fastestGoalScorer || 'Goal'})`;
         }
       }
 
       if (typeof m.fastestTwoGoalsSpanSec === 'number' && m.fastestTwoGoalsSpanSec >= 0) {
         fastestTwoGoalsList.push({
           coachName: m.fastestTwoGoalsCoach || hName,
+          team: m.fastestTwoGoalsTeam || '',
           seconds: m.fastestTwoGoalsSpanSec,
           value: `${formatTime(m.fastestTwoGoalsSpanSec)} span`,
           detail: `${m.fastestTwoGoalsTeam || ''} • ${m.awayTeam} @ ${m.homeTeam}`,
@@ -582,6 +586,7 @@ export async function GET() {
       if (typeof m.fastestThreeGoalsSpanSec === 'number' && m.fastestThreeGoalsSpanSec >= 0) {
         fastestThreeGoalsList.push({
           coachName: m.fastestThreeGoalsCoach || hName,
+          team: m.fastestThreeGoalsTeam || '',
           seconds: m.fastestThreeGoalsSpanSec,
           value: `${formatTime(m.fastestThreeGoalsSpanSec)} span`,
           detail: `${m.fastestThreeGoalsTeam || ''} Hat-Trick Burst • ${m.awayTeam} @ ${m.homeTeam}`,
@@ -592,6 +597,7 @@ export async function GET() {
       if (typeof m.fastestOtGoalSec === 'number' && m.fastestOtGoalSec >= 0) {
         fastestOtGoalsList.push({
           coachName: m.fastestOtGoalCoach || hName,
+          team: '',
           seconds: m.fastestOtGoalSec,
           value: `${formatTime(m.fastestOtGoalSec)} OT`,
           detail: `${m.fastestOtGoalScorer || 'OT Winner'} • ${m.awayTeam} @ ${m.homeTeam}`,
@@ -600,174 +606,18 @@ export async function GET() {
       }
     }
 
-    // 2. Also incorporate historical & current league games from Supabase so all league coaches have complete records
-    const allDbGames = [...(dbGamesRes.data || []), ...(dbPlayoffGamesRes.data || [])];
-    for (const g of allDbGames) {
-      const hCoach =
-        (g.home_coach && String(g.home_coach).trim()) ||
-        coachIdToName.get(Number(g.home_coach_id)) ||
-        '';
-      const aCoach =
-        (g.away_coach && String(g.away_coach).trim()) ||
-        coachIdToName.get(Number(g.away_coach_id)) ||
-        '';
-
-      if (!hCoach && !aCoach) continue;
-
-      const hGoals = Number(g.home_score ?? 0);
-      const aGoals = Number(g.away_score ?? 0);
-      const isOt = Boolean(g.game_meta?.is_ot);
-      const romBadge = g.game_meta?.league || `S${g.league_id || 40}`;
-
-      const hStats = g.home_stats || {};
-      const aStats = g.away_stats || {};
-
-      const hShots = Number(hStats.home_shots || 0);
-      const aShots = Number(aStats.away_shots || 0);
-      const hChecks = Number(hStats.home_bodychecks || 0);
-      const aChecks = Number(aStats.away_bodychecks || 0);
-      const h1T = Number(hStats.home_onetimer_goals || 0);
-      const a1T = Number(aStats.away_onetimer_goals || 0);
-      const hBrk = Number(hStats.home_breakaway_goals || 0);
-      const aBrk = Number(aStats.away_breakaway_goals || 0);
-
-      if (hCoach) {
-        const c = getOrCreateCoach(hCoach);
-        c.gp++;
-        c.goalsFor += hGoals;
-        c.goalsAgainst += aGoals;
-        c.shotsFor += hShots;
-        c.totalChecks += hChecks;
-        c.oneTimerGoals += h1T;
-        c.breakawayGoals += hBrk;
-        if (hGoals > c.mostGoalsInGame) c.mostGoalsInGame = hGoals;
-        if (aGoals === 0 && (hGoals > 0 || hShots > 0)) c.shutouts++;
-
-        if (hGoals > aGoals) {
-          c.wins++;
-          c.points += 2;
-        } else if (hGoals < aGoals) {
-          if (isOt) {
-            c.otl++;
-            c.points += 1;
-          } else {
-            c.losses++;
-          }
-        } else {
-          c.ties++;
-          c.points += 1;
-        }
-
-        singleGameGoalsRecords.push({
-          coachName: hCoach,
-          value: hGoals,
-          detail: `${hGoals} Goals vs ${aCoach || 'Opponent'}`,
-          romLabel: romBadge
-        });
-        if (hChecks > 0) {
-          checksSingleGameRecords.push({
-            coachName: hCoach,
-            value: hChecks,
-            detail: `${hChecks} Body Checks vs ${aCoach || 'Opponent'}`,
-            romLabel: romBadge
-          });
-        }
-        if (h1T > 0) {
-          oneTimerSingleGameRecords.push({
-            coachName: hCoach,
-            value: h1T,
-            detail: `${h1T} One-Timer Goals vs ${aCoach || 'Opponent'}`,
-            romLabel: romBadge
-          });
-        }
-        if (hGoals - aGoals >= 4) {
-          blowoutRecords.push({
-            coachName: hCoach,
-            value: hGoals - aGoals,
-            detail: `+${hGoals - aGoals} Margin (${hGoals}-${aGoals} vs ${aCoach || 'Opponent'})`,
-            romLabel: romBadge
-          });
-        }
-      }
-
-      if (aCoach) {
-        const c = getOrCreateCoach(aCoach);
-        c.gp++;
-        c.goalsFor += aGoals;
-        c.goalsAgainst += hGoals;
-        c.shotsFor += aShots;
-        c.totalChecks += aChecks;
-        c.oneTimerGoals += a1T;
-        c.breakawayGoals += aBrk;
-        if (aGoals > c.mostGoalsInGame) c.mostGoalsInGame = aGoals;
-        if (hGoals === 0 && (aGoals > 0 || aShots > 0)) c.shutouts++;
-
-        if (aGoals > hGoals) {
-          c.wins++;
-          c.points += 2;
-        } else if (aGoals < hGoals) {
-          if (isOt) {
-            c.otl++;
-            c.points += 1;
-          } else {
-            c.losses++;
-          }
-        } else {
-          c.ties++;
-          c.points += 1;
-        }
-
-        singleGameGoalsRecords.push({
-          coachName: aCoach,
-          value: aGoals,
-          detail: `${aGoals} Goals @ ${hCoach || 'Opponent'}`,
-          romLabel: romBadge
-        });
-        if (aChecks > 0) {
-          checksSingleGameRecords.push({
-            coachName: aCoach,
-            value: aChecks,
-            detail: `${aChecks} Body Checks @ ${hCoach || 'Opponent'}`,
-            romLabel: romBadge
-          });
-        }
-        if (a1T > 0) {
-          oneTimerSingleGameRecords.push({
-            coachName: aCoach,
-            value: a1T,
-            detail: `${a1T} One-Timer Goals @ ${hCoach || 'Opponent'}`,
-            romLabel: romBadge
-          });
-        }
-        if (aGoals - hGoals >= 4) {
-          blowoutRecords.push({
-            coachName: aCoach,
-            value: aGoals - hGoals,
-            detail: `+${aGoals - hGoals} Margin (${aGoals}-${hGoals} @ ${hCoach || 'Opponent'})`,
-            romLabel: romBadge
-          });
-        }
-      }
-
-      if (hCoach && aCoach) {
-        combinedGameGoalsRecords.push({
-          coachName: `${aCoach} @ ${hCoach}`,
-          value: hGoals + aGoals,
-          detail: `${aCoach} (${aGoals}) @ ${hCoach} (${hGoals})`,
-          romLabel: romBadge
-        });
-      }
-    }
-
-    // Finalize derived coach ratios
+    // Finalize derived coach ratios strictly from Arena games
     const coachLeaderboard = Array.from(coachMap.values())
       .filter(c => c.gp > 0)
       .map(c => {
         const winPct = c.gp > 0 ? Number(((c.wins / c.gp) * 100).toFixed(1)) : 0;
         const gpg = c.gp > 0 ? Number((c.goalsFor / c.gp).toFixed(2)) : 0;
         const shootingPct = c.shotsFor > 0 ? Number(((c.goalsFor / c.shotsFor) * 100).toFixed(1)) : 0;
+        const favTeam =
+          Object.entries(c.teamCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
         return {
           ...c,
+          favoriteTeam: favTeam,
           goalDiff: c.goalsFor - c.goalsAgainst,
           winPct,
           gpg,
@@ -775,12 +625,12 @@ export async function GET() {
         };
       })
       .sort((a, b) => {
-        if (b.wins !== a.wins) return b.wins - a.wins;
         if (b.points !== a.points) return b.points - a.points;
+        if (b.wins !== a.wins) return b.wins - a.wins;
         return b.goalDiff - a.goalDiff;
       });
 
-    // Sort All-Time Records lists
+    // Sort All-Time Arena Records lists
     singleGameGoalsRecords.sort((a, b) => b.value - a.value);
     combinedGameGoalsRecords.sort((a, b) => b.value - a.value);
     checksSingleGameRecords.sort((a, b) => b.value - a.value);
@@ -791,71 +641,203 @@ export async function GET() {
     fastestThreeGoalsList.sort((a, b) => a.seconds - b.seconds);
     fastestOtGoalsList.sort((a, b) => a.seconds - b.seconds);
 
-    const mostWinsCoach = [...coachLeaderboard]
-      .sort((a, b) => b.wins - a.wins)
-      .slice(0, 10)
-      .map(c => ({
-        coachName: c.coachName,
-        value: `${c.wins} W`,
-        detail: `${c.wins}-${c.losses}-${c.ties} (${c.winPct}% Win • ${c.gp} GP)`,
-        romLabel: 'ALL-TIME'
-      }));
+    const topWinsCoach = [...coachLeaderboard].sort((a, b) => b.wins - a.wins)[0];
+    const topGoalsCoach = [...coachLeaderboard].sort((a, b) => b.goalsFor - a.goalsFor)[0];
+    const topShutoutsCoach = [...coachLeaderboard].filter(c => c.shutouts > 0).sort((a, b) => b.shutouts - a.shutouts)[0];
 
-    const mostGoalsCoach = [...coachLeaderboard]
-      .sort((a, b) => b.goalsFor - a.goalsFor)
-      .slice(0, 10)
-      .map(c => ({
-        coachName: c.coachName,
-        value: `${c.goalsFor} G`,
-        detail: `${c.gpg} GPG across ${c.gp} Games (${c.shootingPct}% SH)`,
-        romLabel: 'ALL-TIME'
-      }));
+    const makeCard = (
+      category: string,
+      valueLabel: string,
+      holderCoach: string,
+      holderTeam: string,
+      detail: string,
+      seasonLabel = 'ONLINE ARENA'
+    ) => ({
+      category,
+      valueLabel,
+      holderCoach,
+      holderTeam,
+      detail,
+      seasonLabel
+    });
 
-    const mostShutoutsCoach = [...coachLeaderboard]
-      .filter(c => c.shutouts > 0)
-      .sort((a, b) => b.shutouts - a.shutouts)
-      .slice(0, 10)
-      .map(c => ({
-        coachName: c.coachName,
-        value: `${c.shutouts} SO`,
-        detail: `${c.gp} GP • ${c.goalsAgainst} GA`,
-        romLabel: 'ALL-TIME'
-      }));
+    const allTimeRecords = {
+      mostWinsCareer: topWinsCoach
+        ? makeCard(
+            'Most Arena Wins',
+            `${topWinsCoach.wins} Wins`,
+            topWinsCoach.coachName,
+            topWinsCoach.favoriteTeam,
+            `${topWinsCoach.wins}-${topWinsCoach.losses}-${topWinsCoach.ties} (${topWinsCoach.winPct}% Win • ${topWinsCoach.gp} Arena GP)`
+          )
+        : makeCard('Most Arena Wins', '0 Wins', 'Open Record', '', 'Play an online Arena match to claim #1!'),
+
+      mostGoalsCareer: topGoalsCoach
+        ? makeCard(
+            'Most Arena Goals (Career)',
+            `${topGoalsCoach.goalsFor} Goals`,
+            topGoalsCoach.coachName,
+            topGoalsCoach.favoriteTeam,
+            `${topGoalsCoach.gpg} GPG across ${topGoalsCoach.gp} Arena Games (${topGoalsCoach.shootingPct}% SH)`
+          )
+        : makeCard('Most Arena Goals (Career)', '0 Goals', 'Open Record', '', 'Score in the Online Arena to claim #1!'),
+
+      mostGoalsSingleGame: singleGameGoalsRecords[0]
+        ? makeCard(
+            'Most Goals (Single Game)',
+            `${singleGameGoalsRecords[0].value} Goals`,
+            singleGameGoalsRecords[0].coachName,
+            singleGameGoalsRecords[0].team,
+            singleGameGoalsRecords[0].detail,
+            `ARENA • ${singleGameGoalsRecords[0].romLabel}`
+          )
+        : makeCard('Most Goals (Single Game)', '0 Goals', 'Open Record', '', 'Single-game Arena goal record open!'),
+
+      mostCombinedGoalsGame: combinedGameGoalsRecords[0]
+        ? makeCard(
+            'Highest Scoring Arena Game',
+            `${combinedGameGoalsRecords[0].value} Combined G`,
+            combinedGameGoalsRecords[0].coachName,
+            combinedGameGoalsRecords[0].team,
+            combinedGameGoalsRecords[0].detail,
+            `ARENA • ${combinedGameGoalsRecords[0].romLabel}`
+          )
+        : makeCard('Highest Scoring Arena Game', '0 Goals', 'Open Record', '', 'Combined single-game goal record open!'),
+
+      fastestGoal: fastestOpeningGoals[0]
+        ? makeCard(
+            'Fastest Opening Goal',
+            fastestOpeningGoals[0].value,
+            fastestOpeningGoals[0].coachName,
+            fastestOpeningGoals[0].team,
+            fastestOpeningGoals[0].detail,
+            `ARENA • ${fastestOpeningGoals[0].romLabel}`
+          )
+        : makeCard('Fastest Opening Goal', '—', 'Open Record', '', 'Fastest goal from opening puck drop in the Arena'),
+
+      fastestTwoGoals: fastestTwoGoalsList[0]
+        ? makeCard(
+            'Fastest 2 Goals',
+            fastestTwoGoalsList[0].value,
+            fastestTwoGoalsList[0].coachName,
+            fastestTwoGoalsList[0].team,
+            fastestTwoGoalsList[0].detail,
+            `ARENA • ${fastestTwoGoalsList[0].romLabel}`
+          )
+        : makeCard('Fastest 2 Goals', '—', 'Open Record', '', 'Fastest 2 consecutive goals by 1 coach in the Arena'),
+
+      fastestThreeGoals: fastestThreeGoalsList[0]
+        ? makeCard(
+            'Fastest 3 Goals (Burst)',
+            fastestThreeGoalsList[0].value,
+            fastestThreeGoalsList[0].coachName,
+            fastestThreeGoalsList[0].team,
+            fastestThreeGoalsList[0].detail,
+            `ARENA • ${fastestThreeGoalsList[0].romLabel}`
+          )
+        : makeCard('Fastest 3 Goals (Burst)', '—', 'Open Record', '', 'Fastest 3-goal outburst in an online Arena game'),
+
+      fastestOvertimeGoal: fastestOtGoalsList[0]
+        ? makeCard(
+            'Fastest Overtime Winner',
+            fastestOtGoalsList[0].value,
+            fastestOtGoalsList[0].coachName,
+            fastestOtGoalsList[0].team,
+            fastestOtGoalsList[0].detail,
+            `ARENA • ${fastestOtGoalsList[0].romLabel}`
+          )
+        : makeCard('Fastest Overtime Winner', '—', 'Open Record', '', 'Fastest sudden-death OT winner in the Arena'),
+
+      mostChecksSingleGame: checksSingleGameRecords[0]
+        ? makeCard(
+            'Most Body Checks (Game)',
+            `${checksSingleGameRecords[0].value} Checks`,
+            checksSingleGameRecords[0].coachName,
+            checksSingleGameRecords[0].team,
+            checksSingleGameRecords[0].detail,
+            `ARENA • ${checksSingleGameRecords[0].romLabel}`
+          )
+        : makeCard('Most Body Checks (Game)', '0 Checks', 'Open Record', '', 'Most body checks in an online Arena match'),
+
+      mostOneTimersSingleGame: oneTimerSingleGameRecords[0]
+        ? makeCard(
+            'Most One-Timers (Game)',
+            `${oneTimerSingleGameRecords[0].value} One-Timers`,
+            oneTimerSingleGameRecords[0].coachName,
+            oneTimerSingleGameRecords[0].team,
+            oneTimerSingleGameRecords[0].detail,
+            `ARENA • ${oneTimerSingleGameRecords[0].romLabel}`
+          )
+        : makeCard('Most One-Timers (Game)', '0 1T Goals', 'Open Record', '', 'Most one-timer goals in an online Arena match'),
+
+      biggestBlowout: blowoutRecords[0]
+        ? makeCard(
+            'Biggest Arena Blowout',
+            `+${blowoutRecords[0].value} Goal Margin`,
+            blowoutRecords[0].coachName,
+            blowoutRecords[0].team,
+            blowoutRecords[0].detail,
+            `ARENA • ${blowoutRecords[0].romLabel}`
+          )
+        : makeCard('Biggest Arena Blowout', '+0 Margin', 'Open Record', '', 'Largest victory margin in an online Arena match'),
+
+      mostShutoutsCareer: topShutoutsCoach
+        ? makeCard(
+            'Most Arena Shutouts',
+            `${topShutoutsCoach.shutouts} Shutouts`,
+            topShutoutsCoach.coachName,
+            topShutoutsCoach.favoriteTeam,
+            `${topShutoutsCoach.gp} Arena GP • ${topShutoutsCoach.goalsAgainst} GA`
+          )
+        : makeCard('Most Arena Shutouts', '0 Shutouts', 'Open Record', '', 'Hold an opponent scoreless in the Online Arena!')
+    };
+
+    const gw = storedArena.aiModel.globalWeights;
+    const normalizedProfiles: Record<string, any> = {};
+    for (const [k, prof] of Object.entries(storedArena.aiModel.coachProfiles || {})) {
+      const cw = prof.counterWeights || {
+        oneTimerDefense: 55,
+        breakawayTrap: 55,
+        forecheckAggression: 55,
+        faceoffCounter: 55,
+        slotLockdown: 55
+      };
+      normalizedProfiles[k] = {
+        ...prof,
+        counterWeights: {
+          oneTimerDefense: cw.oneTimerDefense > 1 ? cw.oneTimerDefense / 100 : cw.oneTimerDefense,
+          breakawayTrap: cw.breakawayTrap > 1 ? cw.breakawayTrap / 100 : cw.breakawayTrap,
+          forecheckAggression: cw.forecheckAggression > 1 ? cw.forecheckAggression / 100 : cw.forecheckAggression,
+          faceoffCounter: cw.faceoffCounter > 1 ? cw.faceoffCounter / 100 : cw.faceoffCounter,
+          slotLockdown: cw.slotLockdown > 1 ? cw.slotLockdown / 100 : cw.slotLockdown
+        }
+      };
+      // Also index by exact display case so coachProfiles[myDisplayName] matches directly
+      normalizedProfiles[prof.coachName] = normalizedProfiles[k];
+    }
+
+    const aiResponse = {
+      ...storedArena.aiModel,
+      aiWins: storedArena.aiModel.wins,
+      aiLosses: storedArena.aiModel.losses,
+      aiTies: storedArena.aiModel.ties,
+      weights: {
+        oneTimerDefense: gw.oneTimerDefense > 1 ? gw.oneTimerDefense / 100 : gw.oneTimerDefense,
+        breakawayTrap: gw.breakawayTrap > 1 ? gw.breakawayTrap / 100 : gw.breakawayTrap,
+        forecheckAggression: gw.forecheckAggression > 1 ? gw.forecheckAggression / 100 : gw.forecheckAggression,
+        faceoffCounter: gw.faceoffTimingSkill > 1 ? gw.faceoffTimingSkill / 100 : gw.faceoffTimingSkill,
+        slotLockdown: gw.slotCoverage > 1 ? gw.slotCoverage / 100 : gw.slotCoverage
+      },
+      coachProfiles: normalizedProfiles
+    };
 
     return NextResponse.json(
       {
-        aiModel: storedArena.aiModel,
+        totalGamesAnalyzed: storedArena.matches.length,
+        aiModel: aiResponse,
         coachLeaderboard,
-        recentArenaMatches: storedArena.matches.slice(0, 20),
-        allTimeRecords: {
-          mostWinsCoach,
-          mostGoalsCoach,
-          mostShutoutsCoach,
-          mostGoalsSingleGame: singleGameGoalsRecords.slice(0, 10).map(r => ({
-            ...r,
-            value: `${r.value} G`
-          })),
-          mostGoalsCombinedGame: combinedGameGoalsRecords.slice(0, 10).map(r => ({
-            ...r,
-            value: `${r.value} G`
-          })),
-          fastestOpeningGoal: fastestOpeningGoals.slice(0, 10),
-          fastestTwoGoals: fastestTwoGoalsList.slice(0, 10),
-          fastestThreeGoals: fastestThreeGoalsList.slice(0, 10),
-          fastestOtWinner: fastestOtGoalsList.slice(0, 10),
-          mostChecksSingleGame: checksSingleGameRecords.slice(0, 10).map(r => ({
-            ...r,
-            value: `${r.value} CHK`
-          })),
-          mostOneTimersSingleGame: oneTimerSingleGameRecords.slice(0, 10).map(r => ({
-            ...r,
-            value: `${r.value} 1T`
-          })),
-          biggestBlowout: blowoutRecords.slice(0, 10).map(r => ({
-            ...r,
-            value: `+${r.value} GD`
-          }))
-        }
+        recentArenaMatches: storedArena.matches.slice(0, 25),
+        allTimeRecords
       },
       { status: 200, headers: NO_CACHE_HEADERS }
     );
@@ -875,64 +857,83 @@ export async function POST(req: NextRequest) {
 
     const { action } = body;
 
-    // 1. Live Mid-Game AI Learning Telemetry Tick
+    // 1. Live Mid-Game AI Learning Telemetry Tick (supports both flat fields and nested telemetry)
     if (action === 'ai-learn-tick') {
-      const { coachName, telemetry, isVsAi } = body;
-      if (coachName && telemetry) {
-        stored.aiModel = updateAiModelFromTelemetry(
-          stored.aiModel,
-          coachName,
-          {
-            goals: Number(telemetry.goals || 0),
-            oppGoals: Number(telemetry.oppGoals || 0),
-            shots: Number(telemetry.shots || 10),
-            oneTimerGoals: Number(telemetry.oneTimerGoals || 0),
-            oneTimerTries: Number(telemetry.oneTimerTries || 0),
-            breakawayGoals: Number(telemetry.breakawayGoals || 0),
-            breakawayTries: Number(telemetry.breakawayTries || 0),
-            passComps: Number(telemetry.passComps || 0),
-            passTries: Number(telemetry.passTries || 0),
-            checks: Number(telemetry.checks || 0),
-            faceoffWins: Number(telemetry.faceoffWins || 0),
-            oppFaceoffWins: Number(telemetry.oppFaceoffWins || 0),
-            attackZoneSec: Number(telemetry.attackZoneSec || 120),
-            oppAttackZoneSec: Number(telemetry.oppAttackZoneSec || 120)
-          },
-          Boolean(isVsAi)
-        );
-        stored.updatedAt = new Date().toISOString();
-        await saveStoredArenaData(supabase, stored);
-      }
+      const coachName = body.coachName || 'Arena Coach';
+      const t = body.telemetry || body;
+      stored.aiModel = updateAiModelFromTelemetry(
+        stored.aiModel,
+        coachName,
+        {
+          goals: Number(t.goals ?? t.homeGoals ?? 0),
+          oppGoals: Number(t.oppGoals ?? t.awayGoals ?? 0),
+          shots: Number(t.shots ?? t.homeShots ?? 10),
+          oneTimerGoals: Number(t.oneTimerGoals ?? t.homeOneTimerGoals ?? 0),
+          oneTimerTries: Number(t.oneTimerTries ?? t.homeOneTimers ?? 0),
+          breakawayGoals: Number(t.breakawayGoals ?? t.homeBreakawayGoals ?? 0),
+          breakawayTries: Number(t.breakawayTries ?? t.homeBreakaways ?? 0),
+          passComps: Number(t.passComps ?? 0),
+          passTries: Number(t.passTries ?? 0),
+          checks: Number(t.checks ?? t.homeChecks ?? 0),
+          faceoffWins: Number(t.faceoffWins ?? t.homeFaceoffs ?? 0),
+          oppFaceoffWins: Number(t.oppFaceoffWins ?? t.awayFaceoffs ?? 0),
+          attackZoneSec: Number(t.attackZoneSec ?? t.homeAttackZone ?? 120),
+          oppAttackZoneSec: Number(t.oppAttackZoneSec ?? t.awayAttackZone ?? 120)
+        },
+        body.isVsAi !== undefined ? Boolean(body.isVsAi) : true
+      );
+      stored.updatedAt = new Date().toISOString();
+      await saveStoredArenaData(supabase, stored);
       return NextResponse.json({ success: true, aiModel: stored.aiModel }, { status: 200, headers: NO_CACHE_HEADERS });
     }
 
-    // 2. Record Full Match & Extract Fastest Goals / Single-Game Highs + Train AI Model
-    const {
-      game,
-      homeCoach,
-      awayCoach,
-      romLabel,
-      seasonId,
-      isVsAi
-    } = body;
+    // 2. Record Full or Live Auto-Saved Arena Match & Train AI Model
+    // Supports both flat payload from app/arena/page.tsx (action === 'record-match') and nested { game } payload
+    const game = body.game;
+    const ht = game?.homeTeam || {
+      teamCode: body.homeTeam || 'HOME',
+      goals: Number(body.homeGoals ?? 0),
+      shots: Number(body.homeShots ?? 0),
+      checks: Number(body.homeChecks ?? 0),
+      oneTimerGoals: Number(body.homeOneTimerGoals ?? 0),
+      oneTimerTries: Number(body.homeOneTimerTries ?? 0),
+      breakawayGoals: Number(body.homeBreakawayGoals ?? 0),
+      breakawayTries: Number(body.homeBreakawayTries ?? 0),
+      faceoffWins: Number(body.homeFaceoffs ?? 0),
+      passComps: Number(body.homePassComps ?? 0),
+      passTries: Number(body.homePassTries ?? 0),
+      attackZoneTime: body.homeAttackZoneTime
+    };
+    const at = game?.awayTeam || {
+      teamCode: body.awayTeam || 'AWAY',
+      goals: Number(body.awayGoals ?? 0),
+      shots: Number(body.awayShots ?? 0),
+      checks: Number(body.awayChecks ?? 0),
+      oneTimerGoals: Number(body.awayOneTimerGoals ?? 0),
+      oneTimerTries: Number(body.awayOneTimerTries ?? 0),
+      breakawayGoals: Number(body.awayBreakawayGoals ?? 0),
+      breakawayTries: Number(body.awayBreakawayTries ?? 0),
+      faceoffWins: Number(body.awayFaceoffs ?? 0),
+      passComps: Number(body.awayPassComps ?? 0),
+      passTries: Number(body.awayPassTries ?? 0),
+      attackZoneTime: body.awayAttackZoneTime
+    };
 
-    if (!game || !game.homeTeam || !game.awayTeam) {
-      return NextResponse.json({ error: 'Missing parsed game payload' }, { status: 400, headers: NO_CACHE_HEADERS });
-    }
+    const isVsAi = Boolean(body.isVsAi);
+    const hCoachClean = (body.homeCoach || 'Home Coach').trim();
+    const aCoachClean = (body.awayCoach || (isVsAi ? '95-AI Neural CPU' : 'Away Coach')).trim();
+    const romLabel = body.romLabel || body.romId || 'W16';
+    const seasonId = body.seasonId || body.seasonLabel || 'ARENA';
+    const sessionId = body.sessionId ? String(body.sessionId) : undefined;
 
-    const ht = game.homeTeam;
-    const at = game.awayTeam;
-    const hCoachClean = (homeCoach || 'Home Coach').trim();
-    const aCoachClean = (awayCoach || (isVsAi ? '95-AI Neural CPU' : 'Away Coach')).trim();
+    const goalsList = Array.isArray(game?.goals) ? game.goals : Array.isArray(body.goals) ? body.goals : [];
+    const goalsKey = goalsList.map((g: any) => `${g.period}:${g.seconds}:${g.scorer}`).join('|');
+    const signature = `${romLabel}_${at.teamCode}_${at.goals}_${ht.teamCode}_${ht.goals}_${at.shots}_${ht.shots}_${goalsKey}`;
 
-    // Signature to prevent duplicate recording of the exact same save state
-    const goalsKey = (game.goals || []).map((g: any) => `${g.period}:${g.seconds}:${g.scorer}`).join('|');
-    const signature = `${romLabel || 'ROM'}_${at.teamCode}_${at.goals}_${ht.teamCode}_${ht.goals}_${at.shots}_${ht.shots}_${goalsKey}`;
+    const existingSigIdx = stored.matches.findIndex(m => m.signature === signature);
+    const existingSessionIdx = sessionId ? stored.matches.findIndex(m => m.sessionId === sessionId) : -1;
 
-    const existingIdx = stored.matches.findIndex(m => m.signature === signature);
-
-    // Compute fastest goal, fastest 2 goals, fastest 3 goals, fastest OT goal from game.goals
-    const goalsList = Array.isArray(game.goals) ? game.goals : [];
+    // Compute fastest goal, fastest 2 goals, fastest 3 goals, fastest OT goal from goalsList
     let fastestGoalSec: number | null = null;
     let fastestGoalPeriod: number | null = null;
     let fastestGoalScorer: string | null = null;
@@ -951,13 +952,19 @@ export async function POST(req: NextRequest) {
     let fastestOtGoalScorer: string | null = null;
     let fastestOtGoalCoach: string | null = null;
 
-    // Sort goals chronologically by period and seconds elapsed
     const sortedGoals = [...goalsList]
       .filter((g: any) => typeof g.seconds === 'number' && g.seconds >= 0)
-      .map((g: any) => ({
-        ...g,
-        absSeconds: ((Number(g.period) || 1) - 1) * 300 + Number(g.seconds)
-      }))
+      .map((g: any) => {
+        const teamStr = String(g.team || '').toUpperCase();
+        const inferredSide =
+          g.side ||
+          (teamStr && teamStr === String(ht.teamCode || '').toUpperCase() ? 'Home' : 'Away');
+        return {
+          ...g,
+          side: inferredSide,
+          absSeconds: ((Number(g.period) || 1) - 1) * 300 + Number(g.seconds)
+        };
+      })
       .sort((a, b) => a.absSeconds - b.absSeconds);
 
     if (sortedGoals.length > 0) {
@@ -969,7 +976,6 @@ export async function POST(req: NextRequest) {
       fastestGoalCoach = first.side === 'Home' ? hCoachClean : aCoachClean;
     }
 
-    // Fastest 2 & 3 goals by the same team
     for (const side of ['Home', 'Away'] as const) {
       const sideGoals = sortedGoals.filter(g => g.side === side);
       const sideCoach = side === 'Home' ? hCoachClean : aCoachClean;
@@ -1002,10 +1008,9 @@ export async function POST(req: NextRequest) {
       fastestOtGoalCoach = otFirst.side === 'Home' ? hCoachClean : aCoachClean;
     }
 
-    // Top individual skater goals & points in this match
     const allSkaters = [
-      ...(game.homeSkaters || []).map((s: any) => ({ ...s, coach: hCoachClean })),
-      ...(game.awaySkaters || []).map((s: any) => ({ ...s, coach: aCoachClean }))
+      ...(game?.homeSkaters || []).map((s: any) => ({ ...s, coach: hCoachClean })),
+      ...(game?.awaySkaters || []).map((s: any) => ({ ...s, coach: aCoachClean }))
     ];
     let topPlayerGoalsName: string | null = null;
     let topPlayerGoalsCount = 0;
@@ -1029,25 +1034,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const parseTimeSec = (str?: string): number => {
+    const parseTimeSec = (str?: string, fallbackSec?: number): number => {
+      if (typeof fallbackSec === 'number' && fallbackSec > 0) return fallbackSec;
       if (!str || !str.includes(':')) return 120;
       const [m, s] = str.split(':').map(Number);
       return (m || 0) * 60 + (s || 0);
     };
 
     const matchEntry: StoredArenaMatch = {
-      id: `match_${Date.now().toString(36)}`,
+      id: existingSessionIdx !== -1 ? stored.matches[existingSessionIdx].id : `match_${Date.now().toString(36)}`,
+      sessionId,
       signature,
       playedAt: new Date().toISOString(),
-      romLabel: romLabel || 'W16',
-      seasonId: seasonId || '40',
+      romLabel,
+      seasonId,
       homeTeam: ht.teamCode || 'HOME',
       awayTeam: at.teamCode || 'AWAY',
       homeCoach: hCoachClean,
       awayCoach: aCoachClean,
       homeGoals: Number(ht.goals || 0),
       awayGoals: Number(at.goals || 0),
-      isOT: Boolean(game.isOT),
+      isOT: Boolean(game?.isOT ?? body.isOvertime),
       homeShots: Number(ht.shots || 0),
       awayShots: Number(at.shots || 0),
       homeChecks: Number(ht.checks || 0),
@@ -1078,16 +1085,21 @@ export async function POST(req: NextRequest) {
       topPlayerPointsName,
       topPlayerPointsCount,
       topPlayerPointsCoach,
-      isVsAi: Boolean(isVsAi)
+      isVsAi
     };
 
-    if (existingIdx === -1) {
-      stored.matches.unshift(matchEntry);
-      if (stored.matches.length > 250) {
-        stored.matches = stored.matches.slice(0, 250);
+    if (existingSigIdx === -1) {
+      if (existingSessionIdx !== -1) {
+        // Update in-progress Arena match in place as score/stats advance
+        stored.matches[existingSessionIdx] = matchEntry;
+      } else {
+        stored.matches.unshift(matchEntry);
+        if (stored.matches.length > 250) {
+          stored.matches = stored.matches.slice(0, 250);
+        }
       }
 
-      // Train the Adaptive AI Model on the human coach(es) from this game!
+      // Train the Adaptive AI Model on the human coach(es) from this Arena game!
       stored.aiModel = updateAiModelFromTelemetry(
         stored.aiModel,
         hCoachClean,
@@ -1104,10 +1116,10 @@ export async function POST(req: NextRequest) {
           checks: Number(ht.checks || 0),
           faceoffWins: Number(ht.faceoffWins || 0),
           oppFaceoffWins: Number(at.faceoffWins || 0),
-          attackZoneSec: parseTimeSec(ht.attackZoneTime),
-          oppAttackZoneSec: parseTimeSec(at.attackZoneTime)
+          attackZoneSec: parseTimeSec(ht.attackZoneTime, Number(body.homeAttackZoneSec)),
+          oppAttackZoneSec: parseTimeSec(at.attackZoneTime, Number(body.awayAttackZoneSec))
         },
-        Boolean(isVsAi)
+        isVsAi
       );
 
       if (!isVsAi && aCoachClean && !aCoachClean.includes('95-AI') && aCoachClean.toUpperCase() !== 'CPU') {
@@ -1127,8 +1139,8 @@ export async function POST(req: NextRequest) {
             checks: Number(at.checks || 0),
             faceoffWins: Number(at.faceoffWins || 0),
             oppFaceoffWins: Number(ht.faceoffWins || 0),
-            attackZoneSec: parseTimeSec(at.attackZoneTime),
-            oppAttackZoneSec: parseTimeSec(ht.attackZoneTime)
+            attackZoneSec: parseTimeSec(at.attackZoneTime, Number(body.awayAttackZoneSec)),
+            oppAttackZoneSec: parseTimeSec(ht.attackZoneTime, Number(body.homeAttackZoneSec))
           },
           false
         );
@@ -1141,7 +1153,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        alreadyRecorded: existingIdx !== -1,
+        alreadyRecorded: existingSigIdx !== -1,
         match: matchEntry,
         aiModel: stored.aiModel
       },
