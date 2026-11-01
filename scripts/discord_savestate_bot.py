@@ -2207,8 +2207,14 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
             m_games.sort(key=lambda x: x["game_number"])
             eff_home = int(m.get("home_team_id") or (m_games[0]["home_team_id"] if m_games else 0)) or None
             eff_away = int(m.get("away_team_id") or (m_games[0]["away_team_id"] if m_games else 0)) or None
+            if eff_home and eff_away and eff_home == eff_away:
+                eff_away = None
+                try:
+                    supabase.update("league_playoffs", {"playoff_id": f"eq.{pid}"}, {"away_team_id": None, "away_team_seed": None})
+                except Exception:
+                    pass
             h_seed = m.get("home_team_seed") if m.get("home_team_seed") is not None else (seed_by_tid.get(eff_home) if eff_home else None)
-            a_seed = m.get("away_team_seed") if m.get("away_team_seed") is not None else (seed_by_tid.get(eff_away) if eff_away else None)
+            a_seed = (m.get("away_team_seed") if m.get("away_team_seed") is not None else (seed_by_tid.get(eff_away) if eff_away else None)) if eff_away else None
             compiled_matches.append({
                 "playoff_id": pid,
                 "match_label": m.get("match_label") or m.get("round_name") or f"Series {pid}",
@@ -2309,28 +2315,20 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
 
         single_adv = w_top or w_bot
         if not single_adv:
+            target_m["home_team_id"] = None
+            target_m["home_team_seed"] = None
+            target_m["home_team"] = None
+            target_m["away_team_id"] = None
+            target_m["away_team_seed"] = None
+            target_m["away_team"] = None
             return
         adv_tid = int(single_adv["team_id"])
-        if int(target_m.get("home_team_id") or 0) == adv_tid or int(target_m.get("away_team_id") or 0) == adv_tid:
-            return
-
-        pref_side = "home" if w_top else "away"
-        if pref_side == "home" and not target_m.get("home_team_id"):
-            target_m["home_team_id"] = adv_tid
-            target_m["home_team_seed"] = single_adv["seed"] if single_adv["seed"] != 99 else None
-            target_m["home_team"] = single_adv["team"]
-        elif pref_side == "away" and not target_m.get("away_team_id"):
-            target_m["away_team_id"] = adv_tid
-            target_m["away_team_seed"] = single_adv["seed"] if single_adv["seed"] != 99 else None
-            target_m["away_team"] = single_adv["team"]
-        elif not target_m.get("home_team_id"):
-            target_m["home_team_id"] = adv_tid
-            target_m["home_team_seed"] = single_adv["seed"] if single_adv["seed"] != 99 else None
-            target_m["home_team"] = single_adv["team"]
-        elif not target_m.get("away_team_id"):
-            target_m["away_team_id"] = adv_tid
-            target_m["away_team_seed"] = single_adv["seed"] if single_adv["seed"] != 99 else None
-            target_m["away_team"] = single_adv["team"]
+        target_m["home_team_id"] = adv_tid
+        target_m["home_team_seed"] = single_adv["seed"] if single_adv["seed"] != 99 else None
+        target_m["home_team"] = single_adv["team"]
+        target_m["away_team_id"] = None
+        target_m["away_team_seed"] = None
+        target_m["away_team"] = None
 
     # Auto-advance completed rounds by bracket fork pairs
     has_qf = any("quarterfinals" in norm_str(m.get("match_label")) for m in compiled_matches)
@@ -3451,7 +3449,7 @@ def ingest_save_state_to_supabase(
             sched_ids = [int(g["game_id"]) for g in scheduled_games]
             played_games = supabase.select(
                 "league_gamestats",
-                {"select": "game_id", "game_id": f"in.({','.join(str(x) for x in sched_ids)})"},
+                {"select": "game_id,home_team_id,away_team_id,home_score,away_score,total_faceoffs", "game_id": f"in.({','.join(str(x) for x in sched_ids)})"},
             )
             played_set = {int(p["game_id"]) for p in (played_games or [])}
             unplayed = next(
@@ -3465,39 +3463,64 @@ def ingest_save_state_to_supabase(
             if unplayed:
                 final_game_id = int(unplayed["game_id"])
             else:
-                # Check if there is an active incomplete playoff series between these two teams before returning 409
-                series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}"})
-                matching_po = [
-                    m for m in (series_matches or [])
-                    if not m.get("is_complete")
-                    and (
-                        (int(m.get("home_team_id") or 0) == home_team_id and int(m.get("away_team_id") or 0) == away_team_id)
-                        or (int(m.get("home_team_id") or 0) == away_team_id and int(m.get("away_team_id") or 0) == home_team_id)
-                    )
-                ]
-                if matching_po:
-                    is_playoff_mode = True
-                elif not allow_overwrite:
-                    return {
-                        "success": False,
-                        "alreadyPlayed": True,
-                        "playedGameIds": sched_ids,
-                        "matchup": f"{away_team_code} @ {home_team_code}",
-                        "gameResults": f"{away_team_code} {game['awayTeam']['goals']} - {game['homeTeam']['goals']} {home_team_code}",
-                        "error": (
-                            f"All scheduled regular-season games between **{away_team_code}** and **{home_team_code}** "
-                            f"for Season {s_id} ({get_league_code(s_id)}) have already been recorded "
-                            f"(Game #{', #'.join(str(x) for x in sched_ids)})."
-                        ),
-                    }
+                # Check if BoxscoreBot just inserted this exact regular-season game seconds earlier
+                matched_reg = next(
+                    (
+                        p for p in (played_games or [])
+                        if int(p.get("home_team_id") or 0) == home_team_id
+                        and int(p.get("away_team_id") or 0) == away_team_id
+                        and int(p.get("home_score") or 0) == int(game["homeTeam"]["goals"])
+                        and int(p.get("away_score") or 0) == int(game["awayTeam"]["goals"])
+                        and int(p.get("total_faceoffs") or 0) == int(game["totalFaceoffs"])
+                    ),
+                    None,
+                )
+                if matched_reg:
+                    final_game_id = int(matched_reg["game_id"])
                 else:
-                    final_game_id = sched_ids[-1]
+                    # Check if there is an active incomplete playoff series between these two teams before returning 409
+                    series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"})
+                    matching_po = [
+                        m for m in (series_matches or [])
+                        if not m.get("is_complete")
+                        and int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
+                        and (
+                            (int(m.get("home_team_id") or 0) == home_team_id and int(m.get("away_team_id") or 0) == away_team_id)
+                            or (int(m.get("home_team_id") or 0) == away_team_id and int(m.get("away_team_id") or 0) == home_team_id)
+                        )
+                    ]
+                    if matching_po:
+                        is_playoff_mode = True
+                    elif not allow_overwrite:
+                        return {
+                            "success": False,
+                            "alreadyPlayed": True,
+                            "seasonId": s_id,
+                            "gameMode": "Season",
+                            "playedGameIds": sched_ids,
+                            "matchup": f"{away_team_code} @ {home_team_code}",
+                            "gameResults": f"{away_team_code} {game['awayTeam']['goals']} - {game['homeTeam']['goals']} {home_team_code}",
+                            "boxscorePngBytes": render_retro_boxscore_png(
+                                game=game,
+                                away_team=away_team or {"team_name": away_team_code, "abbreviation": away_team_code},
+                                home_team=home_team or {"team_name": home_team_code, "abbreviation": home_team_code},
+                            ),
+                            "standingsPngBytes": render_standings_and_leaders_png(s_id, False),
+                            "error": (
+                                f"All scheduled regular-season games between **{away_team_code}** and **{home_team_code}** "
+                                f"for Season {s_id} ({get_league_code(s_id)}) have already been recorded "
+                                f"(Game #{', #'.join(str(x) for x in sched_ids)})."
+                            ),
+                        }
+                    else:
+                        final_game_id = sched_ids[-1]
         else:
             # No regular season games scheduled for this home/away pair; check if an active playoff series exists
-            series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}"})
+            series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"})
             matching_po = [
                 m for m in (series_matches or [])
-                if (
+                if int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
+                and (
                     (int(m.get("home_team_id") or 0) == home_team_id and int(m.get("away_team_id") or 0) == away_team_id)
                     or (int(m.get("home_team_id") or 0) == away_team_id and int(m.get("away_team_id") or 0) == home_team_id)
                 )
@@ -3509,10 +3532,11 @@ def ingest_save_state_to_supabase(
                 final_game_id = (int(latest_game[0]["game_id"]) + 1) if latest_game and latest_game[0].get("game_id") else 1
 
     if is_playoff_mode:
-        series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}"})
+        series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"})
         matching_series_list = [
             m for m in (series_matches or [])
-            if (
+            if int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
+            and (
                 (int(m.get("home_team_id") or 0) == home_team_id and int(m.get("away_team_id") or 0) == away_team_id)
                 or (int(m.get("home_team_id") or 0) == away_team_id and int(m.get("away_team_id") or 0) == home_team_id)
             )
@@ -3545,11 +3569,24 @@ def ingest_save_state_to_supabase(
         existing_po_games = supabase.select(
             "league_playoff_gamestats",
             {
-                "select": "game_id,game_number,home_team_id,away_team_id,home_score,away_score",
+                "select": "game_id,game_number,home_team_id,away_team_id,home_score,away_score,total_faceoffs",
                 "playoff_id": f"eq.{resolved_playoff_id}",
                 "order": "game_number.asc",
             },
         )
+        # Check if this exact playoff game was already inserted into league_playoff_gamestats (e.g. by BoxscoreBot before crashing or by web upload)
+        matched_existing_po = next(
+            (
+                g for g in (existing_po_games or [])
+                if int(g.get("home_team_id") or 0) == home_team_id
+                and int(g.get("away_team_id") or 0) == away_team_id
+                and int(g.get("home_score") or 0) == int(game["homeTeam"]["goals"])
+                and int(g.get("away_score") or 0) == int(game["awayTeam"]["goals"])
+                and int(g.get("total_faceoffs") or 0) == int(game["totalFaceoffs"])
+            ),
+            None,
+        )
+
         t1_wins = 0
         t2_wins = 0
         for g in existing_po_games or []:
@@ -3562,7 +3599,10 @@ def ingest_save_state_to_supabase(
                 t2_wins += 1
 
         is_series_won = t1_wins >= wins_needed or t2_wins >= wins_needed
-        if is_series_won and not allow_overwrite:
+        if matched_existing_po:
+            final_game_number = int(matched_existing_po["game_number"])
+            final_game_id = int(matched_existing_po["game_id"])
+        elif is_series_won and not allow_overwrite:
             return {
                 "success": False,
                 "alreadyPlayed": True,
@@ -3571,6 +3611,11 @@ def ingest_save_state_to_supabase(
                 "playedGameIds": [int(g["game_id"]) for g in (existing_po_games or [])],
                 "matchup": f"{away_team_code} @ {home_team_code}",
                 "gameResults": f"{away_team_code} {game['awayTeam']['goals']} - {game['homeTeam']['goals']} {home_team_code}",
+                "boxscorePngBytes": render_retro_boxscore_png(
+                    game=game,
+                    away_team=away_team or {"team_name": away_team_code, "abbreviation": away_team_code},
+                    home_team=home_team or {"team_name": home_team_code, "abbreviation": home_team_code},
+                ),
                 "playoffBracketPngBytes": render_playoff_bracket_png(s_id),
                 "standingsPngBytes": render_standings_and_leaders_png(s_id, True),
                 "error": (
@@ -3578,19 +3623,19 @@ def ingest_save_state_to_supabase(
                     f"({away_team_code} {t2_wins} - {t1_wins} {home_team_code} in Best-of-{series_len})."
                 ),
             }
-
-        if allow_overwrite and existing_po_games and is_series_won:
-            final_game_number = int(existing_po_games[-1]["game_number"])
         else:
-            max_gn = max([int(g.get("game_number") or 0) for g in (existing_po_games or [])], default=0)
-            final_game_number = max_gn + 1
+            if allow_overwrite and existing_po_games and is_series_won:
+                final_game_number = int(existing_po_games[-1]["game_number"])
+            else:
+                max_gn = max([int(g.get("game_number") or 0) for g in (existing_po_games or [])], default=0)
+                final_game_number = max_gn + 1
 
-        existing_for_num = next((g for g in (existing_po_games or []) if int(g.get("game_number") or 0) == final_game_number), None)
-        if existing_for_num:
-            final_game_id = int(existing_for_num["game_id"])
-        else:
-            latest_po_game = supabase.select("league_playoff_gamestats", {"select": "game_id", "order": "game_id.desc", "limit": "1"})
-            final_game_id = (int(latest_po_game[0]["game_id"]) + 1) if latest_po_game and latest_po_game[0].get("game_id") else 1
+            existing_for_num = next((g for g in (existing_po_games or []) if int(g.get("game_number") or 0) == final_game_number), None)
+            if existing_for_num:
+                final_game_id = int(existing_for_num["game_id"])
+            else:
+                latest_po_game = supabase.select("league_playoff_gamestats", {"select": "game_id", "order": "game_id.desc", "limit": "1"})
+                final_game_id = (int(latest_po_game[0]["game_id"]) + 1) if latest_po_game and latest_po_game[0].get("game_id") else 1
 
     # 4. Format game_meta and game_results
     game_meta = {
@@ -3890,12 +3935,8 @@ def ingest_save_state_to_supabase(
             {"playoff_id": f"eq.{resolved_playoff_id}"},
             {"is_complete": is_now_complete, "winner_id": series_winner_id},
         )
-        try:
-            supabase.rpc("sync_playoff_series", {"p_playoff_id": resolved_playoff_id})
-        except Exception:
-            pass
 
-        # Advance and re-seed next round in league_playoffs when all matchups in a round finish
+        # Advance and re-seed next round in league_playoffs when matchups in a round finish
         try:
             all_season_series = supabase.select(
                 "league_playoffs",
@@ -3915,7 +3956,7 @@ def ingest_save_state_to_supabase(
                 needed = math.ceil(s_l / 2.0)
                 h_id = int(series_row.get("home_team_id") or 0)
                 a_id = int(series_row.get("away_team_id") or 0)
-                if not h_id or not a_id:
+                if not h_id or not a_id or h_id == a_id:
                     return None
                 h_w = 0
                 a_w = 0
@@ -3954,14 +3995,21 @@ def ingest_save_state_to_supabase(
                     has_games = any(int(g.get("playoff_id") or 0) == ex_pid for g in (all_season_po_games or []))
                     if not has_games:
                         updates: Dict[str, Any] = {}
-                        if top_winner:
+                        if top_winner and bot_winner:
                             updates["home_team_id"] = top_winner["winnerId"]
-                            if top_winner["winnerSeed"] != 99:
-                                updates["home_team_seed"] = top_winner["winnerSeed"]
-                        if bot_winner:
+                            updates["home_team_seed"] = top_winner["winnerSeed"] if top_winner["winnerSeed"] != 99 else None
                             updates["away_team_id"] = bot_winner["winnerId"]
-                            if bot_winner["winnerSeed"] != 99:
-                                updates["away_team_seed"] = bot_winner["winnerSeed"]
+                            updates["away_team_seed"] = bot_winner["winnerSeed"] if bot_winner["winnerSeed"] != 99 else None
+                        elif top_winner:
+                            updates["home_team_id"] = top_winner["winnerId"]
+                            updates["home_team_seed"] = top_winner["winnerSeed"] if top_winner["winnerSeed"] != 99 else None
+                            updates["away_team_id"] = None
+                            updates["away_team_seed"] = None
+                        elif bot_winner:
+                            updates["home_team_id"] = bot_winner["winnerId"]
+                            updates["home_team_seed"] = bot_winner["winnerSeed"] if bot_winner["winnerSeed"] != 99 else None
+                            updates["away_team_id"] = None
+                            updates["away_team_seed"] = None
                         if updates:
                             supabase.update("league_playoffs", {"playoff_id": f"eq.{ex_pid}"}, updates)
                 elif top_winner and bot_winner:
@@ -4329,19 +4377,37 @@ class NHL95SaveStateBot(discord.Client):
 
     def find_boxscore_channel(self, source_channel: discord.TextChannel, season_id: int) -> discord.TextChannel:
         """
-        Finds the matching {year}-boxscores channel in the same Discord server.
-        For example:
-          #2014-save-states -> #2014-boxscores
-          #1927-save-states -> #1927-boxscores
+        Finds the matching boxscores channel in the same Discord server:
+          - The W (#2013-saves / season 40) -> The W -> #2013-boxscores (1537489581077692646)
+          - Original 6 (#season-saves / season 39, 54+) -> Original 6 - Golden Era -> #boxscores (1459581630581838045)
+          - Other years -> #{year}-boxscores or #boxscores in the same category
         Falls back to source_channel if no matching boxscores channel exists.
         """
         guild = source_channel.guild
         if not guild:
             return source_channel
 
+        s_id = int(season_id or 0)
+        is_orig6 = (
+            s_id == 39
+            or s_id >= 54
+            or source_channel.id == 1459581476289908838
+            or getattr(source_channel, "category_id", None) == 1459581291476422696
+        )
+
+        # 1. Explicit primary channel IDs for Original 6 and The W (2013)
+        if is_orig6:
+            o6_ch = guild.get_channel(1459581630581838045)
+            if isinstance(o6_ch, discord.TextChannel):
+                return o6_ch
+        elif source_channel.id == 1537489552002916372 or s_id == 40:
+            w_ch = guild.get_channel(1537489581077692646)
+            if isinstance(w_ch, discord.TextChannel):
+                return w_ch
+
         src_name = source_channel.name.lower()
         year_match = re.search(r"\b(19\d{2}|20\d{2})\b", src_name)
-        year_str = year_match.group(1) if year_match else str(SEASON_ID_TO_YEAR.get(int(season_id), ""))
+        year_str = year_match.group(1) if year_match else str(SEASON_ID_TO_YEAR.get(s_id, ""))
 
         candidate_names = []
         # Direct replacement: e.g. "2013-saves" or "2014-save-states" -> "2013-boxscores" / "2014-boxscores"
@@ -4356,6 +4422,13 @@ class NHL95SaveStateBot(discord.Client):
                 f"{year_str}-boxscore",
                 f"{year_str}_boxscores",
             ])
+
+        # Prefer channels inside the same category first
+        src_cat_id = getattr(source_channel, "category_id", None)
+        if src_cat_id:
+            for ch in guild.text_channels:
+                if getattr(ch, "category_id", None) == src_cat_id and ch.name.lower() in candidate_names + ["boxscores", "boxscore"]:
+                    return ch
 
         for cand in candidate_names:
             for ch in guild.text_channels:
@@ -4438,6 +4511,12 @@ class NHL95SaveStateBot(discord.Client):
                 except Exception:
                     pass
 
+                # Avoid duplicating the 3 boxscores that BoxscoreBot already posted before crashing on msg 1565907439759392849
+                skip_single_boxscore = (
+                    message.id == 1565907439759392849
+                    and (att.filename or "").lower() in ("w18p.state1", "w18p.state2", "w18p.state3")
+                )
+
                 if result.get("success"):
                     try:
                         await message.add_reaction("✅")
@@ -4448,11 +4527,12 @@ class NHL95SaveStateBot(discord.Client):
                     target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result["seasonId"]))
                     if target_boxscore_ch.id != message.channel.id:
                         try:
-                            if result.get("boxscorePngBytes"):
-                                file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
-                                await target_boxscore_ch.send(file=file_att)
-                            else:
-                                await target_boxscore_ch.send(embed=embed)
+                            if not skip_single_boxscore:
+                                if result.get("boxscorePngBytes"):
+                                    file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
+                                    await target_boxscore_ch.send(file=file_att)
+                                else:
+                                    await target_boxscore_ch.send(embed=embed)
                             if is_last_att and result.get("playoffBracketPngBytes"):
                                 br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
                                 await target_boxscore_ch.send(file=br_att)
@@ -4463,10 +4543,11 @@ class NHL95SaveStateBot(discord.Client):
                             print(f"   ⚠️ Could not post to #{target_boxscore_ch.name} ({send_err}), trying webhook fallback...")
                             if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
                                 wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
-                                await asyncio.to_thread(
-                                    wh.send,
-                                    file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
-                                )
+                                if not skip_single_boxscore:
+                                    await asyncio.to_thread(
+                                        wh.send,
+                                        file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
+                                    )
                                 if is_last_att and result.get("playoffBracketPngBytes"):
                                     await asyncio.to_thread(
                                         wh.send,
@@ -4477,23 +4558,25 @@ class NHL95SaveStateBot(discord.Client):
                                         wh.send,
                                         file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
                                     )
-                        confirm_text = (
-                            f"✅ **Save State Recorded to Database!** (`{att.filename}`)\n"
-                            f"🏒 **{result['gameResults']}** • Game **#{result['gameId']}** ({mode_badge}) — "
-                            f"Boxscore & Standings posted in {target_boxscore_ch.mention}!"
-                        )
-                        try:
-                            await message.reply(content=confirm_text, mention_author=False)
-                        except Exception:
-                            pass
+                        if not skip_single_boxscore:
+                            confirm_text = (
+                                f"✅ **Save State Recorded to Database!** (`{att.filename}`)\n"
+                                f"🏒 **{result['gameResults']}** • Game **#{result['gameId']}** ({mode_badge}) — "
+                                f"Boxscore & Standings posted in {target_boxscore_ch.mention}!"
+                            )
+                            try:
+                                await message.reply(content=confirm_text, mention_author=False)
+                            except Exception:
+                                pass
                         print(f"   ✅ SUCCESS: Saved Game #{result['gameId']} ({result['gameResults']}) and posted boxscore + standings to #{target_boxscore_ch.name}!")
                     else:
                         try:
-                            if result.get("boxscorePngBytes"):
-                                file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
-                                await message.reply(file=file_att, mention_author=False)
-                            else:
-                                await message.reply(embed=embed, mention_author=False)
+                            if not skip_single_boxscore:
+                                if result.get("boxscorePngBytes"):
+                                    file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
+                                    await message.reply(file=file_att, mention_author=False)
+                                else:
+                                    await message.reply(embed=embed, mention_author=False)
                             if is_last_att and result.get("playoffBracketPngBytes"):
                                 br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
                                 await message.channel.send(file=br_att)
@@ -4504,10 +4587,11 @@ class NHL95SaveStateBot(discord.Client):
                             print(f"   ⚠️ Could not reply in #{channel_name} ({reply_err}), trying webhook fallback...")
                             if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
                                 wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
-                                await asyncio.to_thread(
-                                    wh.send,
-                                    file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
-                                )
+                                if not skip_single_boxscore:
+                                    await asyncio.to_thread(
+                                        wh.send,
+                                        file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
+                                    )
                                 if is_last_att and result.get("playoffBracketPngBytes"):
                                     await asyncio.to_thread(
                                         wh.send,
@@ -4522,25 +4606,25 @@ class NHL95SaveStateBot(discord.Client):
 
                 elif result.get("alreadyPlayed"):
                     # If BoxscoreBot already recorded the series/game seconds earlier (or during catch-up),
-                    # still post the updated Playoff Bracket & Standings on the last attachment of the batch!
+                    # still post any missing boxscore and the updated Playoff Bracket & Standings on the last attachment!
                     try:
                         await message.add_reaction("✅")
                     except Exception:
                         pass
-                    if is_last_att and (result.get("playoffBracketPngBytes") or result.get("standingsPngBytes")):
-                        target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result.get("seasonId") or season_id))
-                        try:
-                            if result.get("playoffBracketPngBytes"):
-                                br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
-                                await target_boxscore_ch.send(file=br_att)
-                            if result.get("standingsPngBytes"):
-                                st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
-                                await target_boxscore_ch.send(file=st_att)
-                            print(f"   ✅ Posted updated Playoff Bracket & Standings to #{target_boxscore_ch.name} for '{att.filename}'!")
-                        except Exception as br_err:
-                            print(f"   ⚠️ Could not post bracket to #{target_boxscore_ch.name}: {br_err}")
-                    else:
-                        print(f"   ℹ️ Already recorded in DB: {result.get('error')}")
+                    target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result.get("seasonId") or season_id))
+                    try:
+                        if not skip_single_boxscore and result.get("boxscorePngBytes"):
+                            file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
+                            await target_boxscore_ch.send(file=file_att)
+                        if is_last_att and result.get("playoffBracketPngBytes"):
+                            br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
+                            await target_boxscore_ch.send(file=br_att)
+                        if is_last_att and result.get("standingsPngBytes"):
+                            st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
+                            await target_boxscore_ch.send(file=st_att)
+                        print(f"   ✅ Posted boxscore/Playoff Bracket/Standings to #{target_boxscore_ch.name} for '{att.filename}'!")
+                    except Exception as br_err:
+                        print(f"   ⚠️ Could not post to #{target_boxscore_ch.name}: {br_err}")
 
                 else:
                     try:
@@ -4944,8 +5028,22 @@ def post_boxscore_png_from_web(payload_data: Dict[str, Any]) -> None:
             return 200 <= r.status < 300
 
     year_str = str(SEASON_ID_TO_YEAR.get(season_id, ""))
+    is_orig6 = season_id == 39 or season_id >= 54
     if DISCORD_BOT_TOKEN:
         try:
+            # 1. Try direct primary channel IDs first (Original 6 -> #boxscores, The W 2013 -> #2013-boxscores)
+            primary_ch_id = "1459581630581838045" if is_orig6 else ("1537489581077692646" if season_id == 40 else "")
+            if primary_ch_id:
+                msg_url = f"https://discord.com/api/v10/channels/{primary_ch_id}/messages"
+                auth_hdr = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+                if send_multipart_png(msg_url, auth_hdr, png_bytes, "boxscore.png"):
+                    if bracket_bytes:
+                        send_multipart_png(msg_url, auth_hdr, bracket_bytes, "playoff_bracket.png")
+                    if standings_bytes:
+                        send_multipart_png(msg_url, auth_hdr, standings_bytes, "standings_leaders.png")
+                    print(f"Posted boxscore.png + bracket/standings to primary channel {primary_ch_id}")
+                    return
+
             guilds_req = urllib.request.Request(
                 "https://discord.com/api/v10/users/@me/guilds",
                 headers={"Authorization": f"Bot {DISCORD_BOT_TOKEN}", "User-Agent": "NHL95Bot/1.0"},
@@ -5003,8 +5101,8 @@ def main():
     parser.add_argument(
         "--backfill-hours",
         type=int,
-        default=24,
-        help="On startup, scan the last N hours of channel history for any un-ingested save states (0 to disable, default: 24)",
+        default=48,
+        help="On startup, scan the last N hours of channel history for any un-ingested save states (0 to disable, default: 48)",
     )
     parser.add_argument(
         "--channel-ids",

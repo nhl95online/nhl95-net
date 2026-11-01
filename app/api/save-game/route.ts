@@ -520,13 +520,21 @@ export async function POST(req: NextRequest) {
             const hasGamesAlready = pGamesList.some((g: any) => Number(g.playoff_id) === existingPId);
             if (!hasGamesAlready) {
               const updates: Record<string, any> = {};
-              if (topWinner) {
+              if (topWinner && botWinner) {
                 updates.home_team_id = topWinner.winnerId;
-                if (topWinner.winnerSeed !== 99) updates.home_team_seed = topWinner.winnerSeed;
-              }
-              if (botWinner) {
+                updates.home_team_seed = topWinner.winnerSeed !== 99 ? topWinner.winnerSeed : null;
                 updates.away_team_id = botWinner.winnerId;
-                if (botWinner.winnerSeed !== 99) updates.away_team_seed = botWinner.winnerSeed;
+                updates.away_team_seed = botWinner.winnerSeed !== 99 ? botWinner.winnerSeed : null;
+              } else if (topWinner) {
+                updates.home_team_id = topWinner.winnerId;
+                updates.home_team_seed = topWinner.winnerSeed !== 99 ? topWinner.winnerSeed : null;
+                updates.away_team_id = null;
+                updates.away_team_seed = null;
+              } else if (botWinner) {
+                updates.home_team_id = botWinner.winnerId;
+                updates.home_team_seed = botWinner.winnerSeed !== 99 ? botWinner.winnerSeed : null;
+                updates.away_team_id = null;
+                updates.away_team_seed = null;
               }
               if (Object.keys(updates).length > 0) {
                 await supabase.from('league_playoffs').update(updates).eq('playoff_id', existingPId);
@@ -946,13 +954,6 @@ export async function POST(req: NextRequest) {
         scheduleUpdateErr = poErr;
       } else {
         scheduleUpdateSuccess = true;
-      }
-
-      // Optional RPC hook if configured in Supabase
-      try {
-        await supabase.rpc('sync_playoff_series', { p_playoff_id: resolvedPlayoffId });
-      } catch {
-        // Ignore if RPC does not exist
       }
 
       playoffSeriesSummary = `Playoff Series #${resolvedPlayoffId} (${activePlayoffSeries?.round_name || 'Playoffs'} • Game #${finalGameNumber}): Series Wins ${sHomeWins}-${sAwayWins}${isNowComplete ? ' [SERIES COMPLETE]' : ''}`;
@@ -1729,15 +1730,12 @@ async function sendDiscordBoxscore(params: {
   };
 
   try {
-    if (webhookUrl) {
-      await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      console.log("✅ Discord Boxscore sent successfully via Webhook!");
-    } else if (botToken && channelId) {
-      await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+    const numSeasonId = Number(seasonId) || 40;
+    const isOrig6 = numSeasonId === 39 || numSeasonId >= 54;
+    const resolvedChannelId = channelId || (isOrig6 ? "1459581630581838045" : "1537489581077692646");
+
+    if (botToken && resolvedChannelId) {
+      await fetch(`https://discord.com/api/v10/channels/${resolvedChannelId}/messages`, {
         method: "POST",
         headers: {
           "Authorization": `Bot ${botToken}`,
@@ -1745,7 +1743,14 @@ async function sendDiscordBoxscore(params: {
         },
         body: JSON.stringify(payload)
       });
-      console.log("✅ Discord Boxscore sent successfully via Bot API!");
+      console.log(`✅ Discord Boxscore sent successfully via Bot API to channel ${resolvedChannelId}!`);
+    } else if (webhookUrl) {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      console.log("✅ Discord Boxscore sent successfully via Webhook!");
     }
     return { success: true };
   } catch (err: any) {

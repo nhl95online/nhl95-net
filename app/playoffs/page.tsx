@@ -1919,10 +1919,13 @@ export default function PlayoffBracket() {
             .sort((a: SeriesGameResult, b: SeriesGameResult) => a.game_number - b.game_number);
 
           const effectiveHomeTeamId = match.home_team_id || (matchedGames.length > 0 ? matchedGames[0].home_team_id : null);
-          const effectiveAwayTeamId = match.away_team_id || (matchedGames.length > 0 ? matchedGames[0].away_team_id : null);
+          let effectiveAwayTeamId = match.away_team_id || (matchedGames.length > 0 ? matchedGames[0].away_team_id : null);
+          if (effectiveHomeTeamId && effectiveAwayTeamId && Number(effectiveHomeTeamId) === Number(effectiveAwayTeamId)) {
+            effectiveAwayTeamId = null;
+          }
 
           const homeSeed = match.home_team_seed ?? (effectiveHomeTeamId ? seedByTeamId.get(Number(effectiveHomeTeamId)) : undefined);
-          const awaySeed = match.away_team_seed ?? (effectiveAwayTeamId ? seedByTeamId.get(Number(effectiveAwayTeamId)) : undefined);
+          const awaySeed = effectiveAwayTeamId ? (match.away_team_seed ?? seedByTeamId.get(Number(effectiveAwayTeamId))) : undefined;
 
           return {
             ...match,
@@ -2021,32 +2024,22 @@ export default function PlayoffBracket() {
         }
 
         const singleAdv = wTop || wBot;
-        if (!singleAdv) return;
-        if (
-          Number(targetMatch.home_team_id) === singleAdv.team_id ||
-          Number(targetMatch.away_team_id) === singleAdv.team_id
-        ) {
+        if (!singleAdv) {
+          targetMatch.home_team_id = undefined;
+          targetMatch.home_team_seed = undefined;
+          targetMatch.home_team = null;
+          targetMatch.away_team_id = undefined;
+          targetMatch.away_team_seed = undefined;
+          targetMatch.away_team = null;
           return;
         }
 
-        const preferredSide: 'home' | 'away' = wTop ? 'home' : 'away';
-        if (preferredSide === 'home' && !targetMatch.home_team_id) {
-          targetMatch.home_team_id = singleAdv.team_id;
-          targetMatch.home_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
-          targetMatch.home_team = singleAdv.team;
-        } else if (preferredSide === 'away' && !targetMatch.away_team_id) {
-          targetMatch.away_team_id = singleAdv.team_id;
-          targetMatch.away_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
-          targetMatch.away_team = singleAdv.team;
-        } else if (!targetMatch.home_team_id) {
-          targetMatch.home_team_id = singleAdv.team_id;
-          targetMatch.home_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
-          targetMatch.home_team = singleAdv.team;
-        } else if (!targetMatch.away_team_id) {
-          targetMatch.away_team_id = singleAdv.team_id;
-          targetMatch.away_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
-          targetMatch.away_team = singleAdv.team;
-        }
+        targetMatch.home_team_id = singleAdv.team_id;
+        targetMatch.home_team_seed = singleAdv.seed !== 99 ? singleAdv.seed : undefined;
+        targetMatch.home_team = singleAdv.team;
+        targetMatch.away_team_id = undefined;
+        targetMatch.away_team_seed = undefined;
+        targetMatch.away_team = null;
       };
 
       const hasQuarterFinals = compiledMatches.some(m => norm(m.match_label).includes('quarterfinals'));
