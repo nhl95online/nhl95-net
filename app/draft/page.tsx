@@ -1110,28 +1110,54 @@ export default function DraftPage() {
 
   // Track which leagues have draft rows and which still have open pick slots
   const { completedDraftLeagues, openDraftLeagues } = useMemo(() => {
-    const withRows = new Set<string>();
-    const withFilled = new Set<string>();
+    const totalRowsByLeague = new Map<string, number>();
+    const filledRowsByLeague = new Map<string, number>();
     const open = new Set<string>();
+
     data.forEach(d => {
-      withRows.add(d.leagueId);
+      totalRowsByLeague.set(d.leagueId, (totalRowsByLeague.get(d.leagueId) || 0) + 1);
       const isEmpty = !d.player || d.player === 'N/A' || d.player.trim() === '';
       if (isEmpty) {
         open.add(d.leagueId);
       } else {
-        withFilled.add(d.leagueId);
+        filledRowsByLeague.set(d.leagueId, (filledRowsByLeague.get(d.leagueId) || 0) + 1);
       }
     });
+
     const completed = new Set<string>();
-    withRows.forEach(lId => {
+    seasons.forEach(s => {
+      const st = String(s.status || '').toLowerCase();
+      if (st === 'completed' || st === 'complete') {
+        completed.add(s.leagueId);
+      }
+    });
+
+    totalRowsByLeague.forEach((totalCount, lId) => {
       const numId = Number(lId);
-      const isHistoricalArchiveSeason = numId <= 38 && !['16', '20', '36', '39'].includes(String(lId));
-      if (!open.has(lId) || (isHistoricalArchiveSeason && withFilled.has(lId))) {
+      const filledCount = filledRowsByLeague.get(lId) || 0;
+      const sMeta = seasons.find(s => s.leagueId === lId);
+      const lType = sMeta?.leagueType || (numId === 39 || numId >= 54 ? 'O' : 'W');
+      const isHistoricalArchiveSeason =
+        (lType === 'W' && numId <= 40) ||
+        (lType === 'O' && numId === 39) ||
+        (lType === 'Q' && numId < 36) ||
+        numId === 16 ||
+        numId === 20;
+
+      if (isHistoricalArchiveSeason && filledCount > 0) {
+        completed.add(lId);
+        return;
+      }
+
+      // For modern drafts (41+), require all generated slots (or at least 2 full rounds) to be filled with 0 open slots
+      const minExpectedSlots = lType === 'O' ? 12 : 50;
+      if (!open.has(lId) && filledCount >= minExpectedSlots && totalCount >= minExpectedSlots) {
         completed.add(lId);
       }
     });
+
     return { completedDraftLeagues: completed, openDraftLeagues: open };
-  }, [data]);
+  }, [data, seasons]);
 
   // Parse traded future draft picks from league_trades (chronological by 'trade id')
   // Key: `${year}-${round}-${ORIG_TEAM_ABBR}` -> Value: `${CURRENT_OWNER_ABBR}`
@@ -1206,49 +1232,62 @@ export default function DraftPage() {
     return map;
   }, [tradesRows]);
 
-  // Filtered Season Options for Draft Floor & Past
-  const availableFloorSeasons = useMemo(() => {
-    const isPastArchiveSeason = (s: SeasonOption) => {
-      const numId = Number(s.leagueId);
-      if (completedDraftLeagues.has(s.leagueId)) return true;
-      if (s.leagueType === 'W' && numId <= 40) return true;
-      if (s.leagueType === 'O' && numId === 39) return true;
-      if (s.leagueType === 'Q' && numId < 36) return true;
-      return false;
-    };
-    const upcoming = seasons
-      .filter(s => !isPastArchiveSeason(s) && (floorLeague === 'ALL' || s.leagueType === floorLeague))
-      .sort((a, b) => Number(a.leagueId) - Number(b.leagueId));
-    return upcoming.length > 0
-      ? upcoming
-      : seasons.filter(s => floorLeague === 'ALL' || s.leagueType === floorLeague);
-  }, [seasons, floorLeague, completedDraftLeagues]);
-
-  const availablePastSeasons = useMemo(() => {
-    return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
-  }, [seasons, pastLeagueType]);
-
-  // Drafts that are live: upcoming/current drafts (e.g. W19 = 41, O02 = 54, or future seasons when opened)
-  // Historical archive seasons (W01-W18, O01, and Q01-Q18) are excluded so they never clutter Live Drafts.
+  // Active Drafts: Only show current active drafts whose preceding season is completed, and remove any draft once it is completed.
+  // Future drafts (e.g. W20 2015, W21 2016, O03 1929) are excluded until their preceding season is completed.
   const activeDrafts = useMemo(() => {
     return seasons
       .filter(s => {
         if (completedDraftLeagues.has(s.leagueId)) return false;
         const numId = Number(s.leagueId);
-        // W01-W18 (<=40 in W), O01 (39 in O), and Q01-Q18 (<36 in Q) are completed seasons whose drafts belong in Past Drafts
+        // Historical archive seasons belong in Past Drafts
         if (s.leagueType === 'W' && numId <= 40) return false;
         if (s.leagueType === 'O' && numId === 39) return false;
         if (s.leagueType === 'Q' && numId < 36) return false;
-        const isO02 = s.seasonBadge.startsWith('O02') || s.leagueId === '54';
+        if (numId === 16 || numId === 20) return false;
+
+        // If Commissioner explicitly started this draft, it is active
+        if (s.draftStarted) return true;
+
+        // Current active drafts for W19 (2014) and O02 (1928)
+        const isW19 = s.leagueId === '41' || s.seasonBadge.startsWith('W19');
+        const isO02 = s.leagueId === '54' || s.seasonBadge.startsWith('O02');
+        if (isW19 || isO02) return true;
+
+        // For any future draft (e.g. W20 = 42, W21 = 43, O03 = 55), only show if its preceding season is completed
+        const prevSeason = seasons
+          .filter(ps => ps.leagueType === s.leagueType && Number(ps.leagueId) < numId)
+          .sort((a, b) => Number(b.leagueId) - Number(a.leagueId))[0];
+        if (!prevSeason) return false;
+
+        const prevStatus = String(prevSeason.status || '').toLowerCase();
+        const prevGamesPlayed = standingsRows
+          .filter(r => Number(r.season_id) === Number(prevSeason.leagueId))
+          .reduce((maxGp, r) => Math.max(maxGp, Number(r.gp) || 0), 0);
+        const minCompletedGp = s.leagueType === 'O' ? 20 : 40;
+
         return (
-          s.leagueId === '41' ||
-          isO02 ||
-          String(s.status || '').toLowerCase() === 'active' ||
-          (numId >= 41 && openDraftLeagues.has(s.leagueId))
+          (prevStatus === 'completed' || prevStatus === 'complete') &&
+          prevGamesPlayed >= minCompletedGp &&
+          completedDraftLeagues.has(prevSeason.leagueId)
         );
       })
       .sort((a, b) => Number(a.leagueId) - Number(b.leagueId));
-  }, [seasons, completedDraftLeagues, openDraftLeagues]);
+  }, [seasons, completedDraftLeagues, standingsRows]);
+
+  // Filtered Season Options for Draft Floor & Past
+  const availableFloorSeasons = useMemo(() => {
+    const activeFiltered = activeDrafts.filter(
+      s => floorLeague === 'ALL' || s.leagueType === floorLeague
+    );
+    if (activeFiltered.length > 0) return activeFiltered;
+    return activeDrafts.length > 0
+      ? activeDrafts
+      : seasons.filter(s => floorLeague === 'ALL' || s.leagueType === floorLeague);
+  }, [activeDrafts, seasons, floorLeague]);
+
+  const availablePastSeasons = useMemo(() => {
+    return seasons.filter(s => pastLeagueType === 'ALL' || s.leagueType === pastLeagueType);
+  }, [seasons, pastLeagueType]);
 
   useEffect(() => {
     if (completedDraftLeagues.has(floorLeagueId) && activeDrafts.length > 0) {
@@ -3559,11 +3598,11 @@ export default function DraftPage() {
             </div>
           </div>
 
-          {/* Right: Live & Upcoming Drafts Stacked Vertically */}
-          {activeDrafts.length > 1 && (
+          {/* Right: Active Drafts Only (Future drafts hidden until preceding season completes; completed drafts removed) */}
+          {activeDrafts.length > 0 && (
             <div className="flex flex-col lg:items-end gap-1.5 font-mono shrink-0 border-t lg:border-t-0 lg:border-l border-black/20 pt-3 lg:pt-0 lg:pl-5">
               <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">
-                Upcoming &amp; Live Drafts:
+                Active Drafts:
               </span>
               <div className="flex flex-col gap-1.5 w-full sm:w-auto min-w-[165px]">
                 {activeDrafts.map(s => {
