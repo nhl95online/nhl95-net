@@ -630,6 +630,21 @@ export default function DraftPage() {
   const [prevSeasonDbRosters, setPrevSeasonDbRosters] = useState<Array<{ team_id: number; player_id?: any; player_name: string }>>([]);
   const [rosterTeamOverrideId, setRosterTeamOverrideId] = useState<number | null>(null);
   const [rosterPosFilter, setRosterPosFilter] = useState<'ALL' | 'SKATERS' | 'GOALIES'>('ALL');
+  const [showRosterCareerSeasons, setShowRosterCareerSeasons] = useState<boolean>(true);
+  const [rosterCareerByNorm, setRosterCareerByNorm] = useState<
+    Record<
+      string,
+      Array<{
+        year: number;
+        nhlTeam: string;
+        pos: string;
+        ovr: number;
+        weightLbs: string | number;
+        hand: string;
+        attrs: Array<{ short: string; label: string; level: number; raw?: number }>;
+      }>
+    >
+  >({});
 
   // Draft order generator (draft rounds worst -> best, waiver rounds best -> worst)
   const [draftRoundsInput, setDraftRoundsInput] = useState(2);
@@ -2402,8 +2417,19 @@ export default function DraftPage() {
         })
       : { goalies: 2, forwards: 5, defensemen: 3 };
 
+    interface RosterCareerSeason {
+      year: number;
+      nhlTeam: string;
+      pos: string;
+      ovr: number;
+      weightLbs: string | number;
+      hand: string;
+      attrs: Array<{ short: string; label: string; level: number; raw?: number }>;
+    }
+
     interface RosterPlayerRow {
       key: string;
+      normKey: string;
       playerId?: string | number;
       name: string;
       rolePos: string;
@@ -2414,9 +2440,38 @@ export default function DraftPage() {
       weightLbs: string | number;
       hand: string;
       attrs: Array<{ short: string; label: string; level: number; raw?: number }>;
+      careerSeasons: RosterCareerSeason[];
       rawRatings?: any;
       rawPlayerInfo?: any;
     }
+
+    const resolvePlayerCareerSeasons = (
+      pName: string,
+      rolePos: string,
+      fallbackOvr: number,
+      fallbackWgt: string | number,
+      fallbackHand: string,
+      fallbackAttrs: Array<{ short: string; label: string; level: number; raw?: number }>,
+      rawInfo?: any
+    ): RosterCareerSeason[] => {
+      const n = normName(pName);
+      const a = normAlias(pName);
+      const fromMap = (n && rosterCareerByNorm[n]) || (a && rosterCareerByNorm[a]) || [];
+      if (fromMap.length > 0) return fromMap;
+      const curYr = Number(rookieClassYear) || 2014;
+      const infoObj = parseRatingJsonObj(rawInfo);
+      return [
+        {
+          year: curYr,
+          nhlTeam: infoObj?.source_team || '',
+          pos: rolePos,
+          ovr: fallbackOvr,
+          weightLbs: fallbackWgt,
+          hand: fallbackHand,
+          attrs: fallbackAttrs
+        }
+      ];
+    };
 
     const seenNorm = new Set<string>();
     const allRows: RosterPlayerRow[] = [];
@@ -2440,11 +2495,13 @@ export default function DraftPage() {
         dbP?.pos || pick.pos || 'F',
         dbP?.ovr || pick.ovr
       );
+      const rolePos = parsed.isG ? 'G' : (dbP?.pos || pick.pos || 'F');
       allRows.push({
         key: `drafted-${pick.pk}-${pName}`,
+        normKey: n,
         playerId: dbP?.player_id ?? pick.playerId,
         name: pName,
-        rolePos: parsed.isG ? 'G' : (dbP?.pos || pick.pos || 'F'),
+        rolePos,
         isGoalie: parsed.isG,
         isDraftedNow: true,
         draftBadgeText: `NEW PICK • Rd ${pick.rd}, #${pick.pk}`,
@@ -2452,6 +2509,15 @@ export default function DraftPage() {
         weightLbs: parsed.weightLbs,
         hand: parsed.hand,
         attrs: parsed.attrs,
+        careerSeasons: resolvePlayerCareerSeasons(
+          pName,
+          rolePos,
+          parsed.ovr,
+          parsed.weightLbs,
+          parsed.hand,
+          parsed.attrs,
+          dbP?.player_info || pick.playerInfo
+        ),
         rawRatings: dbP?.ratings || pick.ratings,
         rawPlayerInfo: dbP?.player_info || pick.playerInfo
       });
@@ -2468,19 +2534,30 @@ export default function DraftPage() {
       const defaultSlotPos = idx < (posCounts.forwards || 5) ? 'F' : 'D';
       const dbP = lookupDbPlayer(pName);
       const resolvedPos = dbP?.pos && dbP.pos !== 'G' ? dbP.pos : defaultSlotPos;
+      const rolePos = defaultSlotPos === 'D' && resolvedPos === 'F' ? 'D' : resolvedPos;
       const parsed = extractDraftPlayerRatings(dbP?.ratings, dbP?.player_info, resolvedPos, dbP?.ovr);
 
       allRows.push({
         key: `skater-${idx}-${pName}`,
+        normKey: n,
         playerId: dbP?.player_id,
         name: pName,
-        rolePos: defaultSlotPos === 'D' && resolvedPos === 'F' ? 'D' : resolvedPos,
+        rolePos,
         isGoalie: false,
         isDraftedNow: false,
         ovr: parsed.ovr,
         weightLbs: parsed.weightLbs,
         hand: parsed.hand,
         attrs: parsed.attrs,
+        careerSeasons: resolvePlayerCareerSeasons(
+          pName,
+          rolePos,
+          parsed.ovr,
+          parsed.weightLbs,
+          parsed.hand,
+          parsed.attrs,
+          dbP?.player_info
+        ),
         rawRatings: dbP?.ratings,
         rawPlayerInfo: dbP?.player_info
       });
@@ -2499,6 +2576,7 @@ export default function DraftPage() {
 
       allRows.push({
         key: `goalie-${idx}-${pName}`,
+        normKey: n,
         playerId: dbP?.player_id,
         name: pName,
         rolePos: 'G',
@@ -2508,6 +2586,15 @@ export default function DraftPage() {
         weightLbs: parsed.weightLbs,
         hand: parsed.hand,
         attrs: parsed.attrs,
+        careerSeasons: resolvePlayerCareerSeasons(
+          pName,
+          'G',
+          parsed.ovr,
+          parsed.weightLbs,
+          parsed.hand,
+          parsed.attrs,
+          dbP?.player_info
+        ),
         rawRatings: dbP?.ratings,
         rawPlayerInfo: dbP?.player_info
       });
@@ -2525,18 +2612,29 @@ export default function DraftPage() {
 
         const dbP = lookupDbPlayer(pName, r.player_id);
         const parsed = extractDraftPlayerRatings(dbP?.ratings, dbP?.player_info, dbP?.pos || 'F', dbP?.ovr);
+        const rolePos = parsed.isG ? 'G' : (dbP?.pos || 'F');
 
         allRows.push({
           key: `dbroster-${idx}-${pName}`,
+          normKey: n,
           playerId: dbP?.player_id ?? r.player_id,
           name: pName,
-          rolePos: parsed.isG ? 'G' : (dbP?.pos || 'F'),
+          rolePos,
           isGoalie: parsed.isG,
           isDraftedNow: false,
           ovr: parsed.ovr,
           weightLbs: parsed.weightLbs,
           hand: parsed.hand,
           attrs: parsed.attrs,
+          careerSeasons: resolvePlayerCareerSeasons(
+            pName,
+            rolePos,
+            parsed.ovr,
+            parsed.weightLbs,
+            parsed.hand,
+            parsed.attrs,
+            dbP?.player_info
+          ),
           rawRatings: dbP?.ratings,
           rawPlayerInfo: dbP?.player_info
         });
@@ -2554,7 +2652,153 @@ export default function DraftPage() {
       avgOvr,
       totalCount: allRows.length
     };
-  }, [activeRosterTeam, activeFloorSeasonMeta, floorLeagueId, draftTeamsList, selectedPicksForFloor, allYearPlayersByNorm, prevSeasonDbRosters]);
+  }, [activeRosterTeam, activeFloorSeasonMeta, floorLeagueId, draftTeamsList, selectedPicksForFloor, allYearPlayersByNorm, prevSeasonDbRosters, rosterCareerByNorm, rookieClassYear]);
+
+  // Load remaining career seasons (from current draft season onward) for all players on activeRosterTeam
+  useEffect(() => {
+    const allRosterPlayers = [...activeTeamRosterData.skaters, ...activeTeamRosterData.goalies];
+    if (allRosterPlayers.length === 0) return;
+
+    const minYear = Number(rookieClassYear) || 2014;
+    const normName = (name: string) =>
+      String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+
+    const normAlias = (name: string) => {
+      const cleaned = String(name || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase()
+        .replace(/[.'’-]/g, ' ')
+        .replace(/\s+/g, ' ');
+      const parts = cleaned.split(' ').filter(Boolean);
+      if (parts.length < 2) return normName(name);
+      const firstMap: Record<string, string> = {
+        alexander: 'alex', michael: 'mike', matthew: 'matt', christopher: 'chris',
+        nicholas: 'nick', niklas: 'nicklas', daniel: 'dan', steven: 'steve',
+        stephen: 'steve', anthony: 'tony', thomas: 'tom', william: 'bill',
+        robert: 'bob', edward: 'ed', joseph: 'joe', zachary: 'zach',
+        bradley: 'brad', patrick: 'pat', samuel: 'sam', benjamin: 'ben',
+        jonathan: 'jon', evgeny: 'evgeni'
+      };
+      const first = firstMap[parts[0]] || parts[0];
+      return `${first}${parts.slice(1).join('')}`.replace(/[^a-z0-9]/g, '');
+    };
+
+    const lastNames = Array.from(
+      new Set(
+        allRosterPlayers
+          .map(p => {
+            const parts = p.name.replace(/[^a-zA-Z\s-]/g, ' ').trim().split(/\s+/);
+            return parts[parts.length - 1] || '';
+          })
+          .filter(ln => ln.length >= 2)
+      )
+    );
+    if (lastNames.length === 0) return;
+
+    let cancelled = false;
+    async function loadRosterCareerRemaining() {
+      try {
+        const orFilter = lastNames.map(ln => `player_name.ilike.%${ln}%`).join(',');
+        const { data: careerRows, error } = await supabase
+          .from('league_player_database')
+          .select('player_id, player_name, pos, team_default, rookie, star_rating, ratings, player_info')
+          .or(orFilter)
+          .limit(1000);
+
+        if (cancelled || error || !careerRows) return;
+
+        const targetNorms = new Set<string>();
+        const rolePosByNorm: Record<string, string> = {};
+        allRosterPlayers.forEach(rp => {
+          const n = normName(rp.name);
+          const a = normAlias(rp.name);
+          if (n) {
+            targetNorms.add(n);
+            rolePosByNorm[n] = rp.rolePos;
+          }
+          if (a) {
+            targetNorms.add(a);
+            rolePosByNorm[a] = rp.rolePos;
+          }
+        });
+
+        const groupedByKey: Record<
+          string,
+          Map<
+            number,
+            {
+              year: number;
+              nhlTeam: string;
+              pos: string;
+              ovr: number;
+              weightLbs: string | number;
+              hand: string;
+              attrs: Array<{ short: string; label: string; level: number; raw?: number }>;
+            }
+          >
+        > = {};
+
+        careerRows.forEach((row: any) => {
+          const pName = String(row?.player_name || '').trim();
+          if (!pName) return;
+          const n = normName(pName);
+          const a = normAlias(pName);
+          if (!targetNorms.has(n) && !targetNorms.has(a)) return;
+
+          const info = parseRatingJsonObj(row.player_info);
+          const yr = Number(info?.source_year || 0);
+          if (!yr || yr < minYear) return;
+
+          const posToUse = rolePosByNorm[n] || rolePosByNorm[a] || row.pos || 'F';
+          const parsed = extractDraftPlayerRatings(row.ratings, row.player_info, posToUse, parsePlayerOvr(row.ratings));
+          const seasonEntry = {
+            year: yr,
+            nhlTeam: String(info?.source_team || row.team_default || '').trim(),
+            pos: posToUse,
+            ovr: parsed.ovr,
+            weightLbs: parsed.weightLbs,
+            hand: parsed.hand,
+            attrs: parsed.attrs
+          };
+
+          [n, a].forEach(key => {
+            if (!key) return;
+            if (!groupedByKey[key]) groupedByKey[key] = new Map();
+            const existing = groupedByKey[key].get(yr);
+            if (!existing || seasonEntry.ovr >= existing.ovr) {
+              groupedByKey[key].set(yr, seasonEntry);
+            }
+          });
+        });
+
+        const nextMap: typeof rosterCareerByNorm = {};
+        Object.entries(groupedByKey).forEach(([key, yrMap]) => {
+          nextMap[key] = Array.from(yrMap.values()).sort((x, y) => x.year - y.year);
+        });
+
+        setRosterCareerByNorm(nextMap);
+      } catch (err) {
+        console.error('Failed to load roster career progression:', err);
+      }
+    }
+
+    loadRosterCareerRemaining();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeRosterTeam?.team_id,
+    rookieClassYear,
+    activeTeamRosterData.totalCount,
+    selectedPicksForFloor.length
+  ]);
 
   // Keep Spotlight Card synced to active draft class (either first pick made, or #1 available prospect for the team on the clock)
   useEffect(() => {
@@ -4215,15 +4459,33 @@ export default function DraftPage() {
                         </button>
                       ))}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowRosterCareerSeasons(prev => !prev)}
+                      className={`px-2.5 py-1 text-[10px] font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1 ${
+                        showRosterCareerSeasons
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-white text-black hover:bg-neutral-100'
+                      }`}
+                      title="Show or hide each player's remaining career seasons after the current draft year"
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>
+                        {showRosterCareerSeasons
+                          ? `Career Outlook (${rookieClassYear}+): ON`
+                          : `Career Outlook (${rookieClassYear}+): OFF`}
+                      </span>
+                    </button>
                   </div>
                 </div>
 
                 {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
                 {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-mono text-xs font-black uppercase text-black bg-amber-200 px-2.5 py-0.5 border border-black">
-                        🏒 Skaters &mdash; Forwards &amp; Defensemen ({activeTeamRosterData.skaters.length})
+                        🏒 Skaters &mdash; Forwards &amp; Defensemen ({activeTeamRosterData.skaters.length}) &bull; Career Ratings From {rookieClassYear} Onward
                       </span>
                       <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
                         AGI &bull; SPD &bull; OFA &bull; DFA &bull; SHP &bull; SHA &bull; STH &bull; PAS &bull; CHK &bull; AGR
@@ -4231,10 +4493,11 @@ export default function DraftPage() {
                     </div>
 
                     <div className="bg-white border-2 border-black overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs min-w-[780px]">
+                      <table className="w-full text-left border-collapse text-xs min-w-[840px]">
                         <thead>
                           <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
-                            <th className="py-2 px-3">PLAYER</th>
+                            <th className="py-2 px-3">PLAYER &amp; CAREER LONGEVITY</th>
+                            <th className="py-2 px-2 text-center">SEASON</th>
                             <th className="py-2 px-2 text-center">POS</th>
                             <th className="py-2 px-2 text-center">HAND</th>
                             <th className="py-2 px-2 text-center">WGT</th>
@@ -4254,78 +4517,205 @@ export default function DraftPage() {
                         <tbody className="divide-y divide-neutral-200 font-mono">
                           {activeTeamRosterData.skaters.length === 0 ? (
                             <tr>
-                              <td colSpan={15} className="py-6 text-center italic text-slate-500 font-sans">
+                              <td colSpan={16} className="py-6 text-center italic text-slate-500 font-sans">
                                 No skaters found for {activeRosterTeam.team_name}.
                               </td>
                             </tr>
                           ) : (
-                            activeTeamRosterData.skaters.map(player => (
-                              <tr
-                                key={player.key}
-                                className={
-                                  player.isDraftedNow
-                                    ? 'bg-emerald-50 hover:bg-emerald-100'
-                                    : 'hover:bg-yellow-50'
-                                }
-                              >
-                                <td className="py-2 px-3 font-sans">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Link
-                                      href={`/players?q=${encodeURIComponent(player.name)}${player.playerId ? `&id=${encodeURIComponent(String(player.playerId))}` : ''}`}
-                                      className="font-black uppercase text-black hover:underline"
-                                      title="View in Player Database"
-                                    >
-                                      {player.name}
-                                    </Link>
-                                    {player.isDraftedNow && player.draftBadgeText && (
-                                      <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
-                                        ✓ {player.draftBadgeText}
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="py-2 px-2 text-center">
-                                  <span
-                                    className={`px-1.5 py-0.5 text-[10px] font-black border border-black ${
-                                      player.rolePos === 'D'
-                                        ? 'bg-sky-100 text-sky-950'
-                                        : 'bg-amber-100 text-amber-950'
-                                    }`}
+                            activeTeamRosterData.skaters.map(player => {
+                              const seasonsList =
+                                player.careerSeasons && player.careerSeasons.length > 0
+                                  ? player.careerSeasons
+                                  : [
+                                      {
+                                        year: Number(rookieClassYear) || 2014,
+                                        nhlTeam: '',
+                                        pos: player.rolePos,
+                                        ovr: player.ovr,
+                                        weightLbs: player.weightLbs,
+                                        hand: player.hand,
+                                        attrs: player.attrs
+                                      }
+                                    ];
+                              const currentSeasonEntry = seasonsList[0];
+                              const futureSeasons = seasonsList.slice(1);
+                              const finalYear = seasonsList[seasonsList.length - 1]?.year || Number(rookieClassYear);
+                              const extraYearsCount = futureSeasons.length;
+
+                              return (
+                                <React.Fragment key={player.key}>
+                                  <tr
+                                    className={
+                                      player.isDraftedNow
+                                        ? 'bg-emerald-50 hover:bg-emerald-100 border-t-2 border-black/30'
+                                        : 'bg-white hover:bg-yellow-50 border-t-2 border-black/30'
+                                    }
                                   >
-                                    {player.rolePos}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
-                                  {player.hand}
-                                </td>
-                                <td className="py-2 px-2 text-center text-[11px] text-slate-700">
-                                  {player.weightLbs}
-                                </td>
-                                <td className="py-2 px-2 text-center">
-                                  <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
-                                    {player.ovr || '-'}
-                                  </span>
-                                </td>
-                                {player.attrs.map(attr => {
-                                  const hm = getDraftHeatmapBadgeStyle(attr.level);
-                                  return (
-                                    <td key={`${player.key}-${attr.short}`} className="py-2 px-1.5 text-center">
+                                    <td className="py-2 px-3 font-sans">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <Link
+                                          href={`/players?q=${encodeURIComponent(player.name)}${player.playerId ? `&id=${encodeURIComponent(String(player.playerId))}` : ''}`}
+                                          className="font-black uppercase text-black hover:underline"
+                                          title="View in Player Database"
+                                        >
+                                          {player.name}
+                                        </Link>
+                                        {player.isDraftedNow && player.draftBadgeText && (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
+                                            ✓ {player.draftBadgeText}
+                                          </span>
+                                        )}
+                                        {extraYearsCount === 0 ? (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-red-100 text-red-900 px-1.5 py-0.5 border border-red-700">
+                                            ⚠️ Final Season ({currentSeasonEntry.year})
+                                          </span>
+                                        ) : extraYearsCount === 1 ? (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 text-amber-950 px-1.5 py-0.5 border border-amber-700">
+                                            +1 More Season (Thru {finalYear})
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
+                                            +{extraYearsCount} More Seasons (Thru {finalYear})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                      <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-black uppercase">
+                                        {currentSeasonEntry.year}
+                                      </span>
+                                      {currentSeasonEntry.nhlTeam && (
+                                        <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">
+                                          {currentSeasonEntry.nhlTeam}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
                                       <span
-                                        style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
-                                        className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
-                                        title={
-                                          attr.raw !== undefined
-                                            ? `${attr.label}: ${attr.level}/6 (Raw ${attr.raw})`
-                                            : `${attr.label}: ${attr.level}/6`
-                                        }
+                                        className={`px-1.5 py-0.5 text-[10px] font-black border border-black ${
+                                          player.rolePos === 'D'
+                                            ? 'bg-sky-100 text-sky-950'
+                                            : 'bg-amber-100 text-amber-950'
+                                        }`}
                                       >
-                                        {attr.level || '-'}
+                                        {player.rolePos}
                                       </span>
                                     </td>
-                                  );
-                                })}
-                              </tr>
-                            ))
+                                    <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
+                                      {currentSeasonEntry.hand || player.hand}
+                                    </td>
+                                    <td className="py-2 px-2 text-center text-[11px] text-slate-700">
+                                      {currentSeasonEntry.weightLbs || player.weightLbs}
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                      <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
+                                        {currentSeasonEntry.ovr || player.ovr || '-'}
+                                      </span>
+                                    </td>
+                                    {(currentSeasonEntry.attrs || player.attrs).map(attr => {
+                                      const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                      return (
+                                        <td key={`${player.key}-cur-${attr.short}`} className="py-2 px-1.5 text-center">
+                                          <span
+                                            style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                            className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                            title={
+                                              attr.raw !== undefined
+                                                ? `${attr.label}: ${attr.level}/6 (Raw ${attr.raw})`
+                                                : `${attr.label}: ${attr.level}/6`
+                                            }
+                                          >
+                                            {attr.level || '-'}
+                                          </span>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+
+                                  {/* Remaining Career Seasons (2015, 2016, etc.) */}
+                                  {showRosterCareerSeasons &&
+                                    futureSeasons.map((sRow, sIdx) => {
+                                      const ovrDiff = (sRow.ovr || 0) - (currentSeasonEntry.ovr || player.ovr || 0);
+                                      const isLastSeason = sIdx === futureSeasons.length - 1;
+                                      return (
+                                        <tr
+                                          key={`${player.key}-yr-${sRow.year}`}
+                                          className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]"
+                                        >
+                                          <td className="py-1.5 pl-6 pr-3 font-mono text-[10px] text-slate-600">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="font-black text-slate-800">
+                                                ↳ {sRow.year} Career (+{sIdx + 1} Yr{sIdx > 0 ? 's' : ''})
+                                              </span>
+                                              {isLastSeason && (
+                                                <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8.5px] font-black uppercase">
+                                                  Final NHL95 Season
+                                                </span>
+                                              )}
+                                            </div>
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center">
+                                            <span className="bg-neutral-200 text-black px-1.5 py-0.5 text-[10px] font-black border border-black/30">
+                                              {sRow.year}
+                                            </span>
+                                            {sRow.nhlTeam && (
+                                              <span className="block text-[8.5px] text-slate-500 font-bold uppercase">
+                                                {sRow.nhlTeam}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center text-[10px] font-bold text-slate-500">
+                                            {player.rolePos}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                            {sRow.hand}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                            {sRow.weightLbs}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center">
+                                            <div className="inline-flex items-center gap-1">
+                                              <span className="bg-neutral-800 text-amber-300 font-black px-1.5 py-0.5 text-[11px] border border-black">
+                                                {sRow.ovr || '-'}
+                                              </span>
+                                              {ovrDiff !== 0 && (
+                                                <span
+                                                  className={`text-[9px] font-black ${
+                                                    ovrDiff > 0 ? 'text-emerald-700' : 'text-red-700'
+                                                  }`}
+                                                >
+                                                  {ovrDiff > 0 ? `+${ovrDiff}` : ovrDiff}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </td>
+                                          {sRow.attrs.map(attr => {
+                                            const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                            return (
+                                              <td
+                                                key={`${player.key}-${sRow.year}-${attr.short}`}
+                                                className="py-1.5 px-1.5 text-center"
+                                              >
+                                                <span
+                                                  style={{
+                                                    backgroundColor: hm.bg,
+                                                    color: hm.text,
+                                                    borderColor: hm.border
+                                                  }}
+                                                  className="inline-block w-6 py-0.5 text-center font-black text-[10px] border opacity-90"
+                                                  title={`${sRow.year} ${attr.label}: ${attr.level}/6`}
+                                                >
+                                                  {attr.level || '-'}
+                                                </span>
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+                                      );
+                                    })}
+                                </React.Fragment>
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
@@ -4336,9 +4726,9 @@ export default function DraftPage() {
                 {/* GOALIES TABLE */}
                 {(rosterPosFilter === 'ALL' || rosterPosFilter === 'GOALIES') && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-mono text-xs font-black uppercase text-black bg-sky-200 px-2.5 py-0.5 border border-black">
-                        🥅 Goalies ({activeTeamRosterData.goalies.length})
+                        🥅 Goalies ({activeTeamRosterData.goalies.length}) &bull; Career Ratings From {rookieClassYear} Onward
                       </span>
                       <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
                         AGI &bull; SPD &bull; OFA &bull; DFA &bull; PKC &bull; STR &bull; STL &bull; GVR &bull; GVL
@@ -4346,10 +4736,11 @@ export default function DraftPage() {
                     </div>
 
                     <div className="bg-white border-2 border-black overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs min-w-[740px]">
+                      <table className="w-full text-left border-collapse text-xs min-w-[800px]">
                         <thead>
                           <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
-                            <th className="py-2 px-3">GOALIE</th>
+                            <th className="py-2 px-3">GOALIE &amp; CAREER LONGEVITY</th>
+                            <th className="py-2 px-2 text-center">SEASON</th>
                             <th className="py-2 px-2 text-center">POS</th>
                             <th className="py-2 px-2 text-center">CATCH</th>
                             <th className="py-2 px-2 text-center">WGT</th>
@@ -4368,68 +4759,195 @@ export default function DraftPage() {
                         <tbody className="divide-y divide-neutral-200 font-mono">
                           {activeTeamRosterData.goalies.length === 0 ? (
                             <tr>
-                              <td colSpan={14} className="py-6 text-center italic text-slate-500 font-sans">
+                              <td colSpan={15} className="py-6 text-center italic text-slate-500 font-sans">
                                 No goalies found for {activeRosterTeam.team_name}.
                               </td>
                             </tr>
                           ) : (
-                            activeTeamRosterData.goalies.map(goalie => (
-                              <tr
-                                key={goalie.key}
-                                className={
-                                  goalie.isDraftedNow
-                                    ? 'bg-emerald-50 hover:bg-emerald-100'
-                                    : 'hover:bg-yellow-50'
-                                }
-                              >
-                                <td className="py-2 px-3 font-sans">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Link
-                                      href={`/players?q=${encodeURIComponent(goalie.name)}${goalie.playerId ? `&id=${encodeURIComponent(String(goalie.playerId))}` : ''}`}
-                                      className="font-black uppercase text-black hover:underline"
-                                      title="View in Player Database"
-                                    >
-                                      {goalie.name}
-                                    </Link>
-                                    {goalie.isDraftedNow && goalie.draftBadgeText && (
-                                      <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
-                                        ✓ {goalie.draftBadgeText}
+                            activeTeamRosterData.goalies.map(goalie => {
+                              const seasonsList =
+                                goalie.careerSeasons && goalie.careerSeasons.length > 0
+                                  ? goalie.careerSeasons
+                                  : [
+                                      {
+                                        year: Number(rookieClassYear) || 2014,
+                                        nhlTeam: '',
+                                        pos: 'G',
+                                        ovr: goalie.ovr,
+                                        weightLbs: goalie.weightLbs,
+                                        hand: goalie.hand,
+                                        attrs: goalie.attrs
+                                      }
+                                    ];
+                              const currentSeasonEntry = seasonsList[0];
+                              const futureSeasons = seasonsList.slice(1);
+                              const finalYear = seasonsList[seasonsList.length - 1]?.year || Number(rookieClassYear);
+                              const extraYearsCount = futureSeasons.length;
+
+                              return (
+                                <React.Fragment key={goalie.key}>
+                                  <tr
+                                    className={
+                                      goalie.isDraftedNow
+                                        ? 'bg-emerald-50 hover:bg-emerald-100 border-t-2 border-black/30'
+                                        : 'bg-white hover:bg-yellow-50 border-t-2 border-black/30'
+                                    }
+                                  >
+                                    <td className="py-2 px-3 font-sans">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <Link
+                                          href={`/players?q=${encodeURIComponent(goalie.name)}${goalie.playerId ? `&id=${encodeURIComponent(String(goalie.playerId))}` : ''}`}
+                                          className="font-black uppercase text-black hover:underline"
+                                          title="View in Player Database"
+                                        >
+                                          {goalie.name}
+                                        </Link>
+                                        {goalie.isDraftedNow && goalie.draftBadgeText && (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
+                                            ✓ {goalie.draftBadgeText}
+                                          </span>
+                                        )}
+                                        {extraYearsCount === 0 ? (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-red-100 text-red-900 px-1.5 py-0.5 border border-red-700">
+                                            ⚠️ Final Season ({currentSeasonEntry.year})
+                                          </span>
+                                        ) : extraYearsCount === 1 ? (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 text-amber-950 px-1.5 py-0.5 border border-amber-700">
+                                            +1 More Season (Thru {finalYear})
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
+                                            +{extraYearsCount} More Seasons (Thru {finalYear})
+                                          </span>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                      <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-black uppercase">
+                                        {currentSeasonEntry.year}
                                       </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="py-2 px-2 text-center">
-                                  <span className="px-1.5 py-0.5 text-[10px] font-black border border-black bg-purple-100 text-purple-950">
-                                    G
-                                  </span>
-                                </td>
-                                <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
-                                  {goalie.hand}
-                                </td>
-                                <td className="py-2 px-2 text-center text-[11px] text-slate-700">
-                                  {goalie.weightLbs}
-                                </td>
-                                <td className="py-2 px-2 text-center">
-                                  <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
-                                    {goalie.ovr || '-'}
-                                  </span>
-                                </td>
-                                {goalie.attrs.map(attr => {
-                                  const hm = getDraftHeatmapBadgeStyle(attr.level);
-                                  return (
-                                    <td key={`${goalie.key}-${attr.short}`} className="py-2 px-1.5 text-center">
-                                      <span
-                                        style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
-                                        className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
-                                        title={`${attr.label}: ${attr.level}/6`}
-                                      >
-                                        {attr.level || '-'}
+                                      {currentSeasonEntry.nhlTeam && (
+                                        <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">
+                                          {currentSeasonEntry.nhlTeam}
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                      <span className="px-1.5 py-0.5 text-[10px] font-black border border-black bg-purple-100 text-purple-950">
+                                        G
                                       </span>
                                     </td>
-                                  );
-                                })}
-                              </tr>
-                            ))
+                                    <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
+                                      {currentSeasonEntry.hand || goalie.hand}
+                                    </td>
+                                    <td className="py-2 px-2 text-center text-[11px] text-slate-700">
+                                      {currentSeasonEntry.weightLbs || goalie.weightLbs}
+                                    </td>
+                                    <td className="py-2 px-2 text-center">
+                                      <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
+                                        {currentSeasonEntry.ovr || goalie.ovr || '-'}
+                                      </span>
+                                    </td>
+                                    {(currentSeasonEntry.attrs || goalie.attrs).map(attr => {
+                                      const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                      return (
+                                        <td key={`${goalie.key}-cur-${attr.short}`} className="py-2 px-1.5 text-center">
+                                          <span
+                                            style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                            className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                            title={`${attr.label}: ${attr.level}/6`}
+                                          >
+                                            {attr.level || '-'}
+                                          </span>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+
+                                  {/* Remaining Career Seasons for Goalie */}
+                                  {showRosterCareerSeasons &&
+                                    futureSeasons.map((sRow, sIdx) => {
+                                      const ovrDiff = (sRow.ovr || 0) - (currentSeasonEntry.ovr || goalie.ovr || 0);
+                                      const isLastSeason = sIdx === futureSeasons.length - 1;
+                                      return (
+                                        <tr
+                                          key={`${goalie.key}-yr-${sRow.year}`}
+                                          className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]"
+                                        >
+                                          <td className="py-1.5 pl-6 pr-3 font-mono text-[10px] text-slate-600">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="font-black text-slate-800">
+                                                ↳ {sRow.year} Career (+{sIdx + 1} Yr{sIdx > 0 ? 's' : ''})
+                                              </span>
+                                              {isLastSeason && (
+                                                <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8.5px] font-black uppercase">
+                                                  Final NHL95 Season
+                                                </span>
+                                              )}
+                                            </div>
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center">
+                                            <span className="bg-neutral-200 text-black px-1.5 py-0.5 text-[10px] font-black border border-black/30">
+                                              {sRow.year}
+                                            </span>
+                                            {sRow.nhlTeam && (
+                                              <span className="block text-[8.5px] text-slate-500 font-bold uppercase">
+                                                {sRow.nhlTeam}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center text-[10px] font-bold text-slate-500">
+                                            G
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                            {sRow.hand}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                            {sRow.weightLbs}
+                                          </td>
+                                          <td className="py-1.5 px-2 text-center">
+                                            <div className="inline-flex items-center gap-1">
+                                              <span className="bg-neutral-800 text-amber-300 font-black px-1.5 py-0.5 text-[11px] border border-black">
+                                                {sRow.ovr || '-'}
+                                              </span>
+                                              {ovrDiff !== 0 && (
+                                                <span
+                                                  className={`text-[9px] font-black ${
+                                                    ovrDiff > 0 ? 'text-emerald-700' : 'text-red-700'
+                                                  }`}
+                                                >
+                                                  {ovrDiff > 0 ? `+${ovrDiff}` : ovrDiff}
+                                                </span>
+                                              )}
+                                            </div>
+                                          </td>
+                                          {sRow.attrs.map(attr => {
+                                            const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                            return (
+                                              <td
+                                                key={`${goalie.key}-${sRow.year}-${attr.short}`}
+                                                className="py-1.5 px-1.5 text-center"
+                                              >
+                                                <span
+                                                  style={{
+                                                    backgroundColor: hm.bg,
+                                                    color: hm.text,
+                                                    borderColor: hm.border
+                                                  }}
+                                                  className="inline-block w-6 py-0.5 text-center font-black text-[10px] border opacity-90"
+                                                  title={`${sRow.year} ${attr.label}: ${attr.level}/6`}
+                                                >
+                                                  {attr.level || '-'}
+                                                </span>
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+                                      );
+                                    })}
+                                </React.Fragment>
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
