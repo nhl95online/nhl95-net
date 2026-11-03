@@ -3794,58 +3794,161 @@ export default function DraftPage() {
                   </div>
                 )}
 
-                {/* Unified Franchise On The Clock + Search & Submit Area */}
+                {/* Unified Franchise On The Clock + Roster Controls + Search & Submit Area */}
                 <div className="bg-white border-2 border-black p-3 space-y-2.5">
-                  <div className="flex items-center justify-between flex-wrap gap-2 border-b border-black/15 pb-2">
-                    <div className="flex items-center gap-2.5">
-                      {nextEmptyPickSlot.logo ? (
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 border-b border-black/15 pb-2.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      {(activeRosterTeam?.logo_url || nextEmptyPickSlot.logo) ? (
                         <img
-                          src={nextEmptyPickSlot.logo}
-                          alt={nextEmptyPickSlot.team}
-                          className="w-8 h-8 object-contain border border-black/20 p-0.5 bg-neutral-50"
+                          src={activeRosterTeam?.logo_url || nextEmptyPickSlot.logo}
+                          alt={activeRosterTeam?.team_name || nextEmptyPickSlot.team}
+                          className="w-9 h-9 object-contain border border-black p-0.5 bg-neutral-50 shrink-0"
                         />
                       ) : (
-                        <div className="w-8 h-8 bg-black text-white font-mono font-black text-xs flex items-center justify-center border border-black">
+                        <div className="w-9 h-9 bg-black text-white font-mono font-black text-xs flex items-center justify-center border border-black shrink-0">
                           #{nextEmptyPickSlot.pk}
                         </div>
                       )}
                       <div>
                         <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5 flex-wrap">
-                          <span>Franchise On The Clock</span>
-                          {nextEmptyPickSlot.coachName && (
+                          <span>
+                            {!activeRosterTeam || Number(activeRosterTeam.team_id) === Number(nextEmptyPickSlot.teamId)
+                              ? 'Franchise On The Clock'
+                              : 'Viewing Franchise Roster'}
+                          </span>
+                          {(activeRosterTeam?.coach_name || nextEmptyPickSlot.coachName) && (
                             <span className="bg-neutral-200 text-black px-1.5 py-0 border border-black/20 font-bold">
-                              Coach: {nextEmptyPickSlot.coachName}
+                              Coach: {activeRosterTeam?.coach_name || nextEmptyPickSlot.coachName}
                             </span>
+                          )}
+                          {activeRosterTeam && (
+                            <span className="bg-black text-amber-300 px-1.5 py-0 border border-black font-black">
+                              Team Avg OVR: {activeTeamRosterData.avgOvr || '-'}
+                            </span>
+                          )}
+                          {overridePickSlot && (
+                            <button
+                              type="button"
+                              onClick={() => setOverridePickSlot(null)}
+                              className="text-[10px] text-red-800 font-bold uppercase underline cursor-pointer"
+                            >
+                              Reset Slot
+                            </button>
                           )}
                         </div>
                         <div className="text-sm sm:text-base font-black uppercase text-black leading-tight">
-                          {nextEmptyPickSlot.team}
+                          {activeRosterTeam?.team_name || nextEmptyPickSlot.team}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {Number(nextEmptyPickSlot.pk) === 1 ? (
-                        <span className="bg-black text-amber-300 px-2 py-0.5 border border-black font-mono text-[10px] font-black uppercase">
-                          ★ ON THE CLOCK FOR #1 OVERALL ★
-                        </span>
-                      ) : firstOverallPick?.player && firstOverallPick.player !== 'N/A' ? (
-                        <span className="bg-emerald-600 text-white px-2 py-0.5 border border-emerald-900 shadow-2xs font-mono text-[10px] font-black uppercase">
-                          ✓ #1 OVERALL: {firstOverallPick.player} {firstOverallPick.ovr ? `(OVR ${firstOverallPick.ovr})` : ''}
-                        </span>
-                      ) : null}
-                      <span className="text-[10px] font-mono uppercase font-black bg-yellow-100 text-black px-2 py-0.5 border border-black">
-                        {nextEmptyPickSlot.seasonBadge}
-                      </span>
-                      {overridePickSlot && (
+                    {/* Right: Team Switcher, Position Filters & Career Expand Toggle */}
+                    {activeRosterTeam && (
+                      <div className="flex flex-wrap items-center gap-1.5 font-mono">
+                        {rosterTeamOverrideId !== null &&
+                          nextEmptyPickSlot.teamId &&
+                          Number(rosterTeamOverrideId) !== Number(nextEmptyPickSlot.teamId) && (
+                            <button
+                              type="button"
+                              onClick={() => setRosterTeamOverrideId(null)}
+                              className="bg-red-800 hover:bg-red-900 text-white text-[10px] font-black uppercase px-2 py-1 border border-black cursor-pointer"
+                            >
+                              🎯 On-Clock ({nextEmptyPickSlot.team})
+                            </button>
+                          )}
+
+                        {myCoachTeamInDraft &&
+                          Number(activeRosterTeam.team_id) !== Number(myCoachTeamInDraft.team_id) && (
+                            <button
+                              type="button"
+                              onClick={() => setRosterTeamOverrideId(Number(myCoachTeamInDraft.team_id))}
+                              className="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black uppercase px-2 py-1 border border-black cursor-pointer"
+                            >
+                              👤 My Team ({myCoachTeamInDraft.team_name})
+                            </button>
+                          )}
+
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-black uppercase text-slate-700">Team:</span>
+                          <select
+                            value={Number(activeRosterTeam.team_id)}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              if (nextEmptyPickSlot.teamId && val === Number(nextEmptyPickSlot.teamId)) {
+                                setRosterTeamOverrideId(null);
+                              } else {
+                                setRosterTeamOverrideId(val);
+                              }
+                            }}
+                            className="bg-yellow-100 text-black border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
+                          >
+                            {draftTeamsList.map(t => {
+                              const isOnClock = Number(t.team_id) === Number(nextEmptyPickSlot.teamId);
+                              return (
+                                <option key={`roster-team-opt-${t.team_id}`} value={t.team_id}>
+                                  {t.team_name} {t.coach_name ? `(${t.coach_name})` : ''} {isOnClock ? '★ ON CLOCK' : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {([
+                            { key: 'ALL', label: `All (${activeTeamRosterData.totalCount})` },
+                            { key: 'SKATERS', label: `Skaters (${activeTeamRosterData.skaters.length})` },
+                            { key: 'GOALIES', label: `Goalies (${activeTeamRosterData.goalies.length})` }
+                          ] as const).map(tab => (
+                            <button
+                              key={`roster-pos-tab-${tab.key}`}
+                              type="button"
+                              onClick={() => setRosterPosFilter(tab.key)}
+                              className={`px-2 py-1 text-[10px] font-black uppercase border border-black cursor-pointer ${
+                                rosterPosFilter === tab.key
+                                  ? 'bg-black text-amber-300'
+                                  : 'bg-white text-black hover:bg-neutral-100'
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+
                         <button
-                          onClick={() => setOverridePickSlot(null)}
-                          className="text-[10px] text-red-800 font-bold uppercase underline cursor-pointer"
+                          type="button"
+                          onClick={() => {
+                            if (showRosterCareerSeasons) {
+                              setShowRosterCareerSeasons(false);
+                              setExpandedRosterPlayerKeys(new Set());
+                            } else {
+                              setShowRosterCareerSeasons(true);
+                              const allKeys = [
+                                ...activeTeamRosterData.skaters.map(s => s.key),
+                                ...activeTeamRosterData.goalies.map(g => g.key)
+                              ];
+                              setExpandedRosterPlayerKeys(new Set(allKeys));
+                            }
+                          }}
+                          className={`px-2 py-1 text-[10px] font-black uppercase border border-black cursor-pointer flex items-center gap-1 ${
+                            showRosterCareerSeasons
+                              ? 'bg-emerald-700 text-white'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                          title="Expand or collapse remaining career seasons for all players on this roster"
                         >
-                          Reset Slot
+                          {showRosterCareerSeasons ? (
+                            <ChevronDown className="w-3 h-3" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3" />
+                          )}
+                          <span>
+                            {showRosterCareerSeasons
+                              ? `Collapse All Career Seasons (${rookieClassYear}+)`
+                              : `Expand All Career Seasons (${rookieClassYear}+)`}
+                          </span>
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                 {/* Draft completion notice (or fallback only if 0 slots exist at all) */}
@@ -4160,180 +4263,20 @@ export default function DraftPage() {
                     </div>
                   </div>
                 )}
-              </div>
 
-            {/* ========================================================================= */}
-            {/* ACTIVE TEAM ROSTER & PLAYER RATINGS (AUTO-SYNCED TO TEAM ON THE CLOCK) */}
-            {/* ========================================================================= */}
-            {activeRosterTeam && (
-              <div className="bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b-2 border-black pb-3">
-                  {/* Left: Active Team Identity & Summary */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {activeRosterTeam.logo_url ? (
-                      <img
-                        src={activeRosterTeam.logo_url}
-                        alt={activeRosterTeam.team_name}
-                        className="w-11 h-11 object-contain bg-white border-2 border-black p-1 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 bg-black text-amber-300 font-mono font-black text-xs flex items-center justify-center border-2 border-black shrink-0">
-                        {activeRosterTeam.abbreviation || 'TM'}
-                      </div>
-                    )}
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 border border-black ${
-                            Number(activeRosterTeam.team_id) === Number(nextEmptyPickSlot.teamId)
-                              ? 'bg-red-700 text-white'
-                              : 'bg-amber-300 text-black'
-                          }`}
-                        >
-                          {Number(activeRosterTeam.team_id) === Number(nextEmptyPickSlot.teamId)
-                            ? `🎯 ACTIVE TEAM ON THE CLOCK (PICK #${nextEmptyPickSlot.pk})`
-                            : '🔍 FRANCHISE ROSTER & RATINGS'}
-                        </span>
-                        {activeRosterTeam.coach_name && (
-                          <span className="text-[10px] font-mono font-bold uppercase bg-neutral-200 text-black px-2 py-0.5 border border-black/30">
-                            Coach: {activeRosterTeam.coach_name}
+                {/* ACTIVE TEAM ROSTER & PLAYER RATINGS (MERGED DIRECTLY INTO SELECTION DESK CARD) */}
+                {activeRosterTeam && (
+                  <div className="mt-3 pt-3 border-t-2 border-black space-y-3">
+                    {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
+                    {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="font-mono text-xs font-black uppercase text-black bg-amber-200 px-2.5 py-0.5 border border-black">
+                            🏒 Skaters ({activeTeamRosterData.skaters.length})
                           </span>
-                        )}
-                        <span className="text-[10px] font-mono font-black uppercase bg-black text-amber-300 px-2 py-0.5 border border-black">
-                          Team Avg OVR: {activeTeamRosterData.avgOvr || '-'}
-                        </span>
-                      </div>
-                      <h3 className="text-base sm:text-xl font-black uppercase tracking-tight text-black mt-0.5">
-                        {activeRosterTeam.team_name} &bull; Current Team Roster &amp; Player Ratings
-                      </h3>
-                      <p className="text-[11px] font-mono font-bold uppercase text-slate-600">
-                        {activeTeamRosterData.totalCount} Rostered Players ({activeTeamRosterData.skaters.length} Skaters, {activeTeamRosterData.goalies.length} Goalies)
-                        {activeTeamRosterData.draftedCount > 0 ? ` • Includes ${activeTeamRosterData.draftedCount} New Pick(s) in ${activeFloorSeasonMeta?.seasonBadge}` : ''}
-                        {' • '}1&ndash;6 NHL &apos;95 Rating Scale
-                      </p>
-                    </div>
-                  </div>
+                        </div>
 
-                  {/* Right: Team Switcher & Position Filter */}
-                  <div className="flex flex-wrap items-center gap-2 font-mono">
-                    {rosterTeamOverrideId !== null &&
-                      nextEmptyPickSlot.teamId &&
-                      Number(rosterTeamOverrideId) !== Number(nextEmptyPickSlot.teamId) && (
-                        <button
-                          type="button"
-                          onClick={() => setRosterTeamOverrideId(null)}
-                          className="bg-red-800 hover:bg-red-900 text-white text-[10px] font-black uppercase px-2.5 py-1.5 border-2 border-black cursor-pointer"
-                        >
-                          🎯 On-Clock Team ({nextEmptyPickSlot.team})
-                        </button>
-                      )}
-
-                    {myCoachTeamInDraft &&
-                      Number(activeRosterTeam.team_id) !== Number(myCoachTeamInDraft.team_id) && (
-                        <button
-                          type="button"
-                          onClick={() => setRosterTeamOverrideId(Number(myCoachTeamInDraft.team_id))}
-                          className="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black uppercase px-2.5 py-1.5 border-2 border-black cursor-pointer"
-                        >
-                          👤 My Team ({myCoachTeamInDraft.team_name})
-                        </button>
-                      )}
-
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-black uppercase text-slate-700">Team:</span>
-                      <select
-                        value={Number(activeRosterTeam.team_id)}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          if (nextEmptyPickSlot.teamId && val === Number(nextEmptyPickSlot.teamId)) {
-                            setRosterTeamOverrideId(null);
-                          } else {
-                            setRosterTeamOverrideId(val);
-                          }
-                        }}
-                        className="bg-yellow-100 text-black border-2 border-black px-2.5 py-1 text-xs font-black uppercase cursor-pointer"
-                      >
-                        {draftTeamsList.map(t => {
-                          const isOnClock = Number(t.team_id) === Number(nextEmptyPickSlot.teamId);
-                          return (
-                            <option key={`roster-team-opt-${t.team_id}`} value={t.team_id}>
-                              {t.team_name} {t.coach_name ? `(${t.coach_name})` : ''} {isOnClock ? '★ ON CLOCK' : ''}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {([
-                        { key: 'ALL', label: `All (${activeTeamRosterData.totalCount})` },
-                        { key: 'SKATERS', label: `Skaters (${activeTeamRosterData.skaters.length})` },
-                        { key: 'GOALIES', label: `Goalies (${activeTeamRosterData.goalies.length})` }
-                      ] as const).map(tab => (
-                        <button
-                          key={`roster-pos-tab-${tab.key}`}
-                          type="button"
-                          onClick={() => setRosterPosFilter(tab.key)}
-                          className={`px-2.5 py-1 text-[10px] font-black uppercase border border-black cursor-pointer ${
-                            rosterPosFilter === tab.key
-                              ? 'bg-black text-amber-300'
-                              : 'bg-white text-black hover:bg-neutral-100'
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (showRosterCareerSeasons) {
-                          setShowRosterCareerSeasons(false);
-                          setExpandedRosterPlayerKeys(new Set());
-                        } else {
-                          setShowRosterCareerSeasons(true);
-                          const allKeys = [
-                            ...activeTeamRosterData.skaters.map(s => s.key),
-                            ...activeTeamRosterData.goalies.map(g => g.key)
-                          ];
-                          setExpandedRosterPlayerKeys(new Set(allKeys));
-                        }
-                      }}
-                      className={`px-2.5 py-1 text-[10px] font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1 ${
-                        showRosterCareerSeasons
-                          ? 'bg-emerald-700 text-white'
-                          : 'bg-white text-black hover:bg-neutral-100'
-                      }`}
-                      title="Expand or collapse remaining career seasons for all players on this roster"
-                    >
-                      {showRosterCareerSeasons ? (
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      ) : (
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      )}
-                      <span>
-                        {showRosterCareerSeasons
-                          ? `Collapse All Career Seasons (${rookieClassYear}+)`
-                          : `Expand All Career Seasons (${rookieClassYear}+)`}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
-                {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-mono text-xs font-black uppercase text-black bg-amber-200 px-2.5 py-0.5 border border-black">
-                        🏒 Skaters &mdash; Forwards &amp; Defensemen ({activeTeamRosterData.skaters.length}) &bull; Click Any Player To Expand Career ({rookieClassYear}+)
-                      </span>
-                      <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
-                        AGI &bull; SPD &bull; OFA &bull; DFA &bull; SHP &bull; SHA &bull; STH &bull; PAS &bull; CHK &bull; AGR
-                      </span>
-                    </div>
-
-                    <div className="bg-white border-2 border-black overflow-x-auto">
+                        <div className="bg-white border-2 border-black overflow-x-auto">
                       <table className="w-full text-left border-collapse text-xs min-w-[840px]">
                         <thead>
                           <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
@@ -4593,10 +4536,7 @@ export default function DraftPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-mono text-xs font-black uppercase text-black bg-sky-200 px-2.5 py-0.5 border border-black">
-                        🥅 Goalies ({activeTeamRosterData.goalies.length}) &bull; Click Any Goalie To Expand Career ({rookieClassYear}+)
-                      </span>
-                      <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
-                        AGI &bull; SPD &bull; OFA &bull; DFA &bull; PKC &bull; STR &bull; STL &bull; GVR &bull; GVL
+                        🥅 Goalies ({activeTeamRosterData.goalies.length})
                       </span>
                     </div>
 
@@ -4843,8 +4783,9 @@ export default function DraftPage() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
+                  </div>
+                )}
+                </div>
               </div>
 
               {/* RIGHT COLUMN (4 COLS): TOP AVAILABLE PLAYERS + LIVE DRAFT WAR ROOM CHAT (SAME WIDTH, VISIBLE ABOVE FOLD) */}
