@@ -3422,49 +3422,11 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         {activeTab === 'floor' && (
           <div className="space-y-6">
-            
-            {/* 1ST OVERALL SELECTION SHOWCASE BAR */}
-            {firstOverallPick && (
-              <div className="bg-[#fff9e6] border-3 border-black p-3.5 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
-                <div className="flex items-center gap-3">
-                  <div className="bg-amber-400 text-black font-black px-2.5 py-1 text-xs border-2 border-black shadow-xs flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-black" />
-                    <span>1ST OVERALL PICK</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {firstOverallPick.logo && (
-                      <img src={firstOverallPick.logo} alt="" className="w-6 h-6 object-contain" />
-                    )}
-                    <span className="font-sans font-black text-sm uppercase text-black">
-                      {firstOverallPick.team}
-                    </span>
-                    {firstOverallPick.coachName && (
-                      <span className="text-[11px] font-sans font-bold text-slate-700 bg-neutral-200/80 px-2 py-0.5 border border-black/30">
-                        Coach: {firstOverallPick.coachName}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-xs font-bold font-sans">
-                  {firstOverallPick.player && firstOverallPick.player !== "N/A" ? (
-                    <span className="bg-emerald-600 text-white px-2.5 py-1 border border-emerald-900 shadow-2xs font-mono font-black">
-                      ✓ SELECTED: {firstOverallPick.player} {firstOverallPick.ovr ? `(OVR ${firstOverallPick.ovr})` : ''}
-                    </span>
-                  ) : (
-                    <span className="bg-black text-amber-300 px-2.5 py-1 border border-black font-mono font-black">
-                      ★ ON THE CLOCK FOR #1 OVERALL ★
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* TOP HERO SECTION: Coach Desk on Left, Hockey Card Spotlight on Top Right */}
+            {/* TOP HERO SECTION: Unified 1st Pick & Coach Selection Desk on Left, Top Available Players on Right */}
             <div className="grid grid-cols-12 gap-5 items-start">
               
-              {/* TOP LEFT: COACH SELECTION DESK ("ON THE CLOCK") */}
-              <div className="col-span-12 lg:col-span-8 bg-[#fdfaf5] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+              {/* TOP LEFT: UNIFIED 1ST PICK & COACH SELECTION DESK ("ON THE CLOCK") */}
+              <div className="col-span-12 lg:col-span-8 bg-[#fff9e6] border-3 border-black p-4 sm:p-5 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] relative overflow-hidden">
                 {!isLoggedIn && (
                   <CoachLockOverlay
                     title="COACH SIGN-IN REQUIRED"
@@ -3558,11 +3520,19 @@ export default function DraftPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 font-mono text-xs font-bold bg-yellow-100 px-2.5 py-1 border border-black">
-                    <span>On The Clock:</span>
-                    <span className="font-black text-red-800 uppercase">
-                      Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {Number(nextEmptyPickSlot.pk) === 1 && (
+                      <div className="bg-amber-400 text-black font-mono font-black px-2.5 py-1 text-xs border-2 border-black shadow-xs flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-black" />
+                        <span>1ST OVERALL PICK</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 font-mono text-xs font-bold bg-yellow-100 px-2.5 py-1 border border-black">
+                      <span>On The Clock:</span>
+                      <span className="font-black text-red-800 uppercase">
+                        Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -3644,7 +3614,7 @@ export default function DraftPage() {
                       </div>
                     )}
                     <div>
-                      <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5">
+                      <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5 flex-wrap">
                         <span>Franchise On The Clock</span>
                         {nextEmptyPickSlot.coachName && (
                           <span className="bg-neutral-200 text-black px-1.5 py-0 border border-black/20 font-bold">
@@ -3658,7 +3628,16 @@ export default function DraftPage() {
                     </div>
                   </div>
 
-                  <div className="text-right">
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {Number(nextEmptyPickSlot.pk) === 1 ? (
+                      <span className="bg-black text-amber-300 px-2.5 py-1 border border-black font-mono text-[11px] font-black uppercase">
+                        ★ ON THE CLOCK FOR #1 OVERALL ★
+                      </span>
+                    ) : firstOverallPick?.player && firstOverallPick.player !== 'N/A' ? (
+                      <span className="bg-emerald-600 text-white px-2.5 py-1 border border-emerald-900 shadow-2xs font-mono text-[11px] font-black uppercase">
+                        ✓ #1 OVERALL: {firstOverallPick.player} {firstOverallPick.ovr ? `(OVR ${firstOverallPick.ovr})` : ''}
+                      </span>
+                    ) : null}
                     <span className="text-[10px] font-mono uppercase font-black bg-yellow-100 text-black px-2.5 py-1 border-2 border-black shadow-xs">
                       {nextEmptyPickSlot.seasonBadge}
                     </span>
