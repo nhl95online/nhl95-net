@@ -320,14 +320,25 @@ const toDraftStickHandlingLevel = (val: any): number => {
 
 const getDraftHeatmapBadgeStyle = (level: number): { bg: string; text: string; border: string } => {
   switch (level) {
-    case 1: return { bg: '#dcfce7', text: '#166534', border: '#86efac' };
-    case 2: return { bg: '#bbf7d0', text: '#166534', border: '#4ade80' };
-    case 3: return { bg: '#86efac', text: '#14532d', border: '#22c55e' };
-    case 4: return { bg: '#4ade80', text: '#052e16', border: '#16a34a' };
-    case 5: return { bg: '#22c55e', text: '#ffffff', border: '#15803d' };
-    case 6: return { bg: '#15803d', text: '#ffffff', border: '#14532d' };
-    default: return { bg: '#f8fafc', text: '#94a3b8', border: '#cbd5e1' };
+    case 6: return { bg: '#15803d', text: '#ffffff', border: '#14532d' }; // Highest: Deep Green
+    case 5: return { bg: '#22c55e', text: '#ffffff', border: '#15803d' }; // High: Bright Green
+    case 4: return { bg: '#f59e0b', text: '#000000', border: '#b45309' }; // Middle-High: Amber-Orange
+    case 3: return { bg: '#ea580c', text: '#ffffff', border: '#9a3412' }; // Middle: Orange
+    case 2: return { bg: '#ef4444', text: '#ffffff', border: '#991b1b' }; // Low: Red
+    case 1: return { bg: '#b91c1c', text: '#ffffff', border: '#7f1d1d' }; // Lowest (1): Dark Red
+    default: return { bg: '#fecaca', text: '#991b1b', border: '#ef4444' }; // 0 / '-': Soft Red
   }
+};
+
+const getDraftOvrBadgeStyle = (ovrVal: any): { bg: string; text: string; border: string } => {
+  const n = Number(ovrVal);
+  if (isNaN(n) || n <= 0) return { bg: '#fecaca', text: '#991b1b', border: '#ef4444' };
+  if (n >= 85) return { bg: '#15803d', text: '#ffffff', border: '#14532d' };
+  if (n >= 75) return { bg: '#22c55e', text: '#ffffff', border: '#15803d' };
+  if (n >= 65) return { bg: '#f59e0b', text: '#000000', border: '#b45309' };
+  if (n >= 55) return { bg: '#ea580c', text: '#ffffff', border: '#9a3412' };
+  if (n >= 45) return { bg: '#ef4444', text: '#ffffff', border: '#991b1b' };
+  return { bg: '#b91c1c', text: '#ffffff', border: '#7f1d1d' };
 };
 
 const extractDraftPlayerRatings = (ratingsRaw: any, playerInfoRaw: any, posRaw: string | null | undefined, fallbackOvr?: number | null) => {
@@ -3857,17 +3868,6 @@ export default function DraftPage() {
                             </button>
                           )}
 
-                        {myCoachTeamInDraft &&
-                          Number(activeRosterTeam.team_id) !== Number(myCoachTeamInDraft.team_id) && (
-                            <button
-                              type="button"
-                              onClick={() => setRosterTeamOverrideId(Number(myCoachTeamInDraft.team_id))}
-                              className="bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-black uppercase px-2 py-1 border border-black cursor-pointer"
-                            >
-                              👤 My Team ({myCoachTeamInDraft.team_name})
-                            </button>
-                          )}
-
                         <div className="flex items-center gap-1">
                           <span className="text-[10px] font-black uppercase text-slate-700">Team:</span>
                           <select
@@ -4416,9 +4416,17 @@ export default function DraftPage() {
                                       {currentSeasonEntry.weightLbs || player.weightLbs}
                                     </td>
                                     <td className="py-2 px-2 text-center">
-                                      <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
-                                        {currentSeasonEntry.ovr || player.ovr || '-'}
-                                      </span>
+                                      {(() => {
+                                        const ovrHm = getDraftOvrBadgeStyle(currentSeasonEntry.ovr || player.ovr);
+                                        return (
+                                          <span
+                                            style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                            className="font-black px-2 py-0.5 text-xs border inline-block"
+                                          >
+                                            {currentSeasonEntry.ovr || player.ovr || '-'}
+                                          </span>
+                                        );
+                                      })()}
                                     </td>
                                     {(currentSeasonEntry.attrs || player.attrs).map(attr => {
                                       const hm = getDraftHeatmapBadgeStyle(attr.level);
@@ -4483,9 +4491,17 @@ export default function DraftPage() {
                                           </td>
                                           <td className="py-1.5 px-2 text-center">
                                             <div className="inline-flex items-center gap-1">
-                                              <span className="bg-neutral-800 text-amber-300 font-black px-1.5 py-0.5 text-[11px] border border-black">
-                                                {sRow.ovr || '-'}
-                                              </span>
+                                              {(() => {
+                                                const ovrHm = getDraftOvrBadgeStyle(sRow.ovr);
+                                                return (
+                                                  <span
+                                                    style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                                    className="font-black px-1.5 py-0.5 text-[11px] border"
+                                                  >
+                                                    {sRow.ovr || '-'}
+                                                  </span>
+                                                );
+                                              })()}
                                               {ovrDiff !== 0 && (
                                                 <span
                                                   className={`text-[9px] font-black ${
@@ -4673,9 +4689,17 @@ export default function DraftPage() {
                                       {currentSeasonEntry.weightLbs || goalie.weightLbs}
                                     </td>
                                     <td className="py-2 px-2 text-center">
-                                      <span className="bg-black text-amber-300 font-black px-2 py-0.5 text-xs border border-black">
-                                        {currentSeasonEntry.ovr || goalie.ovr || '-'}
-                                      </span>
+                                      {(() => {
+                                        const ovrHm = getDraftOvrBadgeStyle(currentSeasonEntry.ovr || goalie.ovr);
+                                        return (
+                                          <span
+                                            style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                            className="font-black px-2 py-0.5 text-xs border inline-block"
+                                          >
+                                            {currentSeasonEntry.ovr || goalie.ovr || '-'}
+                                          </span>
+                                        );
+                                      })()}
                                     </td>
                                     {(currentSeasonEntry.attrs || goalie.attrs).map(attr => {
                                       const hm = getDraftHeatmapBadgeStyle(attr.level);
@@ -4736,9 +4760,17 @@ export default function DraftPage() {
                                           </td>
                                           <td className="py-1.5 px-2 text-center">
                                             <div className="inline-flex items-center gap-1">
-                                              <span className="bg-neutral-800 text-amber-300 font-black px-1.5 py-0.5 text-[11px] border border-black">
-                                                {sRow.ovr || '-'}
-                                              </span>
+                                              {(() => {
+                                                const ovrHm = getDraftOvrBadgeStyle(sRow.ovr);
+                                                return (
+                                                  <span
+                                                    style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                                    className="font-black px-1.5 py-0.5 text-[11px] border"
+                                                  >
+                                                    {sRow.ovr || '-'}
+                                                  </span>
+                                                );
+                                              })()}
                                               {ovrDiff !== 0 && (
                                                 <span
                                                   className={`text-[9px] font-black ${
