@@ -3772,11 +3772,11 @@ export default function DraftPage() {
               );
             })()}
 
-            {/* MAIN 2-COLUMN DRAFT STAGE: Left (8 cols: Podium + Selection + Team Roster), Right (4 cols: Top Available + Chat) */}
+            {/* MAIN 2-COLUMN DRAFT STAGE: Left (7 cols: Podium + Selection + Team Roster), Right (5 cols: Top Available + Chat) */}
             <div className="grid grid-cols-12 gap-4 items-start">
               
-              {/* LEFT COLUMN (8 COLS): NHL DRAFT PODIUM + TEAM ROSTER */}
-              <div className="col-span-12 lg:col-span-8">
+              {/* LEFT COLUMN (7 COLS): NHL DRAFT PODIUM + TEAM ROSTER */}
+              <div className="col-span-12 lg:col-span-7">
                 <div className="bg-[#fdfaf5] border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
                   {!isLoggedIn && (
                     <CoachLockOverlay
@@ -4695,8 +4695,8 @@ export default function DraftPage() {
                 </div>
               </div>
 
-              {/* RIGHT COLUMN (4 COLS): NHL CENTRAL SCOUTING BIG BOARD + WAR ROOM CHAT */}
-              <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
+              {/* RIGHT COLUMN (5 COLS): NHL CENTRAL SCOUTING BIG BOARD + WAR ROOM CHAT */}
+              <div className="col-span-12 lg:col-span-5 flex flex-col gap-4">
                 {/* TOP AVAILABLE PLAYERS (CLEAN CENTRAL SCOUTING BIG BOARD) */}
                 <div className="bg-[#fdfaf5] border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
                   <div className="bg-[#111827] text-white px-3.5 py-2.5 border-b-2 border-black flex items-center justify-between gap-2">
@@ -4757,8 +4757,8 @@ export default function DraftPage() {
                     </div>
                   </div>
 
-                  {/* Clean Single-Line Prospect List */}
-                  <div className="bg-white divide-y divide-neutral-200 max-h-[250px] overflow-y-auto">
+                  {/* Top Available Players Table with Full Attribute Heatmap Breakdown */}
+                  <div className="bg-white max-h-[320px] overflow-auto">
                     {rookiePoolLoading ? (
                       <div className="p-6 text-center text-xs font-mono font-bold uppercase text-slate-500 italic">
                         Loading {rookieClassYear} draft pool...
@@ -4771,7 +4771,7 @@ export default function DraftPage() {
                           if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
                           return true;
                         })
-                        .slice(0, 30);
+                        .slice(0, 35);
 
                       if (topAvail.length === 0) {
                         return (
@@ -4781,85 +4781,168 @@ export default function DraftPage() {
                         );
                       }
 
-                      return topAvail.map((player, idx) => {
-                        const isSelectedInDesk = coachSelectedPlayer?.player_id === player.player_id;
-                        const canSelectNow = coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
-                        const ovrHm = getDraftOvrBadgeStyle(player.ovr);
-                        return (
-                          <div
-                            key={`top-avail-${player.player_id}`}
-                            onClick={() => {
-                              if (!draftLockStatus.isLocked) {
-                                setCoachSelectedPlayer(player);
-                                setCoachSearch(player.player_name);
-                              }
-                            }}
-                            className={`px-3 py-2 flex items-center justify-between gap-2 text-xs transition-colors ${
-                              !draftLockStatus.isLocked ? 'cursor-pointer hover:bg-yellow-50' : ''
-                            } ${isSelectedInDesk ? 'bg-yellow-100 ring-2 ring-inset ring-black' : ''}`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-mono text-[10px] font-black text-slate-400 w-5 text-right shrink-0">
-                                {idx + 1}.
-                              </span>
-                              <span
-                                className={`font-mono text-[10px] font-black px-1.5 py-0 border border-black/40 shrink-0 ${
-                                  player.pos === 'G'
-                                    ? 'bg-purple-100 text-purple-950'
-                                    : player.pos === 'D'
-                                    ? 'bg-sky-100 text-sky-950'
-                                    : 'bg-amber-100 text-amber-950'
-                                }`}
-                              >
-                                {player.pos}
-                              </span>
-                              <Link
-                                href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="font-black uppercase text-black hover:underline truncate"
-                                title={
-                                  player.isFreeAgent
-                                    ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
-                                    : player.team_default
-                                }
-                              >
-                                {player.player_name}
-                              </Link>
-                              {player.isFreeAgent && (
-                                <span className="text-[8.5px] font-mono font-bold uppercase px-1 py-0 bg-neutral-100 text-slate-600 border border-neutral-300 shrink-0">
-                                  FA
-                                </span>
-                              )}
-                            </div>
+                      const isGoalieFilter = prospectPos === 'G';
 
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <span
-                                style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
-                                className="font-mono font-black text-[11px] px-2 py-0.5 border"
-                              >
-                                {player.ovr ?? '-'}
-                              </span>
-                              {canSelectNow && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCoachSelectedPlayer(player);
-                                    setCoachSearch(player.player_name);
+                      return (
+                        <table className="w-full text-left border-collapse text-xs min-w-[640px]">
+                          <thead className="sticky top-0 z-10">
+                            <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
+                              <th className="py-1.5 px-2.5 sticky left-0 z-20 bg-black">PLAYER</th>
+                              <th className="py-1.5 px-1.5 text-center">POS</th>
+                              <th className="py-1.5 px-1.5 text-center">{isGoalieFilter ? 'GLV' : 'SH'}</th>
+                              <th className="py-1.5 px-1.5 text-center">WGT</th>
+                              <th className="py-1.5 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
+                              {isGoalieFilter ? (
+                                <>
+                                  <th className="py-1.5 px-1 text-center" title="Agility (1-6)">AGI</th>
+                                  <th className="py-1.5 px-1 text-center" title="Speed (1-6)">SPD</th>
+                                  <th className="py-1.5 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                                  <th className="py-1.5 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                                  <th className="py-1.5 px-1 text-center" title="Puck Control (1-6)">PKC</th>
+                                  <th className="py-1.5 px-1 text-center" title="Stick Right (1-6)">STR</th>
+                                  <th className="py-1.5 px-1 text-center" title="Stick Left (1-6)">STL</th>
+                                  <th className="py-1.5 px-1 text-center" title="Glove Right (1-6)">GVR</th>
+                                  <th className="py-1.5 px-1 text-center" title="Glove Left (1-6)">GVL</th>
+                                </>
+                              ) : (
+                                <>
+                                  <th className="py-1.5 px-1 text-center" title="Agility (1-6)">AGI</th>
+                                  <th className="py-1.5 px-1 text-center" title="Speed (1-6)">SPD</th>
+                                  <th className="py-1.5 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                                  <th className="py-1.5 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                                  <th className="py-1.5 px-1 text-center" title="Shot Power (1-6)">SHP</th>
+                                  <th className="py-1.5 px-1 text-center" title="Shot Accuracy (1-6)">SHA</th>
+                                  <th className="py-1.5 px-1 text-center" title="Stick Handling (1-6)">STH</th>
+                                  <th className="py-1.5 px-1 text-center" title="Passing (1-6)">PAS</th>
+                                  <th className="py-1.5 px-1 text-center" title="Checking (1-6)">CHK</th>
+                                  <th className="py-1.5 px-1 text-center" title="Aggression (1-6)">AGR</th>
+                                </>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-neutral-200 font-mono">
+                            {topAvail.map((player, idx) => {
+                              const isSelectedInDesk = coachSelectedPlayer?.player_id === player.player_id;
+                              const canSelectNow = coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
+                              const pRatings = extractDraftPlayerRatings(player.ratings, player.player_info, player.pos, player.ovr);
+                              const ovrHm = getDraftOvrBadgeStyle(player.ovr ?? pRatings.ovr);
+                              const rowBg = isSelectedInDesk
+                                ? 'bg-yellow-100'
+                                : 'bg-white hover:bg-yellow-50/80';
+
+                              return (
+                                <tr
+                                  key={`top-avail-${player.player_id}`}
+                                  onClick={() => {
+                                    if (!draftLockStatus.isLocked) {
+                                      setCoachSelectedPlayer(player);
+                                      setCoachSearch(player.player_name);
+                                    }
                                   }}
-                                  className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
-                                    isSelectedInDesk
-                                      ? 'bg-emerald-700 text-white'
-                                      : 'bg-black hover:bg-neutral-800 text-amber-300'
+                                  className={`${rowBg} border-t border-black/15 transition-colors ${
+                                    !draftLockStatus.isLocked ? 'cursor-pointer' : ''
                                   }`}
                                 >
-                                  {isSelectedInDesk ? '✓' : 'Pick'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      });
+                                  <td className={`py-1.5 px-2 font-sans sticky left-0 z-10 ${rowBg} border-r border-neutral-200`}>
+                                    <div className="flex items-center justify-between gap-1.5">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="font-mono text-[10px] font-black text-slate-400 w-4 text-right shrink-0">
+                                          {idx + 1}.
+                                        </span>
+                                        <Link
+                                          href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="font-black uppercase text-black hover:underline text-[11px] truncate max-w-[115px]"
+                                          title={
+                                            player.isFreeAgent
+                                              ? `${player.player_name} • Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
+                                              : `${player.player_name} • ${player.team_default}`
+                                          }
+                                        >
+                                          {player.player_name}
+                                        </Link>
+                                        {player.isFreeAgent && (
+                                          <span className="text-[8px] font-mono font-bold uppercase px-1 py-0 bg-neutral-100 text-slate-600 border border-neutral-300 shrink-0">
+                                            FA
+                                          </span>
+                                        )}
+                                      </div>
+                                      {canSelectNow && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCoachSelectedPlayer(player);
+                                            setCoachSearch(player.player_name);
+                                          }}
+                                          className={`px-1.5 py-0 text-[9px] font-mono font-black uppercase border border-black cursor-pointer shrink-0 ${
+                                            isSelectedInDesk
+                                              ? 'bg-emerald-700 text-white'
+                                              : 'bg-black hover:bg-neutral-800 text-amber-300'
+                                          }`}
+                                        >
+                                          {isSelectedInDesk ? '✓' : 'Pick'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center">
+                                    <span
+                                      className={`px-1.5 py-0 text-[10px] font-black border border-black/40 inline-block ${
+                                        player.pos === 'G'
+                                          ? 'bg-purple-100 text-purple-950'
+                                          : player.pos === 'D'
+                                          ? 'bg-sky-100 text-sky-950'
+                                          : 'bg-amber-100 text-amber-950'
+                                      }`}
+                                    >
+                                      {player.pos}
+                                    </span>
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center text-[11px] font-bold text-slate-700">
+                                    {pRatings.hand}
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center text-[11px] text-slate-700">
+                                    {pRatings.weightLbs}
+                                  </td>
+                                  <td className="py-1.5 px-1.5 text-center">
+                                    <span
+                                      style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                      className="font-black px-2 py-0.5 text-xs border inline-block"
+                                    >
+                                      {player.ovr ?? pRatings.ovr ?? '-'}
+                                    </span>
+                                  </td>
+                                  {pRatings.attrs.map(attr => {
+                                    const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                    return (
+                                      <td key={`top-avail-attr-${player.player_id}-${attr.short}`} className="py-1.5 px-1 text-center">
+                                        <span
+                                          style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                          className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                          title={`${attr.label}: ${attr.level}/6`}
+                                        >
+                                          {attr.level || '-'}
+                                        </span>
+                                      </td>
+                                    );
+                                  })}
+                                  {!isGoalieFilter && pRatings.isG && (
+                                    <td className="py-1.5 px-1 text-center">
+                                      <span
+                                        style={{ backgroundColor: '#fecaca', color: '#991b1b', borderColor: '#ef4444' }}
+                                        className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                      >
+                                        -
+                                      </span>
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      );
                     })()}
                   </div>
                 </div>
@@ -5291,29 +5374,55 @@ export default function DraftPage() {
               )}
 
               <div className="bg-white border-2 border-black overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs min-w-[750px]">
+                <table className="w-full text-left border-collapse text-xs min-w-[920px]">
                   <thead>
-                    <tr className="bg-black text-white text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3 text-center">#</th>
-                      <th className="py-2.5 px-3">PLAYER</th>
-                      <th className="py-2.5 px-3 text-center">TYPE</th>
-                      <th className="py-2.5 px-3 text-center">POS</th>
-                      <th className="py-2.5 px-3 text-center">OVR</th>
-                      <th className="py-2.5 px-3 text-center">STARS</th>
-                      <th className="py-2.5 px-3">FROM / DESIGNATION</th>
-                      <th className="py-2.5 px-3">STATUS</th>
+                    <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
+                      <th className="py-2 px-2 text-center">#</th>
+                      <th className="py-2 px-3">PLAYER</th>
+                      <th className="py-2 px-2 text-center">TYPE</th>
+                      <th className="py-2 px-1.5 text-center">POS</th>
+                      <th className="py-2 px-1.5 text-center">{prospectPos === 'G' ? 'GLV' : 'SH'}</th>
+                      <th className="py-2 px-1.5 text-center">WGT</th>
+                      <th className="py-2 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
+                      {prospectPos === 'G' ? (
+                        <>
+                          <th className="py-2 px-1 text-center" title="Agility (1-6)">AGI</th>
+                          <th className="py-2 px-1 text-center" title="Speed (1-6)">SPD</th>
+                          <th className="py-2 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                          <th className="py-2 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                          <th className="py-2 px-1 text-center" title="Puck Control (1-6)">PKC</th>
+                          <th className="py-2 px-1 text-center" title="Stick Right (1-6)">STR</th>
+                          <th className="py-2 px-1 text-center" title="Stick Left (1-6)">STL</th>
+                          <th className="py-2 px-1 text-center" title="Glove Right (1-6)">GVR</th>
+                          <th className="py-2 px-1 text-center" title="Glove Left (1-6)">GVL</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="py-2 px-1 text-center" title="Agility (1-6)">AGI</th>
+                          <th className="py-2 px-1 text-center" title="Speed (1-6)">SPD</th>
+                          <th className="py-2 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                          <th className="py-2 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                          <th className="py-2 px-1 text-center" title="Shot Power (1-6)">SHP</th>
+                          <th className="py-2 px-1 text-center" title="Shot Accuracy (1-6)">SHA</th>
+                          <th className="py-2 px-1 text-center" title="Stick Handling (1-6)">STH</th>
+                          <th className="py-2 px-1 text-center" title="Passing (1-6)">PAS</th>
+                          <th className="py-2 px-1 text-center" title="Checking (1-6)">CHK</th>
+                          <th className="py-2 px-1 text-center" title="Aggression (1-6)">AGR</th>
+                        </>
+                      )}
+                      <th className="py-2 px-3">STATUS</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-200 font-mono">
                     {rookiePoolLoading ? (
                       <tr>
-                        <td colSpan={8} className="py-10 text-center italic text-gray-500 font-bold uppercase">
+                        <td colSpan={18} className="py-10 text-center italic text-gray-500 font-bold uppercase font-sans">
                           Loading {rookieClassYear} rookies &amp; free agents...
                         </td>
                       </tr>
                     ) : prospectRows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center italic text-gray-500 font-bold uppercase">
+                        <td colSpan={18} className="py-8 text-center italic text-gray-500 font-bold uppercase font-sans">
                           No prospects or free agents found for these filters.
                         </td>
                       </tr>
@@ -5321,52 +5430,92 @@ export default function DraftPage() {
                       prospectRows.map((p, i) => {
                         const pickedBy = draftedPlayerMap.get(String(p.player_id));
                         const canSelect = !pickedBy && coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
+                        const pRatings = extractDraftPlayerRatings(p.ratings, p.player_info, p.pos, p.ovr);
+                        const ovrHm = getDraftOvrBadgeStyle(p.ovr ?? pRatings.ovr);
                         return (
                           <tr key={p.player_id} className={pickedBy ? 'opacity-60 bg-neutral-50' : 'hover:bg-yellow-50'}>
-                            <td className="py-2 px-3 text-center font-mono text-slate-500">{i + 1}</td>
-                            <td className="py-2 px-3 font-bold uppercase text-black">
+                            <td className="py-1.5 px-2 text-center text-slate-500">{i + 1}</td>
+                            <td className="py-1.5 px-3 font-bold uppercase text-black font-sans">
                               <Link
                                 href={`/players?q=${encodeURIComponent(p.player_name)}&id=${encodeURIComponent(String(p.player_id))}`}
                                 className="hover:underline flex items-center gap-1.5"
-                                title="Open in Player Database"
+                                title={
+                                  p.isFreeAgent
+                                    ? `Free Agent${p.orig_nhl_team ? ` (${p.orig_nhl_team})` : ''}`
+                                    : p.team_default
+                                }
                               >
                                 <span>{p.player_name}</span>
                                 <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
                               </Link>
                             </td>
-                            <td className="py-2 px-3 text-center font-mono">
+                            <td className="py-1.5 px-2 text-center">
                               <span
-                                className={`px-1.5 py-0.5 text-[9.5px] font-black uppercase border border-black inline-block ${
+                                className={`px-1.5 py-0 text-[9px] font-black uppercase border border-black inline-block ${
                                   p.isFreeAgent
                                     ? 'bg-emerald-200 text-emerald-950'
                                     : 'bg-amber-300 text-black'
                                 }`}
                               >
-                                {p.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}
+                                {p.isFreeAgent ? 'FA' : 'ROOKIE'}
                               </span>
                             </td>
-                            <td className="py-2 px-3 text-center font-mono">
-                              <span className="bg-neutral-100 text-black px-1.5 py-0.5 text-[10px] font-bold border border-black/20">{p.pos}</span>
+                            <td className="py-1.5 px-1.5 text-center">
+                              <span
+                                className={`px-1.5 py-0 text-[10px] font-black border border-black/40 inline-block ${
+                                  p.pos === 'G'
+                                    ? 'bg-purple-100 text-purple-950'
+                                    : p.pos === 'D'
+                                    ? 'bg-sky-100 text-sky-950'
+                                    : 'bg-amber-100 text-amber-950'
+                                }`}
+                              >
+                                {p.pos}
+                              </span>
                             </td>
-                            <td className="py-2 px-3 text-center font-mono font-black">{p.ovr || '-'}</td>
-                            <td className="py-2 px-3 text-center font-mono">{p.star_rating ?? '-'}</td>
-                            <td className="py-2 px-3 text-gray-700 font-sans text-[11px]">
-                              {p.isFreeAgent ? (
-                                <span className="font-bold text-emerald-800">
-                                  Free Agent{p.orig_nhl_team ? ` (${p.orig_nhl_team})` : ''}
+                            <td className="py-1.5 px-1.5 text-center text-[11px] font-bold text-slate-700">
+                              {pRatings.hand}
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center text-[11px] text-slate-700">
+                              {pRatings.weightLbs}
+                            </td>
+                            <td className="py-1.5 px-1.5 text-center">
+                              <span
+                                style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                className="font-black px-2 py-0.5 text-xs border inline-block"
+                              >
+                                {p.ovr ?? pRatings.ovr ?? '-'}
+                              </span>
+                            </td>
+                            {pRatings.attrs.map(attr => {
+                              const hm = getDraftHeatmapBadgeStyle(attr.level);
+                              return (
+                                <td key={`full-board-attr-${p.player_id}-${attr.short}`} className="py-1.5 px-1 text-center">
+                                  <span
+                                    style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                    className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                    title={`${attr.label}: ${attr.level}/6`}
+                                  >
+                                    {attr.level || '-'}
+                                  </span>
+                                </td>
+                              );
+                            })}
+                            {prospectPos !== 'G' && pRatings.isG && (
+                              <td className="py-1.5 px-1 text-center">
+                                <span
+                                  style={{ backgroundColor: '#fecaca', color: '#991b1b', borderColor: '#ef4444' }}
+                                  className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
+                                >
+                                  -
                                 </span>
-                              ) : (
-                                <>
-                                  {p.team_default}
-                                  {(p.player_info as any)?.source_league ? ` (${(p.player_info as any).source_league})` : ''}
-                                </>
-                              )}
-                            </td>
-                            <td className="py-2 px-3">
+                              </td>
+                            )}
+                            <td className="py-1.5 px-3">
                               <div className="flex items-center gap-2">
                                 {pickedBy ? (
                                   <span className="font-mono text-[10px] font-black uppercase text-red-800 bg-red-50 px-1.5 py-0.5 border border-red-800/40">
-                                    ✓ Picked by {pickedBy.team}{pickedBy.coachName ? ` (${pickedBy.coachName})` : ''} &bull; Rd {pickedBy.rd}, Pk #{pickedBy.pk}
+                                    ✓ Rd {pickedBy.rd}, #{pickedBy.pk} ({pickedBy.team})
                                   </span>
                                 ) : canSelect ? (
                                   <button
@@ -5378,12 +5527,6 @@ export default function DraftPage() {
                                 ) : (
                                   <span className="font-mono text-[10px] font-black uppercase text-emerald-700">Available</span>
                                 )}
-                                <Link
-                                  href={`/players?q=${encodeURIComponent(p.player_name)}&id=${encodeURIComponent(String(p.player_id))}`}
-                                  className="bg-amber-300 hover:bg-amber-400 text-black px-2 py-0.5 text-[10px] font-black uppercase border border-black inline-flex items-center gap-1"
-                                >
-                                  Profile
-                                </Link>
                               </div>
                             </td>
                           </tr>
