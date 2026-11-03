@@ -3328,79 +3328,6 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         {/* DRAFT LOCKED / NOT STARTED BANNER (EACH DRAFT STARTS INDEPENDENTLY) */}
         {/* ========================================================================= */}
-        {draftLockStatus.isLocked && (
-          <div className="bg-[#121418] border-4 border-amber-400 text-white p-4 sm:p-5 shadow-[6px_6px_0px_rgba(0,0,0,1)] flex flex-col md:flex-row items-center justify-between gap-4 font-mono">
-            <div className="flex items-center gap-3 text-left">
-              <div className="w-12 h-12 bg-amber-400 text-black flex items-center justify-center border-2 border-black shrink-0 font-black">
-                <Lock className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="bg-red-600 text-white text-[9px] font-black uppercase px-2 py-0.5 tracking-wider animate-pulse">
-                    DRAFT STANDBY (NOT STARTED)
-                  </span>
-                  <span className="text-amber-300 text-xs font-black tracking-widest uppercase">
-                    {activeFloorSeasonMeta?.seasonBadge}
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-300 font-sans mt-0.5">
-                  {draftLockStatus.targetDate ? (
-                    <>
-                      Scheduled for <strong className="text-white">{draftLockStatus.targetDate.toLocaleString()}</strong>. Picks unlock as soon as the Commissioner starts this draft.
-                    </>
-                  ) : (
-                    <>
-                      Picks for <strong className="text-white">{activeFloorSeasonMeta?.seasonBadge}</strong> are currently locked on standby until the Commissioner clicks <strong className="text-amber-300">Start Draft</strong>. (Each draft starts independently.)
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap shrink-0">
-              {draftLockStatus.timeRemaining && (
-                <div className="flex items-center gap-2 bg-black/80 border-2 border-neutral-700 p-2 text-center shrink-0">
-                  <div className="px-2">
-                    <div className="text-xl sm:text-2xl font-black text-amber-300">{draftLockStatus.timeRemaining.days}</div>
-                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Days</div>
-                  </div>
-                  <span className="text-amber-300 font-black">:</span>
-                  <div className="px-2">
-                    <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.hours).padStart(2, '0')}</div>
-                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Hours</div>
-                  </div>
-                  <span className="text-amber-300 font-black">:</span>
-                  <div className="px-2">
-                    <div className="text-xl sm:text-2xl font-black text-amber-300">{String(draftLockStatus.timeRemaining.minutes).padStart(2, '0')}</div>
-                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Mins</div>
-                  </div>
-                  <span className="text-amber-300 font-black">:</span>
-                  <div className="px-2">
-                    <div className="text-xl sm:text-2xl font-black text-emerald-400">{String(draftLockStatus.timeRemaining.seconds).padStart(2, '0')}</div>
-                    <div className="text-[8px] uppercase text-neutral-400 font-bold">Secs</div>
-                  </div>
-                </div>
-              )}
-
-              {isUltraMagnusAdmin && (
-                <button
-                  type="button"
-                  disabled={isTogglingDraftStatus}
-                  onClick={() => handleToggleDraftStart(floorLeagueId, true)}
-                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black uppercase text-xs px-4 py-3 border-2 border-black shadow-[3px_3px_0px_#000] cursor-pointer flex items-center gap-2 transition-all"
-                >
-                  <Unlock className="w-4 h-4 text-black shrink-0" />
-                  <span>
-                    {isTogglingDraftStatus
-                      ? 'Starting Draft...'
-                      : `▶ START ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
-                  </span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Success Alert Toast */}
         {submitSuccessMessage && (
           <div className="bg-emerald-100 border-2 border-emerald-800 text-emerald-950 p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center justify-between gap-3 animate-bounce">
@@ -3422,11 +3349,11 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         {activeTab === 'floor' && (
           <div className="space-y-6">
-            {/* TOP HERO SECTION: Unified 1st Pick & Coach Selection Desk on Left, Top Available Players on Right */}
+            {/* TOP HERO SECTION: Unified Coach Selection Desk on Left, Top Available Players on Right */}
             <div className="grid grid-cols-12 gap-5 items-start">
               
-              {/* TOP LEFT: UNIFIED 1ST PICK & COACH SELECTION DESK ("ON THE CLOCK") */}
-              <div className="col-span-12 lg:col-span-8 bg-[#fff9e6] border-3 border-black p-4 sm:p-5 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] relative overflow-hidden">
+              {/* TOP LEFT: UNIFIED COACH SELECTION DESK ("ON THE CLOCK") */}
+              <div className="col-span-12 lg:col-span-8 bg-[#fff9e6] border-3 border-black p-3.5 sm:p-4 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] relative overflow-hidden">
                 {!isLoggedIn && (
                   <CoachLockOverlay
                     title="COACH SIGN-IN REQUIRED"
@@ -3438,7 +3365,7 @@ export default function DraftPage() {
 
                 {/* Personalized "YOU ARE ON THE CLOCK" Alert Banner */}
                 {isCurrentCoachOnClock && !draftLockStatus.isLocked && (
-                  <div className="bg-emerald-600 border-2 border-black text-white p-2.5 mb-3 font-mono font-black text-xs uppercase flex items-center justify-between shadow-[2px_2px_0px_#000] animate-pulse">
+                  <div className="bg-emerald-600 border-2 border-black text-white p-2 mb-2.5 font-mono font-black text-xs uppercase flex items-center justify-between shadow-[2px_2px_0px_#000] animate-pulse">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-amber-300" />
                       <span>🚨 COACH {currentCoach?.coach_name}, YOU ARE CURRENTLY ON THE CLOCK!</span>
@@ -3449,66 +3376,11 @@ export default function DraftPage() {
                   </div>
                 )}
 
-                {/* Exclusive UltraMagnus Commissioner & Proxy Selection Control (Visible ONLY when draft is active) */}
-                {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
-                  <div className="bg-amber-300 border-2 border-black text-black p-2.5 mb-3 font-mono text-xs flex flex-col gap-2 shadow-[2px_2px_0px_#000]">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 font-black uppercase">
-                        <Shield className="w-4 h-4 text-black shrink-0" />
-                        <span>
-                          👑 ULTRAMAGNUS COMMISSIONER CONTROLS ({activeFloorSeasonMeta?.seasonBadge})
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          disabled={isTogglingDraftStatus}
-                          onClick={() => handleToggleDraftStart(floorLeagueId, false)}
-                          className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white border-2 border-black px-3 py-1 text-[11px] font-black uppercase cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>
-                            {isTogglingDraftStatus
-                              ? 'Updating...'
-                              : `⏸ PAUSE / STOP ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-black/30 pt-2">
-                      <span className="text-[11px] font-bold uppercase">
-                        Proxy Pick Access (submit for any coach unable to pick):
-                      </span>
-                      <select
-                        value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
-                        onChange={(e) => {
-                          const [rStr, pStr] = e.target.value.split('-');
-                          const chosen = projectedFloorRows.find(
-                            s => s.rd === Number(rStr) && s.pk === Number(pStr)
-                          );
-                          setOverridePickSlot(chosen || null);
-                        }}
-                        className="bg-black text-amber-300 border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
-                        title="Select any open pick slot to draft on behalf of that coach"
-                      >
-                        {projectedFloorRows
-                          .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
-                          .map(s => (
-                            <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
-                              Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-3 mb-4 gap-2">
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <span className="w-3 h-3 bg-red-600 rounded-full animate-ping"></span>
-                    <h2 className="text-base sm:text-lg font-black uppercase tracking-tight flex items-center gap-2">
+                {/* Unified Top Header Bar: Desk Title + Standby/Live Status + On The Clock + Start/Pause Controls */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-2.5 mb-3 gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`w-2.5 h-2.5 rounded-full ${draftLockStatus.isLocked ? 'bg-amber-500' : 'bg-red-600 animate-ping'}`}></span>
+                    <h2 className="text-sm sm:text-base font-black uppercase tracking-tight flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-red-700" />
                       Coach War Room &bull; Selection Desk
                     </h2>
@@ -3518,27 +3390,93 @@ export default function DraftPage() {
                         Coach: {currentCoach.coach_name}
                       </span>
                     )}
+                    {draftLockStatus.isLocked && (
+                      <span className="bg-red-600 text-white text-[9px] font-mono font-black uppercase px-2 py-0.5 border border-black tracking-wider">
+                        STANDBY &bull; {activeFloorSeasonMeta?.seasonBadge}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {Number(nextEmptyPickSlot.pk) === 1 && (
-                      <div className="bg-amber-400 text-black font-mono font-black px-2.5 py-1 text-xs border-2 border-black shadow-xs flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 text-black" />
+                      <div className="bg-amber-400 text-black font-mono font-black px-2 py-0.5 text-[11px] border-2 border-black shadow-xs flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-black" />
                         <span>1ST OVERALL PICK</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-1.5 font-mono text-xs font-bold bg-yellow-100 px-2.5 py-1 border border-black">
+                    <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold bg-yellow-100 px-2 py-0.5 border border-black">
                       <span>On The Clock:</span>
                       <span className="font-black text-red-800 uppercase">
                         Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})
                       </span>
                     </div>
+                    {isUltraMagnusAdmin && (
+                      draftLockStatus.isLocked ? (
+                        <button
+                          type="button"
+                          disabled={isTogglingDraftStatus}
+                          onClick={() => handleToggleDraftStart(floorLeagueId, true)}
+                          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-mono font-black uppercase text-[11px] px-2.5 py-0.5 border-2 border-black shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1 transition-all"
+                        >
+                          <Unlock className="w-3 h-3 text-black shrink-0" />
+                          <span>
+                            {isTogglingDraftStatus
+                              ? 'Starting...'
+                              : `▶ START ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isTogglingDraftStatus}
+                          onClick={() => handleToggleDraftStart(floorLeagueId, false)}
+                          className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-mono font-black uppercase text-[11px] px-2.5 py-0.5 border-2 border-black shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1 transition-all"
+                        >
+                          <Lock className="w-3 h-3 shrink-0" />
+                          <span>
+                            {isTogglingDraftStatus
+                              ? 'Updating...'
+                              : `⏸ PAUSE DRAFT`}
+                          </span>
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
 
+                {/* Compact Commissioner Proxy Selector (Only when live) */}
+                {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
+                  <div className="bg-amber-300 border-2 border-black text-black px-2.5 py-1.5 mb-2.5 font-mono text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="font-black uppercase flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-black shrink-0" />
+                      Commissioner Proxy Pick:
+                    </span>
+                    <select
+                      value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
+                      onChange={(e) => {
+                        const [rStr, pStr] = e.target.value.split('-');
+                        const chosen = projectedFloorRows.find(
+                          s => s.rd === Number(rStr) && s.pk === Number(pStr)
+                        );
+                        setOverridePickSlot(chosen || null);
+                      }}
+                      className="bg-black text-amber-300 border border-black px-2 py-0.5 text-[11px] font-black uppercase cursor-pointer"
+                      title="Select any open pick slot to draft on behalf of that coach"
+                    >
+                      {projectedFloorRows
+                        .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
+                        .map(s => (
+                          <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
+                            Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Per-Pick Clock Window Banner (Round 1 = 10 Mins, Round 2+ = 5 Mins) */}
                 {!draftLockStatus.isLocked && (
-                  <div className="bg-[#121418] text-white border-2 border-black p-3 mb-4 shadow-[3px_3px_0px_rgba(0,0,0,1)] font-mono">
+                  <div className="bg-[#121418] text-white border-2 border-black p-2.5 mb-3 shadow-[2px_2px_0px_rgba(0,0,0,1)] font-mono">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`px-2 py-0.5 text-[10px] font-black uppercase border border-black ${
@@ -3557,7 +3495,7 @@ export default function DraftPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <div className={`text-lg sm:text-xl font-black px-2.5 py-0.5 border border-neutral-600 bg-black tracking-wider ${
+                        <div className={`text-base sm:text-lg font-black px-2 py-0.5 border border-neutral-600 bg-black tracking-wider ${
                           isPickClockExpired
                             ? 'text-red-500 animate-pulse'
                             : pickClockRemainingMs <= 60000
@@ -3584,7 +3522,7 @@ export default function DraftPage() {
                     </div>
 
                     {/* Progress Bar */}
-                    <div className="w-full h-1.5 bg-neutral-800 mt-2 overflow-hidden border border-neutral-700">
+                    <div className="w-full h-1.5 bg-neutral-800 mt-1.5 overflow-hidden border border-neutral-700">
                       <div
                         className={`h-full transition-all duration-500 ${
                           isPickClockExpired
@@ -3599,58 +3537,59 @@ export default function DraftPage() {
                   </div>
                 )}
 
-                {/* Team On Clock Showcase with Coach Assignment */}
-                <div className="bg-white border-2 border-black p-3 mb-4 flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-3">
-                    {nextEmptyPickSlot.logo ? (
-                      <img
-                        src={nextEmptyPickSlot.logo}
-                        alt={nextEmptyPickSlot.team}
-                        className="w-10 h-10 object-contain border border-black/20 p-1 bg-neutral-50"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 bg-black text-white font-mono font-black text-xs flex items-center justify-center border border-black">
-                        #{nextEmptyPickSlot.pk}
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5 flex-wrap">
-                        <span>Franchise On The Clock</span>
-                        {nextEmptyPickSlot.coachName && (
-                          <span className="bg-neutral-200 text-black px-1.5 py-0 border border-black/20 font-bold">
-                            Coach: {nextEmptyPickSlot.coachName}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm sm:text-base font-black uppercase text-black">
-                        {nextEmptyPickSlot.team}
+                {/* Unified Franchise On The Clock + Search & Submit Area */}
+                <div className="bg-white border-2 border-black p-3 space-y-2.5">
+                  <div className="flex items-center justify-between flex-wrap gap-2 border-b border-black/15 pb-2">
+                    <div className="flex items-center gap-2.5">
+                      {nextEmptyPickSlot.logo ? (
+                        <img
+                          src={nextEmptyPickSlot.logo}
+                          alt={nextEmptyPickSlot.team}
+                          className="w-8 h-8 object-contain border border-black/20 p-0.5 bg-neutral-50"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-black text-white font-mono font-black text-xs flex items-center justify-center border border-black">
+                          #{nextEmptyPickSlot.pk}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5 flex-wrap">
+                          <span>Franchise On The Clock</span>
+                          {nextEmptyPickSlot.coachName && (
+                            <span className="bg-neutral-200 text-black px-1.5 py-0 border border-black/20 font-bold">
+                              Coach: {nextEmptyPickSlot.coachName}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm sm:text-base font-black uppercase text-black leading-tight">
+                          {nextEmptyPickSlot.team}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 flex-wrap justify-end">
-                    {Number(nextEmptyPickSlot.pk) === 1 ? (
-                      <span className="bg-black text-amber-300 px-2.5 py-1 border border-black font-mono text-[11px] font-black uppercase">
-                        ★ ON THE CLOCK FOR #1 OVERALL ★
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {Number(nextEmptyPickSlot.pk) === 1 ? (
+                        <span className="bg-black text-amber-300 px-2 py-0.5 border border-black font-mono text-[10px] font-black uppercase">
+                          ★ ON THE CLOCK FOR #1 OVERALL ★
+                        </span>
+                      ) : firstOverallPick?.player && firstOverallPick.player !== 'N/A' ? (
+                        <span className="bg-emerald-600 text-white px-2 py-0.5 border border-emerald-900 shadow-2xs font-mono text-[10px] font-black uppercase">
+                          ✓ #1 OVERALL: {firstOverallPick.player} {firstOverallPick.ovr ? `(OVR ${firstOverallPick.ovr})` : ''}
+                        </span>
+                      ) : null}
+                      <span className="text-[10px] font-mono uppercase font-black bg-yellow-100 text-black px-2 py-0.5 border border-black">
+                        {nextEmptyPickSlot.seasonBadge}
                       </span>
-                    ) : firstOverallPick?.player && firstOverallPick.player !== 'N/A' ? (
-                      <span className="bg-emerald-600 text-white px-2.5 py-1 border border-emerald-900 shadow-2xs font-mono text-[11px] font-black uppercase">
-                        ✓ #1 OVERALL: {firstOverallPick.player} {firstOverallPick.ovr ? `(OVR ${firstOverallPick.ovr})` : ''}
-                      </span>
-                    ) : null}
-                    <span className="text-[10px] font-mono uppercase font-black bg-yellow-100 text-black px-2.5 py-1 border-2 border-black shadow-xs">
-                      {nextEmptyPickSlot.seasonBadge}
-                    </span>
-                    {overridePickSlot && (
-                      <button
-                        onClick={() => setOverridePickSlot(null)}
-                        className="block text-[10px] text-red-800 font-bold uppercase underline mt-1 cursor-pointer"
-                      >
-                        Reset to Auto Pick Slot
-                      </button>
-                    )}
+                      {overridePickSlot && (
+                        <button
+                          onClick={() => setOverridePickSlot(null)}
+                          className="text-[10px] text-red-800 font-bold uppercase underline cursor-pointer"
+                        >
+                          Reset Slot
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
 
                 {/* Draft completion notice (or fallback only if 0 slots exist at all) */}
                 {!loading &&
@@ -3901,6 +3840,7 @@ export default function DraftPage() {
                     )}
                   </div>
                 </form>
+                </div>
 
                 {/* SELECTED PICKS IN THIS DRAFT (Always visible in Draft Area to show who picked whom) */}
                 {selectedPicksForFloor.length > 0 && (
