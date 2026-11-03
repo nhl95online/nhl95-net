@@ -630,7 +630,19 @@ export default function DraftPage() {
   const [prevSeasonDbRosters, setPrevSeasonDbRosters] = useState<Array<{ team_id: number; player_id?: any; player_name: string }>>([]);
   const [rosterTeamOverrideId, setRosterTeamOverrideId] = useState<number | null>(null);
   const [rosterPosFilter, setRosterPosFilter] = useState<'ALL' | 'SKATERS' | 'GOALIES'>('ALL');
-  const [showRosterCareerSeasons, setShowRosterCareerSeasons] = useState<boolean>(true);
+  const [showRosterCareerSeasons, setShowRosterCareerSeasons] = useState<boolean>(false);
+  const [expandedRosterPlayerKeys, setExpandedRosterPlayerKeys] = useState<Set<string>>(new Set());
+  const toggleRosterPlayerExpand = (playerKey: string) => {
+    setExpandedRosterPlayerKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(playerKey)) {
+        next.delete(playerKey);
+      } else {
+        next.add(playerKey);
+      }
+      return next;
+    });
+  };
   const [rosterCareerByNorm, setRosterCareerByNorm] = useState<
     Record<
       string,
@@ -4462,19 +4474,35 @@ export default function DraftPage() {
 
                     <button
                       type="button"
-                      onClick={() => setShowRosterCareerSeasons(prev => !prev)}
+                      onClick={() => {
+                        if (showRosterCareerSeasons) {
+                          setShowRosterCareerSeasons(false);
+                          setExpandedRosterPlayerKeys(new Set());
+                        } else {
+                          setShowRosterCareerSeasons(true);
+                          const allKeys = [
+                            ...activeTeamRosterData.skaters.map(s => s.key),
+                            ...activeTeamRosterData.goalies.map(g => g.key)
+                          ];
+                          setExpandedRosterPlayerKeys(new Set(allKeys));
+                        }
+                      }}
                       className={`px-2.5 py-1 text-[10px] font-black uppercase border-2 border-black cursor-pointer flex items-center gap-1 ${
                         showRosterCareerSeasons
                           ? 'bg-emerald-700 text-white'
                           : 'bg-white text-black hover:bg-neutral-100'
                       }`}
-                      title="Show or hide each player's remaining career seasons after the current draft year"
+                      title="Expand or collapse remaining career seasons for all players on this roster"
                     >
-                      <Calendar className="w-3 h-3" />
+                      {showRosterCareerSeasons ? (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      )}
                       <span>
                         {showRosterCareerSeasons
-                          ? `Career Outlook (${rookieClassYear}+): ON`
-                          : `Career Outlook (${rookieClassYear}+): OFF`}
+                          ? `Collapse All Career Seasons (${rookieClassYear}+)`
+                          : `Expand All Career Seasons (${rookieClassYear}+)`}
                       </span>
                     </button>
                   </div>
@@ -4485,7 +4513,7 @@ export default function DraftPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-mono text-xs font-black uppercase text-black bg-amber-200 px-2.5 py-0.5 border border-black">
-                        🏒 Skaters &mdash; Forwards &amp; Defensemen ({activeTeamRosterData.skaters.length}) &bull; Career Ratings From {rookieClassYear} Onward
+                        🏒 Skaters &mdash; Forwards &amp; Defensemen ({activeTeamRosterData.skaters.length}) &bull; Click Any Player To Expand Career ({rookieClassYear}+)
                       </span>
                       <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
                         AGI &bull; SPD &bull; OFA &bull; DFA &bull; SHP &bull; SHA &bull; STH &bull; PAS &bull; CHK &bull; AGR
@@ -4541,20 +4569,44 @@ export default function DraftPage() {
                               const futureSeasons = seasonsList.slice(1);
                               const finalYear = seasonsList[seasonsList.length - 1]?.year || Number(rookieClassYear);
                               const extraYearsCount = futureSeasons.length;
+                              const isExpanded = expandedRosterPlayerKeys.has(player.key);
 
                               return (
                                 <React.Fragment key={player.key}>
                                   <tr
-                                    className={
+                                    onClick={() => {
+                                      if (extraYearsCount > 0) toggleRosterPlayerExpand(player.key);
+                                    }}
+                                    className={`${
                                       player.isDraftedNow
-                                        ? 'bg-emerald-50 hover:bg-emerald-100 border-t-2 border-black/30'
-                                        : 'bg-white hover:bg-yellow-50 border-t-2 border-black/30'
-                                    }
+                                        ? 'bg-emerald-50 hover:bg-emerald-100'
+                                        : 'bg-white hover:bg-yellow-50'
+                                    } border-t border-black/20 ${extraYearsCount > 0 ? 'cursor-pointer' : ''}`}
                                   >
                                     <td className="py-2 px-3 font-sans">
                                       <div className="flex items-center gap-2 flex-wrap">
+                                        {extraYearsCount > 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleRosterPlayerExpand(player.key);
+                                            }}
+                                            className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-amber-200 border border-black text-black cursor-pointer shrink-0"
+                                            title={isExpanded ? 'Collapse remaining career seasons' : 'Expand remaining career seasons'}
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronDown className="w-3.5 h-3.5" />
+                                            ) : (
+                                              <ChevronRight className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+                                        ) : (
+                                          <span className="w-5 h-5 inline-block shrink-0" />
+                                        )}
                                         <Link
                                           href={`/players?q=${encodeURIComponent(player.name)}${player.playerId ? `&id=${encodeURIComponent(String(player.playerId))}` : ''}`}
+                                          onClick={(e) => e.stopPropagation()}
                                           className="font-black uppercase text-black hover:underline"
                                           title="View in Player Database"
                                         >
@@ -4570,12 +4622,12 @@ export default function DraftPage() {
                                             ⚠️ Final Season ({currentSeasonEntry.year})
                                           </span>
                                         ) : extraYearsCount === 1 ? (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 text-amber-950 px-1.5 py-0.5 border border-amber-700">
-                                            +1 More Season (Thru {finalYear})
+                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 hover:bg-amber-200 text-amber-950 px-1.5 py-0.5 border border-amber-700">
+                                            {isExpanded ? '▼' : '▶'} +1 More Season (Thru {finalYear})
                                           </span>
                                         ) : (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
-                                            +{extraYearsCount} More Seasons (Thru {finalYear})
+                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 hover:bg-emerald-200 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
+                                            {isExpanded ? '▼' : '▶'} +{extraYearsCount} More Seasons (Thru {finalYear})
                                           </span>
                                         )}
                                       </div>
@@ -4633,7 +4685,7 @@ export default function DraftPage() {
                                   </tr>
 
                                   {/* Remaining Career Seasons (2015, 2016, etc.) */}
-                                  {showRosterCareerSeasons &&
+                                  {isExpanded &&
                                     futureSeasons.map((sRow, sIdx) => {
                                       const ovrDiff = (sRow.ovr || 0) - (currentSeasonEntry.ovr || player.ovr || 0);
                                       const isLastSeason = sIdx === futureSeasons.length - 1;
@@ -4642,7 +4694,7 @@ export default function DraftPage() {
                                           key={`${player.key}-yr-${sRow.year}`}
                                           className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]"
                                         >
-                                          <td className="py-1.5 pl-6 pr-3 font-mono text-[10px] text-slate-600">
+                                          <td className="py-1.5 pl-9 pr-3 font-mono text-[10px] text-slate-600">
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                               <span className="font-black text-slate-800">
                                                 ↳ {sRow.year} Career (+{sIdx + 1} Yr{sIdx > 0 ? 's' : ''})
@@ -4728,7 +4780,7 @@ export default function DraftPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="font-mono text-xs font-black uppercase text-black bg-sky-200 px-2.5 py-0.5 border border-black">
-                        🥅 Goalies ({activeTeamRosterData.goalies.length}) &bull; Career Ratings From {rookieClassYear} Onward
+                        🥅 Goalies ({activeTeamRosterData.goalies.length}) &bull; Click Any Goalie To Expand Career ({rookieClassYear}+)
                       </span>
                       <span className="text-[10px] font-mono font-bold uppercase text-slate-500">
                         AGI &bull; SPD &bull; OFA &bull; DFA &bull; PKC &bull; STR &bull; STL &bull; GVR &bull; GVL
@@ -4783,20 +4835,44 @@ export default function DraftPage() {
                               const futureSeasons = seasonsList.slice(1);
                               const finalYear = seasonsList[seasonsList.length - 1]?.year || Number(rookieClassYear);
                               const extraYearsCount = futureSeasons.length;
+                              const isExpanded = expandedRosterPlayerKeys.has(goalie.key);
 
                               return (
                                 <React.Fragment key={goalie.key}>
                                   <tr
-                                    className={
+                                    onClick={() => {
+                                      if (extraYearsCount > 0) toggleRosterPlayerExpand(goalie.key);
+                                    }}
+                                    className={`${
                                       goalie.isDraftedNow
-                                        ? 'bg-emerald-50 hover:bg-emerald-100 border-t-2 border-black/30'
-                                        : 'bg-white hover:bg-yellow-50 border-t-2 border-black/30'
-                                    }
+                                        ? 'bg-emerald-50 hover:bg-emerald-100'
+                                        : 'bg-white hover:bg-yellow-50'
+                                    } border-t border-black/20 ${extraYearsCount > 0 ? 'cursor-pointer' : ''}`}
                                   >
                                     <td className="py-2 px-3 font-sans">
                                       <div className="flex items-center gap-2 flex-wrap">
+                                        {extraYearsCount > 0 ? (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleRosterPlayerExpand(goalie.key);
+                                            }}
+                                            className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-amber-200 border border-black text-black cursor-pointer shrink-0"
+                                            title={isExpanded ? 'Collapse remaining career seasons' : 'Expand remaining career seasons'}
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronDown className="w-3.5 h-3.5" />
+                                            ) : (
+                                              <ChevronRight className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+                                        ) : (
+                                          <span className="w-5 h-5 inline-block shrink-0" />
+                                        )}
                                         <Link
                                           href={`/players?q=${encodeURIComponent(goalie.name)}${goalie.playerId ? `&id=${encodeURIComponent(String(goalie.playerId))}` : ''}`}
+                                          onClick={(e) => e.stopPropagation()}
                                           className="font-black uppercase text-black hover:underline"
                                           title="View in Player Database"
                                         >
@@ -4812,12 +4888,12 @@ export default function DraftPage() {
                                             ⚠️ Final Season ({currentSeasonEntry.year})
                                           </span>
                                         ) : extraYearsCount === 1 ? (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 text-amber-950 px-1.5 py-0.5 border border-amber-700">
-                                            +1 More Season (Thru {finalYear})
+                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 hover:bg-amber-200 text-amber-950 px-1.5 py-0.5 border border-amber-700">
+                                            {isExpanded ? '▼' : '▶'} +1 More Season (Thru {finalYear})
                                           </span>
                                         ) : (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
-                                            +{extraYearsCount} More Seasons (Thru {finalYear})
+                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 hover:bg-emerald-200 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
+                                            {isExpanded ? '▼' : '▶'} +{extraYearsCount} More Seasons (Thru {finalYear})
                                           </span>
                                         )}
                                       </div>
@@ -4865,7 +4941,7 @@ export default function DraftPage() {
                                   </tr>
 
                                   {/* Remaining Career Seasons for Goalie */}
-                                  {showRosterCareerSeasons &&
+                                  {isExpanded &&
                                     futureSeasons.map((sRow, sIdx) => {
                                       const ovrDiff = (sRow.ovr || 0) - (currentSeasonEntry.ovr || goalie.ovr || 0);
                                       const isLastSeason = sIdx === futureSeasons.length - 1;
@@ -4874,7 +4950,7 @@ export default function DraftPage() {
                                           key={`${goalie.key}-yr-${sRow.year}`}
                                           className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]"
                                         >
-                                          <td className="py-1.5 pl-6 pr-3 font-mono text-[10px] text-slate-600">
+                                          <td className="py-1.5 pl-9 pr-3 font-mono text-[10px] text-slate-600">
                                             <div className="flex items-center gap-1.5 flex-wrap">
                                               <span className="font-black text-slate-800">
                                                 ↳ {sRow.year} Career (+{sIdx + 1} Yr{sIdx > 0 ? 's' : ''})
