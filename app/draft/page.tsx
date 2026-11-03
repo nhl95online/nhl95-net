@@ -635,6 +635,55 @@ export default function DraftPage() {
   const [prospectPos, setProspectPos] = useState<string>('ALL');
   const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('ALL');
   const [prospectTypeFilter, setProspectTypeFilter] = useState<'ALL' | 'ROOKIE' | 'FREE_AGENT'>('ALL');
+  const [topAvailSortCol, setTopAvailSortCol] = useState<string>('OVR');
+  const [topAvailSortDir, setTopAvailSortDir] = useState<'desc' | 'asc'>('desc');
+  const handleToggleTopAvailSort = (col: string) => {
+    if (topAvailSortCol === col) {
+      setTopAvailSortDir(prev => (prev === 'desc' ? 'asc' : 'desc'));
+    } else {
+      setTopAvailSortCol(col);
+      setTopAvailSortDir(col === 'PLAYER' || col === 'POS' || col === 'SH' ? 'asc' : 'desc');
+    }
+  };
+  const sortDraftProspectList = (list: DatabasePlayer[]) => {
+    const mult = topAvailSortDir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const rA = extractDraftPlayerRatings(a.ratings, a.player_info, a.pos, a.ovr);
+      const rB = extractDraftPlayerRatings(b.ratings, b.player_info, b.pos, b.ovr);
+      const ovrA = Number(a.ovr ?? rA.ovr) || 0;
+      const ovrB = Number(b.ovr ?? rB.ovr) || 0;
+
+      if (topAvailSortCol === 'PLAYER') {
+        return mult * (a.player_name || '').localeCompare(b.player_name || '');
+      }
+      if (topAvailSortCol === 'POS') {
+        const cmp = (a.pos || '').localeCompare(b.pos || '');
+        if (cmp !== 0) return mult * cmp;
+        return ovrB - ovrA;
+      }
+      if (topAvailSortCol === 'SH') {
+        const cmp = (rA.hand || '').localeCompare(rB.hand || '');
+        if (cmp !== 0) return mult * cmp;
+        return ovrB - ovrA;
+      }
+      if (topAvailSortCol === 'WGT') {
+        const wA = Number(rA.weightLbs) || 0;
+        const wB = Number(rB.weightLbs) || 0;
+        if (wA !== wB) return mult * (wA - wB);
+        return ovrB - ovrA;
+      }
+      if (topAvailSortCol === 'OVR') {
+        if (ovrA !== ovrB) return mult * (ovrA - ovrB);
+        return (a.player_name || '').localeCompare(b.player_name || '');
+      }
+      // Attribute column (AGI, SPD, OFA, DFA, SHP, SHA, STH, PAS, CHK, AGR, PKC, STR, STL, GVR, GVL)
+      const attrA = rA.attrs.find(x => x.short === topAvailSortCol)?.level || 0;
+      const attrB = rB.attrs.find(x => x.short === topAvailSortCol)?.level || 0;
+      if (attrA !== attrB) return mult * (attrA - attrB);
+      if (ovrA !== ovrB) return ovrB - ovrA;
+      return (a.player_name || '').localeCompare(b.player_name || '');
+    });
+  };
 
   // Active Team Roster & Player Ratings lookup state
   const [allYearPlayersByNorm, setAllYearPlayersByNorm] = useState<Record<string, DatabasePlayer>>({});
@@ -4764,14 +4813,13 @@ export default function DraftPage() {
                         Loading {rookieClassYear} draft pool...
                       </div>
                     ) : (() => {
-                      const topAvail = availableRookies
-                        .filter(p => {
-                          if (prospectTypeFilter === 'ROOKIE' && p.isFreeAgent) return false;
-                          if (prospectTypeFilter === 'FREE_AGENT' && !p.isFreeAgent) return false;
-                          if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
-                          return true;
-                        })
-                        .slice(0, 35);
+                      const filteredAvail = availableRookies.filter(p => {
+                        if (prospectTypeFilter === 'ROOKIE' && p.isFreeAgent) return false;
+                        if (prospectTypeFilter === 'FREE_AGENT' && !p.isFreeAgent) return false;
+                        if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
+                        return true;
+                      });
+                      const topAvail = sortDraftProspectList(filteredAvail).slice(0, 35);
 
                       if (topAvail.length === 0) {
                         return (
@@ -4782,42 +4830,97 @@ export default function DraftPage() {
                       }
 
                       const isGoalieFilter = prospectPos === 'G';
+                      const attrCols = isGoalieFilter
+                        ? [
+                            { short: 'AGI', title: 'Agility (1-6)' },
+                            { short: 'SPD', title: 'Speed (1-6)' },
+                            { short: 'OFA', title: 'Offensive Awareness (1-6)' },
+                            { short: 'DFA', title: 'Defensive Awareness (1-6)' },
+                            { short: 'PKC', title: 'Puck Control (1-6)' },
+                            { short: 'STR', title: 'Stick Right (1-6)' },
+                            { short: 'STL', title: 'Stick Left (1-6)' },
+                            { short: 'GVR', title: 'Glove Right (1-6)' },
+                            { short: 'GVL', title: 'Glove Left (1-6)' }
+                          ]
+                        : [
+                            { short: 'AGI', title: 'Agility (1-6)' },
+                            { short: 'SPD', title: 'Speed (1-6)' },
+                            { short: 'OFA', title: 'Offensive Awareness (1-6)' },
+                            { short: 'DFA', title: 'Defensive Awareness (1-6)' },
+                            { short: 'SHP', title: 'Shot Power (1-6)' },
+                            { short: 'SHA', title: 'Shot Accuracy (1-6)' },
+                            { short: 'STH', title: 'Stick Handling (1-6)' },
+                            { short: 'PAS', title: 'Passing (1-6)' },
+                            { short: 'CHK', title: 'Checking (1-6)' },
+                            { short: 'AGR', title: 'Aggression (1-6)' }
+                          ];
+
+                      const sortArrow = (col: string) =>
+                        topAvailSortCol === col ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : '';
 
                       return (
                         <table className="w-full text-left border-collapse text-xs min-w-[640px]">
-                          <thead className="sticky top-0 z-10">
+                          <thead className="sticky top-0 z-10 select-none">
                             <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
-                              <th className="py-1.5 px-2.5 sticky left-0 z-20 bg-black">PLAYER</th>
-                              <th className="py-1.5 px-1.5 text-center">POS</th>
-                              <th className="py-1.5 px-1.5 text-center">{isGoalieFilter ? 'GLV' : 'SH'}</th>
-                              <th className="py-1.5 px-1.5 text-center">WGT</th>
-                              <th className="py-1.5 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
-                              {isGoalieFilter ? (
-                                <>
-                                  <th className="py-1.5 px-1 text-center" title="Agility (1-6)">AGI</th>
-                                  <th className="py-1.5 px-1 text-center" title="Speed (1-6)">SPD</th>
-                                  <th className="py-1.5 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
-                                  <th className="py-1.5 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
-                                  <th className="py-1.5 px-1 text-center" title="Puck Control (1-6)">PKC</th>
-                                  <th className="py-1.5 px-1 text-center" title="Stick Right (1-6)">STR</th>
-                                  <th className="py-1.5 px-1 text-center" title="Stick Left (1-6)">STL</th>
-                                  <th className="py-1.5 px-1 text-center" title="Glove Right (1-6)">GVR</th>
-                                  <th className="py-1.5 px-1 text-center" title="Glove Left (1-6)">GVL</th>
-                                </>
-                              ) : (
-                                <>
-                                  <th className="py-1.5 px-1 text-center" title="Agility (1-6)">AGI</th>
-                                  <th className="py-1.5 px-1 text-center" title="Speed (1-6)">SPD</th>
-                                  <th className="py-1.5 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
-                                  <th className="py-1.5 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
-                                  <th className="py-1.5 px-1 text-center" title="Shot Power (1-6)">SHP</th>
-                                  <th className="py-1.5 px-1 text-center" title="Shot Accuracy (1-6)">SHA</th>
-                                  <th className="py-1.5 px-1 text-center" title="Stick Handling (1-6)">STH</th>
-                                  <th className="py-1.5 px-1 text-center" title="Passing (1-6)">PAS</th>
-                                  <th className="py-1.5 px-1 text-center" title="Checking (1-6)">CHK</th>
-                                  <th className="py-1.5 px-1 text-center" title="Aggression (1-6)">AGR</th>
-                                </>
-                              )}
+                              <th
+                                onClick={() => handleToggleTopAvailSort('PLAYER')}
+                                className={`py-1.5 px-2.5 sticky left-0 z-20 cursor-pointer hover:bg-neutral-800 ${
+                                  topAvailSortCol === 'PLAYER' ? 'bg-amber-400 text-black font-black' : 'bg-black'
+                                }`}
+                                title="Click to sort by Player Name"
+                              >
+                                PLAYER{sortArrow('PLAYER')}
+                              </th>
+                              <th
+                                onClick={() => handleToggleTopAvailSort('POS')}
+                                className={`py-1.5 px-1.5 text-center cursor-pointer hover:bg-neutral-800 ${
+                                  topAvailSortCol === 'POS' ? 'bg-amber-400 text-black font-black' : ''
+                                }`}
+                                title="Click to sort by Position"
+                              >
+                                POS{sortArrow('POS')}
+                              </th>
+                              <th
+                                onClick={() => handleToggleTopAvailSort('SH')}
+                                className={`py-1.5 px-1.5 text-center cursor-pointer hover:bg-neutral-800 ${
+                                  topAvailSortCol === 'SH' ? 'bg-amber-400 text-black font-black' : ''
+                                }`}
+                                title="Click to sort by Hand / Glove"
+                              >
+                                {isGoalieFilter ? 'GLV' : 'SH'}{sortArrow('SH')}
+                              </th>
+                              <th
+                                onClick={() => handleToggleTopAvailSort('WGT')}
+                                className={`py-1.5 px-1.5 text-center cursor-pointer hover:bg-neutral-800 ${
+                                  topAvailSortCol === 'WGT' ? 'bg-amber-400 text-black font-black' : ''
+                                }`}
+                                title="Click to sort by Weight"
+                              >
+                                WGT{sortArrow('WGT')}
+                              </th>
+                              <th
+                                onClick={() => handleToggleTopAvailSort('OVR')}
+                                className={`py-1.5 px-2 text-center cursor-pointer font-black ${
+                                  topAvailSortCol === 'OVR'
+                                    ? 'bg-amber-400 text-black'
+                                    : 'bg-neutral-800 text-amber-300 hover:bg-neutral-700'
+                                }`}
+                                title="Click to sort by Overall Rating"
+                              >
+                                OVR{sortArrow('OVR')}
+                              </th>
+                              {attrCols.map(ac => (
+                                <th
+                                  key={`top-avail-th-${ac.short}`}
+                                  onClick={() => handleToggleTopAvailSort(ac.short)}
+                                  className={`py-1.5 px-1 text-center cursor-pointer hover:bg-neutral-800 ${
+                                    topAvailSortCol === ac.short ? 'bg-amber-400 text-black font-black' : ''
+                                  }`}
+                                  title={`Click to sort by ${ac.title}`}
+                                >
+                                  {ac.short}{sortArrow(ac.short)}
+                                </th>
+                              ))}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-neutral-200 font-mono">
@@ -5375,41 +5478,72 @@ export default function DraftPage() {
 
               <div className="bg-white border-2 border-black overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs min-w-[920px]">
-                  <thead>
+                  <thead className="select-none">
                     <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
                       <th className="py-2 px-2 text-center">#</th>
-                      <th className="py-2 px-3">PLAYER</th>
+                      <th
+                        onClick={() => handleToggleTopAvailSort('PLAYER')}
+                        className={`py-2 px-3 cursor-pointer hover:bg-neutral-800 ${
+                          topAvailSortCol === 'PLAYER' ? 'bg-amber-400 text-black font-black' : ''
+                        }`}
+                        title="Click to sort by Player Name"
+                      >
+                        PLAYER{topAvailSortCol === 'PLAYER' ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                      </th>
                       <th className="py-2 px-2 text-center">TYPE</th>
-                      <th className="py-2 px-1.5 text-center">POS</th>
-                      <th className="py-2 px-1.5 text-center">{prospectPos === 'G' ? 'GLV' : 'SH'}</th>
-                      <th className="py-2 px-1.5 text-center">WGT</th>
-                      <th className="py-2 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
-                      {prospectPos === 'G' ? (
-                        <>
-                          <th className="py-2 px-1 text-center" title="Agility (1-6)">AGI</th>
-                          <th className="py-2 px-1 text-center" title="Speed (1-6)">SPD</th>
-                          <th className="py-2 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
-                          <th className="py-2 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
-                          <th className="py-2 px-1 text-center" title="Puck Control (1-6)">PKC</th>
-                          <th className="py-2 px-1 text-center" title="Stick Right (1-6)">STR</th>
-                          <th className="py-2 px-1 text-center" title="Stick Left (1-6)">STL</th>
-                          <th className="py-2 px-1 text-center" title="Glove Right (1-6)">GVR</th>
-                          <th className="py-2 px-1 text-center" title="Glove Left (1-6)">GVL</th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="py-2 px-1 text-center" title="Agility (1-6)">AGI</th>
-                          <th className="py-2 px-1 text-center" title="Speed (1-6)">SPD</th>
-                          <th className="py-2 px-1 text-center" title="Offensive Awareness (1-6)">OFA</th>
-                          <th className="py-2 px-1 text-center" title="Defensive Awareness (1-6)">DFA</th>
-                          <th className="py-2 px-1 text-center" title="Shot Power (1-6)">SHP</th>
-                          <th className="py-2 px-1 text-center" title="Shot Accuracy (1-6)">SHA</th>
-                          <th className="py-2 px-1 text-center" title="Stick Handling (1-6)">STH</th>
-                          <th className="py-2 px-1 text-center" title="Passing (1-6)">PAS</th>
-                          <th className="py-2 px-1 text-center" title="Checking (1-6)">CHK</th>
-                          <th className="py-2 px-1 text-center" title="Aggression (1-6)">AGR</th>
-                        </>
-                      )}
+                      <th
+                        onClick={() => handleToggleTopAvailSort('POS')}
+                        className={`py-2 px-1.5 text-center cursor-pointer hover:bg-neutral-800 ${
+                          topAvailSortCol === 'POS' ? 'bg-amber-400 text-black font-black' : ''
+                        }`}
+                        title="Click to sort by Position"
+                      >
+                        POS{topAvailSortCol === 'POS' ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleTopAvailSort('SH')}
+                        className={`py-2 px-1.5 text-center cursor-pointer hover:bg-neutral-800 ${
+                          topAvailSortCol === 'SH' ? 'bg-amber-400 text-black font-black' : ''
+                        }`}
+                        title="Click to sort by Hand / Glove"
+                      >
+                        {prospectPos === 'G' ? 'GLV' : 'SH'}{topAvailSortCol === 'SH' ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleTopAvailSort('WGT')}
+                        className={`py-2 px-1.5 text-center cursor-pointer hover:bg-neutral-800 ${
+                          topAvailSortCol === 'WGT' ? 'bg-amber-400 text-black font-black' : ''
+                        }`}
+                        title="Click to sort by Weight"
+                      >
+                        WGT{topAvailSortCol === 'WGT' ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                      </th>
+                      <th
+                        onClick={() => handleToggleTopAvailSort('OVR')}
+                        className={`py-2 px-2 text-center cursor-pointer font-black ${
+                          topAvailSortCol === 'OVR'
+                            ? 'bg-amber-400 text-black'
+                            : 'bg-neutral-800 text-amber-300 hover:bg-neutral-700'
+                        }`}
+                        title="Click to sort by Overall Rating"
+                      >
+                        OVR{topAvailSortCol === 'OVR' ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                      </th>
+                      {(prospectPos === 'G'
+                        ? ['AGI', 'SPD', 'OFA', 'DFA', 'PKC', 'STR', 'STL', 'GVR', 'GVL']
+                        : ['AGI', 'SPD', 'OFA', 'DFA', 'SHP', 'SHA', 'STH', 'PAS', 'CHK', 'AGR']
+                      ).map(col => (
+                        <th
+                          key={`full-board-th-${col}`}
+                          onClick={() => handleToggleTopAvailSort(col)}
+                          className={`py-2 px-1 text-center cursor-pointer hover:bg-neutral-800 ${
+                            topAvailSortCol === col ? 'bg-amber-400 text-black font-black' : ''
+                          }`}
+                          title={`Click to sort by ${col}`}
+                        >
+                          {col}{topAvailSortCol === col ? (topAvailSortDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                        </th>
+                      ))}
                       <th className="py-2 px-3">STATUS</th>
                     </tr>
                   </thead>
@@ -5427,7 +5561,7 @@ export default function DraftPage() {
                         </td>
                       </tr>
                     ) : (
-                      prospectRows.map((p, i) => {
+                      sortDraftProspectList(prospectRows).map((p, i) => {
                         const pickedBy = draftedPlayerMap.get(String(p.player_id));
                         const canSelect = !pickedBy && coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
                         const pRatings = extractDraftPlayerRatings(p.ratings, p.player_info, p.pos, p.ovr);
