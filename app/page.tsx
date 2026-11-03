@@ -1348,7 +1348,7 @@ export default function HomePage() {
   }, [briefing]);
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-2 sm:p-4 md:p-6">
+    <div className="w-full min-h-screen bg-[#f4f1ea] text-black font-serif p-1 sm:p-3 md:p-4">
       <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 text-center">
         <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
         <p className="text-xs sm:text-sm italic">"Welcome to the Darkside of NHL95"</p>
@@ -1418,8 +1418,8 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-12 gap-4 sm:gap-6 md:gap-8">
-        <section className="col-span-12 md:col-span-3 border-r-0 md:border-r border-black pr-0 md:pr-2 pb-4 md:pb-0 border-b md:border-b-0 space-y-4 sm:space-y-6">
+      <div className="grid grid-cols-12 gap-4 sm:gap-5 lg:gap-6 xl:gap-8 items-start">
+        <section className="col-span-12 md:col-span-5 lg:col-span-3 xl:col-span-2 order-3 md:order-2 lg:order-1 border-r-0 lg:border-r border-black pr-0 lg:pr-4 pt-4 lg:pt-0 border-t lg:border-t-0 space-y-4 sm:space-y-6">
           {/* 1. Live Now Section (if any live events) */}
           {briefing?.events?.some((e: any) => e.is_live) && (
             <div className="border-2 border-red-700 bg-red-50 p-3 shadow-xs">
@@ -1527,7 +1527,7 @@ export default function HomePage() {
         </section>
 
         {/* CENTER COLUMN: FULL LEAGUE HUB */}
-        <main className="col-span-12 md:col-span-6 space-y-6">
+        <main className="col-span-12 md:col-span-12 lg:col-span-6 xl:col-span-7 order-1 md:order-1 lg:order-2 space-y-5 sm:space-y-6 min-w-0">
           {/* SECTION 1: RECENT SCOREBOARD & BOXSCORE WIRE */}
           <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
@@ -2155,7 +2155,7 @@ export default function HomePage() {
           )}
         </main>
 
-        <aside className="col-span-12 md:col-span-3 border-l-0 md:border-l border-black pl-0 md:pl-4 pt-4 md:pt-0 border-t md:border-t-0">
+        <aside className="col-span-12 md:col-span-7 lg:col-span-3 xl:col-span-3 order-2 md:order-3 lg:order-3 border-l-0 md:border-l border-black pl-0 md:pl-4 pt-4 md:pt-0 border-t md:border-t-0">
           <div className="flex justify-between items-center mb-2">
             <h2 className="font-bold uppercase text-sm">STANDINGS</h2>
             <select

@@ -2087,7 +2087,63 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
             "gp": 0, "w": 0, "l": 0, "t": 0, "otl": 0, "pts": 0, "gf": 0, "ga": 0, "gd": 0,
         }
 
-    if reg_standings:
+    if reg_games:
+        for g in reg_games:
+            hid = int(g.get("home_team_id") or 0)
+            aid = int(g.get("away_team_id") or 0)
+            hs = int(g.get("home_score") or 0)
+            as_ = int(g.get("away_score") or 0)
+            is_ot = False
+            gm = g.get("game_meta")
+            if gm:
+                try:
+                    m_obj = json.loads(gm) if isinstance(gm, str) else gm
+                    is_ot = bool((m_obj or {}).get("is_ot"))
+                except Exception:
+                    pass
+            h_rec = team_records.get(hid)
+            a_rec = team_records.get(aid)
+            if h_rec:
+                h_rec["gp"] += 1
+                h_rec["gf"] += hs
+                h_rec["ga"] += as_
+                if hs > as_:
+                    h_rec["w"] += 1
+                    h_rec["pts"] += 2
+                elif hs < as_:
+                    if is_ot:
+                        h_rec["otl"] += 1
+                    else:
+                        h_rec["l"] += 1
+                else:
+                    h_rec["t"] += 1
+                    h_rec["pts"] += 1
+                h_rec["gd"] = h_rec["gf"] - h_rec["ga"]
+            if a_rec:
+                a_rec["gp"] += 1
+                a_rec["gf"] += as_
+                a_rec["ga"] += hs
+                if as_ > hs:
+                    a_rec["w"] += 1
+                    a_rec["pts"] += 2
+                elif as_ < hs:
+                    if is_ot:
+                        a_rec["otl"] += 1
+                    else:
+                        a_rec["l"] += 1
+                else:
+                    a_rec["t"] += 1
+                    a_rec["pts"] += 1
+                a_rec["gd"] = a_rec["gf"] - a_rec["ga"]
+        for st in reg_standings:
+            tid = int(st.get("team_id") or 0)
+            if tid in team_records and st.get("conference"):
+                c_low = str(st["conference"]).lower()
+                if "west" in c_low or "campbell" in c_low:
+                    team_records[tid]["conference"] = "west"
+                elif "east" in c_low or "wales" in c_low:
+                    team_records[tid]["conference"] = "east"
+    elif reg_standings:
         for st in reg_standings:
             tid = int(st.get("team_id") or 0)
             if tid in team_records:
@@ -3332,6 +3388,8 @@ def ingest_save_state_to_supabase(
     game_mode: str = "Season",
     allow_overwrite: bool = False,
     uploaded_by: Optional[str] = None,
+    exclude_game_ids: Optional[set] = None,
+    render_summary_graphics: bool = True,
 ) -> Dict[str, Any]:
     """
     Parses the save state and executes the full Supabase ingestion pipeline.
@@ -3343,6 +3401,7 @@ def ingest_save_state_to_supabase(
       - embed: dict (ready for discord.Embed.from_dict)
       - error: str (if failed)
     """
+    excluded_ids = {int(x) for x in (exclude_game_ids or set())}
     s_id = int(season_id)
     season_cfg = get_season_config(s_id)
     game = parse_save_state_bytes(raw_bytes, season_cfg)
@@ -3427,12 +3486,30 @@ def ingest_save_state_to_supabase(
 
         return 1
 
-    # 3. Resolve Game ID & Auto-upgrade to Playoffs if active series exists and no unplayed regular season game exists
+    # 3. Resolve Game ID & Auto-upgrade to Playoffs if active series exists
     is_playoff_mode = game_mode == "Playoffs"
     final_game_id = 0
     resolved_playoff_id = 0
     final_game_number = 0
     active_playoff_series: Optional[Dict[str, Any]] = None
+
+    # If an active incomplete playoff series exists between these two teams in this season, auto-upgrade to Playoffs
+    if not is_playoff_mode and home_team_id and away_team_id:
+        try:
+            series_check = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"})
+            active_po_match = [
+                m for m in (series_check or [])
+                if not m.get("is_complete")
+                and int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
+                and (
+                    (int(m.get("home_team_id") or 0) == home_team_id and int(m.get("away_team_id") or 0) == away_team_id)
+                    or (int(m.get("home_team_id") or 0) == away_team_id and int(m.get("away_team_id") or 0) == home_team_id)
+                )
+            ]
+            if active_po_match:
+                is_playoff_mode = True
+        except Exception:
+            pass
 
     if not is_playoff_mode:
         scheduled_games = supabase.select(
@@ -3467,7 +3544,8 @@ def ingest_save_state_to_supabase(
                 matched_reg = next(
                     (
                         p for p in (played_games or [])
-                        if int(p.get("home_team_id") or 0) == home_team_id
+                        if int(p.get("game_id") or 0) not in excluded_ids
+                        and int(p.get("home_team_id") or 0) == home_team_id
                         and int(p.get("away_team_id") or 0) == away_team_id
                         and int(p.get("home_score") or 0) == int(game["homeTeam"]["goals"])
                         and int(p.get("away_score") or 0) == int(game["awayTeam"]["goals"])
@@ -3478,12 +3556,11 @@ def ingest_save_state_to_supabase(
                 if matched_reg:
                     final_game_id = int(matched_reg["game_id"])
                 else:
-                    # Check if there is an active incomplete playoff series between these two teams before returning 409
+                    # Check if there is any playoff series between these two teams before returning 409
                     series_matches = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"})
                     matching_po = [
                         m for m in (series_matches or [])
-                        if not m.get("is_complete")
-                        and int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
+                        if int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
                         and (
                             (int(m.get("home_team_id") or 0) == home_team_id and int(m.get("away_team_id") or 0) == away_team_id)
                             or (int(m.get("home_team_id") or 0) == away_team_id and int(m.get("away_team_id") or 0) == home_team_id)
@@ -3505,7 +3582,7 @@ def ingest_save_state_to_supabase(
                                 away_team=away_team or {"team_name": away_team_code, "abbreviation": away_team_code},
                                 home_team=home_team or {"team_name": home_team_code, "abbreviation": home_team_code},
                             ),
-                            "standingsPngBytes": render_standings_and_leaders_png(s_id, False),
+                            "standingsPngBytes": render_standings_and_leaders_png(s_id, False) if render_summary_graphics else None,
                             "error": (
                                 f"All scheduled regular-season games between **{away_team_code}** and **{home_team_code}** "
                                 f"for Season {s_id} ({get_league_code(s_id)}) have already been recorded "
@@ -3578,7 +3655,8 @@ def ingest_save_state_to_supabase(
         matched_existing_po = next(
             (
                 g for g in (existing_po_games or [])
-                if int(g.get("home_team_id") or 0) == home_team_id
+                if int(g.get("game_id") or 0) not in excluded_ids
+                and int(g.get("home_team_id") or 0) == home_team_id
                 and int(g.get("away_team_id") or 0) == away_team_id
                 and int(g.get("home_score") or 0) == int(game["homeTeam"]["goals"])
                 and int(g.get("away_score") or 0) == int(game["awayTeam"]["goals"])
@@ -3616,8 +3694,8 @@ def ingest_save_state_to_supabase(
                     away_team=away_team or {"team_name": away_team_code, "abbreviation": away_team_code},
                     home_team=home_team or {"team_name": home_team_code, "abbreviation": home_team_code},
                 ),
-                "playoffBracketPngBytes": render_playoff_bracket_png(s_id),
-                "standingsPngBytes": render_standings_and_leaders_png(s_id, True),
+                "playoffBracketPngBytes": render_playoff_bracket_png(s_id) if render_summary_graphics else None,
+                "standingsPngBytes": render_standings_and_leaders_png(s_id, True) if render_summary_graphics else None,
                 "error": (
                     f"Playoff series between **{away_team_code}** and **{home_team_code}** is already complete "
                     f"({away_team_code} {t2_wins} - {t1_wins} {home_team_code} in Best-of-{series_len})."
@@ -3941,12 +4019,103 @@ def ingest_save_state_to_supabase(
             all_season_series = supabase.select(
                 "league_playoffs",
                 {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"},
-            )
+            ) or []
             all_season_po_games = supabase.select(
                 "league_playoff_gamestats",
                 {"select": "playoff_id,game_number,home_team_id,away_team_id,home_score,away_score", "league_id": f"eq.{s_id}"},
-            )
+            ) or []
             norm_lbl = lambda val: re.sub(r"[\s\-_]+", "", str(val or "")).lower()
+
+            # Compute conference seeds so advancing teams always re-seed properly even if home_team_seed/away_team_seed is NULL
+            seed_by_tid: Dict[int, int] = {}
+            try:
+                reg_games_adv = supabase.select(
+                    "league_gamestats",
+                    {"select": "home_team_id,away_team_id,home_score,away_score,game_meta", "league_id": f"eq.{s_id}"},
+                ) or []
+                reg_standings_adv = supabase.select("league_standings", {"select": "*", "season_id": f"eq.{s_id}"}) or []
+                teams_adv = supabase.select("league_teams", {"select": "team_id,conference,division,league_id"}) or []
+                t_map_adv: Dict[int, Dict[str, Any]] = {}
+                for t in teams_adv:
+                    if t.get("team_id") is not None:
+                        tid_v = int(t["team_id"])
+                        if tid_v not in t_map_adv or int(t.get("league_id") or 0) == s_id:
+                            t_map_adv[tid_v] = t
+                active_adv_ids = set()
+                for t in teams_adv:
+                    if int(t.get("league_id") or 0) == s_id and int(t.get("team_id") or 0) not in (0, 68, 999):
+                        active_adv_ids.add(int(t["team_id"]))
+                for g in reg_games_adv:
+                    for k in ("home_team_id", "away_team_id"):
+                        v = int(g.get(k) or 0)
+                        if v not in (0, 68, 999):
+                            active_adv_ids.add(v)
+                for st in reg_standings_adv:
+                    v = int(st.get("team_id") or 0)
+                    if v not in (0, 68, 999):
+                        active_adv_ids.add(v)
+                recs_adv: Dict[int, Dict[str, Any]] = {}
+                for tid_v in active_adv_ids:
+                    meta_t = t_map_adv.get(tid_v) or {}
+                    c_raw = str(meta_t.get("conference") or "").lower()
+                    d_raw = str(meta_t.get("division") or "").lower()
+                    is_w = any(w in c_raw for w in ("west", "campbell")) or any(w in d_raw for w in ("west", "central", "pacific"))
+                    recs_adv[tid_v] = {"team_id": tid_v, "conference": "west" if is_w else "east", "pts": 0, "w": 0, "gd": 0, "gf": 0, "ga": 0}
+                if reg_games_adv:
+                    for g in reg_games_adv:
+                        hid_g = int(g.get("home_team_id") or 0)
+                        aid_g = int(g.get("away_team_id") or 0)
+                        hs_g = int(g.get("home_score") or 0)
+                        as_g = int(g.get("away_score") or 0)
+                        for side_tid, my_s, opp_s in ((hid_g, hs_g, as_g), (aid_g, as_g, hs_g)):
+                            rc = recs_adv.get(side_tid)
+                            if rc:
+                                rc["gf"] += my_s
+                                rc["ga"] += opp_s
+                                if my_s > opp_s:
+                                    rc["w"] += 1
+                                    rc["pts"] += 2
+                                elif my_s == opp_s:
+                                    rc["pts"] += 1
+                                rc["gd"] = rc["gf"] - rc["ga"]
+                    for st in reg_standings_adv:
+                        tid_v = int(st.get("team_id") or 0)
+                        if tid_v in recs_adv and st.get("conference"):
+                            c_low = str(st["conference"]).lower()
+                            if "west" in c_low or "campbell" in c_low:
+                                recs_adv[tid_v]["conference"] = "west"
+                            elif "east" in c_low or "wales" in c_low:
+                                recs_adv[tid_v]["conference"] = "east"
+                elif reg_standings_adv:
+                    for st in reg_standings_adv:
+                        tid_v = int(st.get("team_id") or 0)
+                        if tid_v in recs_adv:
+                            rc = recs_adv[tid_v]
+                            rc["w"] = int(st.get("w") or 0)
+                            t_cnt = int(st.get("t") or 0)
+                            rc["pts"] = int(st.get("pts") if st.get("pts") is not None else (rc["w"] * 2 + t_cnt))
+                            rc["gf"] = int(st.get("gf") or 0)
+                            rc["ga"] = int(st.get("ga") or 0)
+                            rc["gd"] = rc["gf"] - rc["ga"]
+                            if st.get("conference"):
+                                c_low = str(st["conference"]).lower()
+                                if "west" in c_low or "campbell" in c_low:
+                                    rc["conference"] = "west"
+                                elif "east" in c_low or "wales" in c_low:
+                                    rc["conference"] = "east"
+                ranked_adv = sorted(recs_adv.values(), key=lambda r: (-r["pts"], -r["w"], -r["gd"], -r["gf"], r["team_id"]))
+                east_adv = [r for r in ranked_adv if r["conference"] == "east"]
+                west_adv = [r for r in ranked_adv if r["conference"] == "west"]
+                if len(east_adv) >= 3 and len(west_adv) >= 3:
+                    for idx_r, r in enumerate(east_adv):
+                        seed_by_tid[r["team_id"]] = idx_r + 1
+                    for idx_r, r in enumerate(west_adv):
+                        seed_by_tid[r["team_id"]] = idx_r + 1
+                else:
+                    for idx_r, r in enumerate(ranked_adv):
+                        seed_by_tid[r["team_id"]] = idx_r + 1
+            except Exception:
+                pass
 
             def evaluate_series_winner(series_row: Optional[Dict[str, Any]]) -> Optional[Dict[str, int]]:
                 if not series_row:
@@ -3970,9 +4139,13 @@ def ingest_save_state_to_supabase(
                         elif w_t == a_id:
                             a_w += 1
                 if h_w >= needed:
-                    return {"winnerId": h_id, "winnerSeed": int(series_row.get("home_team_seed") or 99)}
+                    raw_s = series_row.get("home_team_seed")
+                    w_seed = int(raw_s) if raw_s is not None else seed_by_tid.get(h_id, 99)
+                    return {"winnerId": h_id, "winnerSeed": w_seed}
                 if a_w >= needed:
-                    return {"winnerId": a_id, "winnerSeed": int(series_row.get("away_team_seed") or 99)}
+                    raw_s = series_row.get("away_team_seed")
+                    w_seed = int(raw_s) if raw_s is not None else seed_by_tid.get(a_id, 99)
+                    return {"winnerId": a_id, "winnerSeed": w_seed}
                 return None
 
             def upsert_next_round_matchup(
@@ -4012,23 +4185,44 @@ def ingest_save_state_to_supabase(
                             updates["away_team_seed"] = None
                         if updates:
                             supabase.update("league_playoffs", {"playoff_id": f"eq.{ex_pid}"}, updates)
-                elif top_winner and bot_winner:
+                            existing_target.update(updates)
+                else:
                     latest_row = supabase.select("league_playoffs", {"select": "playoff_id", "order": "playoff_id.desc", "limit": "1"})
                     next_id = (int(latest_row[0]["playoff_id"]) + 1) if latest_row and latest_row[0].get("playoff_id") else 1
-                    new_m: Dict[str, Any] = {
-                        "playoff_id": next_id,
-                        "league_id": s_id,
-                        "round_name": label,
-                        "match_label": label,
-                        "home_team_id": top_winner["winnerId"],
-                        "away_team_id": bot_winner["winnerId"],
-                        "series_length": 7,
-                    }
-                    if top_winner["winnerSeed"] != 99:
-                        new_m["home_team_seed"] = top_winner["winnerSeed"]
-                    if bot_winner["winnerSeed"] != 99:
-                        new_m["away_team_seed"] = bot_winner["winnerSeed"]
-                    supabase.insert("league_playoffs", new_m, upsert=True, on_conflict="playoff_id")
+                    if top_winner and bot_winner:
+                        new_m: Dict[str, Any] = {
+                            "playoff_id": next_id,
+                            "league_id": s_id,
+                            "round_name": label,
+                            "match_label": label,
+                            "home_team_id": top_winner["winnerId"],
+                            "away_team_id": bot_winner["winnerId"],
+                            "series_length": 7,
+                            "is_complete": False,
+                        }
+                        if top_winner["winnerSeed"] != 99:
+                            new_m["home_team_seed"] = top_winner["winnerSeed"]
+                        if bot_winner["winnerSeed"] != 99:
+                            new_m["away_team_seed"] = bot_winner["winnerSeed"]
+                        supabase.insert("league_playoffs", new_m, upsert=True, on_conflict="playoff_id")
+                        all_season_series.append(new_m)
+                    else:
+                        single_w = top_winner or bot_winner
+                        if single_w:
+                            new_m = {
+                                "playoff_id": next_id,
+                                "league_id": s_id,
+                                "round_name": label,
+                                "match_label": label,
+                                "home_team_id": single_w["winnerId"],
+                                "away_team_id": None,
+                                "series_length": 7,
+                                "is_complete": False,
+                            }
+                            if single_w["winnerSeed"] != 99:
+                                new_m["home_team_seed"] = single_w["winnerSeed"]
+                            supabase.insert("league_playoffs", new_m, upsert=True, on_conflict="playoff_id")
+                            all_season_series.append(new_m)
 
             def find_series(lbl: str) -> Optional[Dict[str, Any]]:
                 n = norm_lbl(lbl)
@@ -4097,8 +4291,8 @@ def ingest_save_state_to_supabase(
     if boxscore_png_bytes:
         embed_dict["image"] = {"url": "attachment://boxscore.png"}
 
-    standings_png_bytes = render_standings_and_leaders_png(s_id, is_playoff_mode)
-    playoff_bracket_png_bytes = render_playoff_bracket_png(s_id) if is_playoff_mode else None
+    standings_png_bytes = render_standings_and_leaders_png(s_id, is_playoff_mode) if render_summary_graphics else None
+    playoff_bracket_png_bytes = (render_playoff_bracket_png(s_id) if is_playoff_mode else None) if render_summary_graphics else None
 
     return {
         "success": True,
@@ -4365,6 +4559,7 @@ class NHL95SaveStateBot(discord.Client):
         self.backfill_hours = backfill_hours
         self.allowed_channel_ids = set(allowed_channel_ids or [])
         self.processed_attachment_ids = set()
+        self._processing_lock = asyncio.Lock()
 
     def is_channel_allowed(self, channel: discord.abc.GuildChannel) -> bool:
         if self.allowed_channel_ids:
@@ -4463,195 +4658,207 @@ class NHL95SaveStateBot(discord.Client):
         if not savestate_attachments:
             return
 
-        savestate_attachments.sort(key=lambda a: (a.filename or "").lower())
+        savestate_attachments.sort(
+            key=lambda a: [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", (a.filename or "").lower())]
+        )
 
-        if is_backfill and await self.has_bot_reaction(message):
-            return
+        async with self._processing_lock:
+            if all(att.id in self.processed_attachment_ids for att in savestate_attachments):
+                return
+            if is_backfill and await self.has_bot_reaction(message):
+                for att in savestate_attachments:
+                    self.processed_attachment_ids.add(att.id)
+                return
 
-        total_atts = len(savestate_attachments)
-        for idx_att, att in enumerate(savestate_attachments):
-            is_last_att = idx_att == (total_atts - 1)
-            if att.id in self.processed_attachment_ids:
-                continue
-            self.processed_attachment_ids.add(att.id)
+            total_atts = len(savestate_attachments)
+            batch_game_ids = set()
+            for idx_att, att in enumerate(savestate_attachments):
+                is_last_att = idx_att == (total_atts - 1)
+                if att.id in self.processed_attachment_ids:
+                    continue
+                self.processed_attachment_ids.add(att.id)
 
-            channel_name = message.channel.name
-            author_name = message.author.display_name
-            print(f"\n📥 [{'BACKFILL' if is_backfill else 'LIVE'}] Detected save state '{att.filename}' ({att.size} bytes) from {author_name} in #{channel_name}")
-
-            try:
-                await message.add_reaction("⏳")
-            except Exception:
-                pass
-
-            try:
-                raw_bytes = await att.read()
-
-                # Run blocking HTTP/Supabase I/O in a worker thread so the Discord heartbeat never blocks
-                season_id, game_mode, allow_overwrite = await asyncio.to_thread(
-                    detect_context_from_discord,
-                    raw_bytes,
-                    channel_name,
-                    message.clean_content or "",
-                    att.filename or "",
-                )
-                print(f"   🔎 Auto-Detected: Season {season_id} ({get_league_code(season_id)}) | Mode: {game_mode} | Overwrite: {allow_overwrite}")
-
-                result = await asyncio.to_thread(
-                    ingest_save_state_to_supabase,
-                    raw_bytes,
-                    season_id,
-                    game_mode,
-                    allow_overwrite,
-                    author_name,
-                )
+                channel_name = message.channel.name
+                author_name = message.author.display_name
+                print(f"\n📥 [{'BACKFILL' if is_backfill else 'LIVE'}] Detected save state '{att.filename}' ({att.size} bytes) from {author_name} in #{channel_name}")
 
                 try:
-                    await message.remove_reaction("⏳", self.user)
+                    await message.add_reaction("⏳")
                 except Exception:
                     pass
 
-                # Avoid duplicating the 3 boxscores that BoxscoreBot already posted before crashing on msg 1565907439759392849
-                skip_single_boxscore = (
-                    message.id == 1565907439759392849
-                    and (att.filename or "").lower() in ("w18p.state1", "w18p.state2", "w18p.state3")
-                )
+                try:
+                    raw_bytes = await att.read()
 
-                if result.get("success"):
+                    # Run blocking HTTP/Supabase I/O in a worker thread so the Discord heartbeat never blocks
+                    season_id, game_mode, allow_overwrite = await asyncio.to_thread(
+                        detect_context_from_discord,
+                        raw_bytes,
+                        channel_name,
+                        message.clean_content or "",
+                        att.filename or "",
+                    )
+                    print(f"   🔎 Auto-Detected: Season {season_id} ({get_league_code(season_id)}) | Mode: {game_mode} | Overwrite: {allow_overwrite}")
+
+                    result = await asyncio.to_thread(
+                        ingest_save_state_to_supabase,
+                        raw_bytes,
+                        season_id,
+                        game_mode,
+                        allow_overwrite,
+                        author_name,
+                        batch_game_ids,
+                        is_last_att,
+                    )
+                    if result.get("gameId"):
+                        batch_game_ids.add(int(result["gameId"]))
+
                     try:
-                        await message.add_reaction("✅")
+                        await message.remove_reaction("⏳", self.user)
                     except Exception:
                         pass
-                    embed = discord.Embed.from_dict(result["embed"])
-                    mode_badge = "Playoffs" if result.get("gameMode") == "Playoffs" else "Regular Season"
-                    target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result["seasonId"]))
-                    if target_boxscore_ch.id != message.channel.id:
+
+                    # Avoid duplicating the 3 boxscores that BoxscoreBot already posted before crashing on msg 1565907439759392849
+                    skip_single_boxscore = (
+                        message.id == 1565907439759392849
+                        and (att.filename or "").lower() in ("w18p.state1", "w18p.state2", "w18p.state3")
+                    )
+
+                    if result.get("success"):
                         try:
+                            await message.add_reaction("✅")
+                        except Exception:
+                            pass
+                        embed = discord.Embed.from_dict(result["embed"])
+                        mode_badge = "Playoffs" if result.get("gameMode") == "Playoffs" else "Regular Season"
+                        target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result["seasonId"]))
+                        if target_boxscore_ch.id != message.channel.id:
+                            try:
+                                if not skip_single_boxscore:
+                                    if result.get("boxscorePngBytes"):
+                                        file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
+                                        await target_boxscore_ch.send(file=file_att)
+                                    else:
+                                        await target_boxscore_ch.send(embed=embed)
+                                if is_last_att and result.get("playoffBracketPngBytes"):
+                                    br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
+                                    await target_boxscore_ch.send(file=br_att)
+                                if is_last_att and result.get("standingsPngBytes"):
+                                    st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
+                                    await target_boxscore_ch.send(file=st_att)
+                            except Exception as send_err:
+                                print(f"   ⚠️ Could not post to #{target_boxscore_ch.name} ({send_err}), trying webhook fallback...")
+                                if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
+                                    wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
+                                    if not skip_single_boxscore:
+                                        await asyncio.to_thread(
+                                            wh.send,
+                                            file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
+                                        )
+                                    if is_last_att and result.get("playoffBracketPngBytes"):
+                                        await asyncio.to_thread(
+                                            wh.send,
+                                            file=discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png"),
+                                        )
+                                    if is_last_att and result.get("standingsPngBytes"):
+                                        await asyncio.to_thread(
+                                            wh.send,
+                                            file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
+                                        )
                             if not skip_single_boxscore:
-                                if result.get("boxscorePngBytes"):
-                                    file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
-                                    await target_boxscore_ch.send(file=file_att)
-                                else:
-                                    await target_boxscore_ch.send(embed=embed)
+                                confirm_text = (
+                                    f"✅ **Save State Recorded to Database!** (`{att.filename}`)\n"
+                                    f"🏒 **{result['gameResults']}** • Game **#{result['gameId']}** ({mode_badge}) — "
+                                    f"Boxscore & Standings posted in {target_boxscore_ch.mention}!"
+                                )
+                                try:
+                                    await message.reply(content=confirm_text, mention_author=False)
+                                except Exception:
+                                    pass
+                            print(f"   ✅ SUCCESS: Saved Game #{result['gameId']} ({result['gameResults']}) and posted boxscore + standings to #{target_boxscore_ch.name}!")
+                        else:
+                            try:
+                                if not skip_single_boxscore:
+                                    if result.get("boxscorePngBytes"):
+                                        file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
+                                        await message.reply(file=file_att, mention_author=False)
+                                    else:
+                                        await message.reply(embed=embed, mention_author=False)
+                                if is_last_att and result.get("playoffBracketPngBytes"):
+                                    br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
+                                    await message.channel.send(file=br_att)
+                                if is_last_att and result.get("standingsPngBytes"):
+                                    st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
+                                    await message.channel.send(file=st_att)
+                            except Exception as reply_err:
+                                print(f"   ⚠️ Could not reply in #{channel_name} ({reply_err}), trying webhook fallback...")
+                                if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
+                                    wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
+                                    if not skip_single_boxscore:
+                                        await asyncio.to_thread(
+                                            wh.send,
+                                            file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
+                                        )
+                                    if is_last_att and result.get("playoffBracketPngBytes"):
+                                        await asyncio.to_thread(
+                                            wh.send,
+                                            file=discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png"),
+                                        )
+                                    if is_last_att and result.get("standingsPngBytes"):
+                                        await asyncio.to_thread(
+                                            wh.send,
+                                            file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
+                                        )
+                            print(f"   ✅ SUCCESS: Saved Game #{result['gameId']} ({result['gameResults']}) and posted boxscore + standings in #{channel_name}!")
+
+                    elif result.get("alreadyPlayed"):
+                        # If BoxscoreBot already recorded the series/game seconds earlier (or during catch-up),
+                        # still post any missing boxscore and the updated Playoff Bracket & Standings on the last attachment!
+                        try:
+                            await message.add_reaction("✅")
+                        except Exception:
+                            pass
+                        target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result.get("seasonId") or season_id))
+                        try:
+                            if not skip_single_boxscore and result.get("boxscorePngBytes"):
+                                file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
+                                await target_boxscore_ch.send(file=file_att)
                             if is_last_att and result.get("playoffBracketPngBytes"):
                                 br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
                                 await target_boxscore_ch.send(file=br_att)
                             if is_last_att and result.get("standingsPngBytes"):
                                 st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
                                 await target_boxscore_ch.send(file=st_att)
-                        except Exception as send_err:
-                            print(f"   ⚠️ Could not post to #{target_boxscore_ch.name} ({send_err}), trying webhook fallback...")
-                            if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
-                                wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
-                                if not skip_single_boxscore:
-                                    await asyncio.to_thread(
-                                        wh.send,
-                                        file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
-                                    )
-                                if is_last_att and result.get("playoffBracketPngBytes"):
-                                    await asyncio.to_thread(
-                                        wh.send,
-                                        file=discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png"),
-                                    )
-                                if is_last_att and result.get("standingsPngBytes"):
-                                    await asyncio.to_thread(
-                                        wh.send,
-                                        file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
-                                    )
-                        if not skip_single_boxscore:
-                            confirm_text = (
-                                f"✅ **Save State Recorded to Database!** (`{att.filename}`)\n"
-                                f"🏒 **{result['gameResults']}** • Game **#{result['gameId']}** ({mode_badge}) — "
-                                f"Boxscore & Standings posted in {target_boxscore_ch.mention}!"
-                            )
-                            try:
-                                await message.reply(content=confirm_text, mention_author=False)
-                            except Exception:
-                                pass
-                        print(f"   ✅ SUCCESS: Saved Game #{result['gameId']} ({result['gameResults']}) and posted boxscore + standings to #{target_boxscore_ch.name}!")
+                            print(f"   ✅ Posted boxscore/Playoff Bracket/Standings to #{target_boxscore_ch.name} for '{att.filename}'!")
+                        except Exception as br_err:
+                            print(f"   ⚠️ Could not post to #{target_boxscore_ch.name}: {br_err}")
+
                     else:
                         try:
-                            if not skip_single_boxscore:
-                                if result.get("boxscorePngBytes"):
-                                    file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
-                                    await message.reply(file=file_att, mention_author=False)
-                                else:
-                                    await message.reply(embed=embed, mention_author=False)
-                            if is_last_att and result.get("playoffBracketPngBytes"):
-                                br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
-                                await message.channel.send(file=br_att)
-                            if is_last_att and result.get("standingsPngBytes"):
-                                st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
-                                await message.channel.send(file=st_att)
-                        except Exception as reply_err:
-                            print(f"   ⚠️ Could not reply in #{channel_name} ({reply_err}), trying webhook fallback...")
-                            if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
-                                wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
-                                if not skip_single_boxscore:
-                                    await asyncio.to_thread(
-                                        wh.send,
-                                        file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
-                                    )
-                                if is_last_att and result.get("playoffBracketPngBytes"):
-                                    await asyncio.to_thread(
-                                        wh.send,
-                                        file=discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png"),
-                                    )
-                                if is_last_att and result.get("standingsPngBytes"):
-                                    await asyncio.to_thread(
-                                        wh.send,
-                                        file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
-                                    )
-                        print(f"   ✅ SUCCESS: Saved Game #{result['gameId']} ({result['gameResults']}) and posted boxscore + standings in #{channel_name}!")
+                            await message.add_reaction("❌")
+                            await message.reply(
+                                content=f"❌ **Could not save `{att.filename}`:** {result.get('error', 'Unknown error')}",
+                                mention_author=False,
+                            )
+                        except Exception:
+                            pass
+                        print(f"   ❌ ERROR: {result.get('error')}")
 
-                elif result.get("alreadyPlayed"):
-                    # If BoxscoreBot already recorded the series/game seconds earlier (or during catch-up),
-                    # still post any missing boxscore and the updated Playoff Bracket & Standings on the last attachment!
+                except Exception as err:
                     try:
-                        await message.add_reaction("✅")
-                    except Exception:
-                        pass
-                    target_boxscore_ch = self.find_boxscore_channel(message.channel, int(result.get("seasonId") or season_id))
-                    try:
-                        if not skip_single_boxscore and result.get("boxscorePngBytes"):
-                            file_att = discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png")
-                            await target_boxscore_ch.send(file=file_att)
-                        if is_last_att and result.get("playoffBracketPngBytes"):
-                            br_att = discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png")
-                            await target_boxscore_ch.send(file=br_att)
-                        if is_last_att and result.get("standingsPngBytes"):
-                            st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
-                            await target_boxscore_ch.send(file=st_att)
-                        print(f"   ✅ Posted boxscore/Playoff Bracket/Standings to #{target_boxscore_ch.name} for '{att.filename}'!")
-                    except Exception as br_err:
-                        print(f"   ⚠️ Could not post to #{target_boxscore_ch.name}: {br_err}")
-
-                else:
-                    try:
+                        await message.remove_reaction("⏳", self.user)
                         await message.add_reaction("❌")
-                        await message.reply(
-                            content=f"❌ **Could not save `{att.filename}`:** {result.get('error', 'Unknown error')}",
-                            mention_author=False,
-                        )
                     except Exception:
                         pass
-                    print(f"   ❌ ERROR: {result.get('error')}")
-
-            except Exception as err:
-                try:
-                    await message.remove_reaction("⏳", self.user)
-                    await message.add_reaction("❌")
-                except Exception:
-                    pass
-                print(f"   ❌ Exception processing '{att.filename}': {err}")
-                if not is_backfill:
-                    try:
-                        await message.reply(
-                            content=f"❌ **Failed to parse save state `{att.filename}`:** `{err}`",
-                            mention_author=False,
-                        )
-                    except Exception:
-                        pass
+                    print(f"   ❌ Exception processing '{att.filename}': {err}")
+                    if not is_backfill:
+                        try:
+                            await message.reply(
+                                content=f"❌ **Failed to parse save state `{att.filename}`:** `{err}`",
+                                mention_author=False,
+                            )
+                        except Exception:
+                            pass
 
     async def on_ready(self):
         print("=" * 68)
@@ -4683,10 +4890,46 @@ class NHL95SaveStateBot(discord.Client):
                         print(f"   Notice: Could not scan history in #{channel.name}: {e}")
             print("✅ Startup catch-up scan complete! Now listening live 24/7 for new save states...\n")
 
+        if not getattr(self, "_savestate_watcher_started", False):
+            self._savestate_watcher_started = True
+            asyncio.create_task(self.savestate_watcher_loop())
+
         if not getattr(self, "_draft_watcher_started", False):
             self._draft_watcher_started = True
             self._announced_draft_ids = set()
             asyncio.create_task(self.draft_picks_watcher_loop())
+
+    async def savestate_watcher_loop(self) -> None:
+        """Continuously polls save-state channels every 20 seconds so that even if a Discord gateway
+        event is missed during a reconnect or attachment upload, any new save state set is processed immediately."""
+        while not self.is_closed():
+            await asyncio.sleep(20)
+            try:
+                cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
+                for guild in self.guilds:
+                    for channel in guild.text_channels:
+                        if not self.is_channel_allowed(channel):
+                            continue
+                        cname = channel.name.lower()
+                        if not ("save" in cname or "test" in cname):
+                            continue
+                        perms = channel.permissions_for(guild.me)
+                        if not (perms.read_messages and perms.read_message_history):
+                            continue
+                        try:
+                            async for msg in channel.history(limit=15, after=cutoff, oldest_first=True):
+                                if msg.author.bot:
+                                    continue
+                                atts = [a for a in msg.attachments if is_savestate_attachment(a)]
+                                if not atts:
+                                    continue
+                                if all(a.id in self.processed_attachment_ids for a in atts):
+                                    continue
+                                await self.process_savestate_message(msg, is_backfill=True)
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"Savestate watcher note: {e}")
 
     async def draft_picks_watcher_loop(self) -> None:
         """Watches public.league_drafts for new picks in active drafts (e.g. O02 = 54, W19 = 41)
@@ -4987,6 +5230,9 @@ class NHL95SaveStateBot(discord.Client):
     async def on_message(self, message: discord.Message):
         await self.process_savestate_message(message, is_backfill=False)
         await self.process_season_games_command(message)
+
+    async def on_message_edit(self, _before: discord.Message, after: discord.Message):
+        await self.process_savestate_message(after, is_backfill=False)
 
 
 def post_boxscore_png_from_web(payload_data: Dict[str, Any]) -> None:

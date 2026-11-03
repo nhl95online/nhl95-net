@@ -21,10 +21,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-[#f4f1ea] text-black font-serif min-h-screen overflow-x-hidden antialiased">
+      <body className="bg-[#f4f1ea] text-black font-serif min-h-screen w-full overflow-x-hidden antialiased">
         <CoachAuthProvider>
           <Navbar />
-          <main className="max-w-7xl mx-auto py-3 sm:py-6 px-2 sm:px-4 md:px-6">
+          <main className="w-full py-2 sm:py-4 md:py-5 px-2 sm:px-4 md:px-6 lg:px-8 xl:px-10">
             {children}
           </main>
           <CoachAuthModal />

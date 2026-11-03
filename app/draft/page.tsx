@@ -3198,17 +3198,17 @@ export default function DraftPage() {
 
   return (
     <div className="bg-[#f4f1ea] text-black min-h-screen p-3 sm:p-6 lg:p-8 font-serif text-sm">
-      <div className="max-w-7xl mx-auto space-y-5">
+      <div className="w-full mx-auto space-y-5">
 
         {/* ========================================================================= */}
         {/* CLEAN TOP HEADER: Title on Left, Action Buttons & Live Drafts Off to Right */}
         {/* ========================================================================= */}
-        <header className="bg-[#fdfaf5] border-2 border-black border-b-4 px-4 sm:px-6 py-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          {/* Left: Title & Active Draft Badge */}
-          <div className="text-left space-y-1.5">
+        <header className="bg-[#fdfaf5] border-2 border-black border-b-4 px-4 sm:px-6 py-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          {/* Left: Title, Active Draft Badges, Online Coaches & Navigation Tab Buttons Below */}
+          <div className="text-left space-y-2.5 flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-none">
-                The Draft Floor
+                The War Room - Drafts
               </h1>
               <span className="bg-black text-amber-300 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest border border-black">
                 Active: {activeFloorSeasonMeta?.seasonBadge || 'W19 (2014)'}
@@ -3221,11 +3221,9 @@ export default function DraftPage() {
                 📡 Discord: {activeDiscordChannelLabel}
               </span>
             </div>
-            <p className="text-[11px] uppercase tracking-wider font-sans font-bold text-neutral-600">
-              Official War Room, Rookie Prospects & Franchise Future Draft Capital
-            </p>
+
             {loggedInDraftCoaches.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[10px] font-mono font-black uppercase text-slate-600">
                   Online Coaches:
                 </span>
@@ -3241,14 +3239,12 @@ export default function DraftPage() {
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Right: Navigation Buttons & Concurrent Live Draft Switcher */}
-          <div className="flex flex-col lg:items-end gap-2">
-            <div className="flex items-center lg:justify-end gap-1.5 flex-wrap">
+            {/* Navigation Buttons Below Title */}
+            <div className="flex items-center gap-2 flex-wrap pt-1">
               <button
                 onClick={() => { setActiveTab('floor'); setShowCapital(false); }}
-                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'floor' && !showCapital
                     ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                     : 'bg-white text-black hover:bg-neutral-100'
@@ -3260,7 +3256,7 @@ export default function DraftPage() {
 
               <button
                 onClick={() => { setActiveTab('prospects'); setShowCapital(false); }}
-                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'prospects'
                     ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                     : 'bg-white text-black hover:bg-neutral-100'
@@ -3272,7 +3268,7 @@ export default function DraftPage() {
 
               <button
                 onClick={() => { setActiveTab('capital'); setShowCapital(false); }}
-                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'capital'
                     ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                     : 'bg-white text-black hover:bg-neutral-100'
@@ -3284,7 +3280,7 @@ export default function DraftPage() {
 
               <button
                 onClick={() => { setActiveTab('past'); setShowCapital(false); }}
-                className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
                   activeTab === 'past'
                     ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                     : 'bg-white text-black hover:bg-neutral-100'
@@ -3294,23 +3290,28 @@ export default function DraftPage() {
                 Past Drafts
               </button>
             </div>
+          </div>
 
-            {activeDrafts.length > 1 && (
-              <div className="flex items-center lg:justify-end gap-1.5 flex-wrap font-mono">
-                <span className="text-[10px] font-black uppercase text-slate-600">Upcoming &amp; Live Drafts:</span>
+          {/* Right: Live & Upcoming Drafts Stacked Vertically */}
+          {activeDrafts.length > 1 && (
+            <div className="flex flex-col lg:items-end gap-1.5 font-mono shrink-0 border-t lg:border-t-0 lg:border-l border-black/20 pt-3 lg:pt-0 lg:pl-5">
+              <span className="text-[10px] font-black uppercase text-slate-600 tracking-wider">
+                Upcoming &amp; Live Drafts:
+              </span>
+              <div className="flex flex-col gap-1.5 w-full sm:w-auto min-w-[165px]">
                 {activeDrafts.map(s => {
                   const isCurrent = s.leagueId === floorLeagueId;
                   return (
                     <button
                       key={s.leagueId}
                       onClick={() => switchToDraft(s)}
-                      className={`px-2 py-0.5 text-[11px] font-black uppercase border border-black cursor-pointer transition-all flex items-center gap-1 ${
-                        isCurrent ? 'bg-amber-300 text-black font-black' : 'bg-white text-black hover:bg-yellow-100'
+                      className={`px-2.5 py-1 text-[11px] font-black uppercase border border-black cursor-pointer transition-all flex items-center justify-between gap-2 w-full ${
+                        isCurrent ? 'bg-amber-300 text-black font-black shadow-[2px_2px_0px_rgba(0,0,0,1)]' : 'bg-white text-black hover:bg-yellow-100'
                       }`}
                     >
                       <span>{s.seasonBadge}</span>
                       <span
-                        className={`text-[9px] px-1 py-0 border border-black ${
+                        className={`text-[9px] px-1.5 py-0 border border-black ${
                           s.draftStarted ? 'bg-emerald-600 text-white' : 'bg-neutral-200 text-neutral-700'
                         }`}
                       >
@@ -3320,8 +3321,8 @@ export default function DraftPage() {
                   );
                 })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </header>
 
         {/* ========================================================================= */}
