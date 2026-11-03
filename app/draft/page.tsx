@@ -3509,45 +3509,15 @@ export default function DraftPage() {
         {/* ========================================================================= */}
         {/* CLEAN TOP HEADER: Title on Left, Action Buttons & Live Drafts Off to Right */}
         {/* ========================================================================= */}
-        <header className="bg-[#fdfaf5] border-2 border-black border-b-4 px-4 sm:px-6 py-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-          {/* Left: Title, Active Draft Badges, Online Coaches & Navigation Tab Buttons Below */}
-          <div className="text-left space-y-2.5 flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-none">
-                The War Room - Drafts
-              </h1>
-              <span className="bg-black text-amber-300 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest border border-black">
-                Active: {activeFloorSeasonMeta?.seasonBadge || 'W19 (2014)'}
-              </span>
-              <span className="bg-emerald-900 text-emerald-200 font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 border border-black inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {loggedInDraftCoaches.length} Coach{loggedInDraftCoaches.length === 1 ? '' : 'es'} Logged In
-              </span>
-              <span className="bg-indigo-950 text-indigo-200 font-mono text-[10px] font-black uppercase px-2 py-0.5 border border-black">
-                📡 Discord: {activeDiscordChannelLabel}
-              </span>
-            </div>
-
-            {loggedInDraftCoaches.length > 0 && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-mono font-black uppercase text-slate-600">
-                  Online Coaches:
-                </span>
-                {loggedInDraftCoaches.map((c) => (
-                  <span
-                    key={`hdr-coach-${c.peerId}-${c.coachName}`}
-                    className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-950 border border-black px-2 py-0.5 text-[10px] font-mono font-black uppercase"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                    {c.coachName}
-                    {c.activeDraft ? <span className="text-emerald-700 font-normal">({c.activeDraft.split(' ')[0]})</span> : null}
-                  </span>
-                ))}
-              </div>
-            )}
+        <header className="bg-[#fdfaf5] border-2 border-black border-b-4 px-4 sm:px-6 py-3.5 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left: Clean Title & Navigation Tab Buttons Below */}
+          <div className="text-left space-y-2 flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-none">
+              The War Room - Drafts
+            </h1>
 
             {/* Navigation Buttons Below Title */}
-            <div className="flex items-center gap-2 flex-wrap pt-1">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => { setActiveTab('floor'); setShowCapital(false); }}
                 className={`px-3.5 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -3654,261 +3624,408 @@ export default function DraftPage() {
         {/* TAB 1: LIVE DRAFT FLOOR (Strictly 1 Draft Viewport) */}
         {/* ========================================================================= */}
         {activeTab === 'floor' && (
-          <div className="space-y-6">
-            {/* TOP HERO SECTION: Left Column (Selection Desk + Active Team Roster), Right Column (Top Available Players + Live Chat) */}
+          <div className="space-y-4">
+            {/* ========================================================================= */}
+            {/* NHL DRAFT BROADCAST TICKER BAR (RECENT PICKS • ON THE CLOCK • UPCOMING) */}
+            {/* ========================================================================= */}
+            {projectedFloorRows.length > 0 && (() => {
+              const curIdx = Math.max(
+                0,
+                projectedFloorRows.findIndex(r => Number(r.pk) === Number(nextEmptyPickSlot.pk))
+              );
+              const startIdx = Math.max(0, curIdx - 4);
+              const tickerSlots = projectedFloorRows.slice(startIdx, startIdx + 12);
+              return (
+                <div className="bg-[#111318] text-white border-2 border-black px-3 py-2 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex items-center gap-3 overflow-x-auto">
+                  <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-neutral-700 font-mono">
+                    <span className="bg-amber-400 text-black text-[10px] font-black uppercase px-2 py-0.5 border border-black">
+                      NHL &apos;95 DRAFT TICKER
+                    </span>
+                    <span className="text-[11px] font-black uppercase text-amber-300">
+                      {activeFloorSeasonMeta?.seasonBadge}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 overflow-x-auto py-0.5 flex-1">
+                    {tickerSlots.map((slot) => {
+                      const isFilled = Boolean(slot.player && slot.player !== 'N/A' && slot.player.trim() !== '');
+                      const isOnClock = !isFilled && Number(slot.pk) === Number(nextEmptyPickSlot.pk);
+                      return (
+                        <button
+                          type="button"
+                          key={`ticker-${slot.leagueId}-${slot.pk}`}
+                          onClick={() => {
+                            if (isFilled) {
+                              setPodium(slot);
+                            } else if (isUltraMagnusAdmin) {
+                              setOverridePickSlot(slot);
+                            }
+                          }}
+                          className={`shrink-0 px-2.5 py-1 border text-left font-mono transition-all cursor-pointer flex items-center gap-2 ${
+                            isOnClock
+                              ? 'bg-amber-400 text-black border-white ring-2 ring-amber-300 font-black'
+                              : isFilled
+                                ? 'bg-neutral-900 hover:bg-neutral-800 text-white border-emerald-600/70'
+                                : 'bg-neutral-900/60 hover:bg-neutral-800 text-neutral-300 border-neutral-700'
+                          }`}
+                        >
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 ${
+                            isOnClock
+                              ? 'bg-black text-amber-300'
+                              : isFilled
+                                ? 'bg-emerald-700 text-white'
+                                : 'bg-neutral-800 text-neutral-300'
+                          }`}>
+                            #{slot.pk}
+                          </span>
+                          {slot.logo && (
+                            <img src={slot.logo} alt="" className="w-4 h-4 object-contain shrink-0" />
+                          )}
+                          <div className="leading-tight">
+                            <div className="text-[10px] font-black uppercase truncate max-w-[125px]">
+                              {isFilled ? slot.player : slot.team}
+                            </div>
+                            <div className={`text-[9px] truncate max-w-[125px] ${
+                              isOnClock ? 'text-black/80 font-bold' : 'text-neutral-400'
+                            }`}>
+                              {isOnClock
+                                ? '★ ON THE CLOCK'
+                                : isFilled
+                                  ? `${slot.team} (${slot.pos || 'F'}${slot.ovr ? ` • ${slot.ovr}` : ''})`
+                                  : `Rd ${slot.rd} • ${slot.coachName || 'Upcoming'}`}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedPicksForFloor.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={isPushingDiscordPick}
+                      onClick={() => handlePushPickToDiscord(selectedPicksForFloor[selectedPicksForFloor.length - 1])}
+                      className="bg-indigo-900 hover:bg-indigo-800 disabled:opacity-50 text-amber-300 font-mono text-[10px] font-black uppercase px-2.5 py-1 border border-indigo-400 cursor-pointer shrink-0 flex items-center gap-1"
+                      title={`Push Pick #${selectedPicksForFloor[selectedPicksForFloor.length - 1].pk} to ${activeDiscordChannelLabel}`}
+                    >
+                      <Send className="w-3 h-3" />
+                      <span>
+                        {isPushingDiscordPick
+                          ? 'Pushing...'
+                          : `Push #${selectedPicksForFloor[selectedPicksForFloor.length - 1].pk} to Discord`}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* MAIN 2-COLUMN DRAFT STAGE: Left (8 cols: Podium + Selection + Team Roster), Right (4 cols: Top Available + Chat) */}
             <div className="grid grid-cols-12 gap-4 items-start">
               
-              {/* LEFT COLUMN (8 COLS): UNIFIED COACH SELECTION DESK + ACTIVE TEAM ROSTER */}
-              <div className="col-span-12 lg:col-span-8 space-y-4">
-                <div className="bg-[#fff9e6] border-3 border-black p-3.5 sm:p-4 shadow-[4px_4px_0px_#d97706,4px_4px_0px_1px_#000] relative overflow-hidden">
-                {!isLoggedIn && (
-                  <CoachLockOverlay
-                    title="COACH SIGN-IN REQUIRED"
-                    description="Official draft selections and roster additions require coach verification. Spectators may freely view the draft board, capital picks, and trading cards below."
-                    buttonText="Sign In to Submit Picks"
-                    loginContext="Draft Submissions"
-                  />
-                )}
+              {/* LEFT COLUMN (8 COLS): NHL DRAFT PODIUM + TEAM ROSTER */}
+              <div className="col-span-12 lg:col-span-8">
+                <div className="bg-[#fdfaf5] border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] relative overflow-hidden">
+                  {!isLoggedIn && (
+                    <CoachLockOverlay
+                      title="COACH SIGN-IN REQUIRED"
+                      description="Official draft selections and roster additions require coach verification. Spectators may freely view the draft board, capital picks, and trading cards below."
+                      buttonText="Sign In to Submit Picks"
+                      loginContext="Draft Submissions"
+                    />
+                  )}
 
-                {/* Personalized "YOU ARE ON THE CLOCK" Alert Banner */}
-                {isCurrentCoachOnClock && !draftLockStatus.isLocked && (
-                  <div className="bg-emerald-600 border-2 border-black text-white p-2 mb-2.5 font-mono font-black text-xs uppercase flex items-center justify-between shadow-[2px_2px_0px_#000] animate-pulse">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>🚨 COACH {currentCoach?.coach_name}, YOU ARE CURRENTLY ON THE CLOCK!</span>
-                    </div>
-                    <span className="bg-black text-white px-2 py-0.5 border border-white text-[10px]">
-                      PICK #{nextEmptyPickSlot.pk}
-                    </span>
-                  </div>
-                )}
-
-                {/* Unified Top Header Bar: Desk Title + Standby/Live Status + On The Clock + Start/Pause Controls */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-2.5 mb-3 gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`w-2.5 h-2.5 rounded-full ${draftLockStatus.isLocked ? 'bg-amber-500' : 'bg-red-600 animate-ping'}`}></span>
-                    <h2 className="text-sm sm:text-base font-black uppercase tracking-tight flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-red-700" />
-                      Coach War Room &bull; Selection Desk
-                    </h2>
-                    {isLoggedIn && currentCoach && (
-                      <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-900 px-2 py-0.5 border border-emerald-600 uppercase flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        Coach: {currentCoach.coach_name}
-                      </span>
-                    )}
-                    {draftLockStatus.isLocked && (
-                      <span className="bg-red-600 text-white text-[9px] font-mono font-black uppercase px-2 py-0.5 border border-black tracking-wider">
-                        STANDBY &bull; {activeFloorSeasonMeta?.seasonBadge}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {Number(nextEmptyPickSlot.pk) === 1 && (
-                      <div className="bg-amber-400 text-black font-mono font-black px-2 py-0.5 text-[11px] border-2 border-black shadow-xs flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-black" />
-                        <span>1ST OVERALL PICK</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1.5 font-mono text-[11px] font-bold bg-yellow-100 px-2 py-0.5 border border-black">
-                      <span>On The Clock:</span>
-                      <span className="font-black text-red-800 uppercase">
-                        Pick #{nextEmptyPickSlot.pk} (Rd {nextEmptyPickSlot.rd})
-                      </span>
-                    </div>
-                    {isUltraMagnusAdmin && (
-                      draftLockStatus.isLocked ? (
-                        <button
-                          type="button"
-                          disabled={isTogglingDraftStatus}
-                          onClick={() => handleToggleDraftStart(floorLeagueId, true)}
-                          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-mono font-black uppercase text-[11px] px-2.5 py-0.5 border-2 border-black shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1 transition-all"
-                        >
-                          <Unlock className="w-3 h-3 text-black shrink-0" />
-                          <span>
-                            {isTogglingDraftStatus
-                              ? 'Starting...'
-                              : `▶ START ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
-                          </span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={isTogglingDraftStatus}
-                          onClick={() => handleToggleDraftStart(floorLeagueId, false)}
-                          className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-mono font-black uppercase text-[11px] px-2.5 py-0.5 border-2 border-black shadow-[2px_2px_0px_#000] cursor-pointer flex items-center gap-1 transition-all"
-                        >
-                          <Lock className="w-3 h-3 shrink-0" />
-                          <span>
-                            {isTogglingDraftStatus
-                              ? 'Updating...'
-                              : `⏸ PAUSE DRAFT`}
-                          </span>
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Compact Commissioner Proxy Selector (Only when live) */}
-                {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
-                  <div className="bg-amber-300 border-2 border-black text-black px-2.5 py-1.5 mb-2.5 font-mono text-[11px] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="font-black uppercase flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-black shrink-0" />
-                      Commissioner Proxy Pick:
-                    </span>
-                    <select
-                      value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
-                      onChange={(e) => {
-                        const [rStr, pStr] = e.target.value.split('-');
-                        const chosen = projectedFloorRows.find(
-                          s => s.rd === Number(rStr) && s.pk === Number(pStr)
-                        );
-                        setOverridePickSlot(chosen || null);
-                      }}
-                      className="bg-black text-amber-300 border border-black px-2 py-0.5 text-[11px] font-black uppercase cursor-pointer"
-                      title="Select any open pick slot to draft on behalf of that coach"
-                    >
-                      {projectedFloorRows
-                        .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
-                        .map(s => (
-                          <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
-                            Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Per-Pick Clock Window Banner (Round 1 = 10 Mins, Round 2+ = 5 Mins) */}
-                {!draftLockStatus.isLocked && (
-                  <div className="bg-[#121418] text-white border-2 border-black p-2.5 mb-3 shadow-[2px_2px_0px_rgba(0,0,0,1)] font-mono">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`px-2 py-0.5 text-[10px] font-black uppercase border border-black ${
-                          isPickClockExpired
-                            ? 'bg-red-600 text-white animate-pulse'
-                            : Number(nextEmptyPickSlot.rd) === 1
-                              ? 'bg-amber-400 text-black'
-                              : 'bg-sky-400 text-black'
-                        }`}>
-                          <Timer className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-                          ROUND {nextEmptyPickSlot.rd} CLOCK &bull; {pickWindowMinutes}:00 WINDOW
-                        </span>
-                        <span className="text-[10px] font-bold text-neutral-300 bg-neutral-800 px-2 py-0.5 border border-neutral-600 uppercase">
-                          RD 1: 10 MIN &bull; RD 2: 5 MIN
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <div className={`text-base sm:text-lg font-black px-2 py-0.5 border border-neutral-600 bg-black tracking-wider ${
-                          isPickClockExpired
-                            ? 'text-red-500 animate-pulse'
-                            : pickClockRemainingMs <= 60000
-                              ? 'text-amber-400'
-                              : 'text-emerald-400'
-                        }`}>
-                          {isPickClockExpired ? '00:00 (TIME UP)' : `${pickClockMinutesStr}:${pickClockSecondsStr}`}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={togglePickClockPause}
-                          className="text-[10px] font-black uppercase bg-neutral-800 hover:bg-neutral-700 text-white px-2 py-1 border border-neutral-600 cursor-pointer"
-                        >
-                          {isPickClockPaused ? 'Resume' : 'Pause'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={resetPickClock}
-                          className="text-[10px] font-black uppercase bg-amber-400 hover:bg-amber-300 text-black px-2 py-1 border border-black cursor-pointer"
-                        >
-                          Reset {pickWindowMinutes}:00
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full h-1.5 bg-neutral-800 mt-1.5 overflow-hidden border border-neutral-700">
-                      <div
-                        className={`h-full transition-all duration-500 ${
-                          isPickClockExpired
-                            ? 'bg-red-600'
-                            : pickClockRemainingMs <= 60000
-                              ? 'bg-amber-400'
-                              : 'bg-emerald-400'
-                        }`}
-                        style={{ width: `${pickClockPct}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Unified Franchise On The Clock + Roster Controls + Search & Submit Area */}
-                <div className="bg-white border-2 border-black p-3 space-y-2.5">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 border-b border-black/15 pb-2.5">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      {(activeRosterTeam?.logo_url || nextEmptyPickSlot.logo) ? (
+                  {/* NHL DRAFT STAGE PODIUM BANNER ("ON THE CLOCK") */}
+                  <div className="bg-[#111318] text-white px-4 py-3 border-b-2 border-black flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {nextEmptyPickSlot.logo ? (
                         <img
-                          src={activeRosterTeam?.logo_url || nextEmptyPickSlot.logo}
-                          alt={activeRosterTeam?.team_name || nextEmptyPickSlot.team}
-                          className="w-9 h-9 object-contain border border-black p-0.5 bg-neutral-50 shrink-0"
+                          src={nextEmptyPickSlot.logo}
+                          alt={nextEmptyPickSlot.team}
+                          className="w-11 h-11 object-contain bg-white border-2 border-amber-400 p-1 shrink-0"
                         />
                       ) : (
-                        <div className="w-9 h-9 bg-black text-white font-mono font-black text-xs flex items-center justify-center border border-black shrink-0">
+                        <div className="w-11 h-11 bg-amber-400 text-black font-mono font-black text-sm flex items-center justify-center border-2 border-white shrink-0">
                           #{nextEmptyPickSlot.pk}
                         </div>
                       )}
-                      <div>
-                        <div className="text-[10px] font-mono uppercase font-bold text-slate-500 flex items-center gap-1.5 flex-wrap">
-                          <span>
-                            {!activeRosterTeam || Number(activeRosterTeam.team_id) === Number(nextEmptyPickSlot.teamId)
-                              ? 'Franchise On The Clock'
-                              : 'Viewing Franchise Roster'}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap font-mono text-[10px]">
+                          <span className={`px-2 py-0.5 font-black uppercase border ${
+                            draftLockStatus.isLocked
+                              ? 'bg-red-700 text-white border-red-400'
+                              : 'bg-amber-400 text-black border-black'
+                          }`}>
+                            {draftLockStatus.isLocked
+                              ? `STANDBY • ${activeFloorSeasonMeta?.seasonBadge}`
+                              : `ON THE CLOCK • RD ${nextEmptyPickSlot.rd}, PICK #${nextEmptyPickSlot.pk}`}
                           </span>
-                          {(activeRosterTeam?.coach_name || nextEmptyPickSlot.coachName) && (
-                            <span className="bg-neutral-200 text-black px-1.5 py-0 border border-black/20 font-bold">
-                              Coach: {activeRosterTeam?.coach_name || nextEmptyPickSlot.coachName}
+                          {draftLockStatus.isLocked && (
+                            <span className="text-amber-300 font-black uppercase">
+                              Rd {nextEmptyPickSlot.rd} &bull; Pick #{nextEmptyPickSlot.pk}
                             </span>
                           )}
-                          {activeRosterTeam && (
-                            <span className="bg-black text-amber-300 px-1.5 py-0 border border-black font-black">
-                              Team Avg OVR: {activeTeamRosterData.avgOvr || '-'}
+                          {nextEmptyPickSlot.coachName && (
+                            <span className="text-neutral-300 font-bold uppercase">
+                              Coach: {nextEmptyPickSlot.coachName}
                             </span>
                           )}
                           {overridePickSlot && (
                             <button
                               type="button"
                               onClick={() => setOverridePickSlot(null)}
-                              className="text-[10px] text-red-800 font-bold uppercase underline cursor-pointer"
+                              className="text-amber-300 underline font-black uppercase cursor-pointer"
                             >
                               Reset Slot
                             </button>
                           )}
                         </div>
-                        <div className="text-sm sm:text-base font-black uppercase text-black leading-tight">
-                          {activeRosterTeam?.team_name || nextEmptyPickSlot.team}
-                        </div>
+                        <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white truncate mt-0.5">
+                          {nextEmptyPickSlot.team}
+                        </h2>
                       </div>
                     </div>
 
-                    {/* Right: Team Switcher, Position Filters & Career Expand Toggle */}
-                    {activeRosterTeam && (
-                      <div className="flex flex-wrap items-center gap-1.5 font-mono">
-                        {rosterTeamOverrideId !== null &&
-                          nextEmptyPickSlot.teamId &&
-                          Number(rosterTeamOverrideId) !== Number(nextEmptyPickSlot.teamId) && (
-                            <button
-                              type="button"
-                              onClick={() => setRosterTeamOverrideId(null)}
-                              className="bg-red-800 hover:bg-red-900 text-white text-[10px] font-black uppercase px-2 py-1 border border-black cursor-pointer"
-                            >
-                              🎯 On-Clock ({nextEmptyPickSlot.team})
-                            </button>
-                          )}
+                    {/* Right Side of Podium: Live Clock + Commissioner Start/Pause */}
+                    <div className="flex items-center gap-2 flex-wrap font-mono shrink-0">
+                      {!draftLockStatus.isLocked && (
+                        <div className="flex items-center gap-1.5 bg-black px-2.5 py-1 border border-neutral-600">
+                          <Timer className="w-3.5 h-3.5 text-amber-400" />
+                          <span className={`text-sm font-black tracking-wider ${
+                            isPickClockExpired
+                              ? 'text-red-500 animate-pulse'
+                              : pickClockRemainingMs <= 60000
+                                ? 'text-amber-400'
+                                : 'text-emerald-400'
+                          }`}>
+                            {isPickClockExpired ? '00:00' : `${pickClockMinutesStr}:${pickClockSecondsStr}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={togglePickClockPause}
+                            className="text-[9px] font-black uppercase bg-neutral-800 hover:bg-neutral-700 text-white px-1.5 py-0.5 border border-neutral-600 cursor-pointer"
+                          >
+                            {isPickClockPaused ? 'Resume' : 'Pause'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={resetPickClock}
+                            className="text-[9px] font-black uppercase bg-neutral-800 hover:bg-neutral-700 text-amber-300 px-1.5 py-0.5 border border-neutral-600 cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      )}
 
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-black uppercase text-slate-700">Team:</span>
+                      {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
+                        <select
+                          value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
+                          onChange={(e) => {
+                            const [rStr, pStr] = e.target.value.split('-');
+                            const chosen = projectedFloorRows.find(
+                              s => s.rd === Number(rStr) && s.pk === Number(pStr)
+                            );
+                            setOverridePickSlot(chosen || null);
+                          }}
+                          className="bg-neutral-900 text-amber-300 border border-neutral-600 px-2 py-1 text-[10px] font-black uppercase cursor-pointer"
+                          title="Commissioner Proxy Pick Slot"
+                        >
+                          {projectedFloorRows
+                            .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
+                            .map(s => (
+                              <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
+                                Proxy: Rd {s.rd} #{s.pk} ({s.team})
+                              </option>
+                            ))}
+                        </select>
+                      )}
+
+                      {isUltraMagnusAdmin && (
+                        draftLockStatus.isLocked ? (
+                          <button
+                            type="button"
+                            disabled={isTogglingDraftStatus}
+                            onClick={() => handleToggleDraftStart(floorLeagueId, true)}
+                            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-black uppercase text-xs px-3 py-1.5 border-2 border-white cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Unlock className="w-3.5 h-3.5 text-black shrink-0" />
+                            <span>
+                              {isTogglingDraftStatus
+                                ? 'Starting...'
+                                : `▶ Start ${activeFloorSeasonMeta?.seasonBadge} Draft`}
+                            </span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isTogglingDraftStatus}
+                            onClick={() => handleToggleDraftStart(floorLeagueId, false)}
+                            className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white font-black uppercase text-xs px-3 py-1.5 border border-white cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Lock className="w-3.5 h-3.5 shrink-0" />
+                            <span>{isTogglingDraftStatus ? 'Updating...' : '⏸ Pause Draft'}</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* MAKE SELECTION BAR */}
+                  <div className="p-3.5 bg-[#fff9e6] border-b-2 border-black">
+                    <form onSubmit={handleSubmitPick} className="space-y-2">
+                      {coachSelectedPlayer && (() => {
+                        const selParsed = extractDraftPlayerRatings(
+                          coachSelectedPlayer.ratings,
+                          coachSelectedPlayer.player_info,
+                          coachSelectedPlayer.pos,
+                          coachSelectedPlayer.ovr
+                        );
+                        return (
+                          <div className="bg-white border-2 border-black p-2 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="bg-black text-amber-300 font-black px-2 py-0.5 uppercase">
+                                ✓ {coachSelectedPlayer.player_name}
+                              </span>
+                              <span className="bg-neutral-100 border border-black px-1.5 py-0.5 font-black">
+                                {coachSelectedPlayer.pos}
+                              </span>
+                              <span className="bg-amber-300 border border-black px-1.5 py-0.5 font-black">
+                                OVR {selParsed.ovr}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {selParsed.attrs.map(a => {
+                                const hm = getDraftHeatmapBadgeStyle(a.level);
+                                return (
+                                  <span
+                                    key={`sel-attr-${a.short}`}
+                                    style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                    className="px-1.5 py-0.5 border font-black uppercase"
+                                  >
+                                    {a.short} {a.level}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-stretch">
+                        <div className="relative sm:col-span-8">
+                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
+                          <input
+                            type="text"
+                            value={coachSearch}
+                            onChange={(e) => {
+                              setCoachSearch(e.target.value);
+                              if (coachSelectedPlayer && e.target.value !== coachSelectedPlayer.player_name) {
+                                setCoachSelectedPlayer(null);
+                              }
+                            }}
+                            disabled={draftLockStatus.isLocked}
+                            placeholder={
+                              draftLockStatus.isLocked
+                                ? 'DRAFT IS ON STANDBY UNTIL COMMISSIONER STARTS DRAFT'
+                                : `SEARCH ${rookieClassYear} PROSPECTS & FREE AGENTS (${availableRookies.length} AVAILABLE)...`
+                            }
+                            className="w-full h-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-4 flex">
+                          <button
+                            type="submit"
+                            disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.teamId || !coachMayPickNow}
+                            className="w-full bg-black text-amber-300 hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-3 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            {draftLockStatus.isLocked ? (
+                              <>
+                                <Lock className="w-3.5 h-3.5" />
+                                <span>Draft On Standby</span>
+                              </>
+                            ) : isSubmitting ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Submitting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-3.5 h-3.5" />
+                                <span>
+                                  {!coachMayPickNow && isLoggedIn
+                                    ? `Waiting on ${nextEmptyPickSlot.team}`
+                                    : `Submit Pick #${nextEmptyPickSlot.pk}`}
+                                </span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Autocomplete Quick Results */}
+                      {coachSearch.trim() && !coachSelectedPlayer && !draftLockStatus.isLocked && (
+                        <div className="mt-1 bg-white border-2 border-black shadow-md max-h-48 overflow-y-auto divide-y divide-black/10">
+                          {filteredDbPlayers.length === 0 ? (
+                            <div className="p-2.5 text-xs italic text-slate-500">
+                              No rookies or free agents match your search.
+                            </div>
+                          ) : (
+                            filteredDbPlayers.map((player) => {
+                              const pickedBy = draftedPlayerMap.get(String(player.player_id));
+                              return (
+                                <button
+                                  type="button"
+                                  key={player.player_id}
+                                  onClick={() => {
+                                    if (pickedBy) {
+                                      setPodium(pickedBy);
+                                      return;
+                                    }
+                                    setCoachSelectedPlayer(player);
+                                    setCoachSearch(player.player_name);
+                                  }}
+                                  className={`w-full text-left p-2 flex items-center justify-between text-xs font-sans transition-colors cursor-pointer ${
+                                    pickedBy ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-yellow-100'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-bold uppercase text-black">{player.player_name}</span>
+                                    <span className="text-[10px] font-mono bg-neutral-100 px-1 py-0.5 border border-black/20">{player.pos}</span>
+                                    <span
+                                      className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 border border-black ${
+                                        player.isFreeAgent
+                                          ? 'bg-emerald-200 text-emerald-950'
+                                          : 'bg-amber-300 text-black'
+                                      }`}
+                                    >
+                                      {player.isFreeAgent ? 'FA' : 'ROOKIE'}
+                                    </span>
+                                    {pickedBy && (
+                                      <span className="text-[10px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
+                                        ✓ Picked (#{pickedBy.pk} {pickedBy.team})
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="font-mono font-black text-xs bg-black text-white px-1.5 py-0.5 shrink-0">
+                                    OVR {player.ovr}
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </form>
+                  </div>
+
+                  {/* TEAM ROSTER SECTION */}
+                  {activeRosterTeam && (
+                    <div className="p-3.5 space-y-3">
+                      {/* Clean 1-Line Roster Toolbar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-black/20 font-mono">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black uppercase text-black">Team Roster:</span>
                           <select
                             value={Number(activeRosterTeam.team_id)}
                             onChange={(e) => {
@@ -3919,7 +4036,7 @@ export default function DraftPage() {
                                 setRosterTeamOverrideId(val);
                               }
                             }}
-                            className="bg-yellow-100 text-black border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
+                            className="bg-yellow-100 text-black border-2 border-black px-2.5 py-1 text-xs font-black uppercase cursor-pointer"
                           >
                             {draftTeamsList.map(t => {
                               const isOnClock = Number(t.team_id) === Number(nextEmptyPickSlot.teamId);
@@ -3930,9 +4047,23 @@ export default function DraftPage() {
                               );
                             })}
                           </select>
+                          <span className="bg-black text-amber-300 px-2 py-1 text-[10px] font-black uppercase border border-black">
+                            Avg OVR: {activeTeamRosterData.avgOvr || '-'}
+                          </span>
+                          {rosterTeamOverrideId !== null &&
+                            nextEmptyPickSlot.teamId &&
+                            Number(rosterTeamOverrideId) !== Number(nextEmptyPickSlot.teamId) && (
+                              <button
+                                type="button"
+                                onClick={() => setRosterTeamOverrideId(null)}
+                                className="bg-red-800 hover:bg-red-900 text-white text-[10px] font-black uppercase px-2 py-1 border border-black cursor-pointer"
+                              >
+                                🎯 Return to On-Clock ({nextEmptyPickSlot.team})
+                              </button>
+                            )}
                         </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           {([
                             { key: 'ALL', label: `All (${activeTeamRosterData.totalCount})` },
                             { key: 'SKATERS', label: `Skaters (${activeTeamRosterData.skaters.length})` },
@@ -3951,396 +4082,67 @@ export default function DraftPage() {
                               {tab.label}
                             </button>
                           ))}
-                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (showRosterCareerSeasons) {
-                              setShowRosterCareerSeasons(false);
-                              setExpandedRosterPlayerKeys(new Set());
-                            } else {
-                              setShowRosterCareerSeasons(true);
-                              const allKeys = [
-                                ...activeTeamRosterData.skaters.map(s => s.key),
-                                ...activeTeamRosterData.goalies.map(g => g.key)
-                              ];
-                              setExpandedRosterPlayerKeys(new Set(allKeys));
-                            }
-                          }}
-                          className={`px-2 py-1 text-[10px] font-black uppercase border border-black cursor-pointer flex items-center gap-1 ${
-                            showRosterCareerSeasons
-                              ? 'bg-emerald-700 text-white'
-                              : 'bg-white text-black hover:bg-neutral-100'
-                          }`}
-                          title="Expand or collapse remaining career seasons for all players on this roster"
-                        >
-                          {showRosterCareerSeasons ? (
-                            <ChevronDown className="w-3 h-3" />
-                          ) : (
-                            <ChevronRight className="w-3 h-3" />
-                          )}
-                          <span>
-                            {showRosterCareerSeasons
-                              ? `Collapse All Career Seasons (${rookieClassYear}+)`
-                              : `Expand All Career Seasons (${rookieClassYear}+)`}
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                {/* Draft completion notice (or fallback only if 0 slots exist at all) */}
-                {!loading &&
-                  (projectedFloorRows.length === 0 ||
-                    !projectedFloorRows.some(d => !d.player || d.player === 'N/A' || d.player.trim() === '')) && (
-                  <div className="bg-amber-50 border-2 border-black p-3 mb-4 text-xs font-sans space-y-2">
-                    {projectedFloorRows.length > 0 ? (
-                      <div className="font-black uppercase font-mono text-emerald-800">
-                        ✓ Draft complete &mdash; no open picks remain for {activeFloorSeasonMeta?.seasonBadge}.
-                      </div>
-                    ) : (
-                      <>
-                        <div className="font-black uppercase font-mono">
-                          No draft order yet for {activeFloorSeasonMeta?.seasonBadge}.
-                        </div>
-                        <p className="text-[11px] text-slate-700">
-                          Creates the empty pick slots in the draft table from the current standings.
-                          Draft rounds go worst record first; waiver rounds run in reverse (best record first).
-                        </p>
-                        <div className="flex items-end gap-3 flex-wrap font-mono">
-                          <label className="text-[10px] font-black uppercase">
-                            Draft Rounds
-                            <input
-                              type="number"
-                              min={1}
-                              max={10}
-                              value={draftRoundsInput}
-                              onChange={(e) => setDraftRoundsInput(Number(e.target.value))}
-                              className="block w-20 mt-0.5 bg-white border-2 border-black px-2 py-1 text-xs font-bold"
-                            />
-                          </label>
-                          <label className="text-[10px] font-black uppercase">
-                            Waiver Rounds
-                            <input
-                              type="number"
-                              min={0}
-                              max={10}
-                              value={waiverRoundsInput}
-                              onChange={(e) => setWaiverRoundsInput(Number(e.target.value))}
-                              className="block w-20 mt-0.5 bg-white border-2 border-black px-2 py-1 text-xs font-bold"
-                            />
-                          </label>
                           <button
                             type="button"
-                            onClick={handleGenerateDraftOrder}
-                            disabled={isGeneratingOrder}
-                            className="bg-black text-white hover:bg-neutral-800 disabled:opacity-40 border-2 border-black px-3 py-1.5 text-xs font-black uppercase cursor-pointer flex items-center gap-1.5"
-                          >
-                            {isGeneratingOrder ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
-                            {isLoggedIn ? 'Generate Draft Order' : 'Sign In to Generate Order'}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Coach Pick Form */}
-                <form onSubmit={handleSubmitPick} className="space-y-2">
-                  <div>
-                    <label className="block text-[11px] font-black uppercase font-mono mb-1.5 text-slate-800 flex justify-between items-center flex-wrap gap-1">
-                      <span>
-                        Search & Select Prospect ({rookieClassYear} Rookies & Free Agents • {availableRookies.length} available):
-                      </span>
-                      {coachSelectedPlayer && (
-                        <span className="text-emerald-700 font-bold">
-                          ✓ Selected: {coachSelectedPlayer.player_name} ({coachSelectedPlayer.pos}, {coachSelectedPlayer.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}, OVR {coachSelectedPlayer.ovr})
-                        </span>
-                      )}
-                    </label>
-
-                    {coachSelectedPlayer && (() => {
-                      const selParsed = extractDraftPlayerRatings(
-                        coachSelectedPlayer.ratings,
-                        coachSelectedPlayer.player_info,
-                        coachSelectedPlayer.pos,
-                        coachSelectedPlayer.ovr
-                      );
-                      return (
-                        <div className="mb-2 bg-emerald-50 border-2 border-black p-2 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="bg-black text-amber-300 font-black px-1.5 py-0.5 uppercase">
-                              {coachSelectedPlayer.player_name}
-                            </span>
-                            <span className="bg-white border border-black px-1.5 py-0.5 font-black">
-                              POS: {coachSelectedPlayer.pos}
-                            </span>
-                            <span className="bg-white border border-black px-1.5 py-0.5 font-black">
-                              OVR: {selParsed.ovr}
-                            </span>
-                            <span className="bg-white border border-black px-1.5 py-0.5 font-bold">
-                              {selParsed.isG ? 'CATCH' : 'HAND'}: {selParsed.hand}
-                            </span>
-                            {selParsed.weightLbs !== '-' && (
-                              <span className="bg-white border border-black px-1.5 py-0.5 font-bold">
-                                WGT: {selParsed.weightLbs} lbs
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {selParsed.attrs.map(a => {
-                              const hm = getDraftHeatmapBadgeStyle(a.level);
-                              return (
-                                <span
-                                  key={`sel-attr-${a.short}`}
-                                  style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
-                                  className="px-1.5 py-0.5 border font-black uppercase"
-                                  title={`${a.label}: ${a.level}/6`}
-                                >
-                                  {a.short} {a.level}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
-                      <div className="relative sm:col-span-7">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
-                        <input
-                          type="text"
-                          value={coachSearch}
-                          onChange={(e) => {
-                            setCoachSearch(e.target.value);
-                            if (coachSelectedPlayer && e.target.value !== coachSelectedPlayer.player_name) {
-                              setCoachSelectedPlayer(null);
-                            }
-                          }}
-                          disabled={draftLockStatus.isLocked}
-                          placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE A ROOKIE OR FREE AGENT NAME, POSITION, OR 'FREE AGENT'..."}
-                          className="w-full h-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
-                        />
-                      </div>
-
-                      <div className="sm:col-span-5 flex">
-                        <button
-                          type="submit"
-                          disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.teamId || !coachMayPickNow}
-                          className="w-full bg-black text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-4 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
-                        >
-                          {draftLockStatus.isLocked ? (
-                            <>
-                              <Lock className="w-3.5 h-3.5 text-amber-400" />
-                              Draft Locked Until Start Date
-                            </>
-                          ) : isSubmitting ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              Recording Selection...
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-3.5 h-3.5" />
-                              {!nextEmptyPickSlot.teamId
-                                ? 'No Open Pick Slot'
-                                : !coachMayPickNow && isLoggedIn
-                                  ? `Waiting on ${nextEmptyPickSlot.team}`
-                                  : isUltraMagnusAdmin && !isCurrentCoachOnClock
-                                    ? `Submit Pick #${nextEmptyPickSlot.pk} for ${nextEmptyPickSlot.team}`
-                                    : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Autocomplete Quick Results */}
-                    {coachSearch.trim() && !coachSelectedPlayer && !draftLockStatus.isLocked && (
-                      <div className="mt-1 bg-white border-2 border-black shadow-md max-h-48 overflow-y-auto divide-y divide-black/10">
-                        {filteredDbPlayers.length === 0 ? (
-                          <div className="p-2.5 text-xs italic text-slate-500">
-                            No rookies or free agents match your search.
-                          </div>
-                        ) : (
-                          filteredDbPlayers.map((player) => {
-                            const pickedBy = draftedPlayerMap.get(String(player.player_id));
-                            return (
-                              <button
-                                type="button"
-                                key={player.player_id}
-                                onClick={() => {
-                                  if (pickedBy) {
-                                    setPodium(pickedBy);
-                                    return;
-                                  }
-                                  setCoachSelectedPlayer(player);
-                                  setCoachSearch(player.player_name);
-                                  setPodium({
-                                    team: nextEmptyPickSlot.team,
-                                    teamId: nextEmptyPickSlot.teamId,
-                                    coachId: nextEmptyPickSlot.coachId,
-                                    coachName: nextEmptyPickSlot.coachName,
-                                    rd: nextEmptyPickSlot.rd,
-                                    pk: nextEmptyPickSlot.pk,
-                                    player: player.player_name,
-                                    playerId: player.player_id,
-                                    pos: player.pos,
-                                    ovr: player.ovr,
-                                    transaction: "Coach Selection Preview",
-                                    logo: nextEmptyPickSlot.logo,
-                                    year: nextEmptyPickSlot.year,
-                                    leagueId: nextEmptyPickSlot.leagueId,
-                                    seasonBadge: nextEmptyPickSlot.seasonBadge,
-                                    seasonName: nextEmptyPickSlot.seasonName,
-                                    leagueType: nextEmptyPickSlot.leagueType,
-                                    ratings: player.ratings,
-                                    playerInfo: player.player_info
-                                  });
-                                }}
-                                className={`w-full text-left p-2 flex items-center justify-between text-xs font-sans transition-colors cursor-pointer ${
-                                  pickedBy ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-yellow-100'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold uppercase text-black">{player.player_name}</span>
-                                  <span className="text-[10px] font-mono bg-neutral-100 px-1 py-0.5 border border-black/20">{player.pos}</span>
-                                  <span
-                                    className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 border border-black ${
-                                      player.isFreeAgent
-                                        ? 'bg-emerald-200 text-emerald-950'
-                                        : 'bg-amber-300 text-black'
-                                    }`}
-                                  >
-                                    {player.isFreeAgent ? 'FREE AGENT' : 'ROOKIE'}
-                                  </span>
-                                  {pickedBy ? (
-                                    <span className="text-[10px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
-                                      ✓ PICKED BY {pickedBy.team}{pickedBy.coachName ? ` (${pickedBy.coachName})` : ''} &bull; Rd {pickedBy.rd}, Pk #{pickedBy.pk}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-500 font-serif italic">
-                                      {player.isFreeAgent
-                                        ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
-                                        : player.team_default}
-                                    </span>
-                                  )}
-                                </div>
-                                <span className="font-mono font-black text-xs bg-black text-white px-1.5 py-0.5 shrink-0">
-                                  OVR {player.ovr}
-                                </span>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </form>
-                </div>
-
-                {/* SELECTED PICKS IN THIS DRAFT (Always visible in Draft Area to show who picked whom) */}
-                {selectedPicksForFloor.length > 0 && (
-                  <div className="mt-4 pt-3 border-t-2 border-black">
-                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                      <span className="font-mono text-[10px] font-black uppercase tracking-wider bg-emerald-800 text-white px-2 py-0.5 border border-black">
-                        ✓ Selected Picks in {activeFloorSeasonMeta?.seasonBadge} ({selectedPicksForFloor.length})
-                      </span>
-                      <button
-                        type="button"
-                        disabled={isPushingDiscordPick}
-                        onClick={() => handlePushPickToDiscord(selectedPicksForFloor[selectedPicksForFloor.length - 1])}
-                        className="bg-indigo-900 hover:bg-indigo-800 disabled:opacity-50 text-white font-mono text-[10px] font-black uppercase px-2.5 py-0.5 border border-black cursor-pointer flex items-center gap-1"
-                        title={`Push latest pick to ${activeDiscordChannelLabel}`}
-                      >
-                        <Send className="w-3 h-3 text-amber-300" />
-                        <span>
-                          {isPushingDiscordPick
-                            ? 'Pushing to Discord...'
-                            : `📢 Push Pick #${selectedPicksForFloor[selectedPicksForFloor.length - 1].pk} to ${activeDiscordChannelLabel}`}
-                        </span>
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
-                      {selectedPicksForFloor.map((pick) => (
-                        <div
-                          key={`selected-summary-${pick.leagueId}-${pick.rd}-${pick.pk}`}
-                          onClick={() => setPodium(pick)}
-                          className="flex items-center justify-between gap-2 bg-emerald-50 hover:bg-emerald-100 border border-black px-2.5 py-1.5 text-left transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-mono text-[10px] font-black bg-black text-amber-300 px-1.5 py-0.5 shrink-0">
-                              Rd {pick.rd} &bull; #{pick.pk}
-                            </span>
-                            {pick.logo && <img src={pick.logo} className="w-4 h-4 object-contain shrink-0" alt="" />}
-                            <div className="min-w-0">
-                              <div className="text-xs font-black uppercase text-black truncate">
-                                {pick.player}{' '}
-                                {pick.pos ? <span className="text-[10px] font-mono text-slate-600">({pick.pos}{pick.ovr ? `, OVR ${pick.ovr}` : ''})</span> : null}
-                              </div>
-                              <div className="text-[10px] font-mono font-bold uppercase text-emerald-900 truncate">
-                                Picked by {pick.team}{pick.coachName ? ` (${pick.coachName})` : ''}
-                              </div>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={isPushingDiscordPick}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePushPickToDiscord(pick);
+                            onClick={() => {
+                              if (showRosterCareerSeasons) {
+                                setShowRosterCareerSeasons(false);
+                                setExpandedRosterPlayerKeys(new Set());
+                              } else {
+                                setShowRosterCareerSeasons(true);
+                                const allKeys = [
+                                  ...activeTeamRosterData.skaters.map(s => s.key),
+                                  ...activeTeamRosterData.goalies.map(g => g.key)
+                                ];
+                                setExpandedRosterPlayerKeys(new Set(allKeys));
+                              }
                             }}
-                            className="text-[9px] font-mono font-black uppercase bg-indigo-950 hover:bg-indigo-800 text-amber-300 px-1.5 py-0.5 border border-black shrink-0 cursor-pointer"
-                            title={`Push Pick #${pick.pk} to ${activeDiscordChannelLabel}`}
+                            className={`px-2 py-1 text-[10px] font-black uppercase border border-black cursor-pointer flex items-center gap-1 ${
+                              showRosterCareerSeasons
+                                ? 'bg-emerald-700 text-white'
+                                : 'bg-white text-black hover:bg-neutral-100'
+                            }`}
                           >
-                            📢 Discord
+                            {showRosterCareerSeasons ? (
+                              <ChevronDown className="w-3 h-3" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                            <span>{showRosterCareerSeasons ? 'Collapse Careers' : 'Expand Careers'}</span>
                           </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      </div>
 
-                {/* ACTIVE TEAM ROSTER & PLAYER RATINGS (MERGED DIRECTLY INTO SELECTION DESK CARD) */}
-                {activeRosterTeam && (
-                  <div className="mt-3 pt-3 border-t-2 border-black space-y-3">
-                    {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
-                    {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <span className="font-mono text-xs font-black uppercase text-black bg-amber-200 px-2.5 py-0.5 border border-black">
-                            🏒 Skaters ({activeTeamRosterData.skaters.length})
-                          </span>
-                        </div>
-
-                        <div className="bg-white border-2 border-black overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs min-w-[840px]">
+                      {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
+                      {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
+                        <div className="space-y-1.5">
+                          <div className="bg-white border-2 border-black overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs min-w-[780px]">
                         <thead>
                           <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
-                            <th className="py-2 px-3">PLAYER &amp; CAREER LONGEVITY</th>
-                            <th className="py-2 px-2 text-center">SEASON</th>
-                            <th className="py-2 px-2 text-center">POS</th>
-                            <th className="py-2 px-2 text-center">HAND</th>
-                            <th className="py-2 px-2 text-center">WGT</th>
-                            <th className="py-2 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
-                            <th className="py-2 px-2 text-center" title="Agility (1-6)">AGI</th>
-                            <th className="py-2 px-2 text-center" title="Speed (1-6)">SPD</th>
-                            <th className="py-2 px-2 text-center" title="Offensive Awareness (1-6)">OFA</th>
-                            <th className="py-2 px-2 text-center" title="Defensive Awareness (1-6)">DFA</th>
-                            <th className="py-2 px-2 text-center" title="Shot Power (1-6)">SHP</th>
-                            <th className="py-2 px-2 text-center" title="Shot Accuracy (1-6)">SHA</th>
-                            <th className="py-2 px-2 text-center" title="Stick Handling (1-6)">STH</th>
-                            <th className="py-2 px-2 text-center" title="Passing (1-6)">PAS</th>
-                            <th className="py-2 px-2 text-center" title="Checking (1-6)">CHK</th>
-                            <th className="py-2 px-2 text-center" title="Aggression (1-6)">AGR</th>
+                            <th className="py-1.5 px-3">SKATER ({activeTeamRosterData.skaters.length})</th>
+                            <th className="py-1.5 px-1.5 text-center">YR</th>
+                            <th className="py-1.5 px-1.5 text-center">POS</th>
+                            <th className="py-1.5 px-1.5 text-center">SH</th>
+                            <th className="py-1.5 px-1.5 text-center">WGT</th>
+                            <th className="py-1.5 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Agility (1-6)">AGI</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Speed (1-6)">SPD</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Shot Power (1-6)">SHP</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Shot Accuracy (1-6)">SHA</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Stick Handling (1-6)">STH</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Passing (1-6)">PAS</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Checking (1-6)">CHK</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Aggression (1-6)">AGR</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-200 font-mono">
                           {activeTeamRosterData.skaters.length === 0 ? (
                             <tr>
-                              <td colSpan={16} className="py-6 text-center italic text-slate-500 font-sans">
+                              <td colSpan={16} className="py-5 text-center italic text-slate-500 font-sans">
                                 No skaters found for {activeRosterTeam.team_name}.
                               </td>
                             </tr>
@@ -4374,12 +4176,12 @@ export default function DraftPage() {
                                     }}
                                     className={`${
                                       player.isDraftedNow
-                                        ? 'bg-emerald-50 hover:bg-emerald-100'
-                                        : 'bg-white hover:bg-yellow-50'
-                                    } border-t border-black/20 ${extraYearsCount > 0 ? 'cursor-pointer' : ''}`}
+                                        ? 'bg-emerald-50/70 hover:bg-emerald-100/80'
+                                        : 'bg-white hover:bg-yellow-50/70'
+                                    } border-t border-black/15 ${extraYearsCount > 0 ? 'cursor-pointer' : ''}`}
                                   >
-                                    <td className="py-2 px-3 font-sans">
-                                      <div className="flex items-center gap-2 flex-wrap">
+                                    <td className="py-1.5 px-2.5 font-sans">
+                                      <div className="flex items-center gap-1.5">
                                         {extraYearsCount > 0 ? (
                                           <button
                                             type="button"
@@ -4387,59 +4189,60 @@ export default function DraftPage() {
                                               e.stopPropagation();
                                               toggleRosterPlayerExpand(player.key);
                                             }}
-                                            className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-amber-200 border border-black text-black cursor-pointer shrink-0"
-                                            title={isExpanded ? 'Collapse remaining career seasons' : 'Expand remaining career seasons'}
+                                            className="w-4 h-4 flex items-center justify-center bg-neutral-100 hover:bg-amber-200 border border-black/40 text-black cursor-pointer shrink-0"
+                                            title={isExpanded ? 'Collapse remaining career seasons' : `Show +${extraYearsCount} remaining career season(s) thru ${finalYear}`}
                                           >
                                             {isExpanded ? (
-                                              <ChevronDown className="w-3.5 h-3.5" />
+                                              <ChevronDown className="w-3 h-3" />
                                             ) : (
-                                              <ChevronRight className="w-3.5 h-3.5" />
+                                              <ChevronRight className="w-3 h-3" />
                                             )}
                                           </button>
                                         ) : (
-                                          <span className="w-5 h-5 inline-block shrink-0" />
+                                          <span className="w-4 h-4 inline-block shrink-0" />
                                         )}
                                         <Link
                                           href={`/players?q=${encodeURIComponent(player.name)}${player.playerId ? `&id=${encodeURIComponent(String(player.playerId))}` : ''}`}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="font-black uppercase text-black hover:underline"
+                                          className="font-black uppercase text-black hover:underline text-xs truncate"
                                           title="View in Player Database"
                                         >
                                           {player.name}
                                         </Link>
-                                        {player.isDraftedNow && player.draftBadgeText && (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
-                                            ✓ {player.draftBadgeText}
+                                        {player.isDraftedNow && (
+                                          <span
+                                            className="text-[8.5px] font-mono font-black uppercase bg-emerald-700 text-white px-1 py-0 border border-black shrink-0"
+                                            title={player.draftBadgeText || 'Drafted this year'}
+                                          >
+                                            NEW
                                           </span>
                                         )}
                                         {extraYearsCount === 0 ? (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-red-100 text-red-900 px-1.5 py-0.5 border border-red-700">
-                                            ⚠️ Final Season ({currentSeasonEntry.year})
-                                          </span>
-                                        ) : extraYearsCount === 1 ? (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 hover:bg-amber-200 text-amber-950 px-1.5 py-0.5 border border-amber-700">
-                                            {isExpanded ? '▼' : '▶'} +1 More Season (Thru {finalYear})
+                                          <span
+                                            className="text-[8.5px] font-mono font-bold uppercase text-red-700 bg-red-50 px-1 py-0 border border-red-300 shrink-0"
+                                            title={`Final season (${currentSeasonEntry.year})`}
+                                          >
+                                            Final yr
                                           </span>
                                         ) : (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 hover:bg-emerald-200 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
-                                            {isExpanded ? '▼' : '▶'} +{extraYearsCount} More Seasons (Thru {finalYear})
+                                          <span
+                                            className="text-[8.5px] font-mono font-bold uppercase text-slate-600 bg-neutral-100 hover:bg-amber-100 px-1 py-0 border border-neutral-300 shrink-0"
+                                            title={`Plays thru ${finalYear}`}
+                                          >
+                                            +{extraYearsCount} yr{extraYearsCount === 1 ? '' : 's'}
                                           </span>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="py-2 px-2 text-center">
-                                      <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-black uppercase">
-                                        {currentSeasonEntry.year}
-                                      </span>
-                                      {currentSeasonEntry.nhlTeam && (
-                                        <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">
-                                          {currentSeasonEntry.nhlTeam}
-                                        </span>
-                                      )}
+                                    <td
+                                      className="py-1.5 px-1.5 text-center text-[10px] font-bold text-slate-600"
+                                      title={currentSeasonEntry.nhlTeam || undefined}
+                                    >
+                                      {currentSeasonEntry.year}
                                     </td>
-                                    <td className="py-2 px-2 text-center">
+                                    <td className="py-1.5 px-1.5 text-center">
                                       <span
-                                        className={`px-1.5 py-0.5 text-[10px] font-black border border-black ${
+                                        className={`px-1.5 py-0 text-[10px] font-black border border-black/40 ${
                                           player.rolePos === 'D'
                                             ? 'bg-sky-100 text-sky-950'
                                             : 'bg-amber-100 text-amber-950'
@@ -4448,13 +4251,13 @@ export default function DraftPage() {
                                         {player.rolePos}
                                       </span>
                                     </td>
-                                    <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
+                                    <td className="py-1.5 px-1.5 text-center text-[11px] font-bold text-slate-700">
                                       {currentSeasonEntry.hand || player.hand}
                                     </td>
-                                    <td className="py-2 px-2 text-center text-[11px] text-slate-700">
+                                    <td className="py-1.5 px-1.5 text-center text-[11px] text-slate-700">
                                       {currentSeasonEntry.weightLbs || player.weightLbs}
                                     </td>
-                                    <td className="py-2 px-2 text-center">
+                                    <td className="py-1.5 px-1.5 text-center">
                                       {(() => {
                                         const ovrHm = getDraftOvrBadgeStyle(currentSeasonEntry.ovr || player.ovr);
                                         return (
@@ -4470,7 +4273,7 @@ export default function DraftPage() {
                                     {(currentSeasonEntry.attrs || player.attrs).map(attr => {
                                       const hm = getDraftHeatmapBadgeStyle(attr.level);
                                       return (
-                                        <td key={`${player.key}-cur-${attr.short}`} className="py-2 px-1.5 text-center">
+                                        <td key={`${player.key}-cur-${attr.short}`} className="py-1.5 px-1 text-center">
                                           <span
                                             style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
                                             className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
@@ -4497,45 +4300,38 @@ export default function DraftPage() {
                                           key={`${player.key}-yr-${sRow.year}`}
                                           className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]"
                                         >
-                                          <td className="py-1.5 pl-9 pr-3 font-mono text-[10px] text-slate-600">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              <span className="font-black text-slate-800">
-                                                ↳ {sRow.year} Career (+{sIdx + 1} Yr{sIdx > 0 ? 's' : ''})
+                                          <td className="py-1 pl-8 pr-2 font-mono text-[10px] text-slate-600">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-bold text-slate-700">
+                                                ↳ {sRow.year} (+{sIdx + 1} yr)
                                               </span>
                                               {isLastSeason && (
-                                                <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8.5px] font-black uppercase">
-                                                  Final NHL95 Season
+                                                <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8px] font-black uppercase">
+                                                  Final
                                                 </span>
                                               )}
                                             </div>
                                           </td>
-                                          <td className="py-1.5 px-2 text-center">
-                                            <span className="bg-neutral-200 text-black px-1.5 py-0.5 text-[10px] font-black border border-black/30">
-                                              {sRow.year}
-                                            </span>
-                                            {sRow.nhlTeam && (
-                                              <span className="block text-[8.5px] text-slate-500 font-bold uppercase">
-                                                {sRow.nhlTeam}
-                                              </span>
-                                            )}
+                                          <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">
+                                            {sRow.year}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center text-[10px] font-bold text-slate-500">
+                                          <td className="py-1 px-1.5 text-center text-[10px] font-bold text-slate-500">
                                             {player.rolePos}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                          <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">
                                             {sRow.hand}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                          <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">
                                             {sRow.weightLbs}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center">
+                                          <td className="py-1 px-1.5 text-center">
                                             <div className="inline-flex items-center gap-1">
                                               {(() => {
                                                 const ovrHm = getDraftOvrBadgeStyle(sRow.ovr);
                                                 return (
                                                   <span
                                                     style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
-                                                    className="font-black px-1.5 py-0.5 text-[11px] border"
+                                                    className="font-black px-1.5 py-0 text-[10px] border"
                                                   >
                                                     {sRow.ovr || '-'}
                                                   </span>
@@ -4543,7 +4339,7 @@ export default function DraftPage() {
                                               })()}
                                               {ovrDiff !== 0 && (
                                                 <span
-                                                  className={`text-[9px] font-black ${
+                                                  className={`text-[8.5px] font-black ${
                                                     ovrDiff > 0 ? 'text-emerald-700' : 'text-red-700'
                                                   }`}
                                                 >
@@ -4557,7 +4353,7 @@ export default function DraftPage() {
                                             return (
                                               <td
                                                 key={`${player.key}-${sRow.year}-${attr.short}`}
-                                                className="py-1.5 px-1.5 text-center"
+                                                className="py-1 px-1 text-center"
                                               >
                                                 <span
                                                   style={{
@@ -4565,7 +4361,7 @@ export default function DraftPage() {
                                                     color: hm.text,
                                                     borderColor: hm.border
                                                   }}
-                                                  className="inline-block w-6 py-0.5 text-center font-black text-[10px] border opacity-90"
+                                                  className="inline-block w-6 py-0 text-center font-black text-[10px] border opacity-90"
                                                   title={`${sRow.year} ${attr.label}: ${attr.level}/6`}
                                                 >
                                                   {attr.level || '-'}
@@ -4589,37 +4385,31 @@ export default function DraftPage() {
                 {/* GOALIES TABLE */}
                 {(rosterPosFilter === 'ALL' || rosterPosFilter === 'GOALIES') && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="font-mono text-xs font-black uppercase text-black bg-sky-200 px-2.5 py-0.5 border border-black">
-                        🥅 Goalies ({activeTeamRosterData.goalies.length})
-                      </span>
-                    </div>
-
                     <div className="bg-white border-2 border-black overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs min-w-[800px]">
+                      <table className="w-full text-left border-collapse text-xs min-w-[760px]">
                         <thead>
                           <tr className="bg-black text-white font-mono text-[10px] uppercase tracking-wider">
-                            <th className="py-2 px-3">GOALIE &amp; CAREER LONGEVITY</th>
-                            <th className="py-2 px-2 text-center">SEASON</th>
-                            <th className="py-2 px-2 text-center">POS</th>
-                            <th className="py-2 px-2 text-center">CATCH</th>
-                            <th className="py-2 px-2 text-center">WGT</th>
-                            <th className="py-2 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
-                            <th className="py-2 px-2 text-center" title="Agility (1-6)">AGI</th>
-                            <th className="py-2 px-2 text-center" title="Speed (1-6)">SPD</th>
-                            <th className="py-2 px-2 text-center" title="Offensive Awareness (1-6)">OFA</th>
-                            <th className="py-2 px-2 text-center" title="Defensive Awareness (1-6)">DFA</th>
-                            <th className="py-2 px-2 text-center" title="Puck Control (1-6)">PKC</th>
-                            <th className="py-2 px-2 text-center" title="Stick Right (1-6)">STR</th>
-                            <th className="py-2 px-2 text-center" title="Stick Left (1-6)">STL</th>
-                            <th className="py-2 px-2 text-center" title="Glove Right (1-6)">GVR</th>
-                            <th className="py-2 px-2 text-center" title="Glove Left (1-6)">GVL</th>
+                            <th className="py-1.5 px-3">GOALIE ({activeTeamRosterData.goalies.length})</th>
+                            <th className="py-1.5 px-1.5 text-center">YR</th>
+                            <th className="py-1.5 px-1.5 text-center">POS</th>
+                            <th className="py-1.5 px-1.5 text-center">GLV</th>
+                            <th className="py-1.5 px-1.5 text-center">WGT</th>
+                            <th className="py-1.5 px-2 text-center bg-amber-400 text-black font-black">OVR</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Agility (1-6)">AGI</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Speed (1-6)">SPD</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Offensive Awareness (1-6)">OFA</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Defensive Awareness (1-6)">DFA</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Puck Control (1-6)">PKC</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Stick Right (1-6)">STR</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Stick Left (1-6)">STL</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Glove Right (1-6)">GVR</th>
+                            <th className="py-1.5 px-1.5 text-center" title="Glove Left (1-6)">GVL</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-neutral-200 font-mono">
                           {activeTeamRosterData.goalies.length === 0 ? (
                             <tr>
-                              <td colSpan={15} className="py-6 text-center italic text-slate-500 font-sans">
+                              <td colSpan={15} className="py-5 text-center italic text-slate-500 font-sans">
                                 No goalies found for {activeRosterTeam.team_name}.
                               </td>
                             </tr>
@@ -4653,12 +4443,12 @@ export default function DraftPage() {
                                     }}
                                     className={`${
                                       goalie.isDraftedNow
-                                        ? 'bg-emerald-50 hover:bg-emerald-100'
-                                        : 'bg-white hover:bg-yellow-50'
-                                    } border-t border-black/20 ${extraYearsCount > 0 ? 'cursor-pointer' : ''}`}
+                                        ? 'bg-emerald-50/70 hover:bg-emerald-100/80'
+                                        : 'bg-white hover:bg-yellow-50/70'
+                                    } border-t border-black/15 ${extraYearsCount > 0 ? 'cursor-pointer' : ''}`}
                                   >
-                                    <td className="py-2 px-3 font-sans">
-                                      <div className="flex items-center gap-2 flex-wrap">
+                                    <td className="py-1.5 px-2.5 font-sans">
+                                      <div className="flex items-center gap-1.5">
                                         {extraYearsCount > 0 ? (
                                           <button
                                             type="button"
@@ -4666,68 +4456,69 @@ export default function DraftPage() {
                                               e.stopPropagation();
                                               toggleRosterPlayerExpand(goalie.key);
                                             }}
-                                            className="w-5 h-5 flex items-center justify-center bg-neutral-100 hover:bg-amber-200 border border-black text-black cursor-pointer shrink-0"
-                                            title={isExpanded ? 'Collapse remaining career seasons' : 'Expand remaining career seasons'}
+                                            className="w-4 h-4 flex items-center justify-center bg-neutral-100 hover:bg-amber-200 border border-black/40 text-black cursor-pointer shrink-0"
+                                            title={isExpanded ? 'Collapse remaining career seasons' : `Show +${extraYearsCount} remaining career season(s) thru ${finalYear}`}
                                           >
                                             {isExpanded ? (
-                                              <ChevronDown className="w-3.5 h-3.5" />
+                                              <ChevronDown className="w-3 h-3" />
                                             ) : (
-                                              <ChevronRight className="w-3.5 h-3.5" />
+                                              <ChevronRight className="w-3 h-3" />
                                             )}
                                           </button>
                                         ) : (
-                                          <span className="w-5 h-5 inline-block shrink-0" />
+                                          <span className="w-4 h-4 inline-block shrink-0" />
                                         )}
                                         <Link
                                           href={`/players?q=${encodeURIComponent(goalie.name)}${goalie.playerId ? `&id=${encodeURIComponent(String(goalie.playerId))}` : ''}`}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="font-black uppercase text-black hover:underline"
+                                          className="font-black uppercase text-black hover:underline text-xs truncate"
                                           title="View in Player Database"
                                         >
                                           {goalie.name}
                                         </Link>
-                                        {goalie.isDraftedNow && goalie.draftBadgeText && (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-700 text-white px-1.5 py-0.5 border border-black">
-                                            ✓ {goalie.draftBadgeText}
+                                        {goalie.isDraftedNow && (
+                                          <span
+                                            className="text-[8.5px] font-mono font-black uppercase bg-emerald-700 text-white px-1 py-0 border border-black shrink-0"
+                                            title={goalie.draftBadgeText || 'Drafted this year'}
+                                          >
+                                            NEW
                                           </span>
                                         )}
                                         {extraYearsCount === 0 ? (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-red-100 text-red-900 px-1.5 py-0.5 border border-red-700">
-                                            ⚠️ Final Season ({currentSeasonEntry.year})
-                                          </span>
-                                        ) : extraYearsCount === 1 ? (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-amber-100 hover:bg-amber-200 text-amber-950 px-1.5 py-0.5 border border-amber-700">
-                                            {isExpanded ? '▼' : '▶'} +1 More Season (Thru {finalYear})
+                                          <span
+                                            className="text-[8.5px] font-mono font-bold uppercase text-red-700 bg-red-50 px-1 py-0 border border-red-300 shrink-0"
+                                            title={`Final season (${currentSeasonEntry.year})`}
+                                          >
+                                            Final yr
                                           </span>
                                         ) : (
-                                          <span className="text-[9px] font-mono font-black uppercase bg-emerald-100 hover:bg-emerald-200 text-emerald-950 px-1.5 py-0.5 border border-emerald-700">
-                                            {isExpanded ? '▼' : '▶'} +{extraYearsCount} More Seasons (Thru {finalYear})
+                                          <span
+                                            className="text-[8.5px] font-mono font-bold uppercase text-slate-600 bg-neutral-100 hover:bg-amber-100 px-1 py-0 border border-neutral-300 shrink-0"
+                                            title={`Plays thru ${finalYear}`}
+                                          >
+                                            +{extraYearsCount} yr{extraYearsCount === 1 ? '' : 's'}
                                           </span>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="py-2 px-2 text-center">
-                                      <span className="bg-black text-white px-1.5 py-0.5 text-[10px] font-black uppercase">
-                                        {currentSeasonEntry.year}
-                                      </span>
-                                      {currentSeasonEntry.nhlTeam && (
-                                        <span className="block text-[9px] text-slate-500 font-bold uppercase mt-0.5">
-                                          {currentSeasonEntry.nhlTeam}
-                                        </span>
-                                      )}
+                                    <td
+                                      className="py-1.5 px-1.5 text-center text-[10px] font-bold text-slate-600"
+                                      title={currentSeasonEntry.nhlTeam || undefined}
+                                    >
+                                      {currentSeasonEntry.year}
                                     </td>
-                                    <td className="py-2 px-2 text-center">
-                                      <span className="px-1.5 py-0.5 text-[10px] font-black border border-black bg-purple-100 text-purple-950">
+                                    <td className="py-1.5 px-1.5 text-center">
+                                      <span className="px-1.5 py-0 text-[10px] font-black border border-black/40 bg-purple-100 text-purple-950">
                                         G
                                       </span>
                                     </td>
-                                    <td className="py-2 px-2 text-center text-[11px] font-bold text-slate-700">
+                                    <td className="py-1.5 px-1.5 text-center text-[11px] font-bold text-slate-700">
                                       {currentSeasonEntry.hand || goalie.hand}
                                     </td>
-                                    <td className="py-2 px-2 text-center text-[11px] text-slate-700">
+                                    <td className="py-1.5 px-1.5 text-center text-[11px] text-slate-700">
                                       {currentSeasonEntry.weightLbs || goalie.weightLbs}
                                     </td>
-                                    <td className="py-2 px-2 text-center">
+                                    <td className="py-1.5 px-1.5 text-center">
                                       {(() => {
                                         const ovrHm = getDraftOvrBadgeStyle(currentSeasonEntry.ovr || goalie.ovr);
                                         return (
@@ -4743,7 +4534,7 @@ export default function DraftPage() {
                                     {(currentSeasonEntry.attrs || goalie.attrs).map(attr => {
                                       const hm = getDraftHeatmapBadgeStyle(attr.level);
                                       return (
-                                        <td key={`${goalie.key}-cur-${attr.short}`} className="py-2 px-1.5 text-center">
+                                        <td key={`${goalie.key}-cur-${attr.short}`} className="py-1.5 px-1 text-center">
                                           <span
                                             style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
                                             className="inline-block w-6 py-0.5 text-center font-black text-[11px] border"
@@ -4766,45 +4557,38 @@ export default function DraftPage() {
                                           key={`${goalie.key}-yr-${sRow.year}`}
                                           className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]"
                                         >
-                                          <td className="py-1.5 pl-9 pr-3 font-mono text-[10px] text-slate-600">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              <span className="font-black text-slate-800">
-                                                ↳ {sRow.year} Career (+{sIdx + 1} Yr{sIdx > 0 ? 's' : ''})
+                                          <td className="py-1 pl-8 pr-2 font-mono text-[10px] text-slate-600">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-bold text-slate-700">
+                                                ↳ {sRow.year} (+{sIdx + 1} yr)
                                               </span>
                                               {isLastSeason && (
-                                                <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8.5px] font-black uppercase">
-                                                  Final NHL95 Season
+                                                <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8px] font-black uppercase">
+                                                  Final
                                                 </span>
                                               )}
                                             </div>
                                           </td>
-                                          <td className="py-1.5 px-2 text-center">
-                                            <span className="bg-neutral-200 text-black px-1.5 py-0.5 text-[10px] font-black border border-black/30">
-                                              {sRow.year}
-                                            </span>
-                                            {sRow.nhlTeam && (
-                                              <span className="block text-[8.5px] text-slate-500 font-bold uppercase">
-                                                {sRow.nhlTeam}
-                                              </span>
-                                            )}
+                                          <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">
+                                            {sRow.year}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center text-[10px] font-bold text-slate-500">
+                                          <td className="py-1 px-1.5 text-center text-[10px] font-bold text-slate-500">
                                             G
                                           </td>
-                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                          <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">
                                             {sRow.hand}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center text-[10px] text-slate-500">
+                                          <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">
                                             {sRow.weightLbs}
                                           </td>
-                                          <td className="py-1.5 px-2 text-center">
+                                          <td className="py-1 px-1.5 text-center">
                                             <div className="inline-flex items-center gap-1">
                                               {(() => {
                                                 const ovrHm = getDraftOvrBadgeStyle(sRow.ovr);
                                                 return (
                                                   <span
                                                     style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
-                                                    className="font-black px-1.5 py-0.5 text-[11px] border"
+                                                    className="font-black px-1.5 py-0 text-[10px] border"
                                                   >
                                                     {sRow.ovr || '-'}
                                                   </span>
@@ -4812,7 +4596,7 @@ export default function DraftPage() {
                                               })()}
                                               {ovrDiff !== 0 && (
                                                 <span
-                                                  className={`text-[9px] font-black ${
+                                                  className={`text-[8.5px] font-black ${
                                                     ovrDiff > 0 ? 'text-emerald-700' : 'text-red-700'
                                                   }`}
                                                 >
@@ -4826,7 +4610,7 @@ export default function DraftPage() {
                                             return (
                                               <td
                                                 key={`${goalie.key}-${sRow.year}-${attr.short}`}
-                                                className="py-1.5 px-1.5 text-center"
+                                                className="py-1 px-1 text-center"
                                               >
                                                 <span
                                                   style={{
@@ -4834,7 +4618,7 @@ export default function DraftPage() {
                                                     color: hm.text,
                                                     borderColor: hm.border
                                                   }}
-                                                  className="inline-block w-6 py-0.5 text-center font-black text-[10px] border opacity-90"
+                                                  className="inline-block w-6 py-0 text-center font-black text-[10px] border opacity-90"
                                                   title={`${sRow.year} ${attr.label}: ${attr.level}/6`}
                                                 >
                                                   {attr.level || '-'}
@@ -4859,73 +4643,73 @@ export default function DraftPage() {
                 </div>
               </div>
 
-              {/* RIGHT COLUMN (4 COLS): TOP AVAILABLE PLAYERS + LIVE DRAFT WAR ROOM CHAT (SAME WIDTH, VISIBLE ABOVE FOLD) */}
+              {/* RIGHT COLUMN (4 COLS): NHL CENTRAL SCOUTING BIG BOARD + WAR ROOM CHAT */}
               <div className="col-span-12 lg:col-span-4 flex flex-col gap-4">
-                {/* TOP AVAILABLE PLAYERS FOR THIS DRAFT */}
-                <div className="bg-[#fdfaf5] border-2 border-black p-3.5 sm:p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col">
-                  <div className="flex items-center justify-between gap-2 border-b-2 border-black pb-2 mb-2">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <Star className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
-                        <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-black">
-                          Top Available Players
+                {/* TOP AVAILABLE PLAYERS (CLEAN CENTRAL SCOUTING BIG BOARD) */}
+                <div className="bg-[#fdfaf5] border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
+                  <div className="bg-[#111827] text-white px-3.5 py-2.5 border-b-2 border-black flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Star className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-black uppercase tracking-wider text-white truncate">
+                          Top Available ({availableRookies.length})
                         </h3>
                       </div>
-                      <p className="text-[10px] font-mono font-bold uppercase text-slate-600 mt-0.5">
-                        {activeFloorSeasonMeta?.seasonBadge} &bull; {rookieClassYear} Pool &bull; {availableRookies.length} Available
-                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => setActiveTab('prospects')}
-                      className="bg-black text-amber-300 hover:bg-neutral-800 px-2 py-1 text-[10px] font-mono font-black uppercase border border-black cursor-pointer shrink-0"
+                      className="bg-amber-400 hover:bg-amber-300 text-black px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer shrink-0"
                     >
-                      Full Board ({rookiePool.length}) &rarr;
+                      Full Board &rarr;
                     </button>
                   </div>
 
-                  {/* Quick Type & Position Filters for Top Available */}
-                  <div className="flex flex-wrap items-center gap-1 mb-2">
-                    {([
-                      { key: 'ALL', label: 'All' },
-                      { key: 'ROOKIE', label: 'Rookies' },
-                      { key: 'FREE_AGENT', label: 'Free Agents' }
-                    ] as const).map(t => (
-                      <button
-                        key={`top-avail-type-${t.key}`}
-                        type="button"
-                        onClick={() => setProspectTypeFilter(t.key)}
-                        className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
-                          prospectTypeFilter === t.key
-                            ? 'bg-black text-white'
-                            : 'bg-white text-black hover:bg-neutral-100'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                    <span className="text-slate-400 font-mono text-[10px] mx-0.5">|</span>
-                    {prospectPositions.map(pos => (
-                      <button
-                        key={`top-avail-pos-${pos}`}
-                        type="button"
-                        onClick={() => setProspectPos(pos)}
-                        className={`px-1.5 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
-                          prospectPos === pos
-                            ? 'bg-amber-300 text-black'
-                            : 'bg-white text-black hover:bg-neutral-100'
-                        }`}
-                      >
-                        {pos}
-                      </button>
-                    ))}
+                  {/* Quick Type & Position Filters */}
+                  <div className="px-3 py-2 bg-[#f5efe2] border-b border-black/20 flex flex-wrap items-center justify-between gap-1">
+                    <div className="flex items-center gap-1">
+                      {([
+                        { key: 'ALL', label: 'All' },
+                        { key: 'ROOKIE', label: 'Rookies' },
+                        { key: 'FREE_AGENT', label: 'FA' }
+                      ] as const).map(t => (
+                        <button
+                          key={`top-avail-type-${t.key}`}
+                          type="button"
+                          onClick={() => setProspectTypeFilter(t.key)}
+                          className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                            prospectTypeFilter === t.key
+                              ? 'bg-black text-white'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {prospectPositions.map(pos => (
+                        <button
+                          key={`top-avail-pos-${pos}`}
+                          type="button"
+                          onClick={() => setProspectPos(pos)}
+                          className={`px-1.5 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                            prospectPos === pos
+                              ? 'bg-amber-300 text-black'
+                              : 'bg-white text-black hover:bg-neutral-100'
+                          }`}
+                        >
+                          {pos}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {/* Top Available Players List */}
-                  <div className="bg-white border-2 border-black divide-y divide-neutral-200 max-h-[240px] overflow-y-auto">
+                  {/* Clean Single-Line Prospect List */}
+                  <div className="bg-white divide-y divide-neutral-200 max-h-[250px] overflow-y-auto">
                     {rookiePoolLoading ? (
                       <div className="p-6 text-center text-xs font-mono font-bold uppercase text-slate-500 italic">
-                        Loading {rookieClassYear} top available players...
+                        Loading {rookieClassYear} draft pool...
                       </div>
                     ) : (() => {
                       const topAvail = availableRookies
@@ -4935,7 +4719,7 @@ export default function DraftPage() {
                           if (prospectPos !== 'ALL' && p.pos !== prospectPos) return false;
                           return true;
                         })
-                        .slice(0, 25);
+                        .slice(0, 30);
 
                       if (topAvail.length === 0) {
                         return (
@@ -4948,7 +4732,7 @@ export default function DraftPage() {
                       return topAvail.map((player, idx) => {
                         const isSelectedInDesk = coachSelectedPlayer?.player_id === player.player_id;
                         const canSelectNow = coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
-                        const pRatings = extractDraftPlayerRatings(player.ratings, player.player_info, player.pos, player.ovr);
+                        const ovrHm = getDraftOvrBadgeStyle(player.ovr);
                         return (
                           <div
                             key={`top-avail-${player.player_id}`}
@@ -4958,86 +4742,68 @@ export default function DraftPage() {
                                 setCoachSearch(player.player_name);
                               }
                             }}
-                            className={`px-2.5 py-1.5 flex flex-col gap-1 text-xs transition-colors ${
+                            className={`px-3 py-2 flex items-center justify-between gap-2 text-xs transition-colors ${
                               !draftLockStatus.isLocked ? 'cursor-pointer hover:bg-yellow-50' : ''
                             } ${isSelectedInDesk ? 'bg-yellow-100 ring-2 ring-inset ring-black' : ''}`}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-mono text-[10px] font-black text-slate-500 w-5 text-right shrink-0">
-                                  #{idx + 1}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-mono text-[10px] font-black text-slate-400 w-5 text-right shrink-0">
+                                {idx + 1}.
+                              </span>
+                              <span
+                                className={`font-mono text-[10px] font-black px-1.5 py-0 border border-black/40 shrink-0 ${
+                                  player.pos === 'G'
+                                    ? 'bg-purple-100 text-purple-950'
+                                    : player.pos === 'D'
+                                    ? 'bg-sky-100 text-sky-950'
+                                    : 'bg-amber-100 text-amber-950'
+                                }`}
+                              >
+                                {player.pos}
+                              </span>
+                              <Link
+                                href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="font-black uppercase text-black hover:underline truncate"
+                                title={
+                                  player.isFreeAgent
+                                    ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
+                                    : player.team_default
+                                }
+                              >
+                                {player.player_name}
+                              </Link>
+                              {player.isFreeAgent && (
+                                <span className="text-[8.5px] font-mono font-bold uppercase px-1 py-0 bg-neutral-100 text-slate-600 border border-neutral-300 shrink-0">
+                                  FA
                                 </span>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <Link
-                                      href={`/players?q=${encodeURIComponent(player.player_name)}&id=${encodeURIComponent(String(player.player_id))}`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="font-black uppercase text-black hover:underline truncate"
-                                      title="Open Player Profile"
-                                    >
-                                      {player.player_name}
-                                    </Link>
-                                    <span className="text-[9.5px] font-mono font-bold bg-neutral-100 text-black px-1 py-0 border border-black/30">
-                                      {player.pos}
-                                    </span>
-                                    <span
-                                      className={`text-[8.5px] font-mono font-black uppercase px-1 py-0 border border-black ${
-                                        player.isFreeAgent
-                                          ? 'bg-emerald-200 text-emerald-950'
-                                          : 'bg-amber-300 text-black'
-                                      }`}
-                                    >
-                                      {player.isFreeAgent ? 'FA' : 'ROOKIE'}
-                                    </span>
-                                  </div>
-                                  <div className="text-[10px] font-sans text-slate-500 truncate">
-                                    {player.isFreeAgent
-                                      ? `Free Agent${player.orig_nhl_team ? ` (${player.orig_nhl_team})` : ''}`
-                                      : player.team_default}
-                                    {pRatings.weightLbs !== '-' ? ` • ${pRatings.weightLbs} lbs • ${pRatings.hand}` : ''}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="font-mono font-black text-[11px] bg-black text-amber-300 px-1.5 py-0.5 border border-black">
-                                  OVR {player.ovr ?? '-'}
-                                </span>
-                                {canSelectNow && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setCoachSelectedPlayer(player);
-                                      setCoachSearch(player.player_name);
-                                    }}
-                                    className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
-                                      isSelectedInDesk
-                                        ? 'bg-emerald-700 text-white'
-                                        : 'bg-red-800 hover:bg-red-900 text-white'
-                                    }`}
-                                  >
-                                    {isSelectedInDesk ? '✓ Ready' : 'Select'}
-                                  </button>
-                                )}
-                              </div>
+                              )}
                             </div>
 
-                            {/* Compact 1-6 Ratings Strip for Top Available Player */}
-                            <div className="flex items-center gap-1 flex-wrap pl-7 font-mono text-[9px]">
-                              {pRatings.attrs.map(a => {
-                                const hm = getDraftHeatmapBadgeStyle(a.level);
-                                return (
-                                  <span
-                                    key={`top-avail-attr-${player.player_id}-${a.short}`}
-                                    style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
-                                    className="px-1 py-0 border font-black uppercase"
-                                    title={`${a.label}: ${a.level}/6`}
-                                  >
-                                    {a.short}:{a.level}
-                                  </span>
-                                );
-                              })}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span
+                                style={{ backgroundColor: ovrHm.bg, color: ovrHm.text, borderColor: ovrHm.border }}
+                                className="font-mono font-black text-[11px] px-2 py-0.5 border"
+                              >
+                                {player.ovr ?? '-'}
+                              </span>
+                              {canSelectNow && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCoachSelectedPlayer(player);
+                                    setCoachSearch(player.player_name);
+                                  }}
+                                  className={`px-2 py-0.5 text-[10px] font-mono font-black uppercase border border-black cursor-pointer ${
+                                    isSelectedInDesk
+                                      ? 'bg-emerald-700 text-white'
+                                      : 'bg-black hover:bg-neutral-800 text-amber-300'
+                                  }`}
+                                >
+                                  {isSelectedInDesk ? '✓' : 'Pick'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -5047,104 +4813,74 @@ export default function DraftPage() {
                 </div>
 
                 {/* BELOW TOP AVAILABLE PLAYERS: LIVE DRAFT WAR ROOM CHAT (EXACT SAME WIDTH) */}
-                <div className="bg-[#fdfaf5] border-2 border-black p-3.5 sm:p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col">
-                  <div className="flex items-center justify-between gap-2 border-b-2 border-black pb-2 mb-2 flex-wrap">
-                    <div className="flex items-center gap-1.5">
-                      <MessageSquare className="w-4 h-4 text-amber-600 shrink-0" />
-                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-tight text-black">
+                <div className="bg-[#fdfaf5] border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden">
+                  <div className="bg-[#111827] text-white px-3.5 py-2.5 border-b-2 border-black flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-amber-400 shrink-0" />
+                      <h3 className="text-xs font-black uppercase tracking-wider text-white">
                         War Room Chat
                       </h3>
-                      <span className="text-[10px] font-mono font-bold uppercase bg-yellow-100 text-black px-1.5 py-0.5 border border-black">
-                        {activeFloorSeasonMeta?.seasonBadge}
-                      </span>
                     </div>
-                    <span className="bg-emerald-800 text-white font-mono text-[9.5px] font-black uppercase px-2 py-0.5 border border-black inline-flex items-center gap-1">
+                    <span
+                      className="bg-emerald-800 text-white font-mono text-[9.5px] font-black uppercase px-2 py-0.5 border border-black inline-flex items-center gap-1"
+                      title={loggedInDraftCoaches.map(c => c.coachName).join(', ')}
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                      {loggedInDraftCoaches.length} Coach{loggedInDraftCoaches.length === 1 ? '' : 'es'} Online
+                      {loggedInDraftCoaches.length} Online
                     </span>
                   </div>
 
-                  {/* Compact Online Coaches Strip inside Chat Card */}
-                  {loggedInDraftCoaches.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap mb-2 font-mono text-[9.5px]">
-                      <span className="font-bold uppercase text-slate-600">Online:</span>
-                      {loggedInDraftCoaches.map((c) => {
-                        const isMe =
-                          isLoggedIn &&
-                          currentCoach?.coach_name &&
-                          c.coachName.trim().toLowerCase() === currentCoach.coach_name.trim().toLowerCase();
-                        return (
-                          <span
-                            key={`chat-coach-pill-${c.peerId}-${c.coachName}`}
-                            className="inline-flex items-center gap-1 bg-emerald-50 border border-black px-1.5 py-0.5 font-black uppercase text-black"
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                            <span>{c.coachName}</span>
-                            {isMe && (
-                              <span className="bg-black text-amber-300 px-1 py-0 text-[8px]">YOU</span>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="bg-white border-2 border-black p-2.5 h-40 max-h-40 overflow-y-auto space-y-1.5 font-sans text-xs mb-2">
-                    {draftChatMessages.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-slate-400 italic text-xs text-center px-2">
-                        No messages in the Draft War Room yet. Say hello or talk draft strategy!
-                      </div>
-                    ) : (
-                      draftChatMessages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`px-2 py-1.5 border ${
-                            msg.isSystem
-                              ? 'bg-amber-100 border-black font-mono font-black text-black'
-                              : 'bg-[#fdfaf5] border-neutral-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-black uppercase text-black">{msg.sender}</span>
-                              {msg.draftBadge && (
-                                <span className="bg-neutral-200 text-black px-1 py-0 border border-black/20 text-[9px] font-bold uppercase">
-                                  {msg.draftBadge}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-slate-400">
-                              {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <div className="text-xs text-slate-900 mt-0.5 break-words">{msg.text}</div>
+                  <div className="p-3 space-y-2">
+                    <div className="bg-white border-2 border-black p-2.5 h-44 max-h-44 overflow-y-auto space-y-1.5 font-sans text-xs">
+                      {draftChatMessages.length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-slate-400 italic text-xs text-center px-2">
+                          No messages in the Draft War Room yet.
                         </div>
-                      ))
-                    )}
-                    <div ref={draftChatEndRef} />
-                  </div>
+                      ) : (
+                        draftChatMessages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`px-2 py-1.5 border ${
+                              msg.isSystem
+                                ? 'bg-amber-100 border-black font-mono font-black text-black'
+                                : 'bg-[#fdfaf5] border-neutral-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+                              <span className="font-black uppercase text-black">{msg.sender}</span>
+                              <span className="text-slate-400">
+                                {new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-900 mt-0.5 break-words">{msg.text}</div>
+                          </div>
+                        ))
+                      )}
+                      <div ref={draftChatEndRef} />
+                    </div>
 
-                  <form onSubmit={handleSendDraftChat} className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      value={draftChatInput}
-                      onChange={(e) => setDraftChatInput(e.target.value)}
-                      placeholder={
-                        isLoggedIn && currentCoach
-                          ? `Message War Room as ${currentCoach.coach_name}...`
-                          : 'Type a message to the War Room...'
-                      }
-                      className="flex-1 min-w-0 bg-white border-2 border-black px-2.5 py-1.5 text-xs font-sans focus:outline-none focus:bg-yellow-50"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!draftChatInput.trim()}
-                      className="bg-black hover:bg-neutral-800 disabled:opacity-40 text-amber-300 font-mono text-xs font-black uppercase px-3 py-1.5 border-2 border-black cursor-pointer flex items-center gap-1 shrink-0"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Send</span>
-                    </button>
-                  </form>
+                    <form onSubmit={handleSendDraftChat} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={draftChatInput}
+                        onChange={(e) => setDraftChatInput(e.target.value)}
+                        placeholder={
+                          isLoggedIn && currentCoach
+                            ? `Message War Room as ${currentCoach.coach_name}...`
+                            : 'Type a message to the War Room...'
+                        }
+                        className="flex-1 min-w-0 bg-white border-2 border-black px-2.5 py-1.5 text-xs font-sans focus:outline-none focus:bg-yellow-50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!draftChatInput.trim()}
+                        className="bg-black hover:bg-neutral-800 disabled:opacity-40 text-amber-300 font-mono text-xs font-black uppercase px-3 py-1.5 border-2 border-black cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send</span>
+                      </button>
+                    </form>
+                  </div>
                 </div>
               </div>
             </div>
