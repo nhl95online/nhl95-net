@@ -3487,8 +3487,8 @@ export default function DraftPage() {
                   </div>
                 )}
 
-                {/* Exclusive UltraMagnus Commissioner & Proxy Selection Control (Visible ONLY to UltraMagnus's profile) */}
-                {isUltraMagnusAdmin && (
+                {/* Exclusive UltraMagnus Commissioner & Proxy Selection Control (Visible ONLY when draft is active) */}
+                {isUltraMagnusAdmin && !draftLockStatus.isLocked && (
                   <div className="bg-amber-300 border-2 border-black text-black p-2.5 mb-3 font-mono text-xs flex flex-col gap-2 shadow-[2px_2px_0px_#000]">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2 font-black uppercase">
@@ -3499,65 +3499,47 @@ export default function DraftPage() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        {activeFloorSeasonMeta?.draftStarted ? (
-                          <button
-                            type="button"
-                            disabled={isTogglingDraftStatus}
-                            onClick={() => handleToggleDraftStart(floorLeagueId, false)}
-                            className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white border-2 border-black px-3 py-1 text-[11px] font-black uppercase cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                          >
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>
-                              {isTogglingDraftStatus
-                                ? 'Updating...'
-                                : `⏸ PAUSE / STOP ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={isTogglingDraftStatus}
-                            onClick={() => handleToggleDraftStart(floorLeagueId, true)}
-                            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white border-2 border-black px-3 py-1 text-[11px] font-black uppercase cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                          >
-                            <Unlock className="w-3.5 h-3.5" />
-                            <span>
-                              {isTogglingDraftStatus
-                                ? 'Starting...'
-                                : `▶ START ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
-                            </span>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          disabled={isTogglingDraftStatus}
+                          onClick={() => handleToggleDraftStart(floorLeagueId, false)}
+                          className="bg-red-700 hover:bg-red-800 disabled:opacity-50 text-white border-2 border-black px-3 py-1 text-[11px] font-black uppercase cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>
+                            {isTogglingDraftStatus
+                              ? 'Updating...'
+                              : `⏸ PAUSE / STOP ${activeFloorSeasonMeta?.seasonBadge} DRAFT`}
+                          </span>
+                        </button>
                       </div>
                     </div>
 
-                    {!draftLockStatus.isLocked && (
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-black/30 pt-2">
-                        <span className="text-[11px] font-bold uppercase">
-                          Proxy Pick Access (submit for any coach unable to pick):
-                        </span>
-                        <select
-                          value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
-                          onChange={(e) => {
-                            const [rStr, pStr] = e.target.value.split('-');
-                            const chosen = projectedFloorRows.find(
-                              s => s.rd === Number(rStr) && s.pk === Number(pStr)
-                            );
-                            setOverridePickSlot(chosen || null);
-                          }}
-                          className="bg-black text-amber-300 border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
-                          title="Select any open pick slot to draft on behalf of that coach"
-                        >
-                          {projectedFloorRows
-                            .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
-                            .map(s => (
-                              <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
-                                Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-black/30 pt-2">
+                      <span className="text-[11px] font-bold uppercase">
+                        Proxy Pick Access (submit for any coach unable to pick):
+                      </span>
+                      <select
+                        value={`${nextEmptyPickSlot.rd}-${nextEmptyPickSlot.pk}`}
+                        onChange={(e) => {
+                          const [rStr, pStr] = e.target.value.split('-');
+                          const chosen = projectedFloorRows.find(
+                            s => s.rd === Number(rStr) && s.pk === Number(pStr)
+                          );
+                          setOverridePickSlot(chosen || null);
+                        }}
+                        className="bg-black text-amber-300 border border-black px-2 py-1 text-[11px] font-black uppercase cursor-pointer"
+                        title="Select any open pick slot to draft on behalf of that coach"
+                      >
+                        {projectedFloorRows
+                          .filter(s => !s.player || s.player === 'N/A' || s.player.trim() === '')
+                          .map(s => (
+                            <option key={`${s.rd}-${s.pk}`} value={`${s.rd}-${s.pk}`}>
+                              Rd {s.rd} • Pick #{s.pk} — {s.team} ({s.coachName || 'No Coach'})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
                 )}
 
@@ -3748,9 +3730,9 @@ export default function DraftPage() {
                 )}
 
                 {/* Coach Pick Form */}
-                <form onSubmit={handleSubmitPick} className="space-y-4">
+                <form onSubmit={handleSubmitPick} className="space-y-2">
                   <div>
-                    <label className="block text-[11px] font-black uppercase font-mono mb-1 text-slate-800 flex justify-between items-center flex-wrap gap-1">
+                    <label className="block text-[11px] font-black uppercase font-mono mb-1.5 text-slate-800 flex justify-between items-center flex-wrap gap-1">
                       <span>
                         Search & Select Prospect ({rookieClassYear} Rookies & Free Agents • {availableRookies.length} available):
                       </span>
@@ -3808,21 +3790,54 @@ export default function DraftPage() {
                       );
                     })()}
 
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
-                      <input
-                        type="text"
-                        value={coachSearch}
-                        onChange={(e) => {
-                          setCoachSearch(e.target.value);
-                          if (coachSelectedPlayer && e.target.value !== coachSelectedPlayer.player_name) {
-                            setCoachSelectedPlayer(null);
-                          }
-                        }}
-                        disabled={draftLockStatus.isLocked}
-                        placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE A ROOKIE OR FREE AGENT NAME, POSITION, OR 'FREE AGENT'..."}
-                        className="w-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
+                      <div className="relative sm:col-span-7">
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-neutral-400" />
+                        <input
+                          type="text"
+                          value={coachSearch}
+                          onChange={(e) => {
+                            setCoachSearch(e.target.value);
+                            if (coachSelectedPlayer && e.target.value !== coachSelectedPlayer.player_name) {
+                              setCoachSelectedPlayer(null);
+                            }
+                          }}
+                          disabled={draftLockStatus.isLocked}
+                          placeholder={draftLockStatus.isLocked ? "DRAFT IS CURRENTLY LOCKED UNTIL START DATE" : "TYPE A ROOKIE OR FREE AGENT NAME, POSITION, OR 'FREE AGENT'..."}
+                          className="w-full h-full bg-white border-2 border-black pl-9 pr-3 py-2 text-xs font-bold uppercase focus:outline-none focus:bg-yellow-50 font-sans disabled:bg-neutral-100 disabled:text-neutral-400"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-5 flex">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.teamId || !coachMayPickNow}
+                          className="w-full bg-black text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-4 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
+                        >
+                          {draftLockStatus.isLocked ? (
+                            <>
+                              <Lock className="w-3.5 h-3.5 text-amber-400" />
+                              Draft Locked Until Start Date
+                            </>
+                          ) : isSubmitting ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              Recording Selection...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5" />
+                              {!nextEmptyPickSlot.teamId
+                                ? 'No Open Pick Slot'
+                                : !coachMayPickNow && isLoggedIn
+                                  ? `Waiting on ${nextEmptyPickSlot.team}`
+                                  : isUltraMagnusAdmin && !isCurrentCoachOnClock
+                                    ? `Submit Pick #${nextEmptyPickSlot.pk} for ${nextEmptyPickSlot.team}`
+                                    : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Autocomplete Quick Results */}
@@ -3905,54 +3920,6 @@ export default function DraftPage() {
                         )}
                       </div>
                     )}
-                  </div>
-
-                  {/* Transaction Notes */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase font-mono mb-1 text-slate-800">
-                        Transaction / Pick Context (Optional):
-                      </label>
-                      <input
-                        type="text"
-                        value={coachTransactionNote}
-                        onChange={(e) => setCoachTransactionNote(e.target.value)}
-                        disabled={draftLockStatus.isLocked}
-                        placeholder="e.g. Original Pick, Trade from DET..."
-                        className="w-full bg-white border-2 border-black px-3 py-1.5 text-xs font-sans uppercase focus:outline-none disabled:bg-neutral-100"
-                      />
-                    </div>
-
-                    <div className="flex items-end">
-                      <button
-                        type="submit"
-                        disabled={isSubmitting || draftLockStatus.isLocked || !coachSelectedPlayer || !nextEmptyPickSlot.teamId || !coachMayPickNow}
-                        className="w-full bg-black text-white hover:bg-neutral-800 disabled:opacity-40 disabled:cursor-not-allowed border-2 border-black py-2 px-4 text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_rgba(0,0,0,1)] active:translate-y-0.5"
-                      >
-                        {draftLockStatus.isLocked ? (
-                          <>
-                            <Lock className="w-3.5 h-3.5 text-amber-400" />
-                            Draft Locked Until Start Date
-                          </>
-                        ) : isSubmitting ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            Recording Selection...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-3.5 h-3.5" />
-                            {!nextEmptyPickSlot.teamId
-                              ? 'No Open Pick Slot'
-                              : !coachMayPickNow && isLoggedIn
-                                ? `Waiting on ${nextEmptyPickSlot.team}`
-                                : isUltraMagnusAdmin && !isCurrentCoachOnClock
-                                  ? `Submit Pick #${nextEmptyPickSlot.pk} for ${nextEmptyPickSlot.team}`
-                                  : `Submit Official Pick #${nextEmptyPickSlot.pk}`}
-                          </>
-                        )}
-                      </button>
-                    </div>
                   </div>
                 </form>
 
