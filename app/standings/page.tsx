@@ -240,9 +240,40 @@ export default function StandingsPage() {
         };
       }).sort((a: any, b: any) => Number(b.league_id) - Number(a.league_id));
 
-      setSeasons(formattedList);
+      // Only include active/loaded seasons (1-40 + any future season > 40 that actually has standings, schedule, or game stats)
+      const loadedSeasonIds = new Set<string>();
+      try {
+        const [standingsSeasonsRes, schedFutureRes, statsFutureRes] = await Promise.all([
+          supabase.from('league_standings').select('season_id'),
+          supabase.from('league_schedule').select('league_id').gt('league_id', 40),
+          supabase.from('league_gamestats').select('league_id').gt('league_id', 40)
+        ]);
+        (standingsSeasonsRes.data || []).forEach((r: any) => {
+          if (r.season_id !== undefined && r.season_id !== null) {
+            loadedSeasonIds.add(String(r.season_id).trim());
+          }
+        });
+        (schedFutureRes.data || []).forEach((r: any) => {
+          if (r.league_id !== undefined && r.league_id !== null) {
+            loadedSeasonIds.add(String(r.league_id).trim());
+          }
+        });
+        (statsFutureRes.data || []).forEach((r: any) => {
+          if (r.league_id !== undefined && r.league_id !== null) {
+            loadedSeasonIds.add(String(r.league_id).trim());
+          }
+        });
+      } catch {}
 
-      const latestSeason = formattedList[0];
+      const activeSeasonsList = formattedList.filter((s: any) => {
+        const idNum = Number(s.league_id);
+        if (idNum <= 40) return true;
+        return loadedSeasonIds.has(String(s.league_id));
+      });
+
+      setSeasons(activeSeasonsList);
+
+      const latestSeason = activeSeasonsList[0];
       if (latestSeason) {
         setActiveSeasonId(latestSeason.league_id);
         setSelectedLeagueId(latestSeason.league_id);
@@ -576,7 +607,7 @@ export default function StandingsPage() {
             (
               (t.abbreviation && t.abbreviation.trim().toUpperCase() === (matchTeam.abbreviation || '').trim().toUpperCase()) ||
               (t.team_name && t.team_name.trim().toUpperCase() === (matchTeam.team_name || '').trim().toUpperCase()) ||
-              (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id))
+              (Number((t as any).coach_id) > 0 && Number((t as any).coach_id) === Number((matchTeam as any).coach_id))
             )
           );
 
