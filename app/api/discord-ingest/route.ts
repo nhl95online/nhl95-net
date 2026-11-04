@@ -86,11 +86,15 @@ async function addDiscordReaction(channelId: string, messageId: string, emoji: s
   }
 }
 
+export async function GET(req: NextRequest) {
+  return POST(req);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const botToken = body.botToken || process.env.DISCORD_BOT_TOKEN || '';
-    const hoursBack = Number(body.hoursBack ?? 48);
+    const hoursBack = Number(body.hoursBack ?? 0.5);
     const targetChannelIds: string[] = Array.isArray(body.channelIds)
       ? body.channelIds.map(String)
       : (process.env.DISCORD_SAVESTATE_CHANNELS || '')
@@ -139,8 +143,9 @@ export async function POST(req: NextRequest) {
           if (chansRes.ok) {
             const chans = await chansRes.json();
             for (const ch of chans || []) {
-              // Type 0 = GUILD_TEXT
-              if (ch.type === 0 && !String(ch.name || '').toLowerCase().includes('boxscore')) {
+              // Type 0 = GUILD_TEXT (only scan save-state / test channels)
+              const cname = String(ch.name || '').toLowerCase();
+              if (ch.type === 0 && !cname.includes('boxscore') && (cname.includes('save') || cname.includes('test'))) {
                 channelsToScan.push({ id: String(ch.id), name: String(ch.name || ch.id) });
               }
             }
@@ -149,7 +154,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const cutoffMs = Date.now() - hoursBack * 3600 * 1000;
+    const discordDateHeader = meRes.headers.get('date');
+    const discordNowMs = discordDateHeader ? new Date(discordDateHeader).getTime() : Date.now();
+    const cutoffMs = discordNowMs - hoursBack * 3600 * 1000;
     const processedResults: any[] = [];
     let scannedAttachmentsCount = 0;
 

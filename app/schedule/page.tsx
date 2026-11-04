@@ -259,7 +259,35 @@ export default function SchedulePage() {
         };
       }).sort((a, b) => b.league_id - a.league_id);
 
-      setSeasons(formatted);
+      const [futureSchedRes, futureStatsRes] = await Promise.all([
+        supabase.from('league_schedule').select('league_id').gt('league_id', 40),
+        supabase.from('league_gamestats').select('league_id').gt('league_id', 40),
+      ]);
+      const activeFutureIds = new Set<number>();
+      (futureSchedRes.data || []).forEach((r: any) => { if (r.league_id) activeFutureIds.add(Number(r.league_id)); });
+      (futureStatsRes.data || []).forEach((r: any) => { if (r.league_id) activeFutureIds.add(Number(r.league_id)); });
+
+      const activeFormatted = formatted.filter(s => s.league_id <= 40 || activeFutureIds.has(s.league_id));
+      setSeasons(activeFormatted);
+
+      const defaultSeasonId = activeFormatted.length > 0 ? activeFormatted[0].league_id : 40;
+      setSelectedSeason(defaultSeasonId);
+      fetchSeasonData(defaultSeasonId);
+
+      // Silently trigger automatic Discord save-state sync in the background
+      fetch('/api/discord-ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hoursBack: 0.5 })
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (res?.results?.some((item: any) => item.status === 'saved')) {
+            fetchSeasonData(defaultSeasonId);
+          }
+        })
+        .catch(() => {});
+      return;
 
       if (formatted.length > 0) {
         const recent = formatted[0].league_id;
@@ -411,7 +439,8 @@ export default function SchedulePage() {
       setSchedule(combined);
       
       if (combined.length > 0) {
-        const firstPlayed = combined.find(g => g.isPlayed) || combined[0];
+        const playedGames = combined.filter(g => g.isPlayed);
+        const firstPlayed = playedGames.length > 0 ? playedGames[playedGames.length - 1] : combined[0];
         handleSelectGame(firstPlayed);
       }
     } catch (err) {
@@ -795,7 +824,46 @@ export default function SchedulePage() {
       { label: 'Attack Zone', away: formatDayFractionOrTime(a.away_atk), home: formatDayFractionOrTime(h.home_atk) },
     ];
 
-    const teamRoster = (teamId: number) => ({
+    const parseToiNum = (toiStr: string) => {
+      if (!toiStr || !toiStr.includes(':')) return 0;
+      const [m, s] = toiStr.split(':').map(Number);
+      return (m || 0) * 60 + (s || 0);
+    };
+
+    const teamRoster = (teamId: number, tCode: string) => {
+      const dbGoalies = gameBoxscore.goalies.filter((g: any) => Number(g.team_id) === teamId);
+      const dbSkaters = gameBoxscore.skaters.filter((s: any) => Number(s.team_id) === teamId);
+      const expectedGoalies = (W_LEAGUE_GOALIES[tCode] || O_LEAGUE_GOALIES[tCode] || []).filter(n => n && n !== '--');
+      const expectedSkaters = (W_LEAGUE_SKATERS[tCode] || O_LEAGUE_SKATERS[tCode] || []).filter(n => n && n !== '--');
+
+      const mergedGoalies = [...dbGoalies];
+      expectedGoalies.forEach((gName) => {
+        if (!mergedGoalies.some(g => (g.name || '').trim().toLowerCase() === gName.trim().toLowerCase())) {
+          mergedGoalies.push({ name: gName, goals: 0, assists: 0, so: 0, ga: 0, saves: 0, shots: 0, savePct: 0, toi: '0:00' });
+        }
+      });
+
+      const mergedSkaters = [...dbSkaters];
+      expectedSkaters.forEach((sName) => {
+        if (!mergedSkaters.some(s => (s.name || '').trim().toLowerCase() === sName.trim().toLowerCase())) {
+          mergedSkaters.push({ name: sName, goals: 0, assists: 0, points: 0, sog: 0, checks: 0, pim: 0, ppp: 0, shp: 0, toi: '0:00' });
+        }
+      });
+
+      mergedGoalies.sort((x, y) => parseToiNum(y.toi) - parseToiNum(x.toi));
+      mergedSkaters.sort((x, y) => {
+        if ((y.points || 0) !== (x.points || 0)) return (y.points || 0) - (x.points || 0);
+        if ((y.goals || 0) !== (x.goals || 0)) return (y.goals || 0) - (x.goals || 0);
+        if ((y.sog || 0) !== (x.sog || 0)) return (y.sog || 0) - (x.sog || 0);
+        if ((y.checks || 0) !== (x.checks || 0)) return (y.checks || 0) - (x.checks || 0);
+        if ((y.pim || 0) !== (x.pim || 0)) return (y.pim || 0) - (x.pim || 0);
+        return parseToiNum(y.toi) - parseToiNum(x.toi);
+      });
+
+      return { goalies: mergedGoalies, skaters: mergedSkaters };
+    };
+
+    const _unusedRoster = (teamId: number) => ({
       goalies: gameBoxscore.goalies.filter((g: any) => Number(g.team_id) === teamId),
       skaters: gameBoxscore.skaters.filter((s: any) => Number(s.team_id) === teamId),
     });
@@ -806,14 +874,14 @@ export default function SchedulePage() {
         name: selectedGame.awayTeam?.team_name || awayCode,
         logoUrl: selectedGame.awayTeam?.logo_url,
         score: selectedGame.awayScore ?? periodSummary.away.totalG,
-        ...teamRoster(awayId),
+        ...teamRoster(awayId, awayCode),
       },
       home: {
         code: homeCode,
         name: selectedGame.homeTeam?.team_name || homeCode,
         logoUrl: selectedGame.homeTeam?.logo_url,
         score: selectedGame.homeScore ?? periodSummary.home.totalG,
-        ...teamRoster(homeId),
+        ...teamRoster(homeId, homeCode),
       },
       periods: {
         away: { p1: periodSummary.away.g1, p2: periodSummary.away.g2, p3: periodSummary.away.g3, ot: periodSummary.away.got, total: periodSummary.away.totalG },

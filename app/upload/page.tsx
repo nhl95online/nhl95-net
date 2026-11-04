@@ -318,7 +318,7 @@ export function RetroBoxscoreView({ game, dbTeams }: { game: ParsedGame; dbTeams
       name: g.name,
       goals: g.goals || 0,
       assists: g.assists || 0,
-      so: g.so || (g.ga === 0 ? 1 : 0),
+      so: g.so ?? (g.ga === 0 && g.shots > 0 ? 1 : 0),
       ga: g.ga,
       saves: g.saves,
       shots: g.shots,
@@ -450,6 +450,7 @@ export default function UploadPage() {
   const [customConfigJson, setCustomConfigJson] = useState<string>('');
   const [configAppliedMessage, setConfigAppliedMessage] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{ testing: boolean; message: string | null; error: boolean }>({ testing: false, message: null, error: false });
+  const [discordSyncStatus, setDiscordSyncStatus] = useState<{ syncing: boolean; message: string | null; error: boolean; results: any[] }>({ syncing: false, message: null, error: false, results: [] });
   const [dbTeams, setDbTeams] = useState<any[]>([]);
 
   // Game Mode ('Season' vs 'Playoffs') & Schedule / Playoff Series Matchup Validation
@@ -581,6 +582,36 @@ export default function UploadPage() {
     }
   };
 
+  const handleDiscordChannelSync = async () => {
+    setDiscordSyncStatus({ syncing: true, message: null, error: false, results: [] });
+    try {
+      const res = await fetch('/api/discord-ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hoursBack: 72 })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to scan Discord channels for save states');
+      }
+      const savedCount = (data.results || []).filter((r: any) => r.status === 'saved').length;
+      const skippedCount = (data.results || []).filter((r: any) => r.status === 'skipped_duplicate').length;
+      setDiscordSyncStatus({
+        syncing: false,
+        message: `Discord Scan Complete (${data.channelsScanned || 0} channels, ${data.attachmentsProcessed || 0} save states found): ${savedCount} newly saved to Supabase, ${skippedCount} duplicates skipped.`,
+        error: false,
+        results: data.results || []
+      });
+    } catch (err: any) {
+      setDiscordSyncStatus({
+        syncing: false,
+        message: `Discord Sync Error: ${err.message}`,
+        error: true,
+        results: []
+      });
+    }
+  };
+
   const testSupabaseConnection = async () => {
     setConnectionStatus({ testing: true, message: null, error: false });
     try {
@@ -694,6 +725,34 @@ export default function UploadPage() {
 
       const result = parseSaveStateBuffer(buffer, customConfig);
       setParsedGame(result);
+      setIsSaving(true);
+      try {
+        const isPlayoffFile = /\b(playoff|playoffs|po|qf|sf|cf|final|finals|series|rd[1-4]|r[1-4]|[wo]\d{1,2}p)\b/.test(lowerName) || effectiveSeasonId === 38;
+        const response = await fetch('/api/save-game', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            game: result,
+            seasonId: effectiveSeasonId,
+            gameMode: isPlayoffFile ? 'Playoffs' : gameMode,
+            allowOverwrite
+          })
+        });
+        const data = await response.json();
+        if (response.ok && !data.error) {
+          setSaveSuccess(data.message || `Automatically recorded ${result.matchup} & posted boxscore!`);
+          setSaveDetails(data.details || null);
+          setInsertedRowData(data.insertedRow || null);
+        } else if (response.status === 409 || data.alreadyPlayed) {
+          setSaveSuccess(`Boxscore loaded (${result.matchup} is already recorded in database).`);
+        } else {
+          setSaveError(data.error || data.details || 'Failed to auto-save game data to Supabase');
+        }
+      } catch (saveErr: any) {
+        setSaveError(saveErr.message || 'Error occurred while auto-saving to Supabase.');
+      } finally {
+        setIsSaving(false);
+      }
     } catch (err: any) {
       console.error("Parsing error:", err);
       setParseError(err.message || "Failed to parse save state file. Make sure it is a valid RetroArch .state file.");
@@ -1371,6 +1430,16 @@ export default function UploadPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${connectionStatus.testing ? 'animate-spin' : ''}`} />
             {connectionStatus.testing ? "Testing..." : "Test Supabase Connection"}
           </button>
+
+          <button
+            onClick={handleDiscordChannelSync}
+            disabled={discordSyncStatus.syncing}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold uppercase border-2 border-black bg-indigo-100 text-indigo-950 hover:bg-indigo-700 hover:text-white transition cursor-pointer"
+            title="Scan Discord channels for any .state files dropped in the last 72h that haven't been recorded yet"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${discordSyncStatus.syncing ? 'animate-spin' : ''}`} />
+            {discordSyncStatus.syncing ? "Scanning Discord..." : "Sync Discord Save States"}
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1554,6 +1623,44 @@ export default function UploadPage() {
               </span>
             </div>
           ) : null}
+        </div>
+      )}
+
+      {/* Discord Sync Banner */}
+      {discordSyncStatus.message && (
+        <div className={`mb-6 p-4 border-2 text-xs font-bold uppercase ${
+          discordSyncStatus.error ? 'bg-red-50 border-red-800 text-red-900' : 'bg-indigo-50 border-indigo-800 text-indigo-950'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {discordSyncStatus.error ? (
+                <AlertTriangle className="w-5 h-5 text-red-700 shrink-0" />
+              ) : (
+                <CheckCircle className="w-5 h-5 text-indigo-700 shrink-0" />
+              )}
+              <span>{discordSyncStatus.message}</span>
+            </div>
+            <button
+              onClick={() => setDiscordSyncStatus({ syncing: false, message: null, error: false, results: [] })}
+              className="text-[10px] underline ml-4 hover:opacity-80 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+          {discordSyncStatus.results && discordSyncStatus.results.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-indigo-300 space-y-1 font-sans normal-case text-xs">
+              {discordSyncStatus.results.map((r: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span>{r.status === 'saved' ? '✅' : r.status === 'skipped_duplicate' ? '⚠️' : '❌'}</span>
+                  <span className="font-bold">{r.channel}</span>
+                  <span className="font-mono bg-white px-1.5 py-0.5 border border-slate-300">{r.filename}</span>
+                  {r.score && <span className="font-bold">{r.score}</span>}
+                  {r.gameId && <span className="text-emerald-800 font-bold">(Game #{r.gameId})</span>}
+                  {r.error && <span className="text-slate-600 italic">— {r.error}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

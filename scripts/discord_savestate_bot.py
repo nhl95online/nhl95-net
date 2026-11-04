@@ -4554,12 +4554,37 @@ def render_remaining_opponents_png(opp_counts: List[Tuple[str, int]]) -> Optiona
 
 
 class NHL95SaveStateBot(discord.Client):
-    def __init__(self, backfill_hours: int = 24, allowed_channel_ids: Optional[List[int]] = None, **kwargs):
+    def __init__(self, backfill_hours: float = 0.5, allowed_channel_ids: Optional[List[int]] = None, **kwargs):
         super().__init__(**kwargs)
-        self.backfill_hours = backfill_hours
+        self.backfill_hours = float(backfill_hours)
+        self._startup_cutoff = self.get_discord_utc_now() - timedelta(hours=max(0.0, self.backfill_hours))
         self.allowed_channel_ids = set(allowed_channel_ids or [])
         self.processed_attachment_ids = set()
         self._processing_lock = asyncio.Lock()
+
+    def get_discord_utc_now(self) -> datetime:
+        """Fetches real-world UTC time from Discord's HTTP Date header so local PC clock skew never breaks history cutoffs."""
+        try:
+            import email.utils
+            import ssl
+            ctx = ssl._create_unverified_context()
+            req = urllib.request.Request(
+                "https://discord.com/api/v10/users/@me",
+                headers={
+                    "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+                    "User-Agent": "DiscordBot (https://nhl95.net, 1.0)",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=8, context=ctx) as r:
+                date_hdr = r.headers.get("Date")
+                if date_hdr:
+                    dt = email.utils.parsedate_to_datetime(date_hdr)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt.astimezone(timezone.utc)
+        except Exception as e:
+            print(f"   [Clock sync note: {e}]")
+        return datetime.now(timezone.utc)
 
     def is_channel_allowed(self, channel: discord.abc.GuildChannel) -> bool:
         if self.allowed_channel_ids:
@@ -4871,8 +4896,10 @@ class NHL95SaveStateBot(discord.Client):
         print("=" * 68)
 
         if self.backfill_hours > 0:
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=self.backfill_hours)
-            print(f"🔄 Scanning last {self.backfill_hours}h (since {cutoff.strftime('%Y-%m-%d %H:%M UTC')}) for unprocessed save states...")
+            discord_now = await asyncio.to_thread(self.get_discord_utc_now)
+            cutoff = discord_now - timedelta(hours=self.backfill_hours)
+            self._startup_cutoff = cutoff
+            print(f"🔄 Scanning last {self.backfill_hours}h (since {cutoff.strftime('%Y-%m-%d %H:%M UTC')}, Discord UTC now: {discord_now.strftime('%Y-%m-%d %H:%M UTC')}) for unprocessed save states...")
             for guild in self.guilds:
                 for channel in guild.text_channels:
                     if not self.is_channel_allowed(channel):
@@ -4884,8 +4911,10 @@ class NHL95SaveStateBot(discord.Client):
                     if not (perms.read_messages and perms.read_message_history):
                         continue
                     try:
-                        async for msg in channel.history(limit=50, after=cutoff, oldest_first=True):
-                            await self.process_savestate_message(msg, is_backfill=True)
+                        recent_msgs = [m async for m in channel.history(limit=35)]
+                        for msg in reversed(recent_msgs):
+                            if msg.created_at >= cutoff:
+                                await self.process_savestate_message(msg, is_backfill=True)
                     except Exception as e:
                         print(f"   Notice: Could not scan history in #{channel.name}: {e}")
             print("✅ Startup catch-up scan complete! Now listening live 24/7 for new save states...\n")
@@ -4900,12 +4929,13 @@ class NHL95SaveStateBot(discord.Client):
             asyncio.create_task(self.draft_picks_watcher_loop())
 
     async def savestate_watcher_loop(self) -> None:
-        """Continuously polls save-state channels every 20 seconds so that even if a Discord gateway
+        """Continuously polls save-state channels every 15 seconds so that even if a Discord gateway
         event is missed during a reconnect or attachment upload, any new save state set is processed immediately."""
         while not self.is_closed():
-            await asyncio.sleep(20)
+            await asyncio.sleep(15)
             try:
-                cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
+                discord_now = await asyncio.to_thread(self.get_discord_utc_now)
+                cutoff = max(self._startup_cutoff, discord_now - timedelta(minutes=30))
                 for guild in self.guilds:
                     for channel in guild.text_channels:
                         if not self.is_channel_allowed(channel):
@@ -4917,7 +4947,10 @@ class NHL95SaveStateBot(discord.Client):
                         if not (perms.read_messages and perms.read_message_history):
                             continue
                         try:
-                            async for msg in channel.history(limit=15, after=cutoff, oldest_first=True):
+                            recent_msgs = [m async for m in channel.history(limit=15)]
+                            for msg in reversed(recent_msgs):
+                                if msg.created_at < cutoff:
+                                    continue
                                 if msg.author.bot:
                                     continue
                                 atts = [a for a in msg.attachments if is_savestate_attachment(a)]
@@ -5346,9 +5379,9 @@ def main():
     parser = argparse.ArgumentParser(description="NHL95.net Always-On Discord Save State Bot")
     parser.add_argument(
         "--backfill-hours",
-        type=int,
-        default=48,
-        help="On startup, scan the last N hours of channel history for any un-ingested save states (0 to disable, default: 48)",
+        type=float,
+        default=0.5,
+        help="On startup, scan the last N hours of channel history for any un-ingested save states (0 to disable, default: 0.5 = 30 mins)",
     )
     parser.add_argument(
         "--channel-ids",
