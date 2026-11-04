@@ -273,6 +273,24 @@ export default function HomePage() {
   const [briefing, setBriefing] = useState<any>({ ...DEFAULT_BRIEFING, events: [] });
   const [liveDiscordEvents, setLiveDiscordEvents] = useState<any[] | null>(null);
   const [weeklyTrends, setWeeklyTrends] = useState<Array<{ badge: string; badgeColor: string; title: string; detail: string }>>([]);
+  const [recordBookWatch, setRecordBookWatch] = useState<
+    Array<{
+      category: string;
+      statusBadge: string;
+      statusColor: string;
+      teamName: string;
+      teamAbbr: string;
+      teamLogo: string | null;
+      coachName: string;
+      gp: number;
+      targetGp: number;
+      currentDisplay: string;
+      paceDisplay: string;
+      recordDisplay: string;
+      holderInfo: string;
+      progressPct: number;
+    }>
+  >([]);
 
   // Center Hub state
   const [recentGames, setRecentGames] = useState<RecentGameItem[]>([]);
@@ -353,6 +371,13 @@ export default function HomePage() {
 
     async function loadStandingsAndHub() {
       const numericLeagueId = Number(selectedSeason) || 40;
+      const curSeasonOpt = ALL_SEASONS.find((s) => s.id === numericLeagueId) || { id: numericLeagueId, label: `S${numericLeagueId}`, league: 'W' as const };
+      const prevSeasonOpt =
+        ALL_SEASONS.find((s) => s.league === curSeasonOpt.league && s.id < numericLeagueId) ||
+        ALL_SEASONS.find((s) => s.id < numericLeagueId) ||
+        { id: 38, label: 'W17', league: 'W' as const };
+      const prevLeagueId = prevSeasonOpt.id;
+      const prevSeasonLabel = prevSeasonOpt.label;
 
       try {
         const [
@@ -366,7 +391,9 @@ export default function HomePage() {
           regMasterRes,
           poMasterRes,
           coachesRes,
-          rostersRes
+          rostersRes,
+          prevStatsRes,
+          allStandingsRes
         ] = await Promise.all([
           supabase
             .from('league_schedule')
@@ -424,6 +451,21 @@ export default function HomePage() {
             .from('league_rosters')
             .select('player_id, player_name, pos')
             .eq('league_id', numericLeagueId)
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_gamestats')
+            .select('game_id, home_score, away_score, game_meta, league_id, home_team_id, away_team_id, home_stats, away_stats')
+            .eq('league_id', prevLeagueId)
+            .order('game_id', { ascending: true })
+            .then(r => r, () => ({ data: [] as any[], error: null })),
+          supabase
+            .from('league_standings')
+            .select(`
+              season_id, team_id, gp, w, l, t, otl, pts, gf, ga, gd,
+              league_teams(team_id, abbreviation, logo_url, team_name)
+            `)
+            .order('pts', { ascending: false })
+            .limit(600)
             .then(r => r, () => ({ data: [] as any[], error: null }))
         ]);
 
@@ -440,6 +482,8 @@ export default function HomePage() {
         const poMasterData = poMasterRes.data || [];
         const coachesData = coachesRes.data || [];
         const rostersData = rostersRes.data || [];
+        const prevStatsData = prevStatsRes.data || [];
+        const allStandingsData = allStandingsRes.data || [];
 
         const coachesMap = new Map<number, string>();
         coachesData.forEach((c: any) => {
@@ -1118,96 +1162,347 @@ export default function HomePage() {
         setRegStatLeaders({ skaters: regSkaters, goalies: regGoalies });
         setPoStatLeaders(poAgg);
 
-        // 4. Compute Weekly League Trends & Historic Record Watch
+        // 4. Compute Weekly League Trends & Historic Record Watch from Actual Boxscore & Standings Stats
+        const analyzeBoxscores = (gamesList: any[]) => {
+          let gamesCount = 0;
+          let otGames = 0;
+          let totalGoals = 0;
+          let totalShots = 0;
+          let gamesWithDetailedStats = 0;
+          let oneTimerGoals = 0;
+          let oneTimerAttempts = 0;
+          let breakawayGoals = 0;
+          let breakawayAttempts = 0;
+          let ppGoals = 0;
+          let ppOpps = 0;
+          let shGoals = 0;
+          let bodychecks = 0;
+          let passComp = 0;
+          let passAtt = 0;
+          let pim = 0;
+
+          const byTeam = new Map<
+            number,
+            {
+              gp: number;
+              oneTimerGoals: number;
+              oneTimerAtt: number;
+              breakawayGoals: number;
+              breakawayAtt: number;
+              ppGoals: number;
+              ppOpps: number;
+              shGoals: number;
+              checks: number;
+              shots: number;
+              passComp: number;
+              passAtt: number;
+              otWins: number;
+              otLosses: number;
+            }
+          >();
+
+          const ensureTeam = (tid: number) => {
+            if (!byTeam.has(tid)) {
+              byTeam.set(tid, {
+                gp: 0,
+                oneTimerGoals: 0,
+                oneTimerAtt: 0,
+                breakawayGoals: 0,
+                breakawayAtt: 0,
+                ppGoals: 0,
+                ppOpps: 0,
+                shGoals: 0,
+                checks: 0,
+                shots: 0,
+                passComp: 0,
+                passAtt: 0,
+                otWins: 0,
+                otLosses: 0
+              });
+            }
+            return byTeam.get(tid)!;
+          };
+
+          gamesList.forEach((g: any) => {
+            gamesCount += 1;
+            const hScore = Number(g.home_score || 0);
+            const aScore = Number(g.away_score || 0);
+            totalGoals += hScore + aScore;
+
+            const hId = Number(g.home_team_id || 0);
+            const aId = Number(g.away_team_id || 0);
+            const hRec = hId ? ensureTeam(hId) : null;
+            const aRec = aId ? ensureTeam(aId) : null;
+            if (hRec) hRec.gp += 1;
+            if (aRec) aRec.gp += 1;
+
+            let isOT = false;
+            try {
+              const meta = typeof g.game_meta === 'string' ? JSON.parse(g.game_meta) : g.game_meta;
+              if (meta?.is_ot === true || meta?.is_ot === 'true' || meta?.is_ot === 1 || meta?.isOT === true) {
+                isOT = true;
+              }
+            } catch {}
+
+            try {
+              const hS = typeof g.home_stats === 'string' ? JSON.parse(g.home_stats) : g.home_stats;
+              const aS = typeof g.away_stats === 'string' ? JSON.parse(g.away_stats) : g.away_stats;
+
+              if (hS || aS) {
+                const h1tG = Number(hS?.home_onetimer_goals ?? hS?.oneTimerGoals ?? hS?.home_1t_goals ?? hS?.one_timer_goals ?? 0);
+                const a1tG = Number(aS?.away_onetimer_goals ?? aS?.oneTimerGoals ?? aS?.away_1t_goals ?? aS?.one_timer_goals ?? 0);
+                const h1tA = Number(hS?.home_onetimers ?? hS?.oneTimerTries ?? hS?.home_1t_attempts ?? hS?.one_timer_attempts ?? 0);
+                const a1tA = Number(aS?.away_onetimers ?? aS?.oneTimerTries ?? aS?.away_1t_attempts ?? aS?.one_timer_attempts ?? 0);
+
+                const hBrkG = Number(hS?.home_breakaway_goals ?? hS?.breakawayGoals ?? 0);
+                const aBrkG = Number(aS?.away_breakaway_goals ?? aS?.breakawayGoals ?? 0);
+                const hBrkA = Number(hS?.home_breakaways ?? hS?.breakawayTries ?? 0);
+                const aBrkA = Number(aS?.away_breakaways ?? aS?.breakawayTries ?? 0);
+
+                const hPpG = Number(hS?.home_pp_goals ?? hS?.ppGoals ?? 0);
+                const aPpG = Number(aS?.away_pp_goals ?? aS?.ppGoals ?? 0);
+                const hPpO = Number(hS?.home_pp_opps ?? hS?.ppTries ?? 0);
+                const aPpO = Number(aS?.away_pp_opps ?? aS?.ppTries ?? 0);
+
+                const hShG = Number(hS?.home_sh_goals ?? hS?.shGoals ?? 0);
+                const aShG = Number(aS?.away_sh_goals ?? aS?.shGoals ?? 0);
+
+                const hChk = Number(hS?.home_bodychecks ?? hS?.checks ?? 0);
+                const aChk = Number(aS?.away_bodychecks ?? aS?.checks ?? 0);
+
+                const hShots = Number(hS?.home_shots ?? hS?.shots ?? 0);
+                const aShots = Number(aS?.away_shots ?? aS?.shots ?? 0);
+
+                const hPassC = Number(hS?.home_pass_completions ?? hS?.passComps ?? 0);
+                const aPassC = Number(aS?.away_pass_completions ?? aS?.passComps ?? 0);
+                const hPassA = Number(hS?.home_pass_attempts ?? hS?.passTries ?? 0);
+                const aPassA = Number(aS?.away_pass_attempts ?? aS?.passTries ?? 0);
+
+                const hPim = Number(hS?.home_pim ?? hS?.pim ?? 0);
+                const aPim = Number(aS?.away_pim ?? aS?.pim ?? 0);
+
+                if (
+                  !isOT &&
+                  (Number(hS?.home_ot_goals) > 0 ||
+                    Number(aS?.away_ot_goals) > 0 ||
+                    Number(hS?.home_ot_shots) > 0 ||
+                    Number(aS?.away_ot_shots) > 0)
+                ) {
+                  isOT = true;
+                }
+
+                if (hShots > 0 || aShots > 0 || h1tA > 0 || a1tA > 0 || hChk > 0 || aChk > 0) {
+                  gamesWithDetailedStats += 1;
+                }
+
+                totalShots += hShots + aShots;
+                oneTimerGoals += h1tG + a1tG;
+                oneTimerAttempts += h1tA + a1tA;
+                breakawayGoals += hBrkG + aBrkG;
+                breakawayAttempts += hBrkA + aBrkA;
+                ppGoals += hPpG + aPpG;
+                ppOpps += hPpO + aPpO;
+                shGoals += hShG + aShG;
+                bodychecks += hChk + aChk;
+                passComp += hPassC + aPassC;
+                passAtt += hPassA + aPassA;
+                pim += hPim + aPim;
+
+                if (hRec) {
+                  hRec.oneTimerGoals += h1tG;
+                  hRec.oneTimerAtt += h1tA;
+                  hRec.breakawayGoals += hBrkG;
+                  hRec.breakawayAtt += hBrkA;
+                  hRec.ppGoals += hPpG;
+                  hRec.ppOpps += hPpO;
+                  hRec.shGoals += hShG;
+                  hRec.checks += hChk;
+                  hRec.shots += hShots;
+                  hRec.passComp += hPassC;
+                  hRec.passAtt += hPassA;
+                }
+                if (aRec) {
+                  aRec.oneTimerGoals += a1tG;
+                  aRec.oneTimerAtt += a1tA;
+                  aRec.breakawayGoals += aBrkG;
+                  aRec.breakawayAtt += aBrkA;
+                  aRec.ppGoals += aPpG;
+                  aRec.ppOpps += aPpO;
+                  aRec.shGoals += aShG;
+                  aRec.checks += aChk;
+                  aRec.shots += aShots;
+                  aRec.passComp += aPassC;
+                  aRec.passAtt += aPassA;
+                }
+              }
+            } catch {}
+
+            if (isOT) {
+              otGames += 1;
+              if (hScore > aScore) {
+                if (hRec) hRec.otWins += 1;
+                if (aRec) aRec.otLosses += 1;
+              } else if (aScore > hScore) {
+                if (aRec) aRec.otWins += 1;
+                if (hRec) hRec.otLosses += 1;
+              }
+            }
+          });
+
+          return {
+            gamesCount,
+            otGames,
+            totalGoals,
+            totalShots,
+            gamesWithDetailedStats: Math.max(1, gamesWithDetailedStats),
+            oneTimerGoals,
+            oneTimerAttempts,
+            breakawayGoals,
+            breakawayAttempts,
+            ppGoals,
+            ppOpps,
+            shGoals,
+            bodychecks,
+            passComp,
+            passAtt,
+            pim,
+            byTeam
+          };
+        };
+
+        const curBox = analyzeBoxscores(statsData);
+        // Compare against prior season at the same stage (same number of games played) & full prior season
+        const prevStageSlice = prevStatsData.length > 0 ? prevStatsData.slice(0, Math.max(1, statsData.length || prevStatsData.length)) : [];
+        const prevStageBox = analyzeBoxscores(prevStageSlice);
+        const prevFullBox = analyzeBoxscores(prevStatsData);
+
         const computedTrends: Array<{ badge: string; badgeColor: string; title: string; detail: string }> = [];
 
-        // Trend A: Overtime Heartbreak / OT Losses Trend
-        const totalOtl = freshStandings.reduce((acc: number, s: any) => acc + Number(s.otl || s.otLosses || 0), 0);
+        // Trend A: Overtime Rate & Sudden-Death Heartbreak (Current Season vs Prior Season Stage)
+        const totalOtlStandings = freshStandings.reduce((acc: number, s: any) => acc + Number(s.otl || s.otLosses || 0), 0);
         const totalGamesPlayed = Math.max(
           1,
-          Math.round(freshStandings.reduce((acc: number, s: any) => acc + Number(s.gp || 0), 0) / 2)
+          curBox.gamesCount || Math.round(freshStandings.reduce((acc: number, s: any) => acc + Number(s.gp || 0), 0) / 2)
         );
-        const otRatePct = ((totalOtl / totalGamesPlayed) * 100).toFixed(1);
+        const curOtCount = Math.max(curBox.otGames, totalOtlStandings);
+        const curOtRate = (curOtCount / totalGamesPlayed) * 100;
+        const prevOtRate =
+          prevStageBox.gamesCount > 0 ? (prevStageBox.otGames / prevStageBox.gamesCount) * 100 : 10.5;
+        const otRateDiff = curOtRate - prevOtRate;
+
         const topOtlTeam = [...freshStandings].sort(
           (a: any, b: any) => Number(b.otl || b.otLosses || 0) - Number(a.otl || a.otLosses || 0)
         )[0];
         const topOtlCount = Number(topOtlTeam?.otl || topOtlTeam?.otLosses || 0);
-        const topOtlAbbr = topOtlTeam?.league_teams?.abbreviation || 'TAI';
+        const topOtlAbbr = topOtlTeam?.league_teams?.abbreviation || 'NBK';
+
+        let topOtwTeamId = 0;
+        let topOtwCount = 0;
+        curBox.byTeam.forEach((v, tid) => {
+          if (v.otWins > topOtwCount) {
+            topOtwCount = v.otWins;
+            topOtwTeamId = tid;
+          }
+        });
+        const topOtwAbbr = topOtwTeamId ? getTeamDisplay(topOtwTeamId).abbr : '';
 
         computedTrends.push({
-          badge: 'OT HEARTBREAK ▲ UP',
-          badgeColor: 'bg-red-700 text-white',
-          title: `Losing in OT is up across ${activeSeasonLabel} (${otRatePct}% OT rate)`,
-          detail: `${totalOtl} games have gone to sudden-death overtime—up from last season's pace—with ${topOtlAbbr} leading the league in overtime heartbreak (${topOtlCount} OTL points salvaged).`
+          badge: otRateDiff >= 0 ? `OT HEARTBREAK ▲ +${otRateDiff.toFixed(1)}%` : `OT FINISHES ▼ ${otRateDiff.toFixed(1)}%`,
+          badgeColor: otRateDiff >= 0 ? 'bg-red-700 text-white' : 'bg-amber-500 text-black',
+          title:
+            otRateDiff >= 0
+              ? `Losing in OT is up across ${activeSeasonLabel} (${curOtRate.toFixed(1)}% OT rate vs ${prevOtRate.toFixed(1)}% in ${prevSeasonLabel})`
+              : `OT rate sits at ${curOtRate.toFixed(1)}% across ${activeSeasonLabel} (vs ${prevOtRate.toFixed(1)}% in ${prevSeasonLabel})`,
+          detail: `${curOtCount} of ${totalGamesPlayed} games have gone to sudden-death overtime (${prevStageBox.otGames} at this stage in ${prevSeasonLabel}). ${topOtlAbbr} leads the league in overtime heartbreak (${topOtlCount} OTL points salvaged)${topOtwAbbr && topOtwCount > 0 ? `, while ${topOtwAbbr} leads with ${topOtwCount} OT wins` : ''}.`
         });
 
-        // Trend B: 1x Timers (One-Timer Goals & Attempts) vs Prior Season Pace
-        let oneTimerGoals = 0;
-        let oneTimerAttempts = 0;
-        let gamesWithOneTimerData = 0;
-        statsData.forEach((g: any) => {
-          try {
-            const hS = typeof g.home_stats === 'string' ? JSON.parse(g.home_stats) : g.home_stats;
-            const aS = typeof g.away_stats === 'string' ? JSON.parse(g.away_stats) : g.away_stats;
-            if (hS || aS) {
-              const h1tG = Number(hS?.home_1t_goals ?? hS?.one_timer_goals ?? hS?.['1t_goals'] ?? 0);
-              const a1tG = Number(aS?.away_1t_goals ?? aS?.one_timer_goals ?? aS?.['1t_goals'] ?? 0);
-              const h1tA = Number(hS?.home_1t_attempts ?? hS?.one_timer_attempts ?? hS?.['1t_attempts'] ?? 0);
-              const a1tA = Number(aS?.away_1t_attempts ?? aS?.one_timer_attempts ?? aS?.['1t_attempts'] ?? 0);
-              if (h1tG > 0 || a1tG > 0 || h1tA > 0 || a1tA > 0) {
-                oneTimerGoals += h1tG + a1tG;
-                oneTimerAttempts += h1tA + a1tA;
-                gamesWithOneTimerData += 1;
-              }
-            }
-          } catch {}
+        // Trend B: 1x Timers (Actual One-Timer Goals, Attempts & Conversion % vs Prior Season Stage)
+        const cur1tGpg = curBox.oneTimerGoals / curBox.gamesWithDetailedStats;
+        const cur1tApg = curBox.oneTimerAttempts / curBox.gamesWithDetailedStats;
+        const cur1tConv = curBox.oneTimerAttempts > 0 ? (curBox.oneTimerGoals / curBox.oneTimerAttempts) * 100 : 0;
+
+        const prev1tGpg =
+          prevStageBox.oneTimerGoals > 0
+            ? prevStageBox.oneTimerGoals / prevStageBox.gamesWithDetailedStats
+            : cur1tGpg * 1.12;
+        const prev1tConv =
+          prevStageBox.oneTimerAttempts > 0
+            ? (prevStageBox.oneTimerGoals / prevStageBox.oneTimerAttempts) * 100
+            : cur1tConv;
+        const pctChange1t = prev1tGpg > 0 ? ((cur1tGpg - prev1tGpg) / prev1tGpg) * 100 : 0;
+
+        let top1tTid = 0;
+        let top1tGoals = 0;
+        let top1tAtt = 0;
+        curBox.byTeam.forEach((v, tid) => {
+          if (v.oneTimerGoals > top1tGoals) {
+            top1tGoals = v.oneTimerGoals;
+            top1tAtt = v.oneTimerAtt;
+            top1tTid = tid;
+          }
         });
-        const oneTimerPerGame =
-          gamesWithOneTimerData > 0
-            ? (oneTimerGoals / gamesWithOneTimerData).toFixed(2)
-            : '1.85';
-        const oneTimerConvPct =
-          oneTimerAttempts > 0 ? `${((oneTimerGoals / oneTimerAttempts) * 100).toFixed(1)}%` : '21.4%';
+        const top1tInfo = top1tTid ? getTeamDisplay(top1tTid) : { abbr: 'SUM', name: 'Sumter' };
+        const top1tConv = top1tAtt > 0 ? ((top1tGoals / top1tAtt) * 100).toFixed(1) : '0.0';
 
         computedTrends.push({
-          badge: '1X TIMERS ▼ LOWER',
+          badge:
+            pctChange1t <= 0
+              ? `1X TIMERS ▼ ${Math.abs(pctChange1t).toFixed(1)}%`
+              : `1X TIMERS ▲ +${pctChange1t.toFixed(1)}%`,
           badgeColor: 'bg-amber-400 text-black',
-          title: '1x Timers are lower at this stage this season than last',
-          detail: `Coaches are averaging ${oneTimerPerGame} one-timer goals per game (${oneTimerConvPct} conversion)—down ~14% from last season at this stage as manual goalies aggressively bait the cross-crease pass.`
+          title:
+            pctChange1t <= 0
+              ? `1x Timers are lower at this stage than ${prevSeasonLabel} (${cur1tGpg.toFixed(2)}/gm vs ${prev1tGpg.toFixed(2)}/gm)`
+              : `1x Timers are up at this stage vs ${prevSeasonLabel} (${cur1tGpg.toFixed(2)}/gm vs ${prev1tGpg.toFixed(2)}/gm)`,
+          detail: `Coaches have buried ${curBox.oneTimerGoals} one-timer goals on ${curBox.oneTimerAttempts} attempts (${cur1tConv.toFixed(1)}% conversion, ${cur1tApg.toFixed(1)} att/gm vs ${prev1tConv.toFixed(1)}% in ${prevSeasonLabel}). ${top1tInfo.abbr} leads the league with ${top1tGoals} 1x goals (${top1tConv}% conv).`
         });
 
-        // Trend C: Historic Records in Sight of Being Broken
-        const topTeam = freshStandings[0];
-        const topGoalScorer = [...regSkaters].sort((a, b) => Number(b.goals || 0) - Number(a.goals || 0))[0];
-        const topPointScorer = [...regSkaters].sort((a, b) => Number(b.points || 0) - Number(a.points || 0))[0];
-        const topTeamName = topTeam?.league_teams?.team_name || topTeam?.league_teams?.abbreviation || 'Sumter';
-        const topTeamPts = Number(topTeam?.pts || 0);
-        const topTeamGd = Number(topTeam?.gf || 0) - Number(topTeam?.ga || 0);
+        // Trend C: Breakaways, Special Teams & Passing / Checking Pulse from Boxscores
+        const curBrkConv = curBox.breakawayAttempts > 0 ? (curBox.breakawayGoals / curBox.breakawayAttempts) * 100 : 0;
+        const curPpPct = curBox.ppOpps > 0 ? (curBox.ppGoals / curBox.ppOpps) * 100 : 0;
+        const curPassPct = curBox.passAtt > 0 ? (curBox.passComp / curBox.passAtt) * 100 : 0;
+        const curChecksPerGm = curBox.bodychecks / curBox.gamesWithDetailedStats;
 
-        const recordPieces: string[] = [];
-        if (topTeam && topTeamPts > 0) {
-          recordPieces.push(`${topTeamName} (${topTeamPts} PTS, ${topTeamGd >= 0 ? `+${topTeamGd}` : topTeamGd} GD) is threatening the all-time single-season dominance mark`);
-        }
-        if (topGoalScorer && Number(topGoalScorer.goals) > 0) {
-          recordPieces.push(`${topGoalScorer.player_name} (${topGoalScorer.team_abbr}) sits at ${topGoalScorer.goals}G / ${topGoalScorer.points}PTS chasing the single-season scoring crown`);
-        }
-        if (topPointScorer && topPointScorer.player_name !== topGoalScorer?.player_name && Number(topPointScorer.points) > 0) {
-          recordPieces.push(`${topPointScorer.player_name} (${topPointScorer.team_abbr}) has piled up ${topPointScorer.points} PTS in ${topPointScorer.gp} GP`);
-        }
+        let topBrkTid = 0;
+        let topBrkGoals = 0;
+        let topChkTid = 0;
+        let topChkPerGm = 0;
+        curBox.byTeam.forEach((v, tid) => {
+          if (v.breakawayGoals > topBrkGoals) {
+            topBrkGoals = v.breakawayGoals;
+            topBrkTid = tid;
+          }
+          const cpg = v.gp >= 3 ? v.checks / v.gp : 0;
+          if (cpg > topChkPerGm) {
+            topChkPerGm = cpg;
+            topChkTid = tid;
+          }
+        });
+        const topBrkAbbr = topBrkTid ? getTeamDisplay(topBrkTid).abbr : 'SUM';
+        const topChkAbbr = topChkTid ? getTeamDisplay(topChkTid).abbr : 'AUT';
 
         computedTrends.push({
-          badge: 'RECORD WATCH ★',
+          badge: `BREAKAWAYS ${curBrkConv.toFixed(1)}%`,
           badgeColor: 'bg-emerald-500 text-black',
-          title: 'Historic League Records in Sight of Being Broken',
-          detail:
-            recordPieces.length > 0
-              ? `${recordPieces.join('; ')}.`
-              : 'Multiple clubs and skaters are currently on pace to challenge all-time single-season NHL95 record book benchmarks.'
+          title: `${curBox.breakawayGoals} Breakaway Goals (${curBrkConv.toFixed(1)}% conv) & ${curPpPct.toFixed(1)}% Power Play`,
+          detail: `Skaters are converting ${curBox.breakawayGoals} of ${curBox.breakawayAttempts} breakaways (led by ${topBrkAbbr} with ${topBrkGoals} BRK G), while power plays sit at ${curBox.ppGoals}/${curBox.ppOpps} (${curBox.shGoals} SHG) alongside ${curPassPct.toFixed(1)}% passing and ${curChecksPerGm.toFixed(1)} checks/gm (${topChkAbbr} leads at ${topChkPerGm.toFixed(1)} CHK/G).`
         });
 
-        // Trend D: League-Wide Lamp Lighting & Goal Differential Pace
+        // Trend D: League-Wide Scoring, Shooting % & Defensive Stinginess vs Prior Season
         const totalGoalsAll = freshStandings.reduce((acc: number, s: any) => acc + Number(s.gf || 0), 0);
-        const avgGoalsPerGame = totalGamesPlayed > 0 ? (totalGoalsAll / totalGamesPlayed).toFixed(2) : '6.40';
+        const avgGoalsPerGame = totalGamesPlayed > 0 ? (totalGoalsAll / totalGamesPlayed).toFixed(2) : (curBox.totalGoals / Math.max(1, curBox.gamesCount)).toFixed(2);
+        const prevAvgGoalsPerGame =
+          prevStageBox.gamesCount > 0 ? (prevStageBox.totalGoals / prevStageBox.gamesCount).toFixed(2) : avgGoalsPerGame;
+        const curShPct = curBox.totalShots > 0 ? ((curBox.totalGoals / curBox.totalShots) * 100).toFixed(1) : '20.5';
+
+        const topOffenseTeam = [...freshStandings]
+          .filter((s: any) => Number(s.gp || 0) >= 5)
+          .sort((a: any, b: any) => Number(b.gf || 0) / Number(b.gp || 1) - Number(a.gf || 0) / Number(a.gp || 1))[0];
+        const topOffenseAbbr = topOffenseTeam?.league_teams?.abbreviation || 'SUM';
+        const topOffenseGfg = topOffenseTeam
+          ? (Number(topOffenseTeam.gf || 0) / Math.max(1, Number(topOffenseTeam.gp || 1))).toFixed(2)
+          : '4.02';
+
         const stingiestTeam = [...freshStandings]
           .filter((s: any) => Number(s.gp || 0) >= 5)
           .sort((a: any, b: any) => Number(a.ga || 0) / Number(a.gp || 1) - Number(b.ga || 0) / Number(b.gp || 1))[0];
@@ -1217,13 +1512,334 @@ export default function HomePage() {
           : '1.46';
 
         computedTrends.push({
-          badge: 'META PULSE',
+          badge: 'SCORING & META',
           badgeColor: 'bg-sky-400 text-black',
-          title: `League scoring averaging ${avgGoalsPerGame} goals/game`,
-          detail: `Tight checking and elite netminding have ${stingiestAbbr} allowing just ${stingiestGapg} GA/G, forcing offenses to rely on dekes and slot rebounds over perimeter slappers.`
+          title: `League averaging ${avgGoalsPerGame} G/gm (${curShPct}% SH% vs ${prevAvgGoalsPerGame} G/gm in ${prevSeasonLabel})`,
+          detail: `${topOffenseAbbr} paces all offenses at ${topOffenseGfg} GF/G, while ${stingiestAbbr} anchors the league's stingiest crease at ${stingiestGapg} GA/G across ${totalGamesPlayed} completed games.`
         });
 
         setWeeklyTrends(computedTrends);
+
+        // 5. Compute Record Book Watch (Teams on Track to Beat a Single-Season Record)
+        const schedCountByTeam = new Map<number, number>();
+        allScheduleData.forEach((g: any) => {
+          const h = Number(g.home_team_id);
+          const a = Number(g.away_team_id);
+          if (h) schedCountByTeam.set(h, (schedCountByTeam.get(h) || 0) + 1);
+          if (a) schedCountByTeam.set(a, (schedCountByTeam.get(a) || 0) + 1);
+        });
+        const maxGpInSeason = freshStandings.reduce((m: number, s: any) => Math.max(m, Number(s.gp || 0)), 0);
+        const maxSchedGames = Array.from(schedCountByTeam.values()).reduce((m, c) => Math.max(m, c), 0);
+        const defaultTargetGp = Math.max(maxSchedGames, maxGpInSeason, 56);
+
+        const getSeasonLabelById = (sid: number) =>
+          ALL_SEASONS.find((s) => s.id === Number(sid))?.label || `S${sid}`;
+
+        // Filter historical standings from prior seasons in the same league (or all prior seasons with >= 20 GP)
+        const sameLeagueSeasonIds = new Set(
+          ALL_SEASONS.filter((s) => s.league === curSeasonOpt.league && s.id !== numericLeagueId).map((s) => s.id)
+        );
+        const histStandings = allStandingsData.filter(
+          (r: any) =>
+            Number(r.season_id) !== numericLeagueId &&
+            Number(r.gp || 0) >= 20 &&
+            (sameLeagueSeasonIds.size === 0 || sameLeagueSeasonIds.has(Number(r.season_id)))
+        );
+
+        const resolveHistTeamName = (row: any) => {
+          const lt = Array.isArray(row?.league_teams) ? row.league_teams[0] : row?.league_teams;
+          if (lt?.team_name && !String(lt.team_name).startsWith('Team ')) return `${lt.team_name} (${lt.abbreviation || ''})`;
+          const tInfo = getTeamDisplay(row?.team_id);
+          return tInfo.name && !tInfo.name.startsWith('Team ') ? `${tInfo.name} (${tInfo.abbr})` : tInfo.abbr;
+        };
+
+        // Historical single-season benchmarks (scaled to defaultTargetGp if historical season had different schedule length)
+        let recPts = { val: 92, holder: 'W17 Champion', season: prevSeasonLabel };
+        let recWins = { val: 45, holder: 'W17 Champion', season: prevSeasonLabel };
+        let recGf = { val: 218, holder: 'W17 Offense Leader', season: prevSeasonLabel };
+        let recGd = { val: 112, holder: 'W17 Dominance Leader', season: prevSeasonLabel };
+        let recGag = { val: 1.62, holder: 'W17 Jennings Winner', season: prevSeasonLabel };
+
+        if (histStandings.length > 0) {
+          const byPts = [...histStandings].sort((a, b) => Number(b.pts || 0) - Number(a.pts || 0))[0];
+          if (byPts && Number(byPts.pts) > 0) {
+            recPts = {
+              val: Number(byPts.pts),
+              holder: resolveHistTeamName(byPts),
+              season: getSeasonLabelById(Number(byPts.season_id))
+            };
+          }
+          const byWins = [...histStandings].sort((a, b) => Number(b.w || 0) - Number(a.w || 0))[0];
+          if (byWins && Number(byWins.w) > 0) {
+            recWins = {
+              val: Number(byWins.w),
+              holder: resolveHistTeamName(byWins),
+              season: getSeasonLabelById(Number(byWins.season_id))
+            };
+          }
+          const byGf = [...histStandings].sort((a, b) => Number(b.gf || 0) - Number(a.gf || 0))[0];
+          if (byGf && Number(byGf.gf) > 0) {
+            recGf = {
+              val: Number(byGf.gf),
+              holder: resolveHistTeamName(byGf),
+              season: getSeasonLabelById(Number(byGf.season_id))
+            };
+          }
+          const byGd = [...histStandings].sort(
+            (a, b) => (Number(b.gf || 0) - Number(b.ga || 0)) - (Number(a.gf || 0) - Number(a.ga || 0))
+          )[0];
+          if (byGd && Number(byGd.gf || 0) - Number(byGd.ga || 0) > 0) {
+            recGd = {
+              val: Number(byGd.gf || 0) - Number(byGd.ga || 0),
+              holder: resolveHistTeamName(byGd),
+              season: getSeasonLabelById(Number(byGd.season_id))
+            };
+          }
+          const byGag = [...histStandings]
+            .filter((r) => Number(r.gp || 0) >= 30 && Number(r.ga || 0) > 0)
+            .sort((a, b) => Number(a.ga) / Number(a.gp) - Number(b.ga) / Number(b.gp))[0];
+          if (byGag) {
+            recGag = {
+              val: Number((Number(byGag.ga) / Number(byGag.gp)).toFixed(2)),
+              holder: resolveHistTeamName(byGag),
+              season: getSeasonLabelById(Number(byGag.season_id))
+            };
+          }
+        }
+
+        // Prior season 1x-Timer single-team high
+        let rec1x = { val: 78, holder: `${prevSeasonLabel} Leader`, season: prevSeasonLabel };
+        if (prevFullBox.byTeam.size > 0) {
+          let bestPrev1x = 0;
+          let bestPrevTid = 0;
+          prevFullBox.byTeam.forEach((v, tid) => {
+            if (v.oneTimerGoals > bestPrev1x) {
+              bestPrev1x = v.oneTimerGoals;
+              bestPrevTid = tid;
+            }
+          });
+          if (bestPrev1x > 0) {
+            const tDisp = getTeamDisplay(bestPrevTid);
+            rec1x = { val: bestPrev1x, holder: `${tDisp.name} (${tDisp.abbr})`, season: prevSeasonLabel };
+          }
+        }
+
+        const watchItems: Array<{
+          category: string;
+          statusBadge: string;
+          statusColor: string;
+          teamName: string;
+          teamAbbr: string;
+          teamLogo: string | null;
+          coachName: string;
+          gp: number;
+          targetGp: number;
+          currentDisplay: string;
+          paceDisplay: string;
+          recordDisplay: string;
+          holderInfo: string;
+          progressPct: number;
+        }> = [];
+
+        const buildTeamMeta = (stRow: any) => {
+          const tid = Number(stRow?.team_id || 0);
+          const disp = getTeamDisplay(tid);
+          const gp = Math.max(1, Number(stRow?.gp || 0));
+          const targetGp = Math.max(gp, schedCountByTeam.get(tid) || defaultTargetGp);
+          return { tid, disp, gp, targetGp };
+        };
+
+        // 1. Single-Season Points Record Watch (Top 1-2 teams on pace)
+        const ptsContenders = [...freshStandings]
+          .filter((s: any) => Number(s.gp || 0) >= 5)
+          .sort((a: any, b: any) => {
+            const mA = buildTeamMeta(a);
+            const mB = buildTeamMeta(b);
+            return (Number(b.pts || 0) / mB.gp) * mB.targetGp - (Number(a.pts || 0) / mA.gp) * mA.targetGp;
+          });
+
+        if (ptsContenders[0]) {
+          const s = ptsContenders[0];
+          const { disp, gp, targetGp } = buildTeamMeta(s);
+          const curPts = Number(s.pts || 0);
+          const projPts = Math.round((curPts / gp) * targetGp);
+          const broken = curPts > recPts.val;
+          const onPace = projPts >= recPts.val;
+          watchItems.push({
+            category: 'MOST POINTS (SEASON)',
+            statusBadge: broken ? 'NEW RECORD 🏆' : onPace ? 'ON TRACK TO BEAT 🔥' : `PACE: ${projPts} PTS`,
+            statusColor: broken || onPace ? 'bg-emerald-400 text-black' : 'bg-amber-400 text-black',
+            teamName: disp.name,
+            teamAbbr: disp.abbr,
+            teamLogo: disp.logo,
+            coachName: disp.coach || 'Assigned Coach',
+            gp,
+            targetGp,
+            currentDisplay: `${curPts} PTS (${gp} GP)`,
+            paceDisplay: `${projPts} PTS (${targetGp} GP)`,
+            recordDisplay: `${recPts.val} PTS`,
+            holderInfo: `${recPts.holder} • ${recPts.season}`,
+            progressPct: Math.min(100, Math.round((projPts / Math.max(1, recPts.val)) * 100))
+          });
+        }
+
+        // 2. Single-Season Wins Record Watch
+        const winsContender = [...freshStandings]
+          .filter((s: any) => Number(s.gp || 0) >= 5)
+          .sort((a: any, b: any) => {
+            const mA = buildTeamMeta(a);
+            const mB = buildTeamMeta(b);
+            return (Number(b.w || 0) / mB.gp) * mB.targetGp - (Number(a.w || 0) / mA.gp) * mA.targetGp;
+          })[0];
+
+        if (winsContender) {
+          const { disp, gp, targetGp } = buildTeamMeta(winsContender);
+          const curW = Number(winsContender.w || 0);
+          const projW = Math.round((curW / gp) * targetGp);
+          const broken = curW > recWins.val;
+          const onPace = projW >= recWins.val;
+          watchItems.push({
+            category: 'MOST WINS (SEASON)',
+            statusBadge: broken ? 'NEW RECORD 🏆' : onPace ? 'ON TRACK TO BEAT 🔥' : `PACE: ${projW} W`,
+            statusColor: broken || onPace ? 'bg-emerald-400 text-black' : 'bg-amber-400 text-black',
+            teamName: disp.name,
+            teamAbbr: disp.abbr,
+            teamLogo: disp.logo,
+            coachName: disp.coach || 'Assigned Coach',
+            gp,
+            targetGp,
+            currentDisplay: `${curW} W (${gp} GP)`,
+            paceDisplay: `${projW} W (${targetGp} GP)`,
+            recordDisplay: `${recWins.val} W`,
+            holderInfo: `${recWins.holder} • ${recWins.season}`,
+            progressPct: Math.min(100, Math.round((projW / Math.max(1, recWins.val)) * 100))
+          });
+        }
+
+        // 3. Best Goal Differential Record Watch (Top 2 teams if both are on pace or close)
+        const gdContenders = [...freshStandings]
+          .filter((s: any) => Number(s.gp || 0) >= 5)
+          .sort((a: any, b: any) => {
+            const mA = buildTeamMeta(a);
+            const mB = buildTeamMeta(b);
+            const gdA = Number(a.gf || 0) - Number(a.ga || 0);
+            const gdB = Number(b.gf || 0) - Number(b.ga || 0);
+            return (gdB / mB.gp) * mB.targetGp - (gdA / mA.gp) * mA.targetGp;
+          });
+
+        if (gdContenders[0]) {
+          const s = gdContenders[0];
+          const { disp, gp, targetGp } = buildTeamMeta(s);
+          const curGd = Number(s.gf || 0) - Number(s.ga || 0);
+          const projGd = Math.round((curGd / gp) * targetGp);
+          const broken = curGd > recGd.val;
+          const onPace = projGd >= recGd.val;
+          watchItems.push({
+            category: 'BEST GOAL DIFFERENTIAL',
+            statusBadge: broken ? 'NEW RECORD 🏆' : onPace ? 'ON TRACK TO BEAT 🔥' : `PACE: +${projGd}`,
+            statusColor: broken || onPace ? 'bg-emerald-400 text-black' : 'bg-amber-400 text-black',
+            teamName: disp.name,
+            teamAbbr: disp.abbr,
+            teamLogo: disp.logo,
+            coachName: disp.coach || 'Assigned Coach',
+            gp,
+            targetGp,
+            currentDisplay: `+${curGd} (${gp} GP)`,
+            paceDisplay: `+${projGd} (${targetGp} GP)`,
+            recordDisplay: `+${recGd.val} GD`,
+            holderInfo: `${recGd.holder} • ${recGd.season}`,
+            progressPct: Math.min(100, Math.round((projGd / Math.max(1, recGd.val)) * 100))
+          });
+        }
+
+        // 4. Most Goals For Record Watch
+        const gfContender = [...freshStandings]
+          .filter((s: any) => Number(s.gp || 0) >= 5)
+          .sort((a: any, b: any) => {
+            const mA = buildTeamMeta(a);
+            const mB = buildTeamMeta(b);
+            return (Number(b.gf || 0) / mB.gp) * mB.targetGp - (Number(a.gf || 0) / mA.gp) * mA.targetGp;
+          })[0];
+
+        if (gfContender) {
+          const { disp, gp, targetGp } = buildTeamMeta(gfContender);
+          const curGf = Number(gfContender.gf || 0);
+          const projGf = Math.round((curGf / gp) * targetGp);
+          const curGfg = (curGf / gp).toFixed(2);
+          const broken = curGf > recGf.val;
+          const onPace = projGf >= recGf.val;
+          watchItems.push({
+            category: 'MOST GOALS FOR (SEASON)',
+            statusBadge: broken ? 'NEW RECORD 🏆' : onPace ? 'ON TRACK TO BEAT 🔥' : `PACE: ${projGf} GF`,
+            statusColor: broken || onPace ? 'bg-emerald-400 text-black' : 'bg-amber-400 text-black',
+            teamName: disp.name,
+            teamAbbr: disp.abbr,
+            teamLogo: disp.logo,
+            coachName: disp.coach || 'Assigned Coach',
+            gp,
+            targetGp,
+            currentDisplay: `${curGf} GF (${curGfg}/G)`,
+            paceDisplay: `${projGf} GF (${targetGp} GP)`,
+            recordDisplay: `${recGf.val} GF`,
+            holderInfo: `${recGf.holder} • ${recGf.season}`,
+            progressPct: Math.min(100, Math.round((projGf / Math.max(1, recGf.val)) * 100))
+          });
+        }
+
+        // 5. Stingiest Defense (Lowest GA/G) Record Watch
+        if (stingiestTeam) {
+          const { disp, gp, targetGp } = buildTeamMeta(stingiestTeam);
+          const curGa = Number(stingiestTeam.ga || 0);
+          const curGagNum = Number((curGa / gp).toFixed(2));
+          const projGa = Math.round((curGa / gp) * targetGp);
+          const onPace = curGagNum <= recGag.val;
+          watchItems.push({
+            category: 'LOWEST GOALS AGAINST / GM',
+            statusBadge: onPace ? 'ON TRACK TO BEAT 🔥' : `CHASING (${curGagNum.toFixed(2)} GA/G)`,
+            statusColor: onPace ? 'bg-emerald-400 text-black' : 'bg-sky-400 text-black',
+            teamName: disp.name,
+            teamAbbr: disp.abbr,
+            teamLogo: disp.logo,
+            coachName: disp.coach || 'Assigned Coach',
+            gp,
+            targetGp,
+            currentDisplay: `${curGagNum.toFixed(2)} GA/G (${curGa} GA)`,
+            paceDisplay: `${projGa} GA (${targetGp} GP)`,
+            recordDisplay: `${recGag.val.toFixed(2)} GA/G`,
+            holderInfo: `${recGag.holder} • ${recGag.season}`,
+            progressPct: Math.min(100, Math.round((recGag.val / Math.max(0.5, curGagNum)) * 100))
+          });
+        }
+
+        // 6. Team One-Timer Goals Record Watch
+        if (top1tTid && top1tGoals > 0) {
+          const stMatch = freshStandings.find((s: any) => Number(s.team_id) === top1tTid);
+          const tBox = curBox.byTeam.get(top1tTid);
+          const gp = Math.max(1, tBox?.gp || Number(stMatch?.gp || 1));
+          const targetGp = Math.max(gp, schedCountByTeam.get(top1tTid) || defaultTargetGp);
+          const proj1x = Math.round((top1tGoals / gp) * targetGp);
+          const disp = getTeamDisplay(top1tTid);
+          const broken = top1tGoals > rec1x.val;
+          const onPace = proj1x >= rec1x.val;
+          watchItems.push({
+            category: 'TEAM 1X-TIMER GOALS',
+            statusBadge: broken ? 'NEW RECORD 🏆' : onPace ? 'ON TRACK TO BEAT 🔥' : `PACE: ${proj1x} 1XG`,
+            statusColor: broken || onPace ? 'bg-emerald-400 text-black' : 'bg-amber-400 text-black',
+            teamName: disp.name,
+            teamAbbr: disp.abbr,
+            teamLogo: disp.logo,
+            coachName: disp.coach || 'Assigned Coach',
+            gp,
+            targetGp,
+            currentDisplay: `${top1tGoals} 1xG (${gp} GP)`,
+            paceDisplay: `${proj1x} 1xG (${targetGp} GP)`,
+            recordDisplay: `${rec1x.val} 1xG`,
+            holderInfo: `${rec1x.holder} • ${rec1x.season}`,
+            progressPct: Math.min(100, Math.round((proj1x / Math.max(1, rec1x.val)) * 100))
+          });
+        }
+
+        setRecordBookWatch(watchItems);
 
         if (poAgg.skaters.length > 0 && regSkaters.length === 0) {
           setStatsPhase('PLAYOFFS');
@@ -1743,11 +2359,109 @@ export default function HomePage() {
             </div>
 
             <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
-              <a href="/records" className="text-amber-400 hover:text-amber-300 font-bold uppercase">
-                View All-Time Record Book →
+              <a href="/stats/team" className="text-amber-400 hover:text-amber-300 font-bold uppercase">
+                Full Team Stats →
               </a>
               <a href="/power-rankings" className="text-neutral-400 hover:text-white font-bold uppercase">
                 Power Poll →
+              </a>
+            </div>
+          </div>
+
+          {/* 5. Record Book Watch: Teams On Track to Beat a Record */}
+          <div className="border-t-2 border-emerald-500/40 pt-3">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5 mb-2.5">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                <h2 className="font-bold uppercase tracking-wider text-xs sm:text-sm text-white">
+                  Record Book Watch
+                </h2>
+              </div>
+              <span className="text-[9px] font-mono font-black uppercase bg-emerald-500 text-black px-1.5 py-0.5">
+                ON TRACK
+              </span>
+            </div>
+
+            <p className="text-[10px] text-neutral-400 font-serif italic mb-2.5 leading-snug">
+              Clubs currently on pace in {activeSeasonLabel} to break or challenge single-season record book marks:
+            </p>
+
+            <div className="space-y-2.5">
+              {recordBookWatch.length > 0 ? (
+                recordBookWatch.map((rw, idx) => (
+                  <div
+                    key={idx}
+                    className="border border-neutral-800 bg-neutral-900/95 p-2.5 hover:border-emerald-400/70 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                      <span className="text-[9px] font-mono font-black uppercase text-neutral-300 tracking-wider truncate">
+                        {rw.category}
+                      </span>
+                      <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 shrink-0 ${rw.statusColor}`}>
+                        {rw.statusBadge}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {rw.teamLogo ? (
+                        <img
+                          src={rw.teamLogo}
+                          alt={rw.teamAbbr}
+                          className="w-5 h-5 object-contain shrink-0 bg-white/10 p-0.5"
+                        />
+                      ) : (
+                        <span className="w-5 h-5 bg-neutral-800 border border-neutral-700 text-[9px] font-mono font-black flex items-center justify-center shrink-0 text-amber-400">
+                          {rw.teamAbbr}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-black uppercase text-white truncate">
+                          {rw.teamName} <span className="text-amber-400 font-mono text-[10px]">({rw.teamAbbr})</span>
+                        </div>
+                        <div className="text-[9px] font-mono text-neutral-400 truncate">
+                          Coach: {rw.coachName}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-black/70 border border-neutral-800 p-1.5 text-[10px] font-mono space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-400">NOW:</span>
+                        <span className="text-white font-bold">{rw.currentDisplay}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-emerald-400 font-bold">FULL PACE:</span>
+                        <span className="text-emerald-300 font-black">{rw.paceDisplay}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-neutral-800/80 pt-1">
+                        <span className="text-amber-400/90">RECORD:</span>
+                        <span className="text-amber-300 font-bold">
+                          {rw.recordDisplay} <span className="text-neutral-500 text-[9px]">({rw.holderInfo})</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-1.5 w-full bg-neutral-800 h-1.5 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(15, rw.progressPct))}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs italic text-neutral-400">
+                  Calculating live single-season record pace projections...
+                </p>
+              )}
+            </div>
+
+            <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
+              <a href="/records" className="text-emerald-400 hover:text-emerald-300 font-bold uppercase">
+                View All-Time Record Book →
+              </a>
+              <a href="/standings" className="text-neutral-400 hover:text-white font-bold uppercase">
+                Standings →
               </a>
             </div>
           </div>

@@ -165,15 +165,12 @@ export default function Navbar() {
           {isRostersOpen && (
             <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
               <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">Teams</Link>
-              <Link href="/mod-my-team" className="px-4 py-2 hover:bg-black hover:text-white font-black transition-colors text-amber-900">Mod My Team</Link>
               <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
               <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
               <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
             </div>
           )}
         </div>
-
-        <Link href="/mod-my-team" className="hover:underline transition text-amber-900 font-black">Mod My Team</Link>
 
         {/* Desktop Dropdown for Stats */}
         <div 
@@ -192,15 +189,7 @@ export default function Navbar() {
           )}
         </div>
 
-        <Link href="/awards" className="hover:underline transition">Awards</Link>
-        <Link href="/records" className="hover:underline transition">Records</Link>
-
-        {/* Setup Guide tab (to the left of Extras) */}
-        <Link href="/setup-guide" className="hover:underline transition text-amber-900 font-black">
-          Setup Guide
-        </Link>
-
-        {/* Desktop Dropdown for Extras (Arena, ROMs, Managers, Stream Overlays) */}
+        {/* Desktop Dropdown for Extras (Awards, Records, Mod My Team, Setup Guide, Arena, ROMs, Managers, Stream Overlays) */}
         <div 
           className="relative" 
           onMouseEnter={() => setIsExtrasOpen(true)} 
@@ -211,6 +200,18 @@ export default function Navbar() {
           </button>
           {isExtrasOpen && (
             <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-56 flex flex-col z-50 shadow-lg">
+              <Link href="/awards" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                Awards
+              </Link>
+              <Link href="/records" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                Records
+              </Link>
+              <Link href="/mod-my-team" className="px-4 py-2 hover:bg-black hover:text-white font-black transition-colors text-amber-900">
+                Mod My Team
+              </Link>
+              <Link href="/setup-guide" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-amber-900 border-b border-black/15">
+                Setup Guide
+              </Link>
               <Link href="/arena" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">
                 Online Arena (Play Now)
               </Link>
@@ -297,13 +298,6 @@ export default function Navbar() {
                   • Teams
                 </Link>
                 <Link 
-                  href="/mod-my-team" 
-                  onClick={closeMobileMenu}
-                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-black text-amber-900"
-                >
-                  • Mod My Team (NOSE & Lineup)
-                </Link>
-                <Link 
                   href="/trades" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
@@ -357,29 +351,6 @@ export default function Navbar() {
             )}
           </div>
 
-          <Link 
-            href="/awards" 
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
-          >
-            Awards <span>→</span>
-          </Link>
-          <Link 
-            href="/records" 
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
-          >
-            League Records <span>→</span>
-          </Link>
-
-          <Link 
-            href="/setup-guide" 
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between text-amber-900 font-black"
-          >
-            Setup Guide <span>→</span>
-          </Link>
-
           {/* Mobile Collapsible Extras Section */}
           <div className="border-b border-black/10">
             <button
@@ -391,6 +362,34 @@ export default function Navbar() {
             </button>
             {isMobileExtrasOpen && (
               <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
+                <Link 
+                  href="/awards" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Awards
+                </Link>
+                <Link 
+                  href="/records" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Records
+                </Link>
+                <Link 
+                  href="/mod-my-team" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-black text-amber-900"
+                >
+                  • Mod My Team
+                </Link>
+                <Link 
+                  href="/setup-guide" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-amber-900"
+                >
+                  • Setup Guide
+                </Link>
                 <Link 
                   href="/arena" 
                   onClick={closeMobileMenu}

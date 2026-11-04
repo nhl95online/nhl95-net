@@ -115,6 +115,7 @@ export default function RecordsPage() {
 
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [summaryList, setSummaryList] = useState<any[]>([]);
+  const [teamRecordWatch, setTeamRecordWatch] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Helper to switch main category
@@ -366,6 +367,235 @@ export default function RecordsPage() {
 
         setSummaryList(summaries);
 
+        // F. Compute Team Record Book Watch (Active Season Teams on Track to Beat Single-Season Records)
+        try {
+          const activeSeasonId =
+            targetSeasonIds.length > 0 ? Math.max(...targetSeasonIds) : 40;
+          const [stRes, tmRes, chRes] = await Promise.all([
+            supabase
+              .from('league_standings')
+              .select('season_id, team_id, gp, w, l, t, otl, pts, gf, ga, gd, league_teams(team_id, team_name, abbreviation, logo_url)')
+              .order('pts', { ascending: false })
+              .limit(600),
+            supabase.from('league_teams').select('team_id, team_name, abbreviation, logo_url, coach_id, league_id'),
+            supabase.from('league_coaches').select('coach_id, coach_name')
+          ]);
+
+          const allStandings = stRes.data || [];
+          const allTeams = tmRes.data || [];
+          const coachById = new Map<number, string>();
+          (chRes.data || []).forEach((c: any) => {
+            if (c.coach_id != null && c.coach_name) coachById.set(Number(c.coach_id), String(c.coach_name).trim());
+          });
+
+          const resolveTeamMeta = (row: any) => {
+            const tid = Number(row?.team_id || 0);
+            const lt = Array.isArray(row?.league_teams) ? row.league_teams[0] : row?.league_teams;
+            const tm = allTeams.find((t: any) => Number(t.team_id) === tid);
+            const name = lt?.team_name || tm?.team_name || `Team ${tid}`;
+            const abbr = lt?.abbreviation || tm?.abbreviation || `TM${tid}`;
+            const logo = lt?.logo_url || tm?.logo_url || '';
+            const coach = (tm?.coach_id && coachById.get(Number(tm.coach_id))) || 'Assigned Coach';
+            return { tid, name, abbr, logo, coach };
+          };
+
+          const curRows = allStandings.filter(
+            (r: any) => Number(r.season_id) === activeSeasonId && Number(r.gp || 0) >= 5
+          );
+          const histRows = allStandings.filter(
+            (r: any) =>
+              Number(r.season_id) !== activeSeasonId &&
+              Number(r.gp || 0) >= 20 &&
+              (selectedLeague === 'ALL' || targetSeasonIds.includes(Number(r.season_id)))
+          );
+
+          const maxGpCur = curRows.reduce((m: number, r: any) => Math.max(m, Number(r.gp || 0)), 0);
+          const targetGp = Math.max(maxGpCur, 56);
+
+          let recPts = { val: 92, holder: 'Historical Record', season: 'W17' };
+          let recWins = { val: 45, holder: 'Historical Record', season: 'W17' };
+          let recGf = { val: 218, holder: 'Historical Record', season: 'W17' };
+          let recGd = { val: 112, holder: 'Historical Record', season: 'W17' };
+          let recGag = { val: 1.62, holder: 'Historical Record', season: 'W17' };
+
+          if (histRows.length > 0) {
+            const topPts = [...histRows].sort((a, b) => Number(b.pts || 0) - Number(a.pts || 0))[0];
+            if (topPts && Number(topPts.pts) > 0) {
+              const m = resolveTeamMeta(topPts);
+              recPts = { val: Number(topPts.pts), holder: `${m.name} (${m.abbr})`, season: formatSeasonBadge(topPts.season_id) };
+            }
+            const topW = [...histRows].sort((a, b) => Number(b.w || 0) - Number(a.w || 0))[0];
+            if (topW && Number(topW.w) > 0) {
+              const m = resolveTeamMeta(topW);
+              recWins = { val: Number(topW.w), holder: `${m.name} (${m.abbr})`, season: formatSeasonBadge(topW.season_id) };
+            }
+            const topGf = [...histRows].sort((a, b) => Number(b.gf || 0) - Number(a.gf || 0))[0];
+            if (topGf && Number(topGf.gf) > 0) {
+              const m = resolveTeamMeta(topGf);
+              recGf = { val: Number(topGf.gf), holder: `${m.name} (${m.abbr})`, season: formatSeasonBadge(topGf.season_id) };
+            }
+            const topGd = [...histRows].sort(
+              (a, b) => (Number(b.gf || 0) - Number(b.ga || 0)) - (Number(a.gf || 0) - Number(a.ga || 0))
+            )[0];
+            if (topGd && Number(topGd.gf || 0) - Number(topGd.ga || 0) > 0) {
+              const m = resolveTeamMeta(topGd);
+              recGd = {
+                val: Number(topGd.gf || 0) - Number(topGd.ga || 0),
+                holder: `${m.name} (${m.abbr})`,
+                season: formatSeasonBadge(topGd.season_id)
+              };
+            }
+            const topGag = [...histRows]
+              .filter((r: any) => Number(r.gp || 0) >= 25 && Number(r.ga || 0) > 0)
+              .sort((a, b) => Number(a.ga) / Number(a.gp) - Number(b.ga) / Number(b.gp))[0];
+            if (topGag) {
+              const m = resolveTeamMeta(topGag);
+              recGag = {
+                val: Number((Number(topGag.ga) / Number(topGag.gp)).toFixed(2)),
+                holder: `${m.name} (${m.abbr})`,
+                season: formatSeasonBadge(topGag.season_id)
+              };
+            }
+          }
+
+          const watchList: any[] = [];
+          const activeSeasonBadge = formatSeasonBadge(activeSeasonId);
+
+          if (curRows.length > 0) {
+            const byPts = [...curRows].sort(
+              (a, b) => Number(b.pts || 0) / Number(b.gp || 1) - Number(a.pts || 0) / Number(a.gp || 1)
+            )[0];
+            if (byPts) {
+              const m = resolveTeamMeta(byPts);
+              const gp = Math.max(1, Number(byPts.gp || 1));
+              const tGp = Math.max(gp, targetGp);
+              const curVal = Number(byPts.pts || 0);
+              const projVal = Math.round((curVal / gp) * tGp);
+              watchList.push({
+                category: 'Most Points, Single Season (Team)',
+                season: activeSeasonBadge,
+                teamName: m.name,
+                teamAbbr: m.abbr,
+                teamLogo: m.logo,
+                coach: m.coach,
+                currentText: `${curVal} PTS (${gp} GP)`,
+                paceText: `${projVal} PTS (${tGp} GP)`,
+                recordText: `${recPts.val} PTS`,
+                holderText: `${recPts.holder} • ${recPts.season}`,
+                onTrack: projVal >= recPts.val,
+                broken: curVal > recPts.val
+              });
+            }
+
+            const byWins = [...curRows].sort(
+              (a, b) => Number(b.w || 0) / Number(b.gp || 1) - Number(a.w || 0) / Number(a.gp || 1)
+            )[0];
+            if (byWins) {
+              const m = resolveTeamMeta(byWins);
+              const gp = Math.max(1, Number(byWins.gp || 1));
+              const tGp = Math.max(gp, targetGp);
+              const curVal = Number(byWins.w || 0);
+              const projVal = Math.round((curVal / gp) * tGp);
+              watchList.push({
+                category: 'Most Wins, Single Season (Team)',
+                season: activeSeasonBadge,
+                teamName: m.name,
+                teamAbbr: m.abbr,
+                teamLogo: m.logo,
+                coach: m.coach,
+                currentText: `${curVal} W (${gp} GP)`,
+                paceText: `${projVal} W (${tGp} GP)`,
+                recordText: `${recWins.val} W`,
+                holderText: `${recWins.holder} • ${recWins.season}`,
+                onTrack: projVal >= recWins.val,
+                broken: curVal > recWins.val
+              });
+            }
+
+            const byGd = [...curRows].sort(
+              (a, b) =>
+                (Number(b.gf || 0) - Number(b.ga || 0)) / Number(b.gp || 1) -
+                (Number(a.gf || 0) - Number(a.ga || 0)) / Number(a.gp || 1)
+            )[0];
+            if (byGd) {
+              const m = resolveTeamMeta(byGd);
+              const gp = Math.max(1, Number(byGd.gp || 1));
+              const tGp = Math.max(gp, targetGp);
+              const curVal = Number(byGd.gf || 0) - Number(byGd.ga || 0);
+              const projVal = Math.round((curVal / gp) * tGp);
+              watchList.push({
+                category: 'Best Goal Differential, Single Season',
+                season: activeSeasonBadge,
+                teamName: m.name,
+                teamAbbr: m.abbr,
+                teamLogo: m.logo,
+                coach: m.coach,
+                currentText: `+${curVal} GD (${gp} GP)`,
+                paceText: `+${projVal} GD (${tGp} GP)`,
+                recordText: `+${recGd.val} GD`,
+                holderText: `${recGd.holder} • ${recGd.season}`,
+                onTrack: projVal >= recGd.val,
+                broken: curVal > recGd.val
+              });
+            }
+
+            const byGf = [...curRows].sort(
+              (a, b) => Number(b.gf || 0) / Number(b.gp || 1) - Number(a.gf || 0) / Number(a.gp || 1)
+            )[0];
+            if (byGf) {
+              const m = resolveTeamMeta(byGf);
+              const gp = Math.max(1, Number(byGf.gp || 1));
+              const tGp = Math.max(gp, targetGp);
+              const curVal = Number(byGf.gf || 0);
+              const projVal = Math.round((curVal / gp) * tGp);
+              watchList.push({
+                category: 'Most Goals For, Single Season (Team)',
+                season: activeSeasonBadge,
+                teamName: m.name,
+                teamAbbr: m.abbr,
+                teamLogo: m.logo,
+                coach: m.coach,
+                currentText: `${curVal} GF (${(curVal / gp).toFixed(2)}/G)`,
+                paceText: `${projVal} GF (${tGp} GP)`,
+                recordText: `${recGf.val} GF`,
+                holderText: `${recGf.holder} • ${recGf.season}`,
+                onTrack: projVal >= recGf.val,
+                broken: curVal > recGf.val
+              });
+            }
+
+            const byGag = [...curRows].sort(
+              (a, b) => Number(a.ga || 0) / Number(a.gp || 1) - Number(b.ga || 0) / Number(b.gp || 1)
+            )[0];
+            if (byGag) {
+              const m = resolveTeamMeta(byGag);
+              const gp = Math.max(1, Number(byGag.gp || 1));
+              const tGp = Math.max(gp, targetGp);
+              const curGa = Number(byGag.ga || 0);
+              const curGagVal = Number((curGa / gp).toFixed(2));
+              const projGa = Math.round((curGa / gp) * tGp);
+              watchList.push({
+                category: 'Lowest Goals Against / Game (Team)',
+                season: activeSeasonBadge,
+                teamName: m.name,
+                teamAbbr: m.abbr,
+                teamLogo: m.logo,
+                coach: m.coach,
+                currentText: `${curGagVal.toFixed(2)} GA/G (${curGa} GA)`,
+                paceText: `${projGa} GA (${tGp} GP)`,
+                recordText: `${recGag.val.toFixed(2)} GA/G`,
+                holderText: `${recGag.holder} • ${recGag.season}`,
+                onTrack: curGagVal <= recGag.val,
+                broken: false
+              });
+            }
+          }
+
+          setTeamRecordWatch(watchList);
+        } catch {
+          setTeamRecordWatch([]);
+        }
+
       } catch (err) {
         console.error("Error loading records:", err);
       } finally {
@@ -546,6 +776,97 @@ export default function RecordsPage() {
           </div>
         </div>
       </section>
+
+      {/* ==================================================== */}
+      {/* 2.5 RECORD BOOK WATCH: TEAMS ON TRACK TO BEAT RECORD */}
+      {/* ==================================================== */}
+      {teamRecordWatch.length > 0 && (
+        <section className="mb-8">
+          <div className="bg-neutral-950 text-white border-4 border-black p-4 sm:p-6 shadow-md rounded-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800 pb-3 mb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse" />
+                <div>
+                  <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white">
+                    Record Book Watch — Teams On Track to Beat a Record
+                  </h2>
+                  <p className="text-xs text-neutral-400 font-serif italic">
+                    Live single-season pace projections comparing active clubs against all-time {leagueName} team benchmarks
+                  </p>
+                </div>
+              </div>
+              <span className="bg-emerald-400 text-black font-mono font-black text-xs uppercase px-2.5 py-1 self-start sm:self-center">
+                LIVE PACE TRACKER
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {teamRecordWatch.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="bg-neutral-900 border border-neutral-800 hover:border-emerald-400/70 p-3.5 flex flex-col justify-between transition-colors"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-[10px] font-mono font-black uppercase text-amber-400 tracking-wider">
+                        {item.category}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 shrink-0 ${
+                          item.broken || item.onTrack
+                            ? 'bg-emerald-400 text-black'
+                            : 'bg-amber-400 text-black'
+                        }`}
+                      >
+                        {item.broken ? 'NEW RECORD 🏆' : item.onTrack ? 'ON TRACK TO BEAT 🔥' : 'CHASING RECORD ⚡'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 mb-3">
+                      {item.teamLogo ? (
+                        <img
+                          src={item.teamLogo}
+                          alt={item.teamAbbr}
+                          className="w-8 h-8 object-contain bg-white/10 p-1 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-neutral-800 border border-neutral-700 flex items-center justify-center font-mono font-black text-xs text-amber-400 shrink-0">
+                          {item.teamAbbr}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-black text-sm uppercase text-white truncate">
+                          {item.teamName} <span className="text-amber-400 font-mono text-xs">({item.teamAbbr})</span>
+                        </div>
+                        <div className="text-[11px] font-mono text-neutral-400 truncate">
+                          Coach: {item.coach} • {item.season}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-black/80 border border-neutral-800 p-2 text-xs font-mono space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-400">CURRENT:</span>
+                      <span className="text-white font-bold">{item.currentText}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-emerald-400 font-bold">SEASON PACE:</span>
+                      <span className="text-emerald-300 font-black">{item.paceText}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-neutral-800 pt-1">
+                      <span className="text-amber-400">RECORD TO BEAT:</span>
+                      <span className="text-amber-300 font-bold">
+                        {item.recordText} <span className="text-neutral-500 text-[10px]">({item.holderText})</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ==================================================== */}
       {/* 3. RANKED TOP 10 LEADERBOARD TABLE                   */}
