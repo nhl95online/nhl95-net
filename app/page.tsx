@@ -269,7 +269,8 @@ export default function HomePage() {
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(40);
   const [standings, setStandings] = useState<any[]>([]);
-  const [briefing, setBriefing] = useState<any>(DEFAULT_BRIEFING);
+  const [briefing, setBriefing] = useState<any>({ ...DEFAULT_BRIEFING, events: [] });
+  const [liveDiscordEvents, setLiveDiscordEvents] = useState<any[] | null>(null);
 
   // Center Hub state
   const [recentGames, setRecentGames] = useState<RecentGameItem[]>([]);
@@ -317,9 +318,31 @@ export default function HomePage() {
         if (!res.ok) throw new Error('Not found');
         return res.json();
       })
-      .then((data) => setBriefing(data))
+      .then((data) => setBriefing((prev: any) => ({ ...data, _liveEventsLoaded: prev?._liveEventsLoaded, events: prev?._liveEventsLoaded ? prev.events : (data?.events || []).filter((e: any) => e?.is_live || !e?.start_time || new Date(e.start_time).getTime() >= Date.now() - 12 * 3600 * 1000) })))
       .catch(() => {
         console.log("Using cached Gazette briefing");
+      });
+
+    const loadLiveEvents = () => {
+      fetch(`/api/discord-events?t=${Date.now()}`, { cache: 'no-store' })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((payload) => {
+          if (payload && payload.ok && Array.isArray(payload.events)) {
+            setLiveDiscordEvents(payload.events);
+            setBriefing((prev: any) => ({
+              ...(prev || DEFAULT_BRIEFING),
+              _liveEventsLoaded: true,
+              events: payload.events,
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    loadLiveEvents();
+    const eventsTimer = setInterval(loadLiveEvents, 60000);
+    return () => clearInterval(eventsTimer);
+    if (false) Promise.resolve().then(() => {
       });
   }, []);
 

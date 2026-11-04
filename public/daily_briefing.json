@@ -16,8 +16,21 @@
   },
   "events": [
     {
-      "date": "Nov 28",
-      "time": "04:45 AM",
+      "id": "1566819443382689994",
+      "date": "Nov 04",
+      "time": "9:00 PM ET",
+      "start_time": "2026-11-05T02:00:00+00:00",
+      "title": "Providence vs Tegucigalpa",
+      "description": "",
+      "url": "https://discord.com/events/146381349589090305/1566819443382689994",
+      "interested": 9,
+      "is_live": false
+    },
+    {
+      "id": "1521590330238046290",
+      "date": "Nov 27",
+      "time": "11:45 PM ET",
+      "start_time": "2026-11-28T04:45:00+00:00",
       "title": "Season 18 Playoffs End Date",
       "description": "",
       "url": "https://discord.com/events/146381349589090305/1521590330238046290",
@@ -25,39 +38,14 @@
       "is_live": false
     },
     {
+      "id": "1521590788495249419",
       "date": "Dec 03",
-      "time": "02:00 PM",
+      "time": "9:00 AM ET",
+      "start_time": "2026-12-03T14:00:00+00:00",
       "title": "2014 Entry Draft",
       "description": "",
       "url": "https://discord.com/events/146381349589090305/1521590788495249419",
       "interested": 8,
-      "is_live": false
-    },
-    {
-      "date": "Oct 30",
-      "time": "01:00 AM",
-      "title": "(3) Taipei vs (14) Hamilton",
-      "description": "",
-      "url": "https://discord.com/events/146381349589090305/1564243851621703770",
-      "interested": 5,
-      "is_live": false
-    },
-    {
-      "date": "Oct 30",
-      "time": "12:00 AM",
-      "title": "(8) Betty Ford Clinic vs. (9) Sugar Valley Firebirds",
-      "description": "",
-      "url": "https://discord.com/events/146381349589090305/1564392112861085838",
-      "interested": 5,
-      "is_live": false
-    },
-    {
-      "date": "Oct 31",
-      "time": "01:00 AM",
-      "title": "Brule 1st round playoffs",
-      "description": "#4 Thunder Bay Pike vs #13 Easter Island Stone Heads .... come see if high weight translates to the playoffs",
-      "url": "https://discord.com/events/146381349589090305/1564654461836591315",
-      "interested": 6,
       "is_live": false
     }
   ],

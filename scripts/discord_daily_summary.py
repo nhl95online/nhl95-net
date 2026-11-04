@@ -134,7 +134,7 @@ async def on_ready():
         
         # 1. Fetch Discord Scheduled Events (Live + Upcoming)
         try:
-            guild_events = await guild.fetch_scheduled_events()
+            guild_events = sorted(await guild.fetch_scheduled_events(), key=lambda x: (0 if x.status == discord.EventStatus.active else 1, x.start_time or datetime.max.replace(tzinfo=timezone.utc)))
             for evt in guild_events:
                 is_live = evt.status == discord.EventStatus.active
                 if evt.status in [discord.EventStatus.scheduled, discord.EventStatus.active]:
@@ -143,6 +143,7 @@ async def on_ready():
                     all_events.append({
                         "date": date_str,
                         "time": time_str,
+                        "start_time": evt.start_time.isoformat() if evt.start_time else None,
                         "title": evt.name,
                         "description": evt.description or "",
                         "url": evt.url or "",
