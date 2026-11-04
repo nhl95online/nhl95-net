@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCoachAuth } from '@/lib/coach-auth';
 import {
@@ -12,12 +12,9 @@ import {
   Sparkles,
   Users,
   ArrowLeftRight,
-  Shield,
   Sliders,
-  Trophy,
   CheckCircle2,
   AlertCircle,
-  Layers,
 } from 'lucide-react';
 import {
   W_LEAGUE_GOALIES,
@@ -29,6 +26,15 @@ import {
   TEAM_CITY_ALIASES,
   matchTeamFromList,
 } from '@/lib/seasons';
+import {
+  NOSE_SPRITE_GRID_128,
+  NOSE_SWATCH_LABELS,
+  NOSE_SAMPLE_VISITOR_STRIP,
+  NOSE_SAMPLE_HOME_STRIP,
+  build16SwatchStripFromSimple,
+  generate3ShadeJerseyRamp,
+  generate4ShadePantsRamp,
+} from '@/lib/nose_sprites';
 
 type JerseySlotKey =
   | 'helmet'
@@ -188,246 +194,211 @@ function generateDefaultPaletteForTeam(abbr: string, name: string): { home: Jers
   };
 }
 
-// 16-bit NHL95 Skater + Jersey SVG Preview Component
-function NoseJerseyPreview({
-  title,
-  palette,
-  abbr,
-  activeSlot,
-  onSelectSlot,
+// Authentic NOSE 128x128 (256x256 2x-scaled) Interactive Sprite Sheet Canvas
+function NoseSpriteCanvas({
+  strip16,
+  viewMode,
+  activeSwatch,
+  onSelectSwatch,
 }: {
-  title: string;
-  palette: JerseyPalette;
-  abbr: string;
-  activeSlot: JerseySlotKey;
-  onSelectSlot: (slot: JerseySlotKey) => void;
+  strip16: string[];
+  viewMode: 'all' | 'faceoff' | 'goalies';
+  activeSwatch: number;
+  onSelectSwatch: (idx: number) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.imageSmoothingEnabled = false;
+
+    // Parse 16 hex colors into RGB tuples
+    const rgbPalette: Array<[number, number, number]> = Array.from({ length: 16 }, (_, i) => {
+      const hex = (strip16[i] || '#000000').replace('#', '').padEnd(6, '0');
+      return [
+        parseInt(hex.slice(0, 2), 16) || 0,
+        parseInt(hex.slice(2, 4), 16) || 0,
+        parseInt(hex.slice(4, 6), 16) || 0,
+      ];
+    });
+
+    const imgData = ctx.createImageData(256, 256);
+    const data = imgData.data;
+
+    // Optional crop window for zoom modes
+    let startX = 0;
+    let startY = 0;
+    let scale = 2; // 128 * 2 = 256
+    if (viewMode === 'faceoff') {
+      startX = 0;
+      startY = 0;
+      scale = 4; // 64x64 top-left faceoff skaters zoomed 4x to 256x256
+    } else if (viewMode === 'goalies') {
+      startX = 0;
+      startY = 64;
+      scale = 4; // 64x64 bottom-left goalies zoomed 4x to 256x256
+    }
+
+    const gridSpan = 256 / scale;
+    for (let gy = 0; gy < gridSpan; gy++) {
+      const srcY = Math.min(127, startY + gy);
+      const rowStr = NOSE_SPRITE_GRID_128[srcY] || '';
+      for (let gx = 0; gx < gridSpan; gx++) {
+        const srcX = Math.min(127, startX + gx);
+        const ch = rowStr[srcX] || '0';
+        const cIdx = parseInt(ch, 16) || 0;
+        const [r, g, b] = rgbPalette[cIdx];
+
+        for (let dy = 0; dy < scale; dy++) {
+          const py = gy * scale + dy;
+          for (let dx = 0; dx < scale; dx++) {
+            const px = gx * scale + dx;
+            const pOff = (py * 256 + px) * 4;
+            data[pOff] = r;
+            data[pOff + 1] = g;
+            data[pOff + 2] = b;
+            data[pOff + 3] = 255;
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+  }, [strip16, viewMode]);
+
+  const resolveSwatchAtEvent = (e: React.MouseEvent<HTMLCanvasElement>): number | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const relX = Math.max(0, Math.min(255, Math.floor(((e.clientX - rect.left) / rect.width) * 256)));
+    const relY = Math.max(0, Math.min(255, Math.floor(((e.clientY - rect.top) / rect.height) * 256)));
+
+    let startX = 0;
+    let startY = 0;
+    let scale = 2;
+    if (viewMode === 'faceoff') {
+      startX = 0;
+      startY = 0;
+      scale = 4;
+    } else if (viewMode === 'goalies') {
+      startX = 0;
+      startY = 64;
+      scale = 4;
+    }
+
+    const srcX = Math.min(127, startX + Math.floor(relX / scale));
+    const srcY = Math.min(127, startY + Math.floor(relY / scale));
+    const ch = NOSE_SPRITE_GRID_128[srcY]?.[srcX] || '0';
+    return parseInt(ch, 16) || 0;
+  };
+
+  const hoverMeta = hoverIdx !== null ? NOSE_SWATCH_LABELS[hoverIdx] : null;
+
+  return (
+    <div className="relative flex flex-col items-center">
+      <canvas
+        ref={canvasRef}
+        width={256}
+        height={256}
+        onClick={(e) => {
+          const idx = resolveSwatchAtEvent(e);
+          if (idx !== null) onSelectSwatch(idx);
+        }}
+        onMouseMove={(e) => setHoverIdx(resolveSwatchAtEvent(e))}
+        onMouseLeave={() => setHoverIdx(null)}
+        className="w-[240px] h-[240px] sm:w-[256px] sm:h-[256px] border border-[#a0a0a0] cursor-crosshair select-none"
+        style={{ imageRendering: 'pixelated' }}
+        title="Click any pixel on the skaters or goalies to select that NOSE palette swatch!"
+      />
+      {hoverMeta && (
+        <div className="absolute bottom-1.5 left-1.5 right-1.5 bg-black/85 text-white px-2 py-0.5 text-[10px] font-mono flex items-center justify-between pointer-events-none border border-white/30">
+          <span>
+            Swatch #{hoverMeta.idx} ({hoverMeta.hexChar.toUpperCase()}): {hoverMeta.name}
+          </span>
+          <span className="text-amber-300 font-bold">
+            {hexToGenesisNose(strip16[hoverMeta.idx] || '#000000').noseHex}
+          </span>
+        </div>
+      )}
+      {/* Active swatch indicator badge */}
+      {hoverMeta === null && (
+        <div className="sr-only">Active swatch {activeSwatch}</div>
+      )}
+    </div>
+  );
+}
+
+// Authentic NOSE 2-Row Staggered 16-Color Strip Box (Matches Sample / Visitor / Home boxes in NOSE)
+function Nose16SwatchBar({
+  label,
+  strip16,
+  activeSwatch,
+  isActiveSide,
+  onSelectSwatch,
+}: {
+  label: string;
+  strip16: string[];
+  activeSwatch?: number;
+  isActiveSide?: boolean;
+  onSelectSwatch: (idx: number) => void;
 }) {
   return (
-    <div className="bg-[#12161f] border-2 border-black p-3 text-white font-sans flex flex-col items-center">
-      <div className="w-full flex items-center justify-between border-b border-white/15 pb-1.5 mb-2">
-        <span className="text-[11px] font-black uppercase tracking-widest text-amber-400">
-          {title}
-        </span>
-        <span className="text-[9px] font-mono text-zinc-400">CLICK PART TO EDIT</span>
+    <fieldset className="border border-[#a0a0a0] bg-[#f0f0f0] px-2.5 pt-1 pb-2.5 text-left">
+      <legend className="px-1 text-[11px] font-sans text-[#003399] font-normal leading-none">
+        {label}
+      </legend>
+      <div className="flex flex-col items-center pt-0.5">
+        {/* Top Row: Swatches 0..7 */}
+        <div className="flex items-center mr-3">
+          {strip16.slice(0, 8).map((col, idx) => {
+            const isSelected = isActiveSide && activeSwatch === idx;
+            const meta = NOSE_SWATCH_LABELS[idx];
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onSelectSwatch(idx)}
+                title={`Swatch #${idx} (${meta?.name}): ${hexToGenesisNose(col).noseHex} (${col.toUpperCase()})`}
+                className={`w-[24px] h-[15px] sm:w-[25px] sm:h-[16px] border border-[#646464] cursor-pointer transition-transform ${
+                  isSelected
+                    ? 'ring-2 ring-amber-400 z-10 scale-110 border-black'
+                    : 'hover:brightness-110'
+                }`}
+                style={{ backgroundColor: col }}
+              />
+            );
+          })}
+        </div>
+        {/* Bottom Row: Swatches 8..15 shifted right by half a swatch (staggered NOSE layout) */}
+        <div className="flex items-center ml-3 -mt-[1px]">
+          {strip16.slice(8, 16).map((col, i) => {
+            const idx = i + 8;
+            const isSelected = isActiveSide && activeSwatch === idx;
+            const meta = NOSE_SWATCH_LABELS[idx];
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onSelectSwatch(idx)}
+                title={`Swatch #${idx} (${meta?.name}): ${hexToGenesisNose(col).noseHex} (${col.toUpperCase()})`}
+                className={`w-[24px] h-[15px] sm:w-[25px] sm:h-[16px] border border-[#646464] cursor-pointer transition-transform ${
+                  isSelected
+                    ? 'ring-2 ring-amber-400 z-10 scale-110 border-black'
+                    : 'hover:brightness-110'
+                }`}
+                style={{ backgroundColor: col }}
+              />
+            );
+          })}
+        </div>
       </div>
-
-      <svg
-        viewBox="0 0 220 250"
-        className="w-44 h-52 sm:w-48 sm:h-56 select-none drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)]"
-        style={{ shapeRendering: 'crispEdges' }}
-      >
-        {/* Ice Rink Oval Shadow */}
-        <ellipse cx="110" cy="232" rx="66" ry="11" fill="#1e293b" stroke="#38bdf8" strokeWidth="1" opacity="0.7" />
-
-        {/* 1. Helmet */}
-        <g
-          onClick={() => onSelectSlot('helmet')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect
-            x="88"
-            y="12"
-            width="44"
-            height="24"
-            fill={palette.helmet}
-            stroke={activeSlot === 'helmet' ? '#facc15' : '#000'}
-            strokeWidth={activeSlot === 'helmet' ? '3' : '2'}
-          />
-          {/* Face / Visor */}
-          <rect x="94" y="28" width="32" height="14" fill="#fcd34d" stroke="#000" strokeWidth="1.5" />
-          <rect x="98" y="31" width="6" height="4" fill="#111" />
-          <rect x="116" y="31" width="6" height="4" fill="#111" />
-        </g>
-
-        {/* 3. Shoulder Yoke */}
-        <g
-          onClick={() => onSelectSlot('shoulders')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <path
-            d="M44 44 H176 L186 64 H34 Z"
-            fill={palette.shoulders}
-            stroke={activeSlot === 'shoulders' ? '#facc15' : '#000'}
-            strokeWidth={activeSlot === 'shoulders' ? '3' : '2'}
-          />
-          {/* Collar V-neck */}
-          <polygon points="96,44 124,44 110,58" fill={palette.stripe1} stroke="#000" strokeWidth="1.5" />
-        </g>
-
-        {/* 2. Jersey Base Torso & Sleeves */}
-        <g
-          onClick={() => onSelectSlot('jerseyMain')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          {/* Left Sleeve */}
-          <rect x="26" y="64" width="30" height="54" fill={palette.jerseyMain} stroke="#000" strokeWidth="2" />
-          {/* Right Sleeve */}
-          <rect x="164" y="64" width="30" height="54" fill={palette.jerseyMain} stroke="#000" strokeWidth="2" />
-          {/* Main Torso */}
-          <rect
-            x="56"
-            y="60"
-            width="108"
-            height="72"
-            fill={palette.jerseyMain}
-            stroke={activeSlot === 'jerseyMain' ? '#facc15' : '#000'}
-            strokeWidth={activeSlot === 'jerseyMain' ? '3' : '2'}
-          />
-        </g>
-
-        {/* 4. Arm & Waist Stripes Primary */}
-        <g
-          onClick={() => onSelectSlot('stripe1')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect x="26" y="92" width="30" height="8" fill={palette.stripe1} />
-          <rect x="164" y="92" width="30" height="8" fill={palette.stripe1} />
-          <rect
-            x="56"
-            y="112"
-            width="108"
-            height="10"
-            fill={palette.stripe1}
-            stroke={activeSlot === 'stripe1' ? '#facc15' : 'none'}
-            strokeWidth="2"
-          />
-        </g>
-
-        {/* 5. Arm & Waist Stripes Secondary */}
-        <g
-          onClick={() => onSelectSlot('stripe2')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect x="26" y="100" width="30" height="6" fill={palette.stripe2} />
-          <rect x="164" y="100" width="30" height="6" fill={palette.stripe2} />
-          <rect
-            x="56"
-            y="122"
-            width="108"
-            height="8"
-            fill={palette.stripe2}
-            stroke={activeSlot === 'stripe2' ? '#facc15' : 'none'}
-            strokeWidth="2"
-          />
-        </g>
-
-        {/* 10. Jersey Numbers / Crest */}
-        <g
-          onClick={() => onSelectSlot('numbers')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <text
-            x="110"
-            y="95"
-            textAnchor="middle"
-            fill={palette.numbers}
-            stroke="#000000"
-            strokeWidth="1.2"
-            fontSize="24"
-            fontWeight="900"
-            fontFamily="monospace"
-          >
-            95
-          </text>
-          <text
-            x="110"
-            y="108"
-            textAnchor="middle"
-            fill={palette.numbers}
-            fontSize="9"
-            fontWeight="900"
-            fontFamily="sans-serif"
-          >
-            {(abbr || 'NHL').slice(0, 4)}
-          </text>
-        </g>
-
-        {/* 9. Gloves */}
-        <g
-          onClick={() => onSelectSlot('gloves')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect
-            x="24"
-            y="118"
-            width="32"
-            height="20"
-            fill={palette.gloves}
-            stroke={activeSlot === 'gloves' ? '#facc15' : '#000'}
-            strokeWidth="2"
-          />
-          <rect
-            x="164"
-            y="118"
-            width="32"
-            height="20"
-            fill={palette.gloves}
-            stroke={activeSlot === 'gloves' ? '#facc15' : '#000'}
-            strokeWidth="2"
-          />
-        </g>
-
-        {/* 6. Breezers / Pants */}
-        <g
-          onClick={() => onSelectSlot('pants')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <path
-            d="M62 132 H158 L154 174 H116 L110 158 L104 174 H66 Z"
-            fill={palette.pants}
-            stroke={activeSlot === 'pants' ? '#facc15' : '#000'}
-            strokeWidth={activeSlot === 'pants' ? '3' : '2'}
-          />
-        </g>
-
-        {/* 7. Socks Base */}
-        <g
-          onClick={() => onSelectSlot('socksMain')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect
-            x="70"
-            y="174"
-            width="30"
-            height="38"
-            fill={palette.socksMain}
-            stroke={activeSlot === 'socksMain' ? '#facc15' : '#000'}
-            strokeWidth="2"
-          />
-          <rect
-            x="120"
-            y="174"
-            width="30"
-            height="38"
-            fill={palette.socksMain}
-            stroke={activeSlot === 'socksMain' ? '#facc15' : '#000'}
-            strokeWidth="2"
-          />
-        </g>
-
-        {/* 8. Socks Stripes */}
-        <g
-          onClick={() => onSelectSlot('socksStripe')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect x="70" y="186" width="30" height="8" fill={palette.socksStripe} />
-          <rect x="120" y="186" width="30" height="8" fill={palette.socksStripe} />
-          <rect x="70" y="196" width="30" height="5" fill={palette.stripe2} />
-          <rect x="120" y="196" width="30" height="5" fill={palette.stripe2} />
-        </g>
-
-        {/* 9. Skates */}
-        <g
-          onClick={() => onSelectSlot('gloves')}
-          className="cursor-pointer hover:opacity-90"
-        >
-          <rect x="66" y="212" width="36" height="12" fill={palette.gloves} stroke="#000" strokeWidth="2" />
-          <rect x="64" y="224" width="40" height="4" fill="#cbd5e1" stroke="#000" strokeWidth="1" />
-          <rect x="118" y="212" width="36" height="12" fill={palette.gloves} stroke="#000" strokeWidth="2" />
-          <rect x="116" y="224" width="40" height="4" fill="#cbd5e1" stroke="#000" strokeWidth="1" />
-        </g>
-      </svg>
-    </div>
+    </fieldset>
   );
 }
 
@@ -473,9 +444,24 @@ export default function ModMyTeamPage() {
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
 
-  // NOSE Jersey Editor State
-  const [activeSide, setActiveSide] = useState<'home' | 'away'>('home');
+  // NOSE 16-Color Strip & Jersey Editor State
+  const [activeSide, setActiveSide] = useState<'home' | 'away'>('away'); // 'away' = Left (Team 2 / Visitor), 'home' = Right (Team 1 / Home)
   const [activeSlot, setActiveSlot] = useState<JerseySlotKey>('jerseyMain');
+  const [activeSwatch, setActiveSwatch] = useState<number>(4); // Default to Swatch #4 (Jersey Main)
+  const [autoShadeGroups, setAutoShadeGroups] = useState<boolean>(true);
+  const [visitorViewMode, setVisitorViewMode] = useState<'all' | 'faceoff' | 'goalies'>('all');
+  const [homeViewMode, setHomeViewMode] = useState<'all' | 'faceoff' | 'goalies'>('all');
+  const [previewSampleVisitor, setPreviewSampleVisitor] = useState<boolean>(false);
+  const [previewSampleHome, setPreviewSampleHome] = useState<boolean>(false);
+  const [sampleVisitorStrip, setSampleVisitorStrip] = useState<string[]>(() => [
+    ...NOSE_SAMPLE_VISITOR_STRIP,
+  ]);
+  const [sampleHomeStrip, setSampleHomeStrip] = useState<string[]>(() => [
+    ...NOSE_SAMPLE_HOME_STRIP,
+  ]);
+  const [visitorStrip, setVisitorStrip] = useState<string[]>(() => [...NOSE_SAMPLE_VISITOR_STRIP]);
+  const [homeStrip, setHomeStrip] = useState<string[]>(() => [...NOSE_SAMPLE_HOME_STRIP]);
+
   const [homePalette, setHomePalette] = useState<JerseyPalette>(() =>
     generateDefaultPaletteForTeam('W', 'Team').home
   );
@@ -551,12 +537,36 @@ export default function ModMyTeamPage() {
     [teams, selectedTeamId]
   );
 
-  // 2. When selected team changes: load default NOSE palette AND populate Roster + Drafts + Trades
+  // 2. When selected team changes: load default NOSE 16-swatch strip + palette AND populate Roster + Drafts + Trades
   useEffect(() => {
     if (!currentTeam) return;
     const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name);
     setHomePalette(def.home);
     setAwayPalette(def.away);
+    setVisitorStrip(
+      build16SwatchStripFromSimple({
+        jerseyMain: def.away.jerseyMain,
+        jerseySecondary: def.away.stripe1,
+        pants: def.away.pants,
+        helmet: def.away.helmet,
+        socksMain: def.away.socksMain,
+        socksStripe: def.away.socksStripe,
+        gloves: def.away.gloves,
+      })
+    );
+    setHomeStrip(
+      build16SwatchStripFromSimple({
+        jerseyMain: def.home.jerseyMain,
+        jerseySecondary: def.home.stripe1,
+        pants: def.home.pants,
+        helmet: def.home.helmet,
+        socksMain: def.home.socksMain,
+        socksStripe: def.home.socksStripe,
+        gloves: def.home.gloves,
+      })
+    );
+    setPreviewSampleVisitor(false);
+    setPreviewSampleHome(false);
     setRebrandName('');
     setBrandNotes('');
     setSubmitBanner(null);
@@ -893,31 +903,141 @@ export default function ModMyTeamPage() {
     setTransactionsLog(txSummary);
   }
 
-  // Active NOSE color editing helpers
-  const currentPalette = activeSide === 'home' ? homePalette : awayPalette;
-  const activeHex = currentPalette[activeSlot] || '#ffffff';
-  const activeNoseInfo = hexToGenesisNose(activeHex);
-
-  const updateActiveSlotColor = (newHex: string) => {
-    const snapped = hexToGenesisNose(newHex).snappedHex;
-    if (activeSide === 'home') {
-      setHomePalette((prev) => ({ ...prev, [activeSlot]: snapped }));
+  // Synchronize 16-swatch strip changes back into homePalette / awayPalette for Discord & summary
+  const syncStripToPalette = (side: 'home' | 'away', nextStrip: string[]) => {
+    const updated: JerseyPalette = {
+      helmet: nextStrip[8] || '#f8fcf8',
+      jerseyMain: nextStrip[4] || '#f8fcf8',
+      shoulders: nextStrip[9] || '#200048',
+      stripe1: nextStrip[13] || '#00fcb0',
+      stripe2: nextStrip[8] || '#f8fcf8',
+      pants: nextStrip[9] || '#200048',
+      socksMain: nextStrip[4] || '#f8fcf8',
+      socksStripe: nextStrip[13] || '#00fcb0',
+      gloves: nextStrip[1] || '#202420',
+      numbers: nextStrip[8] || '#f8fcf8',
+    };
+    if (side === 'home') {
+      setHomePalette(updated);
     } else {
-      setAwayPalette((prev) => ({ ...prev, [activeSlot]: snapped }));
+      setAwayPalette(updated);
     }
   };
 
+  // Active NOSE 16-swatch color editing helpers
+  const activeStrip = activeSide === 'home' ? homeStrip : visitorStrip;
+  const activeHex = activeStrip[activeSwatch] || '#f8fcf8';
+  const activeNoseInfo = hexToGenesisNose(activeHex);
+  const activeSwatchMeta = NOSE_SWATCH_LABELS[activeSwatch] || NOSE_SWATCH_LABELS[4];
+
+  const updateSwatchColor = (
+    side: 'home' | 'away',
+    swatchIdx: number,
+    rawHex: string,
+    forceGroupRamp = autoShadeGroups
+  ) => {
+    const snapped = hexToGenesisNose(rawHex).snappedHex;
+    const baseStrip = side === 'home' ? [...homeStrip] : [...visitorStrip];
+
+    if (forceGroupRamp && (swatchIdx === 2 || swatchIdx === 3 || swatchIdx === 4)) {
+      const [jDark, jMid, jLight] = generate3ShadeJerseyRamp(snapped);
+      baseStrip[2] = jDark;
+      baseStrip[3] = jMid;
+      baseStrip[4] = jLight;
+    } else if (
+      forceGroupRamp &&
+      (swatchIdx === 9 || swatchIdx === 10 || swatchIdx === 11 || swatchIdx === 12)
+    ) {
+      const [pBase, pHigh, pMid, pShadow] = generate4ShadePantsRamp(snapped);
+      baseStrip[9] = pBase;
+      baseStrip[10] = pHigh;
+      baseStrip[11] = pMid;
+      baseStrip[12] = pShadow;
+    } else {
+      baseStrip[swatchIdx] = snapped;
+    }
+
+    if (side === 'home') {
+      setHomeStrip(baseStrip);
+      setPreviewSampleHome(false);
+    } else {
+      setVisitorStrip(baseStrip);
+      setPreviewSampleVisitor(false);
+    }
+    syncStripToPalette(side, baseStrip);
+  };
+
+  const updateActiveSlotColor = (newHex: string) => {
+    updateSwatchColor(activeSide, activeSwatch, newHex, autoShadeGroups);
+  };
+
   const handleSwapHomeAway = () => {
-    const temp = { ...homePalette };
-    setHomePalette({ ...awayPalette });
-    setAwayPalette(temp);
+    const vCopy = [...visitorStrip];
+    const hCopy = [...homeStrip];
+    setVisitorStrip(hCopy);
+    setHomeStrip(vCopy);
+    syncStripToPalette('away', hCopy);
+    syncStripToPalette('home', vCopy);
+  };
+
+  const handleCopyVisitorToHome = () => {
+    const vCopy = [...visitorStrip];
+    setHomeStrip(vCopy);
+    syncStripToPalette('home', vCopy);
+  };
+
+  const handleCopyHomeToVisitor = () => {
+    const hCopy = [...homeStrip];
+    setVisitorStrip(hCopy);
+    syncStripToPalette('away', hCopy);
+  };
+
+  const handleLoadNoseTemplateSample = () => {
+    const vSample = [...NOSE_SAMPLE_VISITOR_STRIP];
+    const hSample = [...NOSE_SAMPLE_HOME_STRIP];
+    setSampleVisitorStrip(vSample);
+    setSampleHomeStrip(hSample);
+    setVisitorStrip(vSample);
+    setHomeStrip(hSample);
+    syncStripToPalette('away', vSample);
+    syncStripToPalette('home', hSample);
+  };
+
+  const handleResetSide = (side: 'home' | 'away') => {
+    if (!currentTeam) return;
+    const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name);
+    if (side === 'away') {
+      const nextV = build16SwatchStripFromSimple({
+        jerseyMain: def.away.jerseyMain,
+        jerseySecondary: def.away.stripe1,
+        pants: def.away.pants,
+        helmet: def.away.helmet,
+        socksMain: def.away.socksMain,
+        socksStripe: def.away.socksStripe,
+        gloves: def.away.gloves,
+      });
+      setVisitorStrip(nextV);
+      setPreviewSampleVisitor(false);
+      syncStripToPalette('away', nextV);
+    } else {
+      const nextH = build16SwatchStripFromSimple({
+        jerseyMain: def.home.jerseyMain,
+        jerseySecondary: def.home.stripe1,
+        pants: def.home.pants,
+        helmet: def.home.helmet,
+        socksMain: def.home.socksMain,
+        socksStripe: def.home.socksStripe,
+        gloves: def.home.gloves,
+      });
+      setHomeStrip(nextH);
+      setPreviewSampleHome(false);
+      syncStripToPalette('home', nextH);
+    }
   };
 
   const handleResetPalette = () => {
-    if (!currentTeam) return;
-    const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name);
-    setHomePalette(def.home);
-    setAwayPalette(def.away);
+    handleResetSide('away');
+    handleResetSide('home');
   };
 
   const handleSlotChange = (playerId: string, newSlot: LineupSlot) => {
@@ -945,6 +1065,17 @@ export default function ModMyTeamPage() {
     setTransactionsLog((prev) => [`Added Offseason Acquisition: ${clean} (${manualAddPos})`, ...prev]);
     setManualAddName('');
   };
+
+  // Compute authentic NOSE ROM Strip Offset Hex for display
+  const teamOffsetIndex = Math.max(0, (Number(currentTeam?.team_id || 1) % 28));
+  const homeStripOffsetHex = (0x001a730c + teamOffsetIndex * 0x40)
+    .toString(16)
+    .toUpperCase()
+    .padStart(8, '0');
+  const visitorStripOffsetHex = (0x001a731c + teamOffsetIndex * 0x40)
+    .toString(16)
+    .toUpperCase()
+    .padStart(8, '0');
 
   // Build structured payload for Discord submission & clipboard
   const buildSubmissionPayload = () => {
@@ -994,6 +1125,10 @@ export default function ModMyTeamPage() {
       brandNotes: brandNotes.trim(),
       homePalette: formatPal(homePalette),
       awayPalette: formatPal(awayPalette),
+      homeStrip16: homeStrip.map((c) => hexToGenesisNose(c).noseHex),
+      visitorStrip16: visitorStrip.map((c) => hexToGenesisNose(c).noseHex),
+      homeStripOffsetHex,
+      visitorStripOffsetHex,
       startingLineup,
       benchPlayers,
       cutPlayers,
@@ -1003,6 +1138,11 @@ export default function ModMyTeamPage() {
 
   const handleCopyForDiscord = () => {
     const p = buildSubmissionPayload();
+    const visitorStripLine1 = p.visitorStrip16.slice(0, 8).join(' ');
+    const visitorStripLine2 = p.visitorStrip16.slice(8, 16).join(' ');
+    const homeStripLine1 = p.homeStrip16.slice(0, 8).join(' ');
+    const homeStripLine2 = p.homeStrip16.slice(8, 16).join(' ');
+
     const homeLines = SLOT_METADATA.map(
       (s) => `  ${s.label.padEnd(28, ' ')}: ${p.homePalette[s.key]?.noseHex} (${p.homePalette[s.key]?.hex})`
     ).join('\n');
@@ -1011,18 +1151,22 @@ export default function ModMyTeamPage() {
     ).join('\n');
 
     const text = [
-      `🎨 **NHL95 "MOD MY TEAM" NOSE & LINEUP SUBMISSION [${p.seasonLabel}]**`,
+      `🎨 **NHL95 "MOD MY TEAM" NOSE STRIPS & LINEUP SUBMISSION [${p.seasonLabel}]**`,
       `🏒 **Team:** ${p.teamName} (${p.teamAbbr}) • **Coach:** ${p.coachName}`,
       p.rebrandName ? `✨ **New Brand Identity:** ${p.rebrandName}` : null,
       p.brandNotes ? `📝 **Brand Notes:** ${p.brandNotes}` : null,
       ``,
-      `🏠 **HOME JERSEY (NOSE 9-Bit BGR):**`,
+      `✈️ **TEAM 2 / VISITOR STRIP (Offset Hex ${p.visitorStripOffsetHex}):**`,
       '```',
-      homeLines,
-      '```',
-      `✈️ **AWAY JERSEY (NOSE 9-Bit BGR):**`,
-      '```',
+      `Row 0-7 : ${visitorStripLine1}`,
+      `Row 8-15:   ${visitorStripLine2}`,
       awayLines,
+      '```',
+      `🏠 **TEAM 1 / HOME STRIP (Offset Hex ${p.homeStripOffsetHex}):**`,
+      '```',
+      `Row 0-7 : ${homeStripLine1}`,
+      `Row 8-15:   ${homeStripLine2}`,
+      homeLines,
       '```',
       `⭐ **STARTING LINEUP & ROM SLOTS:**`,
       `• **LW:** ${p.startingLineup.LW}`,
@@ -1090,7 +1234,7 @@ export default function ModMyTeamPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-2 sm:p-6 md:p-8 pb-20">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1440px] mx-auto">
         {/* Masthead */}
         <header className="border-b-4 border-black pb-4 mb-6 text-center">
           <div className="inline-flex items-center gap-2 bg-black text-amber-400 px-3 py-1 text-[10px] sm:text-xs font-sans font-black uppercase tracking-widest mb-2 border border-black">
@@ -1101,7 +1245,7 @@ export default function ModMyTeamPage() {
             Mod My Team
           </h1>
           <p className="text-xs sm:text-sm italic text-neutral-700 mt-1 max-w-2xl mx-auto">
-            Customize your club&apos;s 16-bit NHL95 NOSE Home &amp; Away Jersey Palettes, review your updated roster with Offseason Drafts &amp; Trades, set your Starting Lineup, and submit directly to Discord!
+            Customize your club&apos;s authentic NHL95 NOSE 16-Color Home &amp; Visitor Strips, review your updated roster with Offseason Drafts &amp; Trades, set your Starting Lineup, and submit directly to Discord!
           </p>
         </header>
 
@@ -1202,152 +1346,417 @@ export default function ModMyTeamPage() {
           </div>
         )}
 
-        {/* Main 2-Column Studio Grid: Left = NOSE Jersey Editor | Right = Roster, Drafts, Trades & Starting Lineup */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* LEFT COLUMN (5 cols): NHL95 NOSE JERSEY & BRAND EDITOR */}
-          <section className="lg:col-span-5 bg-[#fdfaf3] border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-            <div className="bg-black text-white px-4 py-2.5 flex items-center justify-between font-sans">
+        {/* Main 2-Column Studio Grid: Left = Authentic NOSE Strips Editor | Right = Roster, Drafts, Trades & Starting Lineup */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+          {/* LEFT COLUMN (6 cols on xl): AUTHENTIC NOSE "STRIPS" WINDOW REPLICA */}
+          <section className="xl:col-span-6 bg-[#f0f0f0] border-2 border-[#404040] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] font-sans text-black select-none">
+            {/* Classic Windows / NOSE Title Bar */}
+            <div className="bg-gradient-to-b from-[#d4e4f7] via-[#b8d0eb] to-[#9cbbe0] border-b border-[#707070] px-2.5 py-1.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-amber-400" />
-                <span className="font-black text-xs sm:text-sm uppercase tracking-wider">
-                  1. NHL95 NOSE Jersey Palette Editor
+                <span className="inline-flex items-center justify-center w-4 h-4 bg-[#0080c0] text-white font-black text-[10px] rounded-[2px] border border-[#004080] shadow-inner">
+                  S
+                </span>
+                <span className="text-xs font-medium text-black tracking-tight">
+                  Strips — {currentTeam?.team_name || 'NHL95'} ({currentTeam?.abbreviation || 'ROM'})
                 </span>
               </div>
-              <span className="text-[10px] font-mono text-amber-400">9-BIT SEGA BGR ($0BGR)</span>
+              <div className="flex items-center gap-1">
+                <span className="px-2 py-0.5 text-[10px] bg-[#e0e0e0] border border-[#707070] text-black leading-none">
+                  _
+                </span>
+                <span className="px-2 py-0.5 text-[10px] bg-[#e0e0e0] border border-[#707070] text-black leading-none">
+                  □
+                </span>
+                <span className="px-2.5 py-0.5 text-[10px] bg-[#d9534f] border border-[#702020] text-white font-bold leading-none">
+                  ×
+                </span>
+              </div>
             </div>
 
-            <div className="p-4 space-y-4 font-sans">
-              {/* Side-by-Side Live Home & Away 16-Bit Skater Sprites */}
-              <div className="grid grid-cols-2 gap-3">
-                <div
-                  onClick={() => setActiveSide('home')}
-                  className={`cursor-pointer transition ${
-                    activeSide === 'home' ? 'ring-2 ring-amber-500' : 'opacity-80 hover:opacity-100'
-                  }`}
+            {/* Classic NOSE Icon Toolbar Row */}
+            <div className="bg-[#f0f0f0] border-b border-[#a0a0a0] px-2 py-1 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                {/* 1. Reset Both */}
+                <button
+                  type="button"
+                  onClick={handleResetPalette}
+                  title="Reset Visitor & Home Strips to Team Default"
+                  className="px-2 py-1 bg-[#e8e8e8] hover:bg-[#d8e8f8] border border-[#a0a0a0] text-[11px] font-bold flex items-center gap-1 cursor-pointer active:translate-y-[1px]"
                 >
-                  <NoseJerseyPreview
-                    title="🏠 HOME (LIGHT)"
-                    palette={homePalette}
-                    abbr={currentTeam?.abbreviation || 'NHL'}
-                    activeSlot={activeSlot}
-                    onSelectSlot={(s) => {
-                      setActiveSide('home');
-                      setActiveSlot(s);
-                    }}
-                  />
-                </div>
+                  <RotateCcw className="w-3.5 h-3.5 text-[#003399]" />
+                  <span>Reset</span>
+                </button>
 
-                <div
-                  onClick={() => setActiveSide('away')}
-                  className={`cursor-pointer transition ${
-                    activeSide === 'away' ? 'ring-2 ring-amber-500' : 'opacity-80 hover:opacity-100'
-                  }`}
+                <span className="h-4 w-[1px] bg-[#a0a0a0] mx-0.5" />
+
+                {/* 2. V <-> H Swap */}
+                <button
+                  type="button"
+                  onClick={handleSwapHomeAway}
+                  title="Swap Visitor and Home Strips (V ↔ H)"
+                  className="px-2 py-1 bg-[#e8e8e8] hover:bg-[#d8e8f8] border border-[#a0a0a0] text-[11px] font-bold flex items-center gap-1 cursor-pointer active:translate-y-[1px]"
                 >
-                  <NoseJerseyPreview
-                    title="✈️ AWAY (DARK)"
-                    palette={awayPalette}
-                    abbr={currentTeam?.abbreviation || 'NHL'}
-                    activeSlot={activeSlot}
-                    onSelectSlot={(s) => {
-                      setActiveSide('away');
-                      setActiveSlot(s);
-                    }}
-                  />
-                </div>
+                  <span className="text-[10px] font-mono bg-[#003399] text-white px-1">V↔H</span>
+                  <span>Swap</span>
+                </button>
+
+                {/* 3. V -> H Copy */}
+                <button
+                  type="button"
+                  onClick={handleCopyVisitorToHome}
+                  title="Copy Visitor Strip to Home Strip (V → H)"
+                  className="px-2 py-1 bg-[#e8e8e8] hover:bg-[#d8e8f8] border border-[#a0a0a0] text-[11px] font-bold flex items-center gap-1 cursor-pointer active:translate-y-[1px]"
+                >
+                  <span className="text-[10px] font-mono bg-emerald-700 text-white px-1">V→H</span>
+                </button>
+
+                {/* 4. H -> V Copy */}
+                <button
+                  type="button"
+                  onClick={handleCopyHomeToVisitor}
+                  title="Copy Home Strip to Visitor Strip (H → V)"
+                  className="px-2 py-1 bg-[#e8e8e8] hover:bg-[#d8e8f8] border border-[#a0a0a0] text-[11px] font-bold flex items-center gap-1 cursor-pointer active:translate-y-[1px]"
+                >
+                  <span className="text-[10px] font-mono bg-amber-600 text-white px-1">H→V</span>
+                </button>
+
+                <span className="h-4 w-[1px] bg-[#a0a0a0] mx-0.5" />
+
+                {/* 5. Load NOSE Template Sample */}
+                <button
+                  type="button"
+                  onClick={handleLoadNoseTemplateSample}
+                  title="Load Classic NOSE Teal/Purple Template Strip"
+                  className="px-2 py-1 bg-[#e8e8e8] hover:bg-[#d8e8f8] border border-[#a0a0a0] text-[11px] font-bold flex items-center gap-1 cursor-pointer active:translate-y-[1px]"
+                >
+                  <span className="w-3 h-3 inline-block bg-[#00fcb0] border border-black" />
+                  <span>Load NOSE Sample</span>
+                </button>
               </div>
 
-              {/* Quick Uniform Controls */}
-              <div className="flex flex-wrap items-center justify-between gap-2 bg-[#ece8de] border border-black p-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setActiveSide('home')}
-                    className={`px-2.5 py-1 text-[11px] font-black uppercase cursor-pointer ${
-                      activeSide === 'home' ? 'bg-black text-amber-400' : 'bg-white text-black'
-                    } border border-black`}
-                  >
-                    Edit Home
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveSide('away')}
-                    className={`px-2.5 py-1 text-[11px] font-black uppercase cursor-pointer ${
-                      activeSide === 'away' ? 'bg-black text-amber-400' : 'bg-white text-black'
-                    } border border-black`}
-                  >
-                    Edit Away
-                  </button>
-                </div>
+              {/* Auto-Shade 3-Tone Jersey / 4-Tone Pants Toggle */}
+              <label className="flex items-center gap-1.5 text-[11px] font-bold text-[#003399] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoShadeGroups}
+                  onChange={(e) => setAutoShadeGroups(e.target.checked)}
+                  className="cursor-pointer"
+                />
+                <span>Auto-Shade 3D Ramps</span>
+              </label>
+            </div>
 
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleSwapHomeAway}
-                    className="px-2 py-1 bg-white hover:bg-black hover:text-white text-black border border-black text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer transition"
-                  >
-                    <ArrowLeftRight className="w-3 h-3" /> Swap H/A
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResetPalette}
-                    className="px-2 py-1 bg-white hover:bg-red-700 hover:text-white text-black border border-black text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer transition"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Reset
-                  </button>
-                </div>
-              </div>
+            {/* Main NOSE Side-by-Side Panels: Left = Team 2 / Visitor | Right = Team 1 / Home */}
+            <div className="p-2.5 grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#f0f0f0]">
+              {/* ================= LEFT PANEL: TEAM 2 / VISITOR STRIP ================= */}
+              <div
+                onClick={() => setActiveSide('away')}
+                className={`space-y-2 transition ${
+                  activeSide === 'away' ? 'ring-2 ring-[#0066cc] bg-[#e9eff7]/60 p-1 -m-1' : ''
+                }`}
+              >
+                <fieldset className="border border-[#a0a0a0] bg-[#f0f0f0] px-2.5 pt-1.5 pb-3">
+                  <legend className="px-1 text-[11px] text-[#003399] font-normal">
+                    Team 2 / Visitor Strip Offset Hex {visitorStripOffsetHex}
+                  </legend>
 
-              {/* 10 NOSE Palette Slots Selector Table */}
-              <div>
-                <div className="text-[11px] font-black uppercase tracking-wider text-neutral-700 mb-1.5">
-                  Select NOSE Uniform Slot ({activeSide.toUpperCase()} JERSEY):
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {SLOT_METADATA.map((slot) => {
-                    const colHex = currentPalette[slot.key];
-                    const nose = hexToGenesisNose(colHex);
-                    const isSelected = activeSlot === slot.key;
-                    return (
+                  {/* Sprites View Dropdown (Classic Windows Blue Focus Highlight) */}
+                  <div className="mb-2.5">
+                    <select
+                      value={visitorViewMode}
+                      onChange={(e) =>
+                        setVisitorViewMode(e.target.value as 'all' | 'faceoff' | 'goalies')
+                      }
+                      className={`w-full border border-[#7f9db9] px-1.5 py-0.5 text-xs outline-none cursor-pointer ${
+                        activeSide === 'away'
+                          ? 'bg-[#0066cc] text-white font-semibold'
+                          : 'bg-white text-black'
+                      }`}
+                    >
+                      <option value="all" className="bg-white text-black">
+                        Sprites
+                      </option>
+                      <option value="faceoff" className="bg-white text-black">
+                        Sprites — Faceoff Zoom (4x)
+                      </option>
+                      <option value="goalies" className="bg-white text-black">
+                        Sprites — Goalies Zoom (4x)
+                      </option>
+                    </select>
+                  </div>
+
+                  {/* 256x256 Interactive Pixel-Art NHL95 Sprite Sheet */}
+                  <div className="flex justify-center mb-3">
+                    <NoseSpriteCanvas
+                      strip16={previewSampleVisitor ? sampleVisitorStrip : visitorStrip}
+                      viewMode={visitorViewMode}
+                      activeSwatch={activeSwatch}
+                      onSelectSwatch={(idx) => {
+                        setActiveSide('away');
+                        setActiveSwatch(idx);
+                      }}
+                    />
+                  </div>
+
+                  {/* Sample Checkbox + Apply + Reset Row */}
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <label className="flex items-center gap-1.5 text-xs text-black cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={previewSampleVisitor}
+                        onChange={(e) => setPreviewSampleVisitor(e.target.checked)}
+                        className="cursor-pointer"
+                      />
+                      <span>
+                        <u>S</u>ample
+                      </span>
+                    </label>
+
+                    <div className="flex items-center gap-2">
                       <button
-                        key={slot.key}
                         type="button"
-                        onClick={() => setActiveSlot(slot.key)}
-                        className={`flex items-center justify-between p-1.5 border text-left cursor-pointer transition ${
-                          isSelected
-                            ? 'bg-black text-white border-black ring-2 ring-amber-400'
-                            : 'bg-white text-black border-black/40 hover:border-black'
+                        disabled={!previewSampleVisitor}
+                        onClick={() => {
+                          const next = [...sampleVisitorStrip];
+                          setVisitorStrip(next);
+                          setPreviewSampleVisitor(false);
+                          syncStripToPalette('away', next);
+                        }}
+                        className={`px-4 py-1 text-xs border border-[#707070] shadow-[inset_0_1px_0_#fff] ${
+                          previewSampleVisitor
+                            ? 'bg-[#e1e1e1] hover:bg-[#d0e4f7] text-black cursor-pointer'
+                            : 'bg-[#e6e6e6] text-[#888888] cursor-not-allowed'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span
-                            className="w-5 h-5 shrink-0 border border-black"
-                            style={{ backgroundColor: nose.snappedHex }}
-                          />
-                          <span className="text-[11px] font-bold truncate">{slot.label}</span>
-                        </div>
-                        <span
-                          className={`text-[10px] font-mono font-black px-1 ${
-                            isSelected ? 'text-amber-400' : 'text-neutral-600'
-                          }`}
-                        >
-                          {nose.noseHex}
-                        </span>
+                        <u>A</u>pply
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => handleResetSide('away')}
+                        className="px-4 py-1 text-xs bg-[#e1e1e1] hover:bg-[#d0e4f7] text-black border border-[#707070] shadow-[inset_0_1px_0_#fff] cursor-pointer"
+                      >
+                        <u>R</u>eset
+                      </button>
+                    </div>
+                  </div>
+                </fieldset>
+
+                {/* Visitor Sample 16-Color Staggered Strip */}
+                <Nose16SwatchBar
+                  label="Sample"
+                  strip16={sampleVisitorStrip}
+                  activeSwatch={activeSwatch}
+                  isActiveSide={false}
+                  onSelectSwatch={(idx) => {
+                    setActiveSide('away');
+                    setActiveSwatch(idx);
+                    updateSwatchColor('away', idx, sampleVisitorStrip[idx], autoShadeGroups);
+                  }}
+                />
+
+                {/* Visitor Active 16-Color Staggered Strip */}
+                <Nose16SwatchBar
+                  label="Visitor"
+                  strip16={visitorStrip}
+                  activeSwatch={activeSwatch}
+                  isActiveSide={activeSide === 'away'}
+                  onSelectSwatch={(idx) => {
+                    setActiveSide('away');
+                    setActiveSwatch(idx);
+                  }}
+                />
+              </div>
+
+              {/* ================= RIGHT PANEL: TEAM 1 / HOME STRIP ================= */}
+              <div
+                onClick={() => setActiveSide('home')}
+                className={`space-y-2 transition ${
+                  activeSide === 'home' ? 'ring-2 ring-[#0066cc] bg-[#e9eff7]/60 p-1 -m-1' : ''
+                }`}
+              >
+                <fieldset className="border border-[#a0a0a0] bg-[#f0f0f0] px-2.5 pt-1.5 pb-3">
+                  <legend className="px-1 text-[11px] text-[#003399] font-normal">
+                    Team 1 / Home Strip Offset Hex {homeStripOffsetHex}
+                  </legend>
+
+                  {/* Sprites View Dropdown */}
+                  <div className="mb-2.5">
+                    <select
+                      value={homeViewMode}
+                      onChange={(e) =>
+                        setHomeViewMode(e.target.value as 'all' | 'faceoff' | 'goalies')
+                      }
+                      className={`w-full border border-[#7f9db9] px-1.5 py-0.5 text-xs outline-none cursor-pointer ${
+                        activeSide === 'home'
+                          ? 'bg-[#0066cc] text-white font-semibold'
+                          : 'bg-white text-black'
+                      }`}
+                    >
+                      <option value="all" className="bg-white text-black">
+                        Sprites
+                      </option>
+                      <option value="faceoff" className="bg-white text-black">
+                        Sprites — Faceoff Zoom (4x)
+                      </option>
+                      <option value="goalies" className="bg-white text-black">
+                        Sprites — Goalies Zoom (4x)
+                      </option>
+                    </select>
+                  </div>
+
+                  {/* 256x256 Interactive Pixel-Art NHL95 Sprite Sheet */}
+                  <div className="flex justify-center mb-3">
+                    <NoseSpriteCanvas
+                      strip16={previewSampleHome ? sampleHomeStrip : homeStrip}
+                      viewMode={homeViewMode}
+                      activeSwatch={activeSwatch}
+                      onSelectSwatch={(idx) => {
+                        setActiveSide('home');
+                        setActiveSwatch(idx);
+                      }}
+                    />
+                  </div>
+
+                  {/* Sample Checkbox + Apply + Reset Row */}
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    <label className="flex items-center gap-1.5 text-xs text-black cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={previewSampleHome}
+                        onChange={(e) => setPreviewSampleHome(e.target.checked)}
+                        className="cursor-pointer"
+                      />
+                      <span>
+                        <u>S</u>ample
+                      </span>
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!previewSampleHome}
+                        onClick={() => {
+                          const next = [...sampleHomeStrip];
+                          setHomeStrip(next);
+                          setPreviewSampleHome(false);
+                          syncStripToPalette('home', next);
+                        }}
+                        className={`px-4 py-1 text-xs border border-[#707070] shadow-[inset_0_1px_0_#fff] ${
+                          previewSampleHome
+                            ? 'bg-[#e1e1e1] hover:bg-[#d0e4f7] text-black cursor-pointer'
+                            : 'bg-[#e6e6e6] text-[#888888] cursor-not-allowed'
+                        }`}
+                      >
+                        <u>A</u>pply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleResetSide('home')}
+                        className="px-4 py-1 text-xs bg-[#e1e1e1] hover:bg-[#d0e4f7] text-black border border-[#707070] shadow-[inset_0_1px_0_#fff] cursor-pointer"
+                      >
+                        <u>R</u>eset
+                      </button>
+                    </div>
+                  </div>
+                </fieldset>
+
+                {/* Home Sample 16-Color Staggered Strip */}
+                <Nose16SwatchBar
+                  label="Sample"
+                  strip16={sampleHomeStrip}
+                  activeSwatch={activeSwatch}
+                  isActiveSide={false}
+                  onSelectSwatch={(idx) => {
+                    setActiveSide('home');
+                    setActiveSwatch(idx);
+                    updateSwatchColor('home', idx, sampleHomeStrip[idx], autoShadeGroups);
+                  }}
+                />
+
+                {/* Home Active 16-Color Staggered Strip */}
+                <Nose16SwatchBar
+                  label="Home"
+                  strip16={homeStrip}
+                  activeSwatch={activeSwatch}
+                  isActiveSide={activeSide === 'home'}
+                  onSelectSwatch={(idx) => {
+                    setActiveSide('home');
+                    setActiveSwatch(idx);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* ================= INTERACTIVE NOSE UNIFORM GROUP & SWATCH COLOR PICKER ================= */}
+            <div className="p-3 bg-[#e4e4e4] border-t border-[#a0a0a0] space-y-3">
+              {/* 1-Click Uniform Part Pickers for Active Side */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-[#003399]">
+                    Quick Uniform Part Color Pickers ({activeSide === 'away' ? 'VISITOR / LEFT' : 'HOME / RIGHT'}):
+                  </span>
+                  <span className="text-[10px] font-mono text-neutral-700">
+                    Click any skater pixel or swatch above!
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {[
+                    { label: 'Jersey Body', swatch: 4, sub: 'Swatches 2-4' },
+                    { label: 'Pants & Yoke', swatch: 9, sub: 'Swatches 9-12' },
+                    { label: 'Stripes / Trim', swatch: 13, sub: 'Swatch 13' },
+                    { label: 'Helmet / #s', swatch: 8, sub: 'Swatch 8' },
+                    { label: 'Gloves / Skates', swatch: 1, sub: 'Swatch 1' },
+                  ].map((g) => {
+                    const col = activeStrip[g.swatch] || '#ffffff';
+                    const isSelected = activeSwatch === g.swatch;
+                    return (
+                      <div
+                        key={g.swatch}
+                        onClick={() => setActiveSwatch(g.swatch)}
+                        className={`p-1.5 border flex items-center justify-between gap-1.5 cursor-pointer transition ${
+                          isSelected
+                            ? 'bg-[#003399] text-white border-black ring-2 ring-amber-400'
+                            : 'bg-white text-black border-[#888888] hover:border-black'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-black uppercase truncate">{g.label}</div>
+                          <div
+                            className={`text-[9px] font-mono ${
+                              isSelected ? 'text-amber-300' : 'text-neutral-500'
+                            }`}
+                          >
+                            {g.sub}
+                          </div>
+                        </div>
+                        <input
+                          type="color"
+                          value={hexToGenesisNose(col).snappedHex}
+                          onChange={(e) => {
+                            setActiveSwatch(g.swatch);
+                            updateSwatchColor(activeSide, g.swatch, e.target.value, true);
+                          }}
+                          className="w-6 h-6 shrink-0 border border-black cursor-pointer bg-transparent"
+                          title={`Pick ${g.label} color`}
+                        />
+                      </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Active Slot 9-Bit BGR Sliders & Color Picker */}
-              <div className="bg-black text-white p-3 border border-black space-y-2.5">
-                <div className="flex items-center justify-between border-b border-zinc-800 pb-1.5">
+              {/* Active Individual Swatch (#0..#15) Sega Genesis 9-Bit BGR Inspector */}
+              <div className="bg-black text-white p-3 border border-black space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-1.5">
                   <div>
                     <div className="text-[10px] text-amber-400 font-black uppercase">
-                      ACTIVE SLOT: {SLOT_METADATA.find((s) => s.key === activeSlot)?.label}
+                      EDITING {activeSide === 'away' ? 'VISITOR' : 'HOME'} SWATCH #{activeSwatch} (0x0
+                      {activeSwatch.toString(16).toUpperCase()}): {activeSwatchMeta.name}
                     </div>
                     <div className="text-[10px] font-mono text-zinc-400">
-                      NOSE Value: <strong className="text-white">{activeNoseInfo.noseHex}</strong> • Hex:{' '}
-                      <strong className="text-white">{activeNoseInfo.snappedHex.toUpperCase()}</strong>
+                      NOSE 9-Bit BGR: <strong className="text-white">{activeNoseInfo.noseHex}</strong> • RGB Hex:{' '}
+                      <strong className="text-white">{activeNoseInfo.snappedHex.toUpperCase()}</strong> • Group:{' '}
+                      <span className="text-amber-300">{activeSwatchMeta.group}</span>
                     </div>
                   </div>
                   <input
@@ -1355,14 +1764,14 @@ export default function ModMyTeamPage() {
                     value={activeNoseInfo.snappedHex}
                     onChange={(e) => updateActiveSlotColor(e.target.value)}
                     className="w-9 h-8 border border-white cursor-pointer bg-transparent"
-                    title="Pick any color (auto-snaps to Genesis 9-bit palette)"
+                    title="Pick color for active swatch"
                   />
                 </div>
 
                 {/* Genesis 0-7 R, G, B Sliders */}
-                <div className="space-y-1.5 text-[11px] font-mono">
-                  <div className="flex items-center gap-2">
-                    <span className="w-14 text-red-400 font-bold">RED ({activeNoseInfo.rLevel * 2}):</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-12 text-red-400 font-bold">R ({activeNoseInfo.rLevel * 2}):</span>
                     <input
                       type="range"
                       min={0}
@@ -1376,8 +1785,8 @@ export default function ModMyTeamPage() {
                       className="flex-1 accent-red-500 cursor-pointer"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-14 text-emerald-400 font-bold">GRN ({activeNoseInfo.gLevel * 2}):</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-12 text-emerald-400 font-bold">G ({activeNoseInfo.gLevel * 2}):</span>
                     <input
                       type="range"
                       min={0}
@@ -1391,8 +1800,8 @@ export default function ModMyTeamPage() {
                       className="flex-1 accent-emerald-500 cursor-pointer"
                     />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-14 text-sky-400 font-bold">BLU ({activeNoseInfo.bLevel * 2}):</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-12 text-sky-400 font-bold">B ({activeNoseInfo.bLevel * 2}):</span>
                     <input
                       type="range"
                       min={0}
@@ -1408,25 +1817,29 @@ export default function ModMyTeamPage() {
                   </div>
                 </div>
 
-                {/* Quick Classic NHL95 Swatches */}
+                {/* Quick Classic NHL95 Genesis Swatch Presets */}
                 <div className="pt-1 flex flex-wrap gap-1">
                   {[
-                    '#ffffff',
-                    '#111111',
+                    '#f8fcf8',
+                    '#202420',
+                    '#00fcb0',
+                    '#00d890',
+                    '#00b468',
+                    '#200068',
+                    '#200048',
+                    '#d89000',
                     '#dc2626',
                     '#991b1b',
                     '#f59e0b',
                     '#facc15',
                     '#15803d',
-                    '#065f46',
                     '#1d4ed8',
-                    '#1e3a8a',
                     '#0284c7',
                     '#38bdf8',
                     '#6d28d9',
                     '#db2777',
                     '#ea580c',
-                    '#94a3b8',
+                    '#909090',
                   ].map((sw) => (
                     <button
                       key={sw}
@@ -1441,7 +1854,7 @@ export default function ModMyTeamPage() {
               </div>
 
               {/* Optional Offseason Rebrand / Team Brand Notes */}
-              <div className="bg-[#f4f1ea] border border-black p-3 space-y-2">
+              <div className="bg-[#f4f1ea] border border-black p-2.5 space-y-2">
                 <div className="text-[11px] font-black uppercase tracking-wider">
                   Offseason Team Brand / Rebrand Notes (Optional):
                 </div>
@@ -1463,8 +1876,8 @@ export default function ModMyTeamPage() {
             </div>
           </section>
 
-          {/* RIGHT COLUMN (7 cols): TEAM ROSTER (WITH DRAFTS & TRADES) & STARTING LINEUP EDITOR */}
-          <section className="lg:col-span-7 bg-[#fdfaf3] border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          {/* RIGHT COLUMN (6 cols on xl): TEAM ROSTER (WITH DRAFTS & TRADES) & STARTING LINEUP EDITOR */}
+          <section className="xl:col-span-6 bg-[#fdfaf3] border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
             <div className="bg-black text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 font-sans">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-amber-400" />

@@ -17,6 +17,10 @@ export async function POST(req: NextRequest) {
       brandNotes = '',
       homePalette = {},
       awayPalette = {},
+      homeStrip16 = [],
+      visitorStrip16 = [],
+      homeStripOffsetHex = '001A730C',
+      visitorStripOffsetHex = '001A731C',
       startingLineup = {},
       benchPlayers = [],
       cutPlayers = [],
@@ -26,20 +30,23 @@ export async function POST(req: NextRequest) {
     const token = (process.env.DISCORD_BOT_TOKEN || '').trim().replace(/^["']|["']$/g, '');
     const guildId = (process.env.DISCORD_GUILD_ID || DEFAULT_GUILD_ID).trim();
 
-    const formatPaletteLine = (pal: Record<string, { hex: string; noseHex: string }>) => {
+    const formatPaletteLine = (
+      pal: Record<string, { hex: string; noseHex: string }>,
+      strip16?: string[]
+    ) => {
+      const stripHeader =
+        Array.isArray(strip16) && strip16.length === 16
+          ? `\`Row 0-7 :\` ${strip16.slice(0, 8).join(' ')}\n\`Row 8-15:\` ${strip16.slice(8, 16).join(' ')}\n`
+          : '';
       const order = [
-        ['helmet', 'Helmet'],
-        ['jerseyMain', 'Jersey'],
-        ['shoulders', 'Shoulders'],
-        ['stripe1', 'Stripe 1'],
-        ['stripe2', 'Stripe 2'],
-        ['pants', 'Pants'],
-        ['socksMain', 'Socks'],
-        ['socksStripe', 'Sock Strp'],
-        ['gloves', 'Gloves/Skates'],
-        ['numbers', 'Numbers'],
+        ['helmet', 'Helmet (#8)'],
+        ['jerseyMain', 'Jersey (#4)'],
+        ['shoulders', 'Yoke (#9)'],
+        ['stripe1', 'Stripes (#13)'],
+        ['pants', 'Pants (#9-12)'],
+        ['gloves', 'Gloves (#1)'],
       ];
-      return order
+      const rows = order
         .map(([k, label]) => {
           const item = pal?.[k];
           if (!item) return null;
@@ -47,6 +54,7 @@ export async function POST(req: NextRequest) {
         })
         .filter(Boolean)
         .join('\n');
+      return `${stripHeader}${rows}`.trim();
     };
 
     const startersLines = [
@@ -88,13 +96,13 @@ export async function POST(req: NextRequest) {
         : `Official offseason NOSE Jersey Palette & Starting Lineup submission for **${seasonLabel}**.`,
       fields: [
         {
-          name: '🏠 HOME JERSEY (NOSE 9-Bit BGR)',
-          value: formatPaletteLine(homePalette) || 'Default Home Palette',
+          name: `✈️ TEAM 2 / VISITOR STRIP (Offset ${visitorStripOffsetHex})`,
+          value: formatPaletteLine(awayPalette, visitorStrip16) || 'Default Visitor Strip',
           inline: true,
         },
         {
-          name: '✈️ AWAY JERSEY (NOSE 9-Bit BGR)',
-          value: formatPaletteLine(awayPalette) || 'Default Away Palette',
+          name: `🏠 TEAM 1 / HOME STRIP (Offset ${homeStripOffsetHex})`,
+          value: formatPaletteLine(homePalette, homeStrip16) || 'Default Home Strip',
           inline: true,
         },
         {
