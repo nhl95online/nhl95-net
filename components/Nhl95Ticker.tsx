@@ -128,7 +128,7 @@ export default function Nhl95Ticker({ className = '' }: { className?: string }) 
         .nhl95-ticker-track {
           display: flex;
           width: max-content;
-          animation: nhl95Marquee 95s linear infinite;
+          animation: nhl95Marquee 190s linear infinite;
         }
         .nhl95-ticker-track:hover {
           animation-play-state: paused;
