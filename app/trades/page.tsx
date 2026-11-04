@@ -20,8 +20,178 @@ interface Team {
   team_name: string;
   abbreviation: string;
   logo_url: string;
+  coach_id?: number | string;
   coach_name?: string;
+  discord_mention?: string;
   league_id?: number | string;
+}
+
+const SUPABASE_PUBLIC_BASE = 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
+
+const COACH_DISCORD_ID_MAP: Record<string, string> = {
+  'autobahn': '692039117499793469',
+  'dasri': '882284979441258567',
+  'jer_33': '241253413722128385',
+  'jer 33': '241253413722128385',
+  'krav1': '1211045587483623484',
+  'krav': '1211045587483623484',
+  'vancecookcobxin': '378302345894821909',
+  'lhx': '873331397782294569',
+  'moses bogart': '692183787509121046',
+  'derek sutton': '932744327191490651',
+  'gmds': '932744327191490651',
+  'wolf': '694697891733831761',
+  'highland wolf': '694697891733831761',
+  'don don': '939897819681161296',
+  'dondon': '939897819681161296',
+  'marcusvickebc': '373576219129806859',
+  'marcus vick ebc': '373576219129806859',
+  'mattya': '918583918838546443',
+  'matty a': '918583918838546443',
+  'gaelicgopher': '691684263698890878',
+  'gaelic gopher': '691684263698890878',
+  'red': '1049531278531252224',
+  'segathon': '144973906070077440',
+  'unholy grail': '897864347764789290',
+  'mnyoda84': '1009697012737921055',
+  'mnyoda': '1009697012737921055',
+  'adolf oliver nipples': '874726051790594051',
+  'lloyd10xmas': '904808850681638923',
+  'bclinton_666': '691747327261671534',
+  'bclinton': '691747327261671534',
+  'the villain ctj': '291228680825470978',
+  'ctj': '291228680825470978',
+  'marylandmike': '1042251245609549824',
+  'maryland mike': '1042251245609549824',
+  'pink elephants': '874999566200635393',
+  'chalky': '628241421781958684',
+  'sugar valley firebirds': '628241421781958684',
+  'nathanmb': '802225742523531325',
+  'shawnbell_': '694688440440193186',
+  'shawnbell': '694688440440193186',
+  'shawn bell': '694688440440193186',
+  'puss': '582240735793774618',
+  'ticklepuss': '582240735793774618',
+  'ultramagnus': '869668599550332958',
+  'newjerseykiller': '204681486484373505',
+  'new jersey killer': '204681486484373505',
+};
+
+const TEAM_KEYWORD_META: Record<string, { coachName: string; discordId: string; logoUrl: string }> = {
+  'AUTOBAHN': { coachName: 'Autobahn', discordId: '692039117499793469', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Autobahn%20Autobahn%20Logo.png` },
+  'BARRIE': { coachName: 'Dasri', discordId: '882284979441258567', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Barrie%20Dolts%20Logo.png` },
+  'BAYTOWN': { coachName: 'Jer 33', discordId: '241253413722128385', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Baytown%20Thunder%20Logo.png` },
+  'BETTY FORD': { coachName: 'Krav', discordId: '1211045587483623484', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Betty%20Ford%20Clinic%20Logo.png` },
+  'DEVIL HILL': { coachName: 'VanceCookCobxin', discordId: '378302345894821909', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Devin%20Hill%20Goblins%20Logo.png` },
+  'DEVIN HILL': { coachName: 'VanceCookCobxin', discordId: '378302345894821909', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Devin%20Hill%20Goblins%20Logo.png` },
+  'EASTER ISLAND': { coachName: 'Lhx', discordId: '873331397782294569', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Easter%20Island%20Stone%20Heads%20Logo.png` },
+  'GRAND RIVER': { coachName: 'Moses Bogart', discordId: '692183787509121046', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Grand%20River%20Herons%20Logo.png` },
+  'HAMILTON': { coachName: 'Derek Sutton', discordId: '932744327191490651', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/hamilton_mustangs.png` },
+  'HIGHLAND': { coachName: 'Highland Wolf', discordId: '694697891733831761', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Highland%20Wolf%20Logo.png` },
+  'INGLEWOOD': { coachName: 'Don Don', discordId: '939897819681161296', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Inglewood%20Monstars%20Logo%20S3.png` },
+  'ITALY': { coachName: 'Marcus Vick EBC', discordId: '373576219129806859', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Italy%20EBC%20Logo%20S12.png` },
+  'KAROLINA': { coachName: 'Matty A', discordId: '918583918838546443', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Karolina%20Kaos%20Logo.png` },
+  'MINNESOTA': { coachName: 'Gaelic Gopher', discordId: '691684263698890878', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Minnesota%20Golden%20Gophers%20Logo.png` },
+  'MARYHILL': { coachName: 'Red', discordId: '1049531278531252224', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Maryhill%20Alumni%20Logo.png` },
+  'MINHATTRICK': { coachName: 'Segathon', discordId: '144973906070077440', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Minhattrick%20Swayzes%20Logo%20S13.png` },
+  'NORTH BAY': { coachName: 'Unholy Grail', discordId: '897864347764789290', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/North%20Bay%20Knights%20Logo.png` },
+  'ORANGE COUNTY': { coachName: 'MNYoda84', discordId: '1009697012737921055', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Orange%20County%20Weststars%20Logo.png` },
+  'PITT': { coachName: 'Adolf Oliver Nipples', discordId: '874726051790594051', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Pitt%20Intramurals%20Logo.png` },
+  'PROVIDENCE': { coachName: 'Lloyd10xmas', discordId: '904808850681638923', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Providence%20Sea%20Bass%20Logo.png` },
+  'RICHFIELD': { coachName: 'bclinton', discordId: '691747327261671534', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Richfield%20Oracles%20Logo.png` },
+  'ROCKFORD': { coachName: 'The Villain CTJ', discordId: '291228680825470978', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Rockford%20Villains%20Logo.png` },
+  'SOUTH HILLS': { coachName: 'Maryland Mike', discordId: '1042251245609549824', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/South%20Hills%20Shindigaz%20Logo.png` },
+  'SUMTER': { coachName: 'Pink Elephants', discordId: '874999566200635393', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Sumter%20Trash%20Logo.png` },
+  'SUGAR VALLEY': { coachName: 'Chalky', discordId: '628241421781958684', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Sugar%20Valley%20Firebirds%20Logo%20S3.png` },
+  'TAIPEI': { coachName: 'NathanMB', discordId: '802225742523531325', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Taipei%20Typhoons%20Logo.png` },
+  'THUNDER BAY': { coachName: 'Shawn Bell', discordId: '694688440440193186', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Thunder%20Bay%20Pike%20Logo.png` },
+  'TEGUCIGALPA': { coachName: 'Ticklepuss', discordId: '582240735793774618', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Tegucigalpa%20Ticklepuss%20Logo.png` },
+  'VALHALLA': { coachName: 'UltraMagnus', discordId: '869668599550332958', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Valhalla%20Vikings%20Logo.png` },
+  'WOODLYNNE': { coachName: 'NewJerseyKiller', discordId: '204681486484373505', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/teams/Woodlynne%20Rats%20Logo.png` },
+  'BOSTON': { coachName: 'VanceCookCobxin', discordId: '378302345894821909', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/nhl%20logo/boston_bruins%201927.png` },
+  'CHICAGO': { coachName: 'Don Don', discordId: '939897819681161296', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/nhl%20logo/chicago_black_hawks%201927.png` },
+  'DETROIT': { coachName: 'Matty A', discordId: '918583918838546443', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/nhl%20logo/detroit_cougars%201927.png` },
+  'MONTREAL': { coachName: 'UltraMagnus', discordId: '869668599550332958', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/nhl%20logo/montreal_canadiens%201927.png` },
+  'NEW YORK': { coachName: 'The Villain CTJ', discordId: '291228680825470978', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/nhl%20logo/new_york_rangers%201927.png` },
+  'TORONTO': { coachName: 'Derek Sutton', discordId: '932744327191490651', logoUrl: `${SUPABASE_PUBLIC_BASE}/storage/v1/object/public/nhl%20logo/toronto_maple_leafs%201927.png` },
+};
+
+function encodeDiscordLogoUrl(rawUrl?: string | null): string {
+  if (!rawUrl) return '';
+  try {
+    return encodeURI(decodeURI(rawUrl)).replace(/\(/g, '%28').replace(/\)/g, '%29');
+  } catch {
+    return rawUrl.replace(/ /g, '%20');
+  }
+}
+
+function enrichTeamCoachAndLogo(
+  rawTeam: {
+    team_id: number | string;
+    team_name?: string;
+    abbreviation?: string;
+    logo_url?: string;
+    coach_id?: number | string;
+    coach_name?: string;
+    league_id?: number | string;
+  },
+  coachMap?: Map<number, { coach_name: string; discord_tag?: string }>
+): Team {
+  const rawName = String(rawTeam.team_name || `Team ${rawTeam.team_id}`).trim();
+  const abbr = String(rawTeam.abbreviation || `TM${rawTeam.team_id}`).trim().toUpperCase();
+  const upperName = `${rawName} ${abbr}`.toUpperCase();
+
+  let matchedMeta: { coachName: string; discordId: string; logoUrl: string } | undefined;
+  for (const [kw, meta] of Object.entries(TEAM_KEYWORD_META)) {
+    if (upperName.includes(kw)) {
+      matchedMeta = meta;
+      break;
+    }
+  }
+
+  const cId = Number(rawTeam.coach_id || 0);
+  const dbCoach = cId && coachMap ? coachMap.get(cId) : undefined;
+  const coachName =
+    dbCoach?.coach_name ||
+    (rawTeam.coach_name && rawTeam.coach_name !== 'Front Office' ? rawTeam.coach_name : '') ||
+    matchedMeta?.coachName ||
+    'Front Office';
+
+  // Resolve Discord <@user_id> mention tag
+  let discordMention = '';
+  const candStrings = [dbCoach?.discord_tag, coachName];
+  for (const c of candStrings) {
+    if (!c) continue;
+    const idMatch = String(c).match(/\b(\d{17,20})\b/);
+    if (idMatch) {
+      discordMention = `<@${idMatch[1]}>`;
+      break;
+    }
+    const lower = String(c).toLowerCase().replace(/^@/, '').trim();
+    if (COACH_DISCORD_ID_MAP[lower]) {
+      discordMention = `<@${COACH_DISCORD_ID_MAP[lower]}>`;
+      break;
+    }
+  }
+  if (!discordMention && matchedMeta?.discordId) {
+    discordMention = `<@${matchedMeta.discordId}>`;
+  }
+  if (!discordMention && coachName && coachName !== 'Front Office') {
+    discordMention = `@${coachName}`;
+  }
+
+  const finalLogo = encodeDiscordLogoUrl(rawTeam.logo_url) || matchedMeta?.logoUrl || '';
+
+  return {
+    team_id: String(rawTeam.team_id),
+    team_name: rawName,
+    abbreviation: abbr,
+    logo_url: finalLogo,
+    coach_id: cId || undefined,
+    coach_name: coachName,
+    discord_mention: discordMention,
+    league_id: rawTeam.league_id,
+  };
 }
 
 interface PlayerAsset {
@@ -206,9 +376,10 @@ export default function TradesPage() {
     async function initGlobalData() {
       setLoadingArchive(true);
       try {
-        const [seasonRes, teamsRes, tradesRes, draftsRes] = await Promise.all([
+        const [seasonRes, teamsRes, coachesRes, tradesRes, draftsRes] = await Promise.all([
           supabase.from('league_seasons').select('*').order('league_id', { ascending: false }),
-          supabase.from('league_teams').select('team_id, team_name, abbreviation, logo_url, league_id, league_coaches(coach_name)'),
+          supabase.from('league_teams').select('*'),
+          supabase.from('league_coaches').select('*'),
           supabase.from('league_trades').select('*').order('trade id', { ascending: false }),
           supabase.from('league_drafts').select(`
             round, pick_number, year, transaction_type, league_id,
@@ -217,24 +388,47 @@ export default function TradesPage() {
           `)
         ]);
 
+        const coachMap = new Map<number, { coach_name: string; discord_tag?: string }>();
+        (coachesRes.data || []).forEach((c: any) => {
+          const cid = Number(c.coach_id ?? c.id ?? 0);
+          if (cid > 0) {
+            coachMap.set(cid, {
+              coach_name: String(c.coach_name ?? c.name ?? `Coach #${cid}`).trim(),
+              discord_tag: c.discord_handle ?? c.discord_tag ?? c.discord ?? undefined,
+            });
+          }
+        });
+
         const loadedSeasons = seasonRes.data || [];
         setSeasons(loadedSeasons);
 
-        const loadedTeams = (teamsRes.data || []).map((t: any) => ({
-          team_id: t.team_id,
-          team_name: t.team_name,
-          abbreviation: t.abbreviation,
-          logo_url: t.logo_url,
-          coach_name: t.league_coaches?.coach_name,
-          league_id: t.league_id
-        }));
+        const loadedTeams = (teamsRes.data || []).map((t: any) =>
+          enrichTeamCoachAndLogo(
+            {
+              team_id: t.team_id,
+              team_name: t.team_name,
+              abbreviation: t.abbreviation,
+              logo_url: t.logo_url,
+              coach_id: t.coach_id,
+              coach_name: t.coach_name,
+              league_id: t.league_id,
+            },
+            coachMap
+          )
+        );
         setAllTeams(loadedTeams);
 
         // Metadata Map for Historical Archive display
         const tMap: Record<string, any> = {};
-        loadedTeams.forEach((t: any) => {
+        loadedTeams.forEach((t: Team) => {
           const abbr = String(t.abbreviation || '').trim().toUpperCase();
-          tMap[abbr] = { name: t.team_name, abbr: t.abbreviation, logo: t.logo_url, coach: t.coach_name };
+          tMap[abbr] = {
+            name: t.team_name,
+            abbr: t.abbreviation,
+            logo: t.logo_url,
+            coach: t.coach_name,
+            discordMention: t.discord_mention,
+          };
         });
         setTeamMetadata(tMap);
 
@@ -279,18 +473,30 @@ export default function TradesPage() {
       const targetSeasonId = matchedConfig?.seasonId;
 
       try {
+        const { data: coachesData } = await supabase.from('league_coaches').select('*');
+        const coachMap = new Map<number, { coach_name: string; discord_tag?: string }>();
+        (coachesData || []).forEach((c: any) => {
+          const cid = Number(c.coach_id ?? c.id ?? 0);
+          if (cid > 0) {
+            coachMap.set(cid, {
+              coach_name: String(c.coach_name ?? c.name ?? `Coach #${cid}`).trim(),
+              discord_tag: c.discord_handle ?? c.discord_tag ?? c.discord ?? undefined,
+            });
+          }
+        });
+
         let teamsList: Team[] = [];
 
         // Special handling for Original 6 (O01) if not loaded in DB yet: Fallback to classic O6 franchises
         if (simLeague === 'O') {
           const { data: allTeamsData } = await supabase
             .from('league_teams')
-            .select('team_id, team_name, abbreviation, logo_url, league_id, league_coaches(coach_name)');
+            .select('*');
 
           const originalSixNames = ['Bruins', 'Blackhawks', 'Black Hawks', 'Red Wings', 'Canadiens', 'Rangers', 'Maple Leafs'];
           const o6Teams = (allTeamsData || []).filter((t: any) => {
             const name = (t.team_name || '').toUpperCase();
-            return originalSixNames.some(o6 => name.includes(o6.toUpperCase())) || name.startsWith('O ') || t.league_id === 1;
+            return originalSixNames.some(o6 => name.includes(o6.toUpperCase())) || name.startsWith('O ') || t.league_id === 1 || t.league_id === 39;
           });
 
           if (o6Teams.length > 0) {
@@ -299,14 +505,20 @@ export default function TradesPage() {
               const baseName = t.team_name.split(' ').pop();
               if (!seen.has(baseName)) {
                 seen.add(baseName);
-                teamsList.push({
-                  team_id: String(t.team_id),
-                  team_name: t.team_name,
-                  abbreviation: t.abbreviation || 'O6',
-                  logo_url: t.logo_url || '',
-                  coach_name: t.league_coaches?.coach_name || 'Front Office',
-                  league_id: 'O01'
-                });
+                teamsList.push(
+                  enrichTeamCoachAndLogo(
+                    {
+                      team_id: String(t.team_id),
+                      team_name: t.team_name,
+                      abbreviation: t.abbreviation || 'O6',
+                      logo_url: t.logo_url || '',
+                      coach_id: t.coach_id,
+                      coach_name: t.coach_name,
+                      league_id: 'O01',
+                    },
+                    coachMap
+                  )
+                );
               }
             });
           }
@@ -318,31 +530,30 @@ export default function TradesPage() {
               .select(`
                 team_id,
                 season_id,
-                league_teams (
-                  team_id,
-                  team_name,
-                  abbreviation,
-                  logo_url,
-                  league_id,
-                  league_coaches (coach_name)
-                )
+                league_teams (*)
               `)
               .eq('season_id', targetSeasonId);
 
             if (standingsData && standingsData.length > 0) {
               const seen = new Set<string>();
               standingsData.forEach((row: any) => {
-                const t = row.league_teams;
+                const t = Array.isArray(row.league_teams) ? row.league_teams[0] : row.league_teams;
                 if (t && !seen.has(String(t.team_id))) {
                   seen.add(String(t.team_id));
-                  teamsList.push({
-                    team_id: String(t.team_id),
-                    team_name: t.team_name || `Team ${t.team_id}`,
-                    abbreviation: t.abbreviation || `TM${t.team_id}`,
-                    logo_url: t.logo_url || '',
-                    coach_name: t.league_coaches?.coach_name || 'Front Office',
-                    league_id: targetSeasonId
-                  });
+                  teamsList.push(
+                    enrichTeamCoachAndLogo(
+                      {
+                        team_id: String(t.team_id),
+                        team_name: t.team_name || `Team ${t.team_id}`,
+                        abbreviation: t.abbreviation || `TM${t.team_id}`,
+                        logo_url: t.logo_url || '',
+                        coach_id: t.coach_id,
+                        coach_name: t.coach_name,
+                        league_id: targetSeasonId,
+                      },
+                      coachMap
+                    )
+                  );
                 }
               });
             }
@@ -352,22 +563,28 @@ export default function TradesPage() {
           if (teamsList.length === 0) {
             let teamQuery = supabase
               .from('league_teams')
-              .select('team_id, team_name, abbreviation, logo_url, league_id, league_coaches(coach_name)');
+              .select('*');
 
             if (typeof targetSeasonId === 'number') {
-              teamQuery = teamQuery.eq('league_id', targetSeasonId);
+              teamQuery = teamQuery.eq('league_id', targetSeasonId === 38 ? 40 : targetSeasonId);
             }
 
             const { data: directTeams } = await teamQuery;
             if (directTeams && directTeams.length > 0) {
-              teamsList = directTeams.map((t: any) => ({
-                team_id: String(t.team_id),
-                team_name: t.team_name || `Team ${t.team_id}`,
-                abbreviation: t.abbreviation || `TM${t.team_id}`,
-                logo_url: t.logo_url || '',
-                coach_name: t.league_coaches?.coach_name || 'Front Office',
-                league_id: t.league_id
-              }));
+              teamsList = directTeams.map((t: any) =>
+                enrichTeamCoachAndLogo(
+                  {
+                    team_id: String(t.team_id),
+                    team_name: t.team_name || `Team ${t.team_id}`,
+                    abbreviation: t.abbreviation || `TM${t.team_id}`,
+                    logo_url: t.logo_url || '',
+                    coach_id: t.coach_id,
+                    coach_name: t.coach_name,
+                    league_id: t.league_id,
+                  },
+                  coachMap
+                )
+              );
             }
           }
         }
@@ -619,12 +836,72 @@ export default function TradesPage() {
 
   const copyTradeForDiscord = () => {
     const activeLeagueName = activeSimConfig.currentSeasonName;
-    const aPlayerList = teamASendingPlayers.map(p => `• ${p.name}${p.source_year ? ` ('${String(p.source_year).slice(-2)})` : ''} (${p.pos}, OVR: ${p.ovr})`).join('\n') || '• No players';
-    const aPickList = teamASendingPicks.map(pk => `• ${pk.year} ${pk.round} Round Pick (${pk.value} pts)`).join('\n') || '• No draft picks';
-    const bPlayerList = teamBSendingPlayers.map(p => `• ${p.name}${p.source_year ? ` ('${String(p.source_year).slice(-2)})` : ''} (${p.pos}, OVR: ${p.ovr})`).join('\n') || '• No players';
-    const bPickList = teamBSendingPicks.map(pk => `• ${pk.year} ${pk.round} Round Pick (${pk.value} pts)`).join('\n') || '• No draft picks';
+    const aPlayerList =
+      teamASendingPlayers
+        .map(
+          (p) =>
+            `• ${p.name}${p.source_year ? ` ('${String(p.source_year).slice(-2)})` : ''} (${p.pos}, OVR: ${p.ovr})`
+        )
+        .join('\n') || '• No players';
+    const aPickList =
+      teamASendingPicks
+        .map((pk) => `• ${pk.year} ${pk.round} Round Pick (${pk.value} pts)`)
+        .join('\n') || '• No draft picks';
+    const bPlayerList =
+      teamBSendingPlayers
+        .map(
+          (p) =>
+            `• ${p.name}${p.source_year ? ` ('${String(p.source_year).slice(-2)})` : ''} (${p.pos}, OVR: ${p.ovr})`
+        )
+        .join('\n') || '• No players';
+    const bPickList =
+      teamBSendingPicks
+        .map((pk) => `• ${pk.year} ${pk.round} Round Pick (${pk.value} pts)`)
+        .join('\n') || '• No draft picks';
 
-    const text = `🏒 **NHL95 TRADE PROPOSAL [${activeLeagueName}]** 🏒\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📤 **${teamA?.team_name || 'Team A'} Sends:**\n${aPlayerList}\n${aPickList}\n📊 *Package Value: ${teamATotalVal} pts*\n\n📥 **${teamB?.team_name || 'Team B'} Sends:**\n${bPlayerList}\n${bPickList}\n📊 *Package Value: ${teamBTotalVal} pts*\n\n⚖️ **Trade Verdict:** ${verdictBadge.text} (Margin: ${valDifference} pts)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    const teamAName = teamA?.team_name || 'Team A';
+    const teamAAbbr = teamA?.abbreviation || 'TMA';
+    const teamACoach = teamA?.coach_name || 'Front Office';
+    const teamAMention = teamA?.discord_mention || `@${teamACoach}`;
+    const teamALogo = teamA?.logo_url || '';
+
+    const teamBName = teamB?.team_name || 'Team B';
+    const teamBAbbr = teamB?.abbreviation || 'TMB';
+    const teamBCoach = teamB?.coach_name || 'Front Office';
+    const teamBMention = teamB?.discord_mention || `@${teamBCoach}`;
+    const teamBLogo = teamB?.logo_url || '';
+
+    const teamAHeader = teamALogo
+      ? `[**${teamAName} (${teamAAbbr})**](${teamALogo})`
+      : `**${teamAName} (${teamAAbbr})**`;
+    const teamBHeader = teamBLogo
+      ? `[**${teamBName} (${teamBAbbr})**](${teamBLogo})`
+      : `**${teamBName} (${teamBAbbr})**`;
+
+    const logoLinksLine =
+      teamALogo || teamBLogo
+        ? `\n🖼️ **Team Logos:** ${
+            teamALogo ? `[${teamAAbbr} Logo](${teamALogo})` : teamAAbbr
+          } ⇄ ${teamBLogo ? `[${teamBAbbr} Logo](${teamBLogo})` : teamBAbbr}`
+        : '';
+
+    const text = [
+      `🏒 **NHL95 TRADE PROPOSAL [${activeLeagueName}]** 🏒`,
+      `🔔 **Coaches Tagged:** Coach **${teamACoach}** (${teamAMention}) ⇄ Coach **${teamBCoach}** (${teamBMention})`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `📤 ${teamAHeader} • Coach **${teamACoach}** (${teamAMention}) **Sends:**`,
+      aPlayerList,
+      aPickList,
+      `📊 *Package Value: ${teamATotalVal} pts*`,
+      ``,
+      `📥 ${teamBHeader} • Coach **${teamBCoach}** (${teamBMention}) **Sends:**`,
+      bPlayerList,
+      bPickList,
+      `📊 *Package Value: ${teamBTotalVal} pts*`,
+      ``,
+      `⚖️ **Trade Verdict:** ${verdictBadge.text} (Margin: ${valDifference} pts)${logoLinksLine}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+    ].join('\n');
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -1295,9 +1572,14 @@ export default function TradesPage() {
                           <h4 className="font-black text-sm md:text-base uppercase tracking-tight leading-snug text-black">
                             {teamA?.team_name || 'Team A'}
                           </h4>
-                          <p className="text-[11px] text-neutral-600 font-sans mt-0.5 truncate">
+                          <p className="text-[11px] text-neutral-700 font-sans font-bold mt-0.5 truncate">
                             Coach: {teamA?.coach_name || 'Front Office'}
                           </p>
+                          {teamA?.discord_mention && (
+                            <span className="inline-block mt-1 px-1.5 py-0.5 bg-[#5865F2]/15 text-[#404EED] border border-[#5865F2]/40 text-[10px] font-mono font-bold">
+                              Discord Tag: @{teamA.coach_name} ({teamA.discord_mention})
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1313,8 +1595,17 @@ export default function TradesPage() {
                   {/* 2. TEAM A OUTGOING ASSET PACKAGE */}
                   <div className="w-full lg:w-[22%] bg-[#fdfaf5] border border-black p-3 flex flex-col justify-between shadow-2xs">
                     <div>
-                      <div className="border border-black bg-white px-2.5 py-1 text-xs font-mono font-black uppercase text-center mb-2.5 shadow-2xs">
-                        {teamA?.abbreviation || 'TEAM A'} SENDS ({teamATotalVal} PTS)
+                      <div className="border border-black bg-white px-2.5 py-1.5 text-xs font-mono font-black uppercase flex items-center justify-center gap-2 mb-2.5 shadow-2xs">
+                        {teamA?.logo_url && (
+                          <img
+                            src={teamA.logo_url}
+                            alt={teamA.abbreviation}
+                            className="w-5 h-5 object-contain shrink-0"
+                          />
+                        )}
+                        <span className="truncate">
+                          {teamA?.abbreviation || 'TEAM A'} ({teamA?.coach_name || 'Coach'}) SENDS ({teamATotalVal} PTS)
+                        </span>
                       </div>
 
                       {teamASendingPlayers.length === 0 && teamASendingPicks.length === 0 ? (
@@ -1368,8 +1659,17 @@ export default function TradesPage() {
                   {/* 4. TEAM B OUTGOING ASSET PACKAGE */}
                   <div className="w-full lg:w-[22%] bg-[#fdfaf5] border border-black p-3 flex flex-col justify-between shadow-2xs">
                     <div>
-                      <div className="border border-black bg-white px-2.5 py-1 text-xs font-mono font-black uppercase text-center mb-2.5 shadow-2xs">
-                        {teamB?.abbreviation || 'TEAM B'} SENDS ({teamBTotalVal} PTS)
+                      <div className="border border-black bg-white px-2.5 py-1.5 text-xs font-mono font-black uppercase flex items-center justify-center gap-2 mb-2.5 shadow-2xs">
+                        {teamB?.logo_url && (
+                          <img
+                            src={teamB.logo_url}
+                            alt={teamB.abbreviation}
+                            className="w-5 h-5 object-contain shrink-0"
+                          />
+                        )}
+                        <span className="truncate">
+                          {teamB?.abbreviation || 'TEAM B'} ({teamB?.coach_name || 'Coach'}) SENDS ({teamBTotalVal} PTS)
+                        </span>
                       </div>
 
                       {teamBSendingPlayers.length === 0 && teamBSendingPicks.length === 0 ? (
@@ -1423,9 +1723,14 @@ export default function TradesPage() {
                           <h4 className="font-black text-sm md:text-base uppercase tracking-tight leading-snug text-black">
                             {teamB?.team_name || 'Team B'}
                           </h4>
-                          <p className="text-[11px] text-neutral-600 font-sans mt-0.5 truncate">
+                          <p className="text-[11px] text-neutral-700 font-sans font-bold mt-0.5 truncate">
                             Coach: {teamB?.coach_name || 'Front Office'}
                           </p>
+                          {teamB?.discord_mention && (
+                            <span className="inline-block mt-1 px-1.5 py-0.5 bg-[#5865F2]/15 text-[#404EED] border border-[#5865F2]/40 text-[10px] font-mono font-bold">
+                              Discord Tag: @{teamB.coach_name} ({teamB.discord_mention})
+                            </span>
+                          )}
                         </div>
                         {teamB?.logo_url ? (
                           <img
