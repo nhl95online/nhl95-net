@@ -3279,6 +3279,64 @@ def recalculate_and_save_season_standings(s_id: int) -> Dict[str, Any]:
 # 4. AUTO-DETECTION & FULL SUPABASE SAVE PIPELINE
 # =====================================================================
 
+def resolve_active_league_season(is_orig6: bool, channel_name: str = "") -> int:
+    """
+    Dynamically resolves the currently active season_id for Original 6 (O01=39, O02=54, O03=55, ...)
+    or The W (W18=40, W19=41, W20=42, ...).
+    1. Checks channel_name for an explicit 4-digit year (e.g. 2013, 2014, 1927, 1928) or W/O code.
+    2. Queries league_schedule and league_playoffs to find the highest season in that league
+       with active unplayed schedule fixtures or active playoff series.
+    """
+    ch_low = (channel_name or "").lower()
+    yr_m = re.search(r"\b(19\d{2}|20\d{2})\b", ch_low)
+    if yr_m:
+        return resolve_season_id_from_year(int(yr_m.group(1)))
+    wo_m = re.search(r"\b([wo])(\d{1,2})\b", ch_low)
+    if wo_m:
+        pref = wo_m.group(1).upper()
+        num = int(wo_m.group(2))
+        if pref == "O":
+            return 39 if num == 1 else (52 + num)
+        if pref == "W" and num >= 18:
+            return 22 + num
+
+    candidate_ids = [39, 54, 55, 56, 57, 58] if is_orig6 else [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53]
+    default_id = 39 if is_orig6 else 40
+    id_list_str = ",".join(str(x) for x in candidate_ids)
+    try:
+        sched_rows = supabase.select(
+            "league_schedule",
+            {"select": "league_id,played", "league_id": f"in.({id_list_str})"},
+        ) or []
+        po_rows = supabase.select(
+            "league_playoffs",
+            {"select": "league_id,is_complete", "league_id": f"in.({id_list_str})"},
+        ) or []
+
+        active_unplayed_sids = {
+            int(r["league_id"])
+            for r in sched_rows
+            if r.get("league_id") is not None and str(r.get("played") or "").strip().lower() not in ("true", "1", "y", "yes")
+        }
+        active_po_sids = {
+            int(r["league_id"])
+            for r in po_rows
+            if r.get("league_id") is not None and not r.get("is_complete")
+        }
+        live_sids = active_unplayed_sids | active_po_sids
+        if live_sids:
+            return max(live_sids)
+
+        loaded_sids = {int(r["league_id"]) for r in sched_rows if r.get("league_id") is not None} | {
+            int(r["league_id"]) for r in po_rows if r.get("league_id") is not None
+        }
+        if loaded_sids:
+            return max(loaded_sids)
+    except Exception:
+        pass
+    return default_id
+
+
 def detect_context_from_discord(
     raw_bytes: bytes,
     channel_name: str,
@@ -3288,7 +3346,7 @@ def detect_context_from_discord(
     """
     Auto-detects (season_id, game_mode, allow_overwrite) from Discord channel name,
     message text, filename, and save state team bytes.
-    Default: Season 40 (W18), Regular Season, allow_overwrite=False.
+    Dynamically resolves the active season in The W or Original 6.
     """
     combined = f"{channel_name} {message_text} {filename}".lower()
 
@@ -3313,17 +3371,20 @@ def detect_context_from_discord(
         if prefix == "O":
             return (39 if num == 1 else (52 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
         if prefix == "W" and num >= 17:
-            return (40 if num in (17, 18) else (22 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+            return (resolve_active_league_season(False, channel_name) if num in (17, 18) else (22 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
 
     # 1. Explicit league/season keywords
     if re.search(r"\b(o01|o-league|o_league|oleague|original[\s_-]*6|s39|season[\s_-]*39)\b", combined):
-        return (39, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+        return (resolve_active_league_season(True, channel_name), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
 
     if re.search(r"\b(w17|s38|season[\s_-]*38|season[\s_-]*17)\b", combined):
-        return (40, "Playoffs", allow_overwrite)
+        return (resolve_active_league_season(False, channel_name), "Playoffs", allow_overwrite)
 
     if re.search(r"\b(w18|s40|season[\s_-]*40|w-league|w_league|wleague)\b", combined):
-        return (40, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+        return (resolve_active_league_season(False, channel_name), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+
+    active_w_sid = resolve_active_league_season(False, channel_name)
+    active_o_sid = resolve_active_league_season(True, channel_name)
 
     # 2. Inspect team bytes if no explicit season keyword was given
     if len(raw_bytes) >= 52000:
@@ -3333,14 +3394,14 @@ def detect_context_from_discord(
         home_byte = raw_bytes[48980 + offset]
         away_byte = raw_bytes[48982 + offset]
 
-        # O-League only has team indices 0..5. If bytes are 0..5, check if W18 has an active scheduled game
-        # between these indices; if not, and O01 (Season 39) does, auto-select Season 39!
+        # O-League only has team indices 0..5. If bytes are 0..5, check if active W season has an active scheduled game
+        # between these indices; if not, and active O season does, auto-select active O season!
         if home_byte <= 5 and away_byte <= 5:
             try:
-                w_cfg = get_season_config(40)
+                w_cfg = get_season_config(active_w_sid)
                 w_home_code = w_cfg.get("teamCodes", {}).get(str(home_byte), "")
                 w_away_code = w_cfg.get("teamCodes", {}).get(str(away_byte), "")
-                w_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": "eq.40"})
+                w_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": f"eq.{active_w_sid}"})
                 w_h = match_team_from_list(w_home_code, w_teams)
                 w_a = match_team_from_list(w_away_code, w_teams)
                 w_sched = []
@@ -3349,7 +3410,7 @@ def detect_context_from_discord(
                         "league_schedule",
                         {
                             "select": "game_id,played",
-                            "league_id": "eq.40",
+                            "league_id": f"eq.{active_w_sid}",
                             "home_team_id": f"eq.{w_h['team_id']}",
                             "away_team_id": f"eq.{w_a['team_id']}",
                         },
@@ -3357,10 +3418,10 @@ def detect_context_from_discord(
                 w_has_unplayed = any(str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes") for g in w_sched)
 
                 if not w_has_unplayed:
-                    o_cfg = get_season_config(39)
+                    o_cfg = get_season_config(active_o_sid)
                     o_home_code = o_cfg.get("teamCodes", {}).get(str(home_byte), "")
                     o_away_code = o_cfg.get("teamCodes", {}).get(str(away_byte), "")
-                    o_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": "eq.39"})
+                    o_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": f"eq.{active_o_sid}"})
                     o_h = match_team_from_list(o_home_code, o_teams)
                     o_a = match_team_from_list(o_away_code, o_teams)
                     if o_h and o_a and o_h.get("team_id") and o_a.get("team_id"):
@@ -3368,18 +3429,18 @@ def detect_context_from_discord(
                             "league_schedule",
                             {
                                 "select": "game_id,played",
-                                "league_id": "eq.39",
+                                "league_id": f"eq.{active_o_sid}",
                                 "home_team_id": f"eq.{o_h['team_id']}",
                                 "away_team_id": f"eq.{o_a['team_id']}",
                             },
                         )
                         o_has_unplayed = any(str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes") for g in o_sched)
                         if o_has_unplayed:
-                            return (39, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+                            return (active_o_sid, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
             except Exception:
                 pass
 
-    return (40, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+    return (active_w_sid, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
 
 
 def ingest_save_state_to_supabase(
@@ -4422,7 +4483,7 @@ def is_coach_muted(user_id: str, abbr: str) -> bool:
     return False
 
 
-def resolve_team_abbr_for_user(user_id: str, username: str, display_name: str, is_orig6: bool = False) -> Optional[str]:
+def resolve_team_abbr_for_user(user_id: str, username: str, display_name: str, is_orig6: bool = False, s_id: Optional[int] = None) -> Optional[str]:
     orig6_set = {"BOS", "CHI", "DET", "DTC", "MTL", "NYR", "TOR"}
     for abbr, meta in TEAM_DISCORD_META.items():
         if (abbr in orig6_set) != is_orig6:
@@ -4437,6 +4498,25 @@ def resolve_team_abbr_for_user(user_id: str, username: str, display_name: str, i
         nick = (meta.get("nick") or "").lower()
         if nick and (nick == low_u or nick == low_d or nick in low_u or nick in low_d):
             return abbr
+    # Fallback: check active season league_teams + league_coaches in Supabase
+    try:
+        active_sid = s_id or resolve_active_league_season(is_orig6)
+        rows = supabase.select(
+            "league_teams",
+            {"select": "abbreviation,league_coaches(coach_name)", "league_id": f"eq.{active_sid}"},
+        ) or []
+        for r in rows:
+            ab = (r.get("abbreviation") or "").strip().upper()
+            lc = r.get("league_coaches")
+            cname = ""
+            if isinstance(lc, dict):
+                cname = (lc.get("coach_name") or "").strip().lower()
+            elif isinstance(lc, list) and lc:
+                cname = (lc[0].get("coach_name") or "").strip().lower()
+            if ab and cname and (cname == low_u or cname == low_d or cname in low_u or cname in low_d):
+                return ab
+    except Exception:
+        pass
     return None
 
 
@@ -5236,7 +5316,7 @@ class NHL95SaveStateBot(discord.Client):
             or "193" in ch_name
             or "orig" in ch_name
         )
-        s_id = 39 if is_orig6 else 40
+        s_id = await asyncio.to_thread(resolve_active_league_season, is_orig6, f"{cat_name} {ch_name}")
 
         user_id_str = str(message.author.id)
         username_str = str(message.author.name or "")
@@ -5329,7 +5409,7 @@ class NHL95SaveStateBot(discord.Client):
         lookup_abbr = "TEG" if upper_text == "THT" else ("KAR" if upper_text == "KAK" else upper_text)
         if lookup_abbr in TEAM_DISCORD_META:
             orig6_set = {"BOS", "CHI", "DET", "DTC", "MTL", "NYR", "TOR"}
-            target_sid = 39 if lookup_abbr in orig6_set else 40
+            target_sid = await asyncio.to_thread(resolve_active_league_season, lookup_abbr in orig6_set, f"{cat_name} {ch_name}")
             await send_team_remaining_and_pings(lookup_abbr, target_sid, ping_coaches=True)
             return
 
