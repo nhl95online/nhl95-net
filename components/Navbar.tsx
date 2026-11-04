@@ -149,6 +149,7 @@ export default function Navbar() {
         </Link>
 
         <Link href="/standings" className="hover:underline transition">Standings</Link>
+        <Link href="/power-rankings" className="hover:underline transition text-red-900 font-black">Power Rankings</Link>
         <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
         <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
 
@@ -251,6 +252,13 @@ export default function Navbar() {
             className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
           >
             Standings <span>→</span>
+          </Link>
+          <Link 
+            href="/power-rankings" 
+            onClick={closeMobileMenu}
+            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between text-red-900 font-black"
+          >
+            Power Rankings <span>→</span>
           </Link>
           <Link 
             href="/playoffs" 
