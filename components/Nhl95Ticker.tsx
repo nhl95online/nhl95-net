@@ -3,17 +3,18 @@
 import React, { useEffect, useState } from 'react';
 
 const FALLBACK_TICKER_ITEMS: string[] = [
+  '🏆 SERIES WIN (3-1): SUMTER TRASH (SUM) TAKES THE SERIES 3-1 OVER BARRIE DOLTS (BAR) — COACH PINK ELEPHANTS STATEMENT SERIES',
   'LLOYD10XMAS SUGGESTS IRRATIONAL KRAV SHOULD BE THE FACE OF THE LEAGUE, GENIUS',
+  '🚨 BLOCKBUSTER TRADE [W18]: AUTOBAHN (AUT) SENDS F MARTIN ST. LOUIS, F BRAD RICHARDS TO BARRIE DOLTS (BAR) FOR F JAMES NEAL, F GABRIEL LANDESKOG!',
   'PINK ELEPHANTS OFFERS BLIND PICK SWAP TO END TANKING DEBATE, BOLD STRATEGY',
+  '🥅 SHUTOUT FINAL: TAIPEI TYPHOONS (TAI) 4, ROCKFORD VILLAINS (ROC) 0 — COACH NATHANMB LOCKS DOWN THE CREASE!',
   'SEGATHON SHARES WE GOT ONE ANNIE POTTS GIF, SECRET CODE FOR CHAOS',
+  '🚨 FINAL SCORE (OT): ITALY EBC (ITA) 4, THUNDER BAY PIKE (TBP) 3 — COACH MARCUS VICK EBC WALKS IT OFF IN OVERTIME!',
   'GAELICGOPHER TRADES GETZLAF FOR BOTH SEDINS, $97, AND A SLICE OF BLUEBERRY PIE, PURE AURA',
+  '🧹 SERIES SWEEP (2-0): GRAND RIVER HERONS (GRH) TAKES THE SERIES 2-0 OVER HAMILTON MUSTANGS (HAM) — COACH MOSES BOGART STATEMENT SERIES',
   'ULTRAMAGNUS DECLARES BRING BACK THE OLD SHITTY BILL, WIN THE SHITTY WIN THE TOP PICK',
   'TICKLEPUSS SHARES JIM HALPERT FACE GIF, LOCKER ROOM ERUPTS',
   'MARCUSVICKEBC ON THE TRADE BLOCK: WILL TRADE KAR 1ST ROUND FOR OVECHKIN & ITA 1ST FOR CROSBY',
-  'KRAV1 UNVEILS 5-TIER WEIGHTED LOTTERY PROPOSAL IN #BELL-N-BELL, COMMISSIONER TAKING NOTES',
-  'MARYLANDMIKE DEMANDS ALL SIMS BE A SPLIT: W 2-1, L 1-2, SHOTS FIRED',
-  'ADOLF OLIVER NIPPLES CLAIMS #BELL-N-BELL AS HIS CHANNEL NOW, NO FURTHER QUESTIONS',
-  'SHAWNMB WISHES FOR A RULE THAT PEOPLE CAN ONLY POST ONCE EVERY 30 MINUTES, INSTANT CLASSIC',
 ];
 
 function formatBriefingToTickerItems(briefingData: any): string[] {
@@ -152,12 +153,20 @@ export default function Nhl95Ticker({ className = '' }: { className?: string }) 
       <div className="flex-1 overflow-hidden flex items-center relative bg-[#0b0e14]">
         <div className="nhl95-ticker-track items-center whitespace-nowrap">
           {loopItems.map((text, idx) => {
-            const colorClass =
-              idx % 3 === 0
-                ? 'text-white font-black'
-                : idx % 3 === 1
-                  ? 'text-amber-400 font-black'
-                  : 'text-slate-300 font-bold';
+            const isSeries = /SERIES WIN|SERIES SWEEP/i.test(text);
+            const isTrade = /BLOCKBUSTER TRADE|OFFICIAL TRADE/i.test(text);
+            const isScore = /FINAL SCORE|SHUTOUT FINAL/i.test(text);
+            const colorClass = isSeries
+              ? 'text-emerald-400 font-black'
+              : isTrade
+                ? 'text-amber-400 font-black'
+                : isScore
+                  ? 'text-sky-300 font-black'
+                  : idx % 3 === 0
+                    ? 'text-white font-black'
+                    : idx % 3 === 1
+                      ? 'text-amber-400 font-black'
+                      : 'text-slate-300 font-bold';
             return (
               <div key={idx} className="inline-flex items-center">
                 <span className={`text-[11px] uppercase tracking-wide px-2 ${colorClass}`}>

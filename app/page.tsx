@@ -1514,8 +1514,6 @@ export default function HomePage() {
     <div className="w-full min-h-screen bg-[#f4f1ea] text-black font-serif p-1 sm:p-3 md:p-4">
       <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 text-center">
         <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-      <Nhl95Ticker className="mt-3" />
-
       </header>
 
       {/* Real-World NHL Current News Wire Bar (only shown when live/updated articles exist, not static placeholders) */}
