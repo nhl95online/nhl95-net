@@ -3313,14 +3313,14 @@ def detect_context_from_discord(
         if prefix == "O":
             return (39 if num == 1 else (52 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
         if prefix == "W" and num >= 17:
-            return (38 if num == 17 else (22 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+            return (40 if num in (17, 18) else (22 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
 
     # 1. Explicit league/season keywords
     if re.search(r"\b(o01|o-league|o_league|oleague|original[\s_-]*6|s39|season[\s_-]*39)\b", combined):
         return (39, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
 
     if re.search(r"\b(w17|s38|season[\s_-]*38|season[\s_-]*17)\b", combined):
-        return (38, "Playoffs", allow_overwrite)
+        return (40, "Playoffs", allow_overwrite)
 
     if re.search(r"\b(w18|s40|season[\s_-]*40|w-league|w_league|wleague)\b", combined):
         return (40, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
@@ -4443,12 +4443,14 @@ def resolve_team_abbr_for_user(user_id: str, username: str, display_name: str, i
 def get_remaining_opponents_for_team(abbr: str, s_id: int = 40) -> Tuple[int, List[Tuple[str, int]]]:
     """
     Returns (total_remaining_games, [(opp_abbr, remaining_count), ...]) for `abbr` in season `s_id`.
+    Checks regular-season schedule first; if all regular-season games are complete, checks active Playoff series in `s_id`.
     """
     abbr_up = abbr.strip().upper()
     if abbr_up == "THT":
         abbr_up = "TEG"
     elif abbr_up == "KAK":
         abbr_up = "KAR"
+    abbr_candidates = {"DET", "DTC"} if abbr_up in ("DET", "DTC") else {abbr_up}
 
     teams_rows = supabase.select("league_teams", {"select": "*", "league_id": f"eq.{s_id}"}) or []
     if not teams_rows:
@@ -4461,7 +4463,7 @@ def get_remaining_opponents_for_team(abbr: str, s_id: int = 40) -> Tuple[int, Li
             tid = int(t["team_id"])
             t_ab = (t.get("abbreviation") or "").strip().upper()
             tid_to_abbr[tid] = t_ab
-            if t_ab == abbr_up and (int(t.get("league_id") or 0) == s_id or target_tid is None):
+            if t_ab in abbr_candidates and (int(t.get("league_id") or 0) == s_id or target_tid is None):
                 target_tid = tid
 
     if target_tid is None:
@@ -4476,7 +4478,7 @@ def get_remaining_opponents_for_team(abbr: str, s_id: int = 40) -> Tuple[int, Li
     for g in sched_rows:
         gid = str(g.get("game_id") or "").strip()
         raw_played = str(g.get("played") or "").strip().lower()
-        is_played = raw_played in ("true", "1", "y") or (gid and gid in played_game_ids)
+        is_played = raw_played in ("true", "1", "y", "yes") or (gid and gid in played_game_ids)
         if is_played:
             continue
         h_id = int(g.get("home_team_id") or 0)
@@ -4489,6 +4491,36 @@ def get_remaining_opponents_for_team(abbr: str, s_id: int = 40) -> Tuple[int, Li
             opp_ab = tid_to_abbr[h_id]
             opp_counts[opp_ab] = opp_counts.get(opp_ab, 0) + 1
             total_rem += 1
+
+    # If all regular-season games are complete, check if this team has an active Playoff series in s_id
+    if total_rem == 0:
+        try:
+            po_series = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"}) or []
+            active_po = [
+                m for m in po_series
+                if not m.get("is_complete")
+                and (int(m.get("home_team_id") or 0) == target_tid or int(m.get("away_team_id") or 0) == target_tid)
+                and int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
+            ]
+            for m in active_po:
+                pid = int(m.get("playoff_id") or 0)
+                h_id = int(m.get("home_team_id") or 0)
+                a_id = int(m.get("away_team_id") or 0)
+                opp_id = a_id if h_id == target_tid else h_id
+                opp_ab = tid_to_abbr.get(opp_id)
+                if not opp_ab:
+                    continue
+                s_len = int(m.get("series_length") or 7)
+                wins_needed = math.ceil(s_len / 2.0)
+                po_games = supabase.select("league_playoff_gamestats", {"select": "home_team_id,away_team_id,home_score,away_score", "playoff_id": f"eq.{pid}"}) or []
+                h_wins = sum(1 for pg in po_games if int(pg.get("home_score") or 0) > int(pg.get("away_score") or 0) and int(pg.get("home_team_id") or 0) == h_id) + sum(1 for pg in po_games if int(pg.get("away_score") or 0) > int(pg.get("home_score") or 0) and int(pg.get("away_team_id") or 0) == h_id)
+                a_wins = len(po_games) - h_wins
+                if h_wins < wins_needed and a_wins < wins_needed:
+                    rem_in_series = max(1, s_len - len(po_games))
+                    opp_counts[opp_ab] = opp_counts.get(opp_ab, 0) + rem_in_series
+                    total_rem += rem_in_series
+        except Exception:
+            pass
 
     sorted_opps = sorted(opp_counts.items(), key=lambda x: (-x[1], x[0]))
     return (total_rem, sorted_opps)
@@ -4527,10 +4559,35 @@ def render_remaining_opponents_png(opp_counts: List[Tuple[str, int]]) -> Optiona
             except Exception:
                 pass
 
+    # Also build a quick map of logo_url from league_teams for Original 6 & W-League fallback
+    db_logo_map: Dict[str, str] = {}
+    try:
+        for t in (supabase.select("league_teams", {"select": "abbreviation,logo_url"}) or []):
+            ab = (t.get("abbreviation") or "").strip().upper()
+            lu = (t.get("logo_url") or "").strip()
+            if ab and lu and ab not in db_logo_map:
+                db_logo_map[ab] = lu
+    except Exception:
+        pass
+
     x = pad_x
     for opp_abbr, cnt in opp_counts:
-        logo_url = TEAM_DISCORD_META.get(opp_abbr, {}).get("logo") or f"{SUPABASE_URL}/storage/v1/object/public/Team%20Logos/{opp_abbr}.png"
-        logo_im = _fetch_pil_image(logo_url)
+        cand_urls = [
+            db_logo_map.get(opp_abbr),
+            TEAM_DISCORD_META.get(opp_abbr, {}).get("logo"),
+            f"{SUPABASE_URL}/storage/v1/object/public/nhl%20logo/{opp_abbr}.png",
+            f"{SUPABASE_URL}/storage/v1/object/public/logos/{opp_abbr}.png",
+            f"{SUPABASE_URL}/storage/v1/object/public/Team%20Logos/{opp_abbr}.png",
+        ]
+        if opp_abbr == "DTC":
+            cand_urls.insert(0, db_logo_map.get("DET"))
+            cand_urls.append(f"{SUPABASE_URL}/storage/v1/object/public/nhl%20logo/DET.png")
+        logo_im = None
+        for u in cand_urls:
+            if u:
+                logo_im = _fetch_pil_image(u)
+                if logo_im is not None:
+                    break
         if logo_im is not None:
             lw, lh = 34, 30
             l_res = logo_im.resize((lw, lh), Image.Resampling.LANCZOS)
@@ -5156,8 +5213,10 @@ class NHL95SaveStateBot(discord.Client):
             return
 
         ch_name = (message.channel.name or "").lower()
-        # Listen for game commands in #season-games, #games, #test, #testing
-        if ch_name not in ("season-games", "games", "test", "testing") and "season-games" not in ch_name:
+        # Listen for game commands in any #season-games, #2013-games, #games, #test, #testing channel
+        if "boxscore" in ch_name or "save" in ch_name:
+            return
+        if "game" not in ch_name and "test" not in ch_name:
             return
 
         raw_text = (message.clean_content or message.content or "").strip()
@@ -5165,7 +5224,18 @@ class NHL95SaveStateBot(discord.Client):
             return
 
         upper_text = re.sub(r"[!?.]+$", "", raw_text.upper()).strip()
-        is_orig6 = ch_name == "games" or "192" in ch_name or "193" in ch_name or "orig" in ch_name
+        cat_id = getattr(message.channel, "category_id", None)
+        cat_name = (getattr(getattr(message.channel, "category", None), "name", "") or "").lower()
+        is_orig6 = (
+            cat_id == 1459581291476422696
+            or "orig" in cat_name
+            or "192" in cat_name
+            or "193" in cat_name
+            or ch_name == "games"
+            or "192" in ch_name
+            or "193" in ch_name
+            or "orig" in ch_name
+        )
         s_id = 39 if is_orig6 else 40
 
         user_id_str = str(message.author.id)
@@ -5198,57 +5268,45 @@ class NHL95SaveStateBot(discord.Client):
                 await message.channel.send(file=br_file)
             return
 
-        # 3. SEASON GAMES -> Ping all unmuted coaches that still have games left vs the sender
-        if upper_text in ("SEASON GAMES", "SEASONGAMES"):
-            user_abbr = resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6)
-            if not user_abbr:
-                return
-            t_meta = TEAM_DISCORD_META.get(user_abbr, {})
-            emoji_str = t_meta.get("emoji") or f"**{user_abbr}**"
-            nick = t_meta.get("nick") or display_str
+        async def send_team_remaining_and_pings(target_abbr: str, target_sid: int, ping_coaches: bool = True) -> None:
+            t_meta = TEAM_DISCORD_META.get(target_abbr, {})
+            emoji_str = t_meta.get("emoji") or f"**{target_abbr}**"
+            if not emoji_str.startswith("<:") and message.guild:
+                for ge in message.guild.emojis:
+                    if ge.name.upper() in (target_abbr, "DET" if target_abbr == "DTC" else target_abbr):
+                        emoji_str = str(ge)
+                        break
+            nick = t_meta.get("nick") or display_str or target_abbr
 
-            total_rem, opp_counts = await asyncio.to_thread(get_remaining_opponents_for_team, user_abbr, s_id)
+            total_rem, opp_counts = await asyncio.to_thread(get_remaining_opponents_for_team, target_abbr, target_sid)
             if total_rem <= 0 or not opp_counts:
-                await message.channel.send(f"{emoji_str}\n{user_abbr} season is complete.")
+                await message.channel.send(f"{emoji_str}\n{target_abbr} season is complete.")
                 return
 
-            mentions: List[str] = []
-            for opp_abbr, _cnt in opp_counts:
-                opp_meta = TEAM_DISCORD_META.get(opp_abbr, {})
-                opp_uid = opp_meta.get("user_id") or ""
-                if await asyncio.to_thread(is_coach_muted, opp_uid, opp_abbr):
-                    continue
-                if opp_uid:
-                    mention_tag = f"<@{opp_uid}>"
-                    if mention_tag not in mentions:
-                        mentions.append(mention_tag)
-                elif opp_meta.get("nick"):
-                    mentions.append(f"@{opp_meta['nick']}")
+            if ping_coaches:
+                mentions: List[str] = []
+                for opp_abbr, _cnt in opp_counts:
+                    opp_key = "DET" if opp_abbr == "DTC" and "DTC" not in TEAM_DISCORD_META else opp_abbr
+                    opp_meta = TEAM_DISCORD_META.get(opp_key, {})
+                    opp_uid = opp_meta.get("user_id") or ""
+                    if await asyncio.to_thread(is_coach_muted, opp_uid, opp_key):
+                        continue
+                    if opp_uid:
+                        mention_tag = f"<@{opp_uid}>"
+                        if mention_tag not in mentions:
+                            mentions.append(mention_tag)
+                    elif opp_meta.get("nick"):
+                        mentions.append(f"@{opp_meta['nick']}")
 
-            mentions_line = "".join(mentions) if mentions else "*(Remaining opponents have notifications muted)*"
-            if user_abbr == "TBP":
-                bottom_line = f":trophy: Games vs {nick} :trophy:"
-            elif user_abbr == "RIC":
-                bottom_line = f":rotating_light: Free wins vs {nick} available :rotating_light:"
-            else:
-                bottom_line = f"Games vs {nick} ?"
+                mentions_line = " ".join(mentions) if mentions else "*(Remaining opponents have notifications muted)*"
+                if target_abbr == "TBP":
+                    bottom_line = f":trophy: Games vs {nick} :trophy:"
+                elif target_abbr == "RIC":
+                    bottom_line = f":rotating_light: Free wins vs {nick} available :rotating_light:"
+                else:
+                    bottom_line = f"Games vs {nick} ?"
 
-            await message.channel.send(f"{mentions_line}\n{emoji_str}\n{bottom_line}")
-            return
-
-        # 4. 3-Letter Team Abbreviation (e.g. TEG, DHG, PIT, SVF, PRO, etc.) -> Remaining opponents logo strip + count
-        lookup_abbr = "TEG" if upper_text == "THT" else ("KAR" if upper_text == "KAK" else upper_text)
-        if lookup_abbr in TEAM_DISCORD_META:
-            orig6_set = {"BOS", "CHI", "DET", "DTC", "MTL", "NYR", "TOR"}
-            target_sid = 39 if lookup_abbr in orig6_set else 40
-            t_meta = TEAM_DISCORD_META[lookup_abbr]
-            emoji_str = t_meta.get("emoji") or f"**{lookup_abbr}**"
-            nick = t_meta.get("nick") or lookup_abbr
-
-            total_rem, opp_counts = await asyncio.to_thread(get_remaining_opponents_for_team, lookup_abbr, target_sid)
-            if total_rem <= 0 or not opp_counts:
-                await message.channel.send(f"{emoji_str}\n{lookup_abbr} season is complete.")
-                return
+                await message.channel.send(f"{mentions_line}\n{emoji_str}\n{bottom_line}")
 
             strip_bytes = await asyncio.to_thread(render_remaining_opponents_png, opp_counts)
             if strip_bytes:
@@ -5258,6 +5316,21 @@ class NHL95SaveStateBot(discord.Client):
                 opp_txt = ", ".join(f"{ab} ({c})" for ab, c in opp_counts)
                 await message.channel.send(content=f"`{nick} remaining opponents`: {opp_txt}")
             await message.channel.send(content=f"`Games remaining: {total_rem}`")
+
+        # 3. SEASON GAMES / GAMES -> Ping all unmuted coaches that still have games left vs the sender + show logo strip
+        if upper_text in ("SEASON GAMES", "SEASONGAMES", "GAMES", "GAMES LEFT", "REMAINING"):
+            user_abbr = resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6)
+            if not user_abbr:
+                return
+            await send_team_remaining_and_pings(user_abbr, s_id, ping_coaches=True)
+            return
+
+        # 4. 3-Letter Team Abbreviation (e.g. TEG, DHG, PIT, SVF, PRO, BOS, MTL, etc.) -> Ping coaches + Remaining opponents logo strip + count
+        lookup_abbr = "TEG" if upper_text == "THT" else ("KAR" if upper_text == "KAK" else upper_text)
+        if lookup_abbr in TEAM_DISCORD_META:
+            orig6_set = {"BOS", "CHI", "DET", "DTC", "MTL", "NYR", "TOR"}
+            target_sid = 39 if lookup_abbr in orig6_set else 40
+            await send_team_remaining_and_pings(lookup_abbr, target_sid, ping_coaches=True)
             return
 
     async def on_message(self, message: discord.Message):
@@ -5424,12 +5497,20 @@ def main():
     intents.messages = True
     intents.reactions = True
 
-    bot = NHL95SaveStateBot(
-        backfill_hours=args.backfill_hours,
-        allowed_channel_ids=channel_ids,
-        intents=intents,
-    )
-    bot.run(DISCORD_BOT_TOKEN)
+    import time
+    while True:
+        try:
+            bot = NHL95SaveStateBot(
+                backfill_hours=args.backfill_hours,
+                allowed_channel_ids=channel_ids,
+                intents=intents,
+            )
+            bot.run(DISCORD_BOT_TOKEN, reconnect=True)
+        except KeyboardInterrupt:
+            break
+        except Exception as crash_err:
+            print(f"⚠️ Bot disconnected or encountered error ({crash_err}), restarting in 5s...")
+            time.sleep(5)
 
 
 if __name__ == "__main__":

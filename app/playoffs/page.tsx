@@ -1471,7 +1471,7 @@ export default function PlayoffBracket() {
         if (!idNum) return;
         const name = l.league_name || l.name || `W${String(idNum).padStart(2, '0')}`;
         const status = String(l.status || '').toLowerCase();
-        if (activeGameLeagueIds.has(idNum) || status === 'active' || idNum >= 38) {
+        if (activeGameLeagueIds.has(idNum) || status === 'active' || (idNum >= 38 && idNum <= 40)) {
           uniqueMap.set(idNum, {
             league_id: idNum,
             league_name: String(name).trim(),
@@ -1500,7 +1500,7 @@ export default function PlayoffBracket() {
       const list = Array.from(uniqueMap.values()).sort((a, b) => Number(b.league_id) - Number(a.league_id));
       setSeasons(list);
       if (list.length > 0) {
-        const latestWithPlayoffs = list.find(s => s.hasOfficialPlayoffs) || list[0];
+        const latestWithPlayoffs = list.find(s => Number(s.league_id) === 40) || list.find(s => s.hasOfficialPlayoffs) || list[0];
         setSelectedLeagueId(latestWithPlayoffs.league_id);
       }
     };

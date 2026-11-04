@@ -706,8 +706,8 @@ export default function UploadPage() {
       const lowerName = (f.name || '').toLowerCase();
       let effectiveSeasonId = selectedSeasonId;
       if (/\b(w17|s38|season[_\s-]*38|season[_\s-]*17)\b/.test(lowerName)) {
-        effectiveSeasonId = 38;
-        setSelectedSeasonId(38);
+        effectiveSeasonId = 40;
+        setSelectedSeasonId(40);
         setGameMode('Playoffs');
       } else if (/\b(playoff|playoffs|po|qf|sf|cf|final|finals|series|rd[1-4]|r[1-4])\b/.test(lowerName)) {
         setGameMode('Playoffs');
@@ -1342,7 +1342,7 @@ export default function UploadPage() {
               if (file) processFile(file);
             }}
           >
-            {gameMode === 'Playoffs' ? (
+            {false ? (
               <>
                 <option value={W17_SEASON_CONFIG.seasonId}>
                   {W17_SEASON_CONFIG.seasonName}
@@ -1392,7 +1392,7 @@ export default function UploadPage() {
               onClick={() => {
                 setGameMode('Playoffs');
                 if (Number(selectedSeasonId) === 40) {
-                  setSelectedSeasonId(38);
+                  setSelectedSeasonId(40);
                 }
               }}
               className={`px-3 py-1 border-l-2 border-black transition cursor-pointer ${

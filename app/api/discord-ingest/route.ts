@@ -49,7 +49,7 @@ function detectDiscordContext(
   }
 
   if (/\b(w17|s38|season[\s_-]*38|season[\s_-]*17)\b/.test(combined)) {
-    return { seasonId: 38, gameMode: 'Playoffs', allowOverwrite };
+    return { seasonId: 40, gameMode: 'Playoffs', allowOverwrite };
   }
 
   if (/\b(w18|s40|season[\s_-]*40|w-league|w_league|wleague)\b/.test(combined)) {
