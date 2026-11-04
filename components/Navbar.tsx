@@ -165,12 +165,15 @@ export default function Navbar() {
           {isRostersOpen && (
             <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
               <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">Teams</Link>
+              <Link href="/mod-my-team" className="px-4 py-2 hover:bg-black hover:text-white font-black transition-colors text-amber-900">Mod My Team</Link>
               <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
               <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
               <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
             </div>
           )}
         </div>
+
+        <Link href="/mod-my-team" className="hover:underline transition text-amber-900 font-black">Mod My Team</Link>
 
         {/* Desktop Dropdown for Stats */}
         <div 
@@ -292,6 +295,13 @@ export default function Navbar() {
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-red-800"
                 >
                   • Teams
+                </Link>
+                <Link 
+                  href="/mod-my-team" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-black text-amber-900"
+                >
+                  • Mod My Team (NOSE & Lineup)
                 </Link>
                 <Link 
                   href="/trades" 
