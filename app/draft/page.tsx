@@ -2765,6 +2765,198 @@ export default function DraftPage() {
     };
   }, [activeRosterTeam, activeFloorSeasonMeta, floorLeagueId, draftTeamsList, selectedPicksForFloor, allYearPlayersByNorm, prevSeasonDbRosters, rosterCareerByNorm, rookieClassYear]);
 
+  // Compute automated Team Needs & Career Longevity analysis for activeRosterTeam
+  const activeTeamNeeds = useMemo(() => {
+    const needs: Array<{
+      id: string;
+      pos: 'G' | 'D' | 'F';
+      priority: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+      label: string;
+      reason: string;
+    }> = [];
+
+    if (!activeRosterTeam || activeTeamRosterData.totalCount === 0) return needs;
+
+    const enrichPlayer = (p: any) => {
+      const seasons =
+        p.careerSeasons && p.careerSeasons.length > 0
+          ? p.careerSeasons
+          : [{ year: Number(rookieClassYear) || 2014, ovr: p.ovr }];
+      const curOvr = Number(seasons[0]?.ovr || p.ovr || 0);
+      const extraYears = Math.max(0, seasons.length - 1);
+      const futureOvrs = seasons.slice(1).map((s: any) => Number(s.ovr || 0));
+      const lastOvr = futureOvrs.length > 0 ? futureOvrs[futureOvrs.length - 1] : curOvr;
+      const maxFutureOvr = futureOvrs.length > 0 ? Math.max(...futureOvrs) : curOvr;
+      const avgFutureOvr =
+        futureOvrs.length > 0
+          ? Math.round(futureOvrs.reduce((a: number, b: number) => a + b, 0) / futureOvrs.length)
+          : curOvr;
+      const isDeclining =
+        extraYears === 0 ||
+        (futureOvrs.length > 0 && (avgFutureOvr < curOvr - 3 || lastOvr < curOvr - 5 || maxFutureOvr < 65));
+      return {
+        ...p,
+        curOvr,
+        extraYears,
+        lastOvr,
+        maxFutureOvr,
+        avgFutureOvr,
+        isDeclining
+      };
+    };
+
+    const gSorted = activeTeamRosterData.goalies.map(enrichPlayer).sort((a, b) => b.curOvr - a.curOvr);
+    const dSorted = activeTeamRosterData.skaters
+      .filter(s => s.rolePos === 'D')
+      .map(enrichPlayer)
+      .sort((a, b) => b.curOvr - a.curOvr);
+    const fSorted = activeTeamRosterData.skaters
+      .filter(s => s.rolePos !== 'D')
+      .map(enrichPlayer)
+      .sort((a, b) => b.curOvr - a.curOvr);
+
+    // 1. Goalie Needs
+    const g1 = gSorted[0];
+    const g2 = gSorted[1];
+    const hasLongTermFranchiseG = gSorted.some(
+      g => g.extraYears >= 4 && (g.curOvr >= 75 || g.maxFutureOvr >= 78)
+    );
+
+    if (!g1) {
+      needs.push({
+        id: 'need-g-none',
+        pos: 'G',
+        priority: 'CRITICAL',
+        label: 'Franchise Starting Goalie',
+        reason: 'No goaltender currently rostered'
+      });
+    } else if (g1.extraYears <= 2 && !hasLongTermFranchiseG) {
+      const yrsText = g1.extraYears === 0 ? 'Final yr' : `+${g1.extraYears} yr${g1.extraYears === 1 ? '' : 's'} left`;
+      const trendText = g1.isDeclining || g1.extraYears <= 2 ? ' & declining' : '';
+      const backupNote = g2
+        ? ` • Backup ${g2.name} (${g2.curOvr} OVR, ${g2.extraYears === 0 ? 'Final yr' : `+${g2.extraYears} yr${g2.extraYears === 1 ? '' : 's'}`})`
+        : '';
+      needs.push({
+        id: 'need-g-longterm',
+        pos: 'G',
+        priority: 'CRITICAL',
+        label: 'Long-Term / Franchise Goalie',
+        reason: `${g1.name} (${g1.curOvr} OVR, ${yrsText}${trendText})${backupNote}`
+      });
+    } else if (g1.curOvr < 73 && g1.maxFutureOvr < 78) {
+      needs.push({
+        id: 'need-g-starter',
+        pos: 'G',
+        priority: 'HIGH',
+        label: 'Franchise #1 Goalie Upgrade',
+        reason: `Starter ${g1.name} is ${g1.curOvr} OVR (+${g1.extraYears} yrs) — needs elite #1 netminder`
+      });
+    } else if (!g2 || g2.curOvr < 55 || g2.extraYears <= 1) {
+      needs.push({
+        id: 'need-g-backup',
+        pos: 'G',
+        priority: 'MEDIUM',
+        label: 'Long-Term Backup / #2 Goalie',
+        reason: g2
+          ? `${g2.name} (${g2.curOvr} OVR, ${g2.extraYears === 0 ? 'Final yr' : `+${g2.extraYears} yr${g2.extraYears === 1 ? '' : 's'} left`})`
+          : 'Only 1 goalie on roster'
+      });
+    }
+
+    // 2. Defensemen Needs
+    const dTop = dSorted[0];
+    const dWeak = dSorted[dSorted.length - 1];
+    const dAgingCore = dSorted.filter(d => d.extraYears <= 2 && d.curOvr >= 68);
+
+    if (dSorted.length < 3) {
+      needs.push({
+        id: 'need-d-count',
+        pos: 'D',
+        priority: 'HIGH',
+        label: 'Starting Defenseman',
+        reason: `Only ${dSorted.length} defensemen on roster`
+      });
+    } else if (!dTop || dTop.curOvr < 75) {
+      needs.push({
+        id: 'need-d-no1',
+        pos: 'D',
+        priority: 'HIGH',
+        label: '#1 Franchise Defenseman',
+        reason: `Top D ${dTop?.name || 'N/A'} is ${dTop?.curOvr || 0} OVR — lacks elite top-pair anchor`
+      });
+    } else if (dAgingCore.length > 0) {
+      const d0 = dAgingCore[0];
+      const yrsText = d0.extraYears === 0 ? 'Final yr' : `+${d0.extraYears} yr${d0.extraYears === 1 ? '' : 's'} left`;
+      needs.push({
+        id: 'need-d-longterm',
+        pos: 'D',
+        priority: 'HIGH',
+        label: 'Long-Term Top-4 Defenseman',
+        reason: `${d0.name} (${d0.curOvr} OVR, ${yrsText}${d0.isDeclining ? ' & declining' : ''})`
+      });
+    } else if (dWeak && dWeak.curOvr < 65) {
+      const dSecondWeak = dSorted.length >= 2 ? dSorted[dSorted.length - 2] : null;
+      needs.push({
+        id: 'need-d-depth',
+        pos: 'D',
+        priority: dWeak.curOvr < 55 ? 'HIGH' : 'MEDIUM',
+        label: dWeak.curOvr < 55 ? 'Top-4 Defenseman Upgrade' : 'Depth Defenseman Upgrade',
+        reason:
+          dSecondWeak && dSecondWeak.curOvr < 65
+            ? `${dWeak.name} (${dWeak.curOvr} OVR) & ${dSecondWeak.name} (${dSecondWeak.curOvr} OVR)`
+            : `Upgrade over ${dWeak.name} (${dWeak.curOvr} OVR, +${dWeak.extraYears} yrs)`
+      });
+    }
+
+    // 3. Forwards Needs
+    const fTop = fSorted[0];
+    const fWeak = fSorted[fSorted.length - 1];
+    const fAgingCore = fSorted.filter(f => f.extraYears <= 2 && f.curOvr >= 72);
+
+    if (fSorted.length < 5) {
+      needs.push({
+        id: 'need-f-count',
+        pos: 'F',
+        priority: 'HIGH',
+        label: 'Starting Forward',
+        reason: `Only ${fSorted.length} forwards on roster`
+      });
+    } else if (!fTop || fTop.curOvr < 80) {
+      needs.push({
+        id: 'need-f-no1',
+        pos: 'F',
+        priority: 'HIGH',
+        label: 'Franchise 1st-Line Scorer',
+        reason: `Top F ${fTop?.name || 'N/A'} is ${fTop?.curOvr || 0} OVR — needs primary offensive weapon`
+      });
+    } else if (fAgingCore.length > 0) {
+      const f0 = fAgingCore[0];
+      const yrsText = f0.extraYears === 0 ? 'Final yr' : `+${f0.extraYears} yr${f0.extraYears === 1 ? '' : 's'} left`;
+      needs.push({
+        id: 'need-f-longterm',
+        pos: 'F',
+        priority: 'HIGH',
+        label: 'Long-Term Top-6 Forward',
+        reason: `${f0.name} (${f0.curOvr} OVR, ${yrsText}${f0.isDeclining ? ' & declining' : ''})`
+      });
+    } else if (fWeak && fWeak.curOvr < 68) {
+      const fSecondWeak = fSorted.length >= 2 ? fSorted[fSorted.length - 2] : null;
+      needs.push({
+        id: 'need-f-depth',
+        pos: 'F',
+        priority: fWeak.curOvr < 58 ? 'HIGH' : 'MEDIUM',
+        label: 'Scoring Winger / Forward Upgrade',
+        reason:
+          fSecondWeak && fSecondWeak.curOvr < 68
+            ? `${fWeak.name} (${fWeak.curOvr} OVR) & ${fSecondWeak.name} (${fSecondWeak.curOvr} OVR)`
+            : `Upgrade over ${fWeak.name} (${fWeak.curOvr} OVR, +${fWeak.extraYears} yrs)`
+      });
+    }
+
+    const pOrder = { CRITICAL: 0, HIGH: 1, MEDIUM: 2 };
+    return needs.sort((a, b) => pOrder[a.priority] - pOrder[b.priority]);
+  }, [activeRosterTeam, activeTeamRosterData, rookieClassYear]);
+
   // Load remaining career seasons (from current draft season onward) for all players on activeRosterTeam
   useEffect(() => {
     const allRosterPlayers = [...activeTeamRosterData.skaters, ...activeTeamRosterData.goalies];
@@ -3884,6 +4076,30 @@ export default function DraftPage() {
                         <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white truncate mt-0.5">
                           {nextEmptyPickSlot.team}
                         </h2>
+                        {activeTeamNeeds.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1 font-mono">
+                            <span className="text-[9px] font-black uppercase text-amber-400 tracking-wider">
+                              TEAM NEEDS:
+                            </span>
+                            {activeTeamNeeds.map(nd => (
+                              <button
+                                key={`podium-${nd.id}`}
+                                type="button"
+                                onClick={() => setProspectPos(nd.pos)}
+                                title={`${nd.reason} (Click to filter Top Available ${nd.pos})`}
+                                className={`text-[9.5px] font-black uppercase px-1.5 py-0.5 border cursor-pointer transition-colors ${
+                                  nd.priority === 'CRITICAL'
+                                    ? 'bg-red-900/90 hover:bg-red-800 text-amber-200 border-red-400'
+                                    : nd.priority === 'HIGH'
+                                      ? 'bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border-amber-400/70'
+                                      : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-neutral-600'
+                                }`}
+                              >
+                                [{nd.pos}] {nd.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -4214,6 +4430,52 @@ export default function DraftPage() {
                           </button>
                         </div>
                       </div>
+
+                      {/* TEAM NEEDS & LONGEVITY SCOUTING BAR */}
+                      {activeTeamNeeds.length > 0 && (
+                        <div className="bg-[#111318] text-white border-2 border-black px-3 py-2 font-mono">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="bg-amber-400 text-black text-[10px] font-black uppercase px-2 py-0.5 border border-black shrink-0">
+                              TEAM NEEDS
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2 flex-1">
+                              {activeTeamNeeds.map(nd => (
+                                <button
+                                  key={`roster-${nd.id}`}
+                                  type="button"
+                                  onClick={() => setProspectPos(nd.pos)}
+                                  title={`Click to filter Top Available by ${nd.pos}`}
+                                  className={`text-left px-2.5 py-1 border transition-colors cursor-pointer flex items-center gap-1.5 flex-wrap ${
+                                    nd.priority === 'CRITICAL'
+                                      ? 'bg-red-950/90 hover:bg-red-900 border-red-400 text-white'
+                                      : nd.priority === 'HIGH'
+                                        ? 'bg-neutral-900 hover:bg-neutral-800 border-amber-400 text-white'
+                                        : 'bg-neutral-900 hover:bg-neutral-800 border-neutral-600 text-neutral-200'
+                                  }`}
+                                >
+                                  <span
+                                    className={`text-[9px] font-black uppercase px-1 py-0 border border-black ${
+                                      nd.pos === 'G'
+                                        ? 'bg-purple-300 text-purple-950'
+                                        : nd.pos === 'D'
+                                          ? 'bg-sky-300 text-sky-950'
+                                          : 'bg-amber-300 text-black'
+                                    }`}
+                                  >
+                                    {nd.pos}
+                                  </span>
+                                  <span className="text-[10.5px] font-black uppercase text-amber-300">
+                                    {nd.label}:
+                                  </span>
+                                  <span className="text-[10px] font-bold text-neutral-300">
+                                    {nd.reason}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* SKATERS TABLE (FORWARDS & DEFENSEMEN) */}
                       {(rosterPosFilter === 'ALL' || rosterPosFilter === 'SKATERS') && (
