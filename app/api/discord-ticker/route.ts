@@ -117,7 +117,7 @@ function formatMessageToTickerBlurb(authorRaw: string, textRaw: string, channelN
 let cachedTicker: { ts: number; items: string[] } | null = null;
 
 export async function GET() {
-  if (cachedTicker && Date.now() - cachedTicker.ts < 60000 && cachedTicker.items.length > 0) {
+  if (cachedTicker && Date.now() - cachedTicker.ts < 45000 && cachedTicker.items.length > 0) {
     return NextResponse.json({ ok: true, items: cachedTicker.items, cached: true });
   }
 
@@ -129,13 +129,22 @@ export async function GET() {
   }
 
   try {
-    const chRes = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
-      headers: {
-        Authorization: `Bot ${token}`,
-        'User-Agent': 'DiscordBot (https://nhl95.net, 1.0)',
-      },
-      cache: 'no-store',
-    });
+    const [chRes, evRes] = await Promise.all([
+      fetch(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
+        headers: {
+          Authorization: `Bot ${token}`,
+          'User-Agent': 'DiscordBot (https://nhl95.net, 1.0)',
+        },
+        cache: 'no-store',
+      }),
+      fetch(`${DISCORD_API_BASE}/guilds/${guildId}/scheduled-events?with_user_count=true`, {
+        headers: {
+          Authorization: `Bot ${token}`,
+          'User-Agent': 'DiscordBot (https://nhl95.net, 1.0)',
+        },
+        cache: 'no-store',
+      }),
+    ]);
 
     if (!chRes.ok) {
       return NextResponse.json({ ok: false, items: [] });
@@ -144,6 +153,48 @@ export async function GET() {
     const channels = await chRes.json();
     if (!Array.isArray(channels)) {
       return NextResponse.json({ ok: false, items: [] });
+    }
+
+    const eventBlurbs: string[] = [];
+    if (evRes.ok) {
+      const rawEvents = await evRes.json();
+      if (Array.isArray(rawEvents)) {
+        const nowMs = Date.now() - 2 * 60 * 60 * 1000;
+        const activeEvents = rawEvents
+          .filter((ev: any) => {
+            if (ev?.status === 3 || ev?.status === 4) return false;
+            const startMs = ev?.scheduled_start_time ? Date.parse(ev.scheduled_start_time) : 0;
+            return ev?.status === 2 || startMs >= nowMs;
+          })
+          .sort(
+            (a: any, b: any) =>
+              Date.parse(a.scheduled_start_time || '') - Date.parse(b.scheduled_start_time || '')
+          );
+
+        for (const ev of activeEvents.slice(0, 6)) {
+          const dt = new Date(ev.scheduled_start_time);
+          const dateLabel = dt
+            .toLocaleDateString('en-US', {
+              month: 'short',
+              day: '2-digit',
+              timeZone: 'America/New_York',
+            })
+            .toUpperCase();
+          const timeLabel = dt
+            .toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              timeZone: 'America/New_York',
+            })
+            .toUpperCase();
+          const nameUpper = String(ev.name || 'LEAGUE EVENT').trim().toUpperCase();
+          const descSnippet = ev.description
+            ? ` (${String(ev.description).replace(/\s+/g, ' ').trim().slice(0, 55).toUpperCase()})`
+            : '';
+          const livePrefix = ev.status === 2 ? '🔴 LIVE NOW ON DISCORD' : `📅 UPCOMING [${dateLabel} ${timeLabel} ET]`;
+          eventBlurbs.push(`${livePrefix}: ${nameUpper}${descSnippet}`);
+        }
+      }
     }
 
     const targetNames = [
@@ -156,11 +207,13 @@ export async function GET() {
       'highlights',
       'cooking-with-puss',
       'exis-only',
+      'announcements',
+      'playoffs',
     ];
 
     const matchedChannels = channels.filter(
       (c: any) =>
-        c?.type === 0 &&
+        (c?.type === 0 || c?.type === 5) &&
         typeof c?.name === 'string' &&
         targetNames.some((tn) => c.name.toLowerCase().includes(tn))
     );
@@ -169,7 +222,7 @@ export async function GET() {
     const seenTexts = new Set<string>();
 
     await Promise.all(
-      matchedChannels.slice(0, 7).map(async (ch: any) => {
+      matchedChannels.slice(0, 9).map(async (ch: any) => {
         try {
           const msgRes = await fetch(`${DISCORD_API_BASE}/channels/${ch.id}/messages?limit=8`, {
             headers: {
@@ -197,7 +250,20 @@ export async function GET() {
     );
 
     blurbs.sort((a, b) => b.id.localeCompare(a.id));
-    const finalItems = blurbs.slice(0, 24).map((b) => b.text);
+    const commentItems = blurbs.slice(0, 22).map((b) => b.text);
+
+    // Interleave upcoming/live Discord events with live comments so both stay visible in the scroll
+    const finalItems: string[] = [];
+    let evIdx = 0;
+    for (let i = 0; i < commentItems.length; i++) {
+      if (i % 4 === 0 && evIdx < eventBlurbs.length) {
+        finalItems.push(eventBlurbs[evIdx++]);
+      }
+      finalItems.push(commentItems[i]);
+    }
+    while (evIdx < eventBlurbs.length) {
+      finalItems.push(eventBlurbs[evIdx++]);
+    }
 
     if (finalItems.length > 0) {
       cachedTicker = { ts: Date.now(), items: finalItems };
