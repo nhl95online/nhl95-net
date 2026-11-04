@@ -1351,7 +1351,7 @@ export default function HomePage() {
     <div className="w-full min-h-screen bg-[#f4f1ea] text-black font-serif p-1 sm:p-3 md:p-4">
       <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 text-center">
         <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-        <p className="text-xs sm:text-sm italic">"Welcome to the Darkside of NHL95"</p>
+
       </header>
 
       {/* Real-World NHL Current News Wire Bar (only shown when live/updated articles exist, not static placeholders) */}
@@ -1419,16 +1419,16 @@ export default function HomePage() {
       )}
 
       <div className="grid grid-cols-12 gap-4 sm:gap-5 lg:gap-6 xl:gap-8 items-start">
-        <section className="col-span-12 md:col-span-5 lg:col-span-3 xl:col-span-2 order-3 md:order-2 lg:order-1 border-r-0 lg:border-r border-black pr-0 lg:pr-4 pt-4 lg:pt-0 border-t lg:border-t-0 space-y-4 sm:space-y-6">
+        <section className="col-span-12 md:col-span-5 lg:col-span-3 xl:col-span-2 order-3 md:order-2 lg:order-1 bg-black text-white border-2 border-black p-3.5 space-y-4 sm:space-y-6">
           {/* 1. Live Now Section (if any live events) */}
           {briefing?.events?.some((e: any) => e.is_live) && (
-            <div className="border-2 border-red-700 bg-red-50 p-3 shadow-xs">
+            <div className="border-2 border-red-600 bg-red-950/70 p-3 shadow-xs">
               <div className="flex items-center gap-2 mb-2">
                 <span className="relative flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
                 </span>
-                <span className="text-[10px] font-black uppercase tracking-wider text-red-900 font-mono">
+                <span className="text-[10px] font-black uppercase tracking-wider text-red-400 font-mono">
                   HAPPENING NOW
                 </span>
               </div>
@@ -1436,9 +1436,9 @@ export default function HomePage() {
                 .filter((e: any) => e.is_live)
                 .map((liveEvt: any, lIdx: number) => (
                   <div key={lIdx} className="space-y-1">
-                    <h3 className="font-black text-xs text-neutral-900 leading-snug">{liveEvt.title}</h3>
+                    <h3 className="font-black text-xs text-white leading-snug">{liveEvt.title}</h3>
                     {liveEvt.description && (
-                      <p className="text-[11px] text-neutral-700 italic">{liveEvt.description}</p>
+                      <p className="text-[11px] text-neutral-300 italic">{liveEvt.description}</p>
                     )}
                     {liveEvt.url && (
                       <a
@@ -1457,9 +1457,9 @@ export default function HomePage() {
 
           {/* 2. Upcoming Discord Events */}
           <div>
-            <div className="flex items-center justify-between border-b border-black mb-3 pb-1">
-              <h2 className="font-bold uppercase tracking-tight text-sm">Upcoming Events</h2>
-              <span className="text-[9px] font-mono uppercase bg-neutral-200 px-1 py-0.5">
+            <div className="flex items-center justify-between border-b border-neutral-700 mb-3 pb-1">
+              <h2 className="font-bold uppercase tracking-tight text-sm text-white">Upcoming Events</h2>
+              <span className="text-[9px] font-mono font-bold uppercase bg-neutral-800 text-amber-400 border border-neutral-700 px-1.5 py-0.5">
                 DISCORD
               </span>
             </div>
@@ -1469,28 +1469,28 @@ export default function HomePage() {
                 briefing.events
                   .filter((e: any) => !e.is_live)
                   .map((evt: any, idx: number) => (
-                    <div key={idx} className="border border-neutral-300 bg-white/60 p-2.5 shadow-xs">
+                    <div key={idx} className="border border-neutral-800 bg-neutral-900 p-2.5 shadow-xs">
                       <div className="flex items-start gap-2.5">
-                        <div className="bg-black text-white text-center px-1.5 py-1 min-w-[48px] shrink-0 font-mono rounded-none">
+                        <div className="bg-amber-400 text-black text-center px-1.5 py-1 min-w-[48px] shrink-0 font-mono rounded-none">
                           <div className="text-[10px] font-black uppercase leading-none">{evt.date}</div>
                           {evt.time && <div className="text-[8px] opacity-75 mt-0.5 leading-none">{evt.time}</div>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-xs leading-snug text-neutral-900">{evt.title}</h3>
+                          <h3 className="font-bold text-xs leading-snug text-white">{evt.title}</h3>
                           {evt.description && (
-                            <p className="text-[10px] text-neutral-600 italic mt-0.5 leading-tight">{evt.description}</p>
+                            <p className="text-[10px] text-neutral-400 italic mt-0.5 leading-tight">{evt.description}</p>
                           )}
                           {evt.url ? (
                             <a
                               href={evt.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-block mt-1 text-[9px] font-mono font-bold text-blue-800 hover:underline"
+                              className="inline-block mt-1 text-[9px] font-mono font-bold text-amber-400 hover:underline"
                             >
                               Join in Discord →
                             </a>
                           ) : evt.interested ? (
-                            <span className="inline-block mt-1 text-[8px] font-mono text-neutral-500">
+                            <span className="inline-block mt-1 text-[8px] font-mono text-neutral-400">
                               ★ {evt.interested} interested
                             </span>
                           ) : null}
@@ -1499,27 +1499,27 @@ export default function HomePage() {
                     </div>
                   ))
               ) : (
-                <p className="text-xs italic text-neutral-500">No scheduled events on the wire.</p>
+                <p className="text-xs italic text-neutral-400">No scheduled events on the wire.</p>
               )}
             </div>
           </div>
 
           {/* 3. League Special Bulletin / Announcements */}
           {briefing?.bulletin && (
-            <div className="border border-black bg-amber-50/50 p-3 shadow-xs">
-              <div className="flex items-center justify-between border-b border-black/20 pb-1 mb-1.5">
-                <span className="text-[9px] font-black uppercase font-mono tracking-wider text-neutral-800">
+            <div className="border border-amber-500/40 bg-neutral-900 p-3 shadow-xs">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-1 mb-1.5">
+                <span className="text-[9px] font-black uppercase font-mono tracking-wider text-amber-400">
                   SPECIAL BULLETIN
                 </span>
-                <span className="text-[9px] font-mono text-neutral-500">{briefing.bulletin.date}</span>
+                <span className="text-[9px] font-mono text-neutral-400">{briefing.bulletin.date}</span>
               </div>
-              <h3 className="font-bold text-xs leading-snug text-neutral-900 mb-1">
+              <h3 className="font-bold text-xs leading-snug text-white mb-1">
                 {briefing.bulletin.title}
               </h3>
-              <p className="text-[11px] text-neutral-700 leading-relaxed font-serif">
+              <p className="text-[11px] text-neutral-300 leading-relaxed font-serif">
                 {briefing.bulletin.text}
               </p>
-              <div className="text-[9px] font-mono text-right text-neutral-500 mt-1.5">
+              <div className="text-[9px] font-mono text-right text-neutral-400 mt-1.5">
                 — {briefing.bulletin.author}
               </div>
             </div>
@@ -2155,16 +2155,16 @@ export default function HomePage() {
           )}
         </main>
 
-        <aside className="col-span-12 md:col-span-7 lg:col-span-3 xl:col-span-3 order-2 md:order-3 lg:order-3 border-l-0 md:border-l border-black pl-0 md:pl-4 pt-4 md:pt-0 border-t md:border-t-0">
+        <aside className="col-span-12 md:col-span-7 lg:col-span-3 xl:col-span-3 order-2 md:order-3 lg:order-3 bg-black text-white border-2 border-black p-3.5">
           <div className="flex justify-between items-center mb-2">
-            <h2 className="font-bold uppercase text-sm">STANDINGS</h2>
+            <h2 className="font-bold uppercase text-sm text-white">STANDINGS</h2>
             <select
-              className="text-[10px] border border-black p-1 bg-transparent font-bold cursor-pointer"
+              className="text-[10px] border border-neutral-600 p-1 bg-neutral-900 text-white font-bold cursor-pointer"
               value={selectedSeason}
               onChange={(e) => setSelectedSeason(Number(e.target.value))}
             >
               {filteredSeasons.map((s) => (
-                <option key={s.id} value={s.id}>
+                <option key={s.id} value={s.id} className="bg-black text-white">
                   {s.label}
                 </option>
               ))}
@@ -2173,16 +2173,16 @@ export default function HomePage() {
 
           {/* League Filter / Sort Buttons */}
           <div className="flex items-center gap-1 mb-3 overflow-x-auto no-scrollbar max-w-full pb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 mr-0.5 shrink-0">League:</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 mr-0.5 shrink-0">League:</span>
             {(['ALL', 'W', 'Q', 'O', 'V', 'G'] as const).map((league) => (
               <button
                 key={league}
                 type="button"
                 onClick={() => handleLeagueChange(league)}
-                className={`text-[10px] font-bold px-1.5 py-0.5 border border-black transition-colors shrink-0 ${
+                className={`text-[10px] font-bold px-1.5 py-0.5 border transition-colors shrink-0 cursor-pointer ${
                   selectedLeague === league
-                    ? 'bg-black text-white'
-                    : 'bg-white text-black hover:bg-neutral-200'
+                    ? 'bg-amber-400 text-black border-amber-400'
+                    : 'bg-neutral-900 text-white border-neutral-700 hover:bg-neutral-800'
                 }`}
               >
                 {league}
@@ -2193,7 +2193,7 @@ export default function HomePage() {
           <div className="overflow-x-auto">
             <table className="w-full text-[10px] border-collapse min-w-[240px]">
               <thead>
-                <tr className="border-b border-black text-left">
+                <tr className="border-b border-neutral-700 text-left text-neutral-300">
                   <th className="pb-1 font-bold">RK</th>
                   <th className="pb-1 font-bold">TM</th>
                   <th className="pb-1 font-bold text-center">W-L-T-OTL</th>
@@ -2202,9 +2202,9 @@ export default function HomePage() {
               </thead>
               <tbody>
                 {standings.map((s: any, index: number) => (
-                  <tr key={index} className="border-b border-slate-200">
-                    <td className="py-1 font-bold">{index + 1}</td>
-                    <td className="py-1 font-bold flex items-center gap-1.5">
+                  <tr key={index} className="border-b border-neutral-800 hover:bg-neutral-900/70">
+                    <td className="py-1 font-bold text-neutral-400">{index + 1}</td>
+                    <td className="py-1 font-bold flex items-center gap-1.5 text-white">
                       {s.league_teams?.logo_url && (
                         <img
                           src={s.league_teams.logo_url}
@@ -2223,15 +2223,15 @@ export default function HomePage() {
                         />
                       )}
                     </td>
-                    <td className="py-1 text-center font-mono">
+                    <td className="py-1 text-center font-mono text-neutral-300">
                       {(s.w ?? s.wins ?? 0)}-{(s.l ?? s.losses ?? 0)}-{(s.t ?? s.ties ?? 0)}-{(s.otl ?? s.otLosses ?? 0)}
                     </td>
-                    <td className="py-1 font-bold text-center">{s.pts ?? 0}</td>
+                    <td className="py-1 font-bold text-center text-amber-400">{s.pts ?? 0}</td>
                   </tr>
                 ))}
                 {standings.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-3 text-center text-slate-500 italic">
+                    <td colSpan={4} className="py-3 text-center text-neutral-500 italic">
                       No standings available
                     </td>
                   </tr>
@@ -2239,7 +2239,7 @@ export default function HomePage() {
               </tbody>
             </table>
           </div>
-          <a href="/standings" className="block mt-4 text-[9px] underline italic text-slate-600 hover:text-black">
+          <a href="/standings" className="block mt-4 text-[9px] underline italic text-amber-400 hover:text-amber-300">
             View full standings →
           </a>
         </aside>
