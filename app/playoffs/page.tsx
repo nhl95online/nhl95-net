@@ -1674,6 +1674,7 @@ export default function PlayoffBracket() {
         ga: number;
         gd: number;
         seed?: number;
+        h2h?: Record<number, { wins: number; pts: number; gf: number; ga: number }>;
       }
 
       const teamRecords = new Map<number, RankedTeam>();
@@ -1685,7 +1686,7 @@ export default function PlayoffBracket() {
         teamRecords.set(tId, {
           team_id: tId,
           conference: isWest ? 'west' : 'east',
-          gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0, gd: 0
+          gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0, gd: 0, h2h: {}
         });
       });
 
@@ -1710,7 +1711,7 @@ export default function PlayoffBracket() {
             hRec.ga += aScore;
             if (hScore > aScore) { hRec.w++; hRec.pts += 2; }
             else if (hScore < aScore) {
-              if (isOT) { hRec.otl++; } else { hRec.l++; }
+              if (isOT) { hRec.otl++; hRec.pts += 1; } else { hRec.l++; }
             } else { hRec.t++; hRec.pts += 1; }
             hRec.gd = hRec.gf - hRec.ga;
           }
@@ -1720,9 +1721,31 @@ export default function PlayoffBracket() {
             aRec.ga += hScore;
             if (aScore > hScore) { aRec.w++; aRec.pts += 2; }
             else if (aScore < hScore) {
-              if (isOT) { aRec.otl++; } else { aRec.l++; }
+              if (isOT) { aRec.otl++; aRec.pts += 1; } else { aRec.l++; }
             } else { aRec.t++; aRec.pts += 1; }
             aRec.gd = aRec.gf - aRec.ga;
+            if (hRec) {
+              if (!hRec.h2h) hRec.h2h = {};
+              if (!aRec.h2h) aRec.h2h = {};
+              if (!hRec.h2h[aId]) hRec.h2h[aId] = { wins: 0, pts: 0, gf: 0, ga: 0 };
+              if (!aRec.h2h[hId]) aRec.h2h[hId] = { wins: 0, pts: 0, gf: 0, ga: 0 };
+              hRec.h2h[aId].gf += hScore;
+              hRec.h2h[aId].ga += aScore;
+              aRec.h2h[hId].gf += aScore;
+              aRec.h2h[hId].ga += hScore;
+              if (hScore > aScore) {
+                hRec.h2h[aId].wins += 1;
+                hRec.h2h[aId].pts += 2;
+                if (isOT) aRec.h2h[hId].pts += 1;
+              } else if (aScore > hScore) {
+                aRec.h2h[hId].wins += 1;
+                aRec.h2h[hId].pts += 2;
+                if (isOT) hRec.h2h[aId].pts += 1;
+              } else {
+                hRec.h2h[aId].pts += 1;
+                aRec.h2h[hId].pts += 1;
+              }
+            }
           }
         });
       } else if (regStandings.length > 0) {
@@ -1746,6 +1769,17 @@ export default function PlayoffBracket() {
       const sortStandings = (a: RankedTeam, b: RankedTeam) => {
         if (b.pts !== a.pts) return b.pts - a.pts;
         if (b.w !== a.w) return b.w - a.w;
+        const aVsB = a.h2h?.[b.team_id];
+        const bVsA = b.h2h?.[a.team_id];
+        if (aVsB || bVsA) {
+          const h2hWinsDiff = (bVsA?.wins || 0) - (aVsB?.wins || 0);
+          if (h2hWinsDiff !== 0) return h2hWinsDiff;
+          const h2hPtsDiff = (bVsA?.pts || 0) - (aVsB?.pts || 0);
+          if (h2hPtsDiff !== 0) return h2hPtsDiff;
+          const h2hGdA = (aVsB?.gf || 0) - (aVsB?.ga || 0);
+          const h2hGdB = (bVsA?.gf || 0) - (bVsA?.ga || 0);
+          if (h2hGdB !== h2hGdA) return h2hGdB - h2hGdA;
+        }
         if (b.gd !== a.gd) return b.gd - a.gd;
         if (b.gf !== a.gf) return b.gf - a.gf;
         return a.team_id - b.team_id;

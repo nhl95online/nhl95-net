@@ -616,6 +616,26 @@ export default function HomePage() {
             teamMap[hId].ga += awayScore;
             teamMap[aId].gf += awayScore;
             teamMap[aId].ga += homeScore;
+            if (!teamMap[hId].h2h) teamMap[hId].h2h = {};
+            if (!teamMap[aId].h2h) teamMap[aId].h2h = {};
+            if (!teamMap[hId].h2h[aId]) teamMap[hId].h2h[aId] = { wins: 0, pts: 0, gf: 0, ga: 0 };
+            if (!teamMap[aId].h2h[hId]) teamMap[aId].h2h[hId] = { wins: 0, pts: 0, gf: 0, ga: 0 };
+            teamMap[hId].h2h[aId].gf += homeScore;
+            teamMap[hId].h2h[aId].ga += awayScore;
+            teamMap[aId].h2h[hId].gf += awayScore;
+            teamMap[aId].h2h[hId].ga += homeScore;
+            if (isTie) {
+              teamMap[hId].h2h[aId].pts += 1;
+              teamMap[aId].h2h[hId].pts += 1;
+            } else if (homeScore > awayScore) {
+              teamMap[hId].h2h[aId].wins += 1;
+              teamMap[hId].h2h[aId].pts += 2;
+              if (isOT) teamMap[aId].h2h[hId].pts += 1;
+            } else if (awayScore > homeScore) {
+              teamMap[aId].h2h[hId].wins += 1;
+              teamMap[aId].h2h[hId].pts += 2;
+              if (isOT) teamMap[hId].h2h[aId].pts += 1;
+            }
 
             if (isTie) {
               teamMap[hId].t += 1;
@@ -711,6 +731,17 @@ export default function HomePage() {
         freshStandings.sort((a: any, b: any) => {
           if (b.pts !== a.pts) return b.pts - a.pts;
           if ((b.w || b.wins || 0) !== (a.w || a.wins || 0)) return (b.w || b.wins || 0) - (a.w || a.wins || 0);
+          const aVsB = a.h2h?.[Number(b.team_id)];
+          const bVsA = b.h2h?.[Number(a.team_id)];
+          if (aVsB || bVsA) {
+            const h2hWinsDiff = (bVsA?.wins || 0) - (aVsB?.wins || 0);
+            if (h2hWinsDiff !== 0) return h2hWinsDiff;
+            const h2hPtsDiff = (bVsA?.pts || 0) - (aVsB?.pts || 0);
+            if (h2hPtsDiff !== 0) return h2hPtsDiff;
+            const h2hGdA = (aVsB?.gf || 0) - (aVsB?.ga || 0);
+            const h2hGdB = (bVsA?.gf || 0) - (bVsA?.ga || 0);
+            if (h2hGdB !== h2hGdA) return h2hGdB - h2hGdA;
+          }
           const gdA = (a.gf || 0) - (a.ga || 0);
           const gdB = (b.gf || 0) - (b.ga || 0);
           if (gdB !== gdA) return gdB - gdA;
