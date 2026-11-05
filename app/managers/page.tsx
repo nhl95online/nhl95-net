@@ -236,32 +236,55 @@ export default function ManagersPage() {
         const PO_COLS =
           'game_id, playoff_id, game_number, league_id, home_team_id, away_team_id, home_coach_id, away_coach_id, home_coach, away_coach, home_score, away_score, game_meta';
 
-        const fetchRegWave = async (startPage: number, pageCount: number) => {
-          const pages = await Promise.all(
-            Array.from({ length: pageCount }, (_, idx) => {
-              const page = startPage + idx;
-              return supabase
-                .from('league_gamestats')
-                .select(REG_COLS)
-                .order('league_id', { ascending: false })
-                .order('game_id', { ascending: false })
-                .range(page * 1000, page * 1000 + 999)
-                .then(r => r.data || [], () => [] as any[]);
-            })
-          );
-          return pages.flat();
+        // Unbounded primary-key paginator that fetches 100% of rows in a table with automatic retry
+        const fetchAllTableRows = async (
+          table: string,
+          cols: string,
+          batchConcurrency: number = 4
+        ): Promise<any[]> => {
+          const allRows: any[] = [];
+          let pageOffset = 0;
+          let keepGoing = true;
+
+          const fetchSinglePage = async (pageIdx: number): Promise<any[]> => {
+            const from = pageIdx * 1000;
+            const to = from + 999;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              const res = await supabase
+                .from(table)
+                .select(cols)
+                .order('game_id', { ascending: true })
+                .range(from, to);
+              if (!res.error && Array.isArray(res.data)) {
+                return res.data;
+              }
+            }
+            return [];
+          };
+
+          while (keepGoing) {
+            const batchResults = await Promise.all(
+              Array.from({ length: batchConcurrency }, (_, idx) => fetchSinglePage(pageOffset + idx))
+            );
+            for (const pageRows of batchResults) {
+              allRows.push(...pageRows);
+              if (pageRows.length < 1000) {
+                keepGoing = false;
+              }
+            }
+            pageOffset += batchConcurrency;
+          }
+
+          return allRows;
         };
 
         const [
           coachesRes,
           teamsRes,
           seasonsRes,
-          regWave1,
-          poPage0,
-          poPage1,
-          poPage2,
-          schedPage0,
-          schedPage1
+          regGameRows,
+          poGameRows,
+          schedRows
         ] = await Promise.all([
           supabase
             .from('league_coaches')
@@ -275,52 +298,13 @@ export default function ManagersPage() {
             .from('leagues')
             .select('league_id, league_name')
             .order('league_id', { ascending: false }),
-          fetchRegWave(0, 8),
-          supabase
-            .from('league_playoff_gamestats')
-            .select(PO_COLS)
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(0, 999)
-            .then(r => r.data || [], () => [] as any[]),
-          supabase
-            .from('league_playoff_gamestats')
-            .select(PO_COLS)
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(1000, 1999)
-            .then(r => r.data || [], () => [] as any[]),
-          supabase
-            .from('league_playoff_gamestats')
-            .select(PO_COLS)
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(2000, 2999)
-            .then(r => r.data || [], () => [] as any[]),
-          supabase
-            .from('league_schedule')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played')
-            .not('home_score', 'is', null)
-            .not('away_score', 'is', null)
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(0, 999)
-            .then(r => r.data || [], () => [] as any[]),
-          supabase
-            .from('league_schedule')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played')
-            .not('home_score', 'is', null)
-            .not('away_score', 'is', null)
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(1000, 1999)
-            .then(r => r.data || [], () => [] as any[])
-        ]);
-
-        // Fetch remaining regular season waves (pages 8..15 and 16..23 -> covers all 21,508+ games across all 40 seasons)
-        const [regWave2, regWave3] = await Promise.all([
-          fetchRegWave(8, 8),
-          fetchRegWave(16, 8)
+          fetchAllTableRows('league_gamestats', REG_COLS, 6),
+          fetchAllTableRows('league_playoff_gamestats', PO_COLS, 3),
+          fetchAllTableRows(
+            'league_schedule',
+            'game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played',
+            3
+          )
         ]);
 
         const rawCoaches = coachesRes.data || [];
@@ -528,8 +512,6 @@ export default function ManagersPage() {
         const compiledMatches: CoachMatchRecord[] = [];
         const seenRegKeys = new Set<string>();
 
-        const regGameRows = [...regWave1, ...regWave2, ...regWave3];
-
         regGameRows.forEach((row: any) => {
           const sId = Number(row.league_id) || 1;
           const gIdStr = String(row.game_id).trim();
@@ -583,8 +565,10 @@ export default function ManagersPage() {
         });
 
         // Include any played schedule games not already in league_gamestats
-        const schedRows = [...schedPage0, ...schedPage1];
         schedRows.forEach((row: any) => {
+          if (row.home_score === null || row.home_score === undefined || row.away_score === null || row.away_score === undefined) {
+            return;
+          }
           const rawPlayed = String(row.played ?? '').trim().toLowerCase();
           const isPlayed =
             rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes';
@@ -640,7 +624,6 @@ export default function ManagersPage() {
 
         // Include ALL playoff games from league_playoff_gamestats across all seasons
         const seenPoKeys = new Set<string>();
-        const poGameRows = [...poPage0, ...poPage1, ...poPage2];
         poGameRows.forEach((row: any) => {
           const sId = Number(row.league_id) || 1;
           const gIdStr = String(row.game_id).trim();
