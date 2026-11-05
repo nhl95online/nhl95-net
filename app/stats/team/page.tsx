@@ -342,34 +342,63 @@ export default function TeamStatsPage() {
   const [sortConfig, setSortConfig] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   const [hoveredTeam, setHoveredTeam] = useState<any>(null);
 
-  // 1. Fetch available leagues and seasons
+  // 1. Fetch available leagues and seasons (only active or archived seasons, most recent at the top)
   useEffect(() => {
     async function fetchLeagues() {
       try {
-        let { data, error } = await supabase
-          .from('league_seasons')
-          .select('league_id, season_name')
-          .order('league_id', { ascending: false });
+        const [leaguesRes, futureGamesRes, futureStandingsRes] = await Promise.all([
+          supabase.from('leagues').select('league_id, league_name, status').order('league_id', { ascending: false }),
+          supabase.from('league_gamestats').select('league_id').gt('league_id', 40).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_standings').select('season_id').gt('season_id', 40).then(r => r, () => ({ data: null, error: null }))
+        ]);
 
-        if (error || !data || data.length === 0) {
+        const activeFutureIds = new Set<number>();
+        (futureGamesRes.data || []).forEach((r: any) => {
+          if (r.league_id != null) activeFutureIds.add(Number(r.league_id));
+        });
+        (futureStandingsRes.data || []).forEach((r: any) => {
+          if (r.season_id != null) activeFutureIds.add(Number(r.season_id));
+        });
+
+        let data: any[] | null = leaguesRes.data;
+        if (!data || data.length === 0) {
           const fallback = await supabase
-            .from('leagues')
-            .select('league_id, league_name')
+            .from('league_seasons')
+            .select('league_id, season_name')
             .order('league_id', { ascending: false });
-
           if (fallback.data && fallback.data.length > 0) {
             data = fallback.data.map((l: any) => ({
               league_id: l.league_id,
-              season_name: l.league_name || `Season ${l.league_id}`
+              league_name: l.season_name || `Season ${l.league_id}`,
+              status: Number(l.league_id) <= 40 ? 'Active' : 'Upcoming'
             }));
           }
         }
 
         if (data && data.length > 0) {
-          const formatted = data.map((l: any) => ({
-            league_id: String(l.league_id),
-            league_name: l.season_name || l.league_name || `Season ${l.league_id}`
-          }));
+          const activeOrArchived = data
+            .filter((l: any) => {
+              const idNum = Number(l.league_id);
+              if (isNaN(idNum) || idNum <= 0) return false;
+              const statusStr = String(l.status || '').trim().toLowerCase();
+              const isValidStatus = !statusStr || statusStr === 'active' || statusStr === 'archived';
+              if (!isValidStatus) return false;
+              if (idNum <= 40) return true;
+              return activeFutureIds.has(idNum);
+            })
+            .map((l: any) => ({
+              league_id: String(l.league_id),
+              league_name: l.season_name || l.league_name || `Season ${l.league_id}`
+            }))
+            .sort((a: any, b: any) => Number(b.league_id) - Number(a.league_id));
+
+          const formatted = activeOrArchived.length > 0
+            ? activeOrArchived
+            : data.map((l: any) => ({
+                league_id: String(l.league_id),
+                league_name: l.season_name || l.league_name || `Season ${l.league_id}`
+              })).sort((a: any, b: any) => Number(b.league_id) - Number(a.league_id));
+
           setLeagues(formatted);
           const latest = formatted[0];
           setSelectedLeague(String(latest.league_id));

@@ -231,16 +231,35 @@ export default function ManagersPage() {
     async function loadManagersAndH2HData() {
       setLoading(true);
       try {
+        const REG_COLS =
+          'game_id, league_id, home_team_id, away_team_id, home_coach_id, away_coach_id, home_coach, away_coach, home_score, away_score, game_meta';
+        const PO_COLS =
+          'game_id, playoff_id, game_number, league_id, home_team_id, away_team_id, home_coach_id, away_coach_id, home_coach, away_coach, home_score, away_score, game_meta';
+
+        const fetchRegWave = async (startPage: number, pageCount: number) => {
+          const pages = await Promise.all(
+            Array.from({ length: pageCount }, (_, idx) => {
+              const page = startPage + idx;
+              return supabase
+                .from('league_gamestats')
+                .select(REG_COLS)
+                .order('league_id', { ascending: false })
+                .order('game_id', { ascending: false })
+                .range(page * 1000, page * 1000 + 999)
+                .then(r => r.data || [], () => [] as any[]);
+            })
+          );
+          return pages.flat();
+        };
+
         const [
           coachesRes,
           teamsRes,
           seasonsRes,
-          statsPage0,
-          statsPage1,
-          statsPage2,
-          statsPage3,
-          statsPage4,
-          poGamesRes,
+          regWave1,
+          poPage0,
+          poPage1,
+          poPage2,
           schedPage0,
           schedPage1
         ] = await Promise.all([
@@ -253,46 +272,31 @@ export default function ManagersPage() {
             .select('*')
             .order('league_id', { ascending: false }),
           supabase
-            .from('league_seasons')
-            .select('league_id, season_name')
+            .from('leagues')
+            .select('league_id, league_name')
             .order('league_id', { ascending: false }),
-          supabase
-            .from('league_gamestats')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(0, 999),
-          supabase
-            .from('league_gamestats')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(1000, 1999),
-          supabase
-            .from('league_gamestats')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(2000, 2999),
-          supabase
-            .from('league_gamestats')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(3000, 3999),
-          supabase
-            .from('league_gamestats')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
-            .order('league_id', { ascending: false })
-            .order('game_id', { ascending: false })
-            .range(4000, 4999),
+          fetchRegWave(0, 8),
           supabase
             .from('league_playoff_gamestats')
-            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach, round_number, series_id')
+            .select(PO_COLS)
             .order('league_id', { ascending: false })
             .order('game_id', { ascending: false })
             .range(0, 999)
-            .then(r => r, () => ({ data: [] as any[] })),
+            .then(r => r.data || [], () => [] as any[]),
+          supabase
+            .from('league_playoff_gamestats')
+            .select(PO_COLS)
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(1000, 1999)
+            .then(r => r.data || [], () => [] as any[]),
+          supabase
+            .from('league_playoff_gamestats')
+            .select(PO_COLS)
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(2000, 2999)
+            .then(r => r.data || [], () => [] as any[]),
           supabase
             .from('league_schedule')
             .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played')
@@ -301,7 +305,7 @@ export default function ManagersPage() {
             .order('league_id', { ascending: false })
             .order('game_id', { ascending: false })
             .range(0, 999)
-            .then(r => r, () => ({ data: [] as any[] })),
+            .then(r => r.data || [], () => [] as any[]),
           supabase
             .from('league_schedule')
             .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played')
@@ -310,25 +314,21 @@ export default function ManagersPage() {
             .order('league_id', { ascending: false })
             .order('game_id', { ascending: false })
             .range(1000, 1999)
-            .then(r => r, () => ({ data: [] as any[] }))
+            .then(r => r.data || [], () => [] as any[])
+        ]);
+
+        // Fetch remaining regular season waves (pages 8..15 and 16..23 -> covers all 21,508+ games across all 40 seasons)
+        const [regWave2, regWave3] = await Promise.all([
+          fetchRegWave(8, 8),
+          fetchRegWave(16, 8)
         ]);
 
         const rawCoaches = coachesRes.data || [];
         const rawTeams = teamsRes.data || [];
-        let rawSeasons = seasonsRes.data || [];
-
-        if (rawSeasons.length === 0) {
-          const fallback = await supabase
-            .from('leagues')
-            .select('league_id, league_name')
-            .order('league_id', { ascending: false });
-          if (fallback.data) {
-            rawSeasons = fallback.data.map((l: any) => ({
-              league_id: l.league_id,
-              season_name: l.league_name || `Season ${l.league_id}`
-            }));
-          }
-        }
+        const rawSeasons = (seasonsRes.data || []).map((l: any) => ({
+          league_id: l.league_id,
+          season_name: l.league_name || `Season ${l.league_id}`
+        }));
 
         const seasonMap = new Map<number, string>();
         rawSeasons.forEach((s: any) => {
@@ -345,7 +345,7 @@ export default function ManagersPage() {
           coachMap.set(cId, {
             coach_id: cId,
             coach_name: cName,
-            discord_tag: c.discord_tag || c.discord_name || c.coach_tag || undefined,
+            discord_tag: c.discord_tag || c.discord_name || c.coach_tag || c.discord_handle || undefined,
             teams: []
           });
           coachNameLookup.set(normalizeCoachStr(cName), cId);
@@ -404,23 +404,16 @@ export default function ManagersPage() {
             if (!anyTeamIdMap.has(teamInfo.team_id)) {
               anyTeamIdMap.set(teamInfo.team_id, { ...teamInfo, coach_id: cId });
             }
+          } else {
+            anyTeamIdMap.set(teamInfo.team_id, { ...teamInfo, coach_id: cId || 0 });
           }
         });
 
-        // Sort each coach's teams by latest season descending
-        const compiledCoaches = Array.from(coachMap.values())
-          .map(c => ({
-            ...c,
-            teams: c.teams.sort((a, b) => b.league_id - a.league_id)
-          }))
-          .sort((a, b) => a.coach_name.localeCompare(b.coach_name));
-
-        setCoaches(compiledCoaches);
-
-        // Helper to resolve (seasonId, rawTeamId, optionalCoachName) -> { coach_id, coach_name, team }
+        // Helper to resolve (seasonId, rawTeamId, rawCoachId, rawCoachName) -> { coach_id, coach_name, team }
         const resolveSide = (
           sId: number,
           rawTeamId: any,
+          rawCoachId?: any,
           rawCoachName?: any
         ): {
           coach_id: number;
@@ -430,91 +423,69 @@ export default function ManagersPage() {
           abbreviation: string;
           logo_url: string | null;
         } | null => {
-          const numId = Number(rawTeamId);
-          if (!numId || numId === 999 || numId === 0 || numId === 68) return null;
+          const numTeamId = Number(rawTeamId);
+          const explicitCoachId = Number(rawCoachId);
+          const directTeam = numTeamId ? (seasonTeamMap.get(`${sId}-${numTeamId}`) || anyTeamIdMap.get(numTeamId)) : undefined;
 
-          // 1. Direct (season, team_id) match
-          const direct = seasonTeamMap.get(`${sId}-${numId}`);
-          if (direct && coachMap.has(direct.coach_id)) {
-            const c = coachMap.get(direct.coach_id)!;
-            return {
-              coach_id: c.coach_id,
-              coach_name: c.coach_name,
-              team_id: direct.team_id,
-              team_name: direct.team_name,
-              abbreviation: direct.abbreviation,
-              logo_url: direct.logo_url
-            };
-          }
-
-          // 2. Match via rawTeams cross-season resolution (same logic as Standings / AllTeamsContent)
-          const matchTeam = rawTeams.find(
-            (t: any) => Number(t.team_id) === numId || Number(t.coach_id) === numId
-          );
-          if (matchTeam) {
-            const seasonMatch = rawTeams.find(
-              (t: any) =>
-                Number(t.league_id) === sId &&
-                ((t.abbreviation &&
-                  t.abbreviation.trim().toUpperCase() ===
-                    (matchTeam.abbreviation || '').trim().toUpperCase()) ||
-                  (t.team_name &&
-                    t.team_name.trim().toUpperCase() ===
-                      (matchTeam.team_name || '').trim().toUpperCase()) ||
-                  (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id)))
-            );
-            if (seasonMatch) {
-              const smDirect = seasonTeamMap.get(`${sId}-${Number(seasonMatch.team_id)}`);
-              if (smDirect && coachMap.has(smDirect.coach_id)) {
-                const c = coachMap.get(smDirect.coach_id)!;
-                return {
-                  coach_id: c.coach_id,
-                  coach_name: c.coach_name,
-                  team_id: smDirect.team_id,
-                  team_name: smDirect.team_name,
-                  abbreviation: smDirect.abbreviation,
-                  logo_url: smDirect.logo_url
-                };
-              }
-            }
-          }
-
-          // 3. Fallback to anyTeamIdMap + explicit coach name on the game row
-          const fallbackTeam = anyTeamIdMap.get(numId);
-          let resolvedCoachId = fallbackTeam?.coach_id || 0;
-          if (rawCoachName) {
+          // 1. Direct coach_id on the game row (present on 100% of league_gamestats & league_playoff_gamestats)
+          let resolvedCoachId = 0;
+          if (explicitCoachId && coachMap.has(explicitCoachId)) {
+            resolvedCoachId = explicitCoachId;
+          } else if (rawCoachName) {
             const byName = coachNameLookup.get(normalizeCoachStr(String(rawCoachName)));
             if (byName && coachMap.has(byName)) {
               resolvedCoachId = byName;
             }
           }
-          if (resolvedCoachId && coachMap.has(resolvedCoachId)) {
-            const c = coachMap.get(resolvedCoachId)!;
-            const coachTeamInSeason =
-              c.teams.find(t => t.league_id === sId) || fallbackTeam || c.teams[0];
-            return {
-              coach_id: c.coach_id,
-              coach_name: c.coach_name,
-              team_id: coachTeamInSeason?.team_id || numId,
-              team_name: coachTeamInSeason?.team_name || matchTeam?.team_name || `Team #${numId}`,
-              abbreviation: (
-                coachTeamInSeason?.abbreviation ||
-                matchTeam?.abbreviation ||
-                `TM${numId}`
-              ).toUpperCase(),
-              logo_url: coachTeamInSeason?.logo_url || matchTeam?.logo_url || null
-            };
+
+          // 2. Fallback to (season, team_id) or cross-season team lookup
+          if (!resolvedCoachId && directTeam?.coach_id && coachMap.has(directTeam.coach_id)) {
+            resolvedCoachId = directTeam.coach_id;
           }
 
-          return null;
+          if (!resolvedCoachId && numTeamId) {
+            const matchTeam = rawTeams.find(
+              (t: any) => Number(t.team_id) === numTeamId || Number(t.coach_id) === numTeamId
+            );
+            if (matchTeam && Number(matchTeam.coach_id) && coachMap.has(Number(matchTeam.coach_id))) {
+              resolvedCoachId = Number(matchTeam.coach_id);
+            }
+          }
+
+          // 3. If game row has a valid coach_id + coach_name not yet in coachMap, register it dynamically
+          if (!resolvedCoachId && explicitCoachId && rawCoachName) {
+            const cleanName = String(rawCoachName).trim();
+            coachMap.set(explicitCoachId, {
+              coach_id: explicitCoachId,
+              coach_name: cleanName,
+              teams: directTeam ? [directTeam] : []
+            });
+            coachNameLookup.set(normalizeCoachStr(cleanName), explicitCoachId);
+            resolvedCoachId = explicitCoachId;
+          }
+
+          if (!resolvedCoachId || !coachMap.has(resolvedCoachId)) return null;
+
+          const c = coachMap.get(resolvedCoachId)!;
+          const teamForMatch =
+            directTeam ||
+            c.teams.find(t => t.league_id === sId) ||
+            c.teams[0];
+
+          return {
+            coach_id: c.coach_id,
+            coach_name: c.coach_name,
+            team_id: teamForMatch?.team_id || numTeamId || 0,
+            team_name: teamForMatch?.team_name || `Team #${numTeamId || c.coach_id}`,
+            abbreviation: (teamForMatch?.abbreviation || `TM`).toUpperCase(),
+            logo_url: teamForMatch?.logo_url || null
+          };
         };
 
-        // Helper to parse OT / Tie / Shots from a game row
+        // Helper to parse OT / Tie from a game row
         const parseGameDetails = (row: any, homeScore: number, awayScore: number) => {
           let isOT = false;
           let isTie = false;
-          let homeShots: number | null = null;
-          let awayShots: number | null = null;
 
           if (row.game_meta) {
             try {
@@ -547,43 +518,17 @@ export default function ManagersPage() {
             }
           }
 
-          try {
-            const hStats =
-              typeof row.home_stats === 'string' ? JSON.parse(row.home_stats) : row.home_stats;
-            const aStats =
-              typeof row.away_stats === 'string' ? JSON.parse(row.away_stats) : row.away_stats;
-            if (
-              !isOT &&
-              (Number(hStats?.home_ot_goals) > 0 ||
-                Number(aStats?.away_ot_goals) > 0 ||
-                Number(hStats?.home_ot_shots) > 0 ||
-                Number(aStats?.away_ot_shots) > 0)
-            ) {
-              isOT = true;
-            }
-            const hs = hStats?.home_shots ?? hStats?.shots;
-            const as = aStats?.away_shots ?? aStats?.shots;
-            if (hs !== undefined && hs !== null && !isNaN(Number(hs))) homeShots = Number(hs);
-            if (as !== undefined && as !== null && !isNaN(Number(as))) awayShots = Number(as);
-          } catch {}
-
           if (homeScore === awayScore) {
             isTie = true;
           }
 
-          return { isOT, isTie, homeShots, awayShots };
+          return { isOT, isTie, homeShots: null, awayShots: null };
         };
 
         const compiledMatches: CoachMatchRecord[] = [];
         const seenRegKeys = new Set<string>();
 
-        const regGameRows = [
-          ...(statsPage0.data || []),
-          ...(statsPage1.data || []),
-          ...(statsPage2.data || []),
-          ...(statsPage3.data || []),
-          ...(statsPage4.data || [])
-        ];
+        const regGameRows = [...regWave1, ...regWave2, ...regWave3];
 
         regGameRows.forEach((row: any) => {
           const sId = Number(row.league_id) || 1;
@@ -599,8 +544,8 @@ export default function ManagersPage() {
           const awayScore = Number(row.away_score);
           if (isNaN(homeScore) || isNaN(awayScore)) return;
 
-          const homeSide = resolveSide(sId, row.home_team_id, row.home_coach);
-          const awaySide = resolveSide(sId, row.away_team_id, row.away_coach);
+          const homeSide = resolveSide(sId, row.home_team_id, row.home_coach_id, row.home_coach);
+          const awaySide = resolveSide(sId, row.away_team_id, row.away_coach_id, row.away_coach);
           if (!homeSide || !awaySide || homeSide.coach_id === awaySide.coach_id) return;
 
           const sName = seasonMap.get(sId) || `Season ${sId}`;
@@ -638,7 +583,7 @@ export default function ManagersPage() {
         });
 
         // Include any played schedule games not already in league_gamestats
-        const schedRows = [...(schedPage0.data || []), ...(schedPage1.data || [])];
+        const schedRows = [...schedPage0, ...schedPage1];
         schedRows.forEach((row: any) => {
           const rawPlayed = String(row.played ?? '').trim().toLowerCase();
           const isPlayed =
@@ -693,9 +638,10 @@ export default function ManagersPage() {
           });
         });
 
-        // Include playoff games from league_playoff_gamestats
+        // Include ALL playoff games from league_playoff_gamestats across all seasons
         const seenPoKeys = new Set<string>();
-        (poGamesRes.data || []).forEach((row: any) => {
+        const poGameRows = [...poPage0, ...poPage1, ...poPage2];
+        poGameRows.forEach((row: any) => {
           const sId = Number(row.league_id) || 1;
           const gIdStr = String(row.game_id).trim();
           const key = `po-${sId}-${gIdStr}`;
@@ -709,16 +655,16 @@ export default function ManagersPage() {
           const awayScore = Number(row.away_score);
           if (isNaN(homeScore) || isNaN(awayScore)) return;
 
-          const homeSide = resolveSide(sId, row.home_team_id, row.home_coach);
-          const awaySide = resolveSide(sId, row.away_team_id, row.away_coach);
+          const homeSide = resolveSide(sId, row.home_team_id, row.home_coach_id, row.home_coach);
+          const awaySide = resolveSide(sId, row.away_team_id, row.away_coach_id, row.away_coach);
           if (!homeSide || !awaySide || homeSide.coach_id === awaySide.coach_id) return;
 
           const sName = seasonMap.get(sId) || `Season ${sId}`;
           const sBadge = formatSeasonBadge(sId, sName);
           const lType = getLeaguePrefix(sId, sName);
           const { isOT, isTie, homeShots, awayShots } = parseGameDetails(row, homeScore, awayScore);
-          const rNum = Number(row.round_number);
-          const roundLabel = rNum ? `R${rNum}` : 'PO';
+          const gNum = Number(row.game_number);
+          const roundLabel = gNum ? `PO G${gNum}` : 'PO';
 
           compiledMatches.push({
             id: key,
@@ -749,6 +695,16 @@ export default function ManagersPage() {
             is_tie: isTie
           });
         });
+
+        // Sort each coach's teams by latest season descending
+        const compiledCoaches = Array.from(coachMap.values())
+          .map(c => ({
+            ...c,
+            teams: c.teams.sort((a, b) => b.league_id - a.league_id)
+          }))
+          .sort((a, b) => a.coach_name.localeCompare(b.coach_name));
+
+        setCoaches(compiledCoaches);
 
         // Sort all matches most recent first (by league_id desc, then playoff after reg in same season, then game_id desc)
         compiledMatches.sort((a, b) => {
@@ -850,13 +806,12 @@ export default function ManagersPage() {
     return coaches.find(c => c.coach_id === Number(selectedOpponentId)) || null;
   }, [coaches, selectedOpponentId]);
 
-  // Available seasons for the selected Coach A
+  // Available seasons for the selected Coach A (across all seasons & leagues)
   const availableCoachSeasons = useMemo(() => {
     if (!selectedCoachId) return [];
     const map = new Map<number, { league_id: number; badge: string; name: string; league_type: string }>();
     allMatches.forEach(m => {
       if (m.home_coach_id !== selectedCoachId && m.away_coach_id !== selectedCoachId) return;
-      if (selectedLeagueType !== 'ALL' && m.league_type !== selectedLeagueType) return;
       if (!map.has(m.league_id)) {
         map.set(m.league_id, {
           league_id: m.league_id,
@@ -867,20 +822,18 @@ export default function ManagersPage() {
       }
     });
     return Array.from(map.values()).sort((a, b) => b.league_id - a.league_id);
-  }, [allMatches, selectedCoachId, selectedLeagueType]);
+  }, [allMatches, selectedCoachId]);
 
-  // All matches involving selectedCoachId under the current League / Season / Phase filters
+  // All matches involving selectedCoachId across ALL seasons regardless of season
   const coachMatchesFiltered = useMemo(() => {
     if (!selectedCoachId) return [];
     return allMatches.filter(m => {
       if (m.home_coach_id !== selectedCoachId && m.away_coach_id !== selectedCoachId) return false;
-      if (selectedLeagueType !== 'ALL' && m.league_type !== selectedLeagueType) return false;
-      if (h2hSeasonFilter !== 'ALL' && m.league_id !== Number(h2hSeasonFilter)) return false;
       if (h2hPhaseFilter === 'REG' && m.is_playoff) return false;
       if (h2hPhaseFilter === 'PLAYOFFS' && !m.is_playoff) return false;
       return true;
     });
-  }, [allMatches, selectedCoachId, selectedLeagueType, h2hSeasonFilter, h2hPhaseFilter]);
+  }, [allMatches, selectedCoachId, h2hPhaseFilter]);
 
   // Compute Head-to-Head summaries against every opponent coach
   const h2hOpponentSummaries = useMemo(() => {
@@ -1391,23 +1344,9 @@ export default function ManagersPage() {
               ))}
             </div>
 
-            {/* Season Filter */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono font-black uppercase text-slate-600">Season:</span>
-              <select
-                value={h2hSeasonFilter}
-                onChange={e =>
-                  setH2hSeasonFilter(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))
-                }
-                className="border border-black bg-white text-black px-2.5 py-1 text-xs font-mono font-bold uppercase cursor-pointer focus:outline-none"
-              >
-                <option value="ALL">All Seasons ({availableCoachSeasons.length})</option>
-                {availableCoachSeasons.map(s => (
-                  <option key={s.league_id} value={s.league_id}>
-                    {s.badge} — {s.name}
-                  </option>
-                ))}
-              </select>
+            {/* All Seasons Badge */}
+            <div className="flex items-center gap-1.5 bg-black text-white px-2.5 py-1 text-[11px] font-mono font-black uppercase border border-black">
+              <span>All Seasons Included ({availableCoachSeasons.length} Seasons • {coachMatchesFiltered.length} Games)</span>
             </div>
           </div>
 

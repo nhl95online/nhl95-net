@@ -392,10 +392,13 @@ export default function NewspaperPage() {
   useEffect(() => {
     async function fetchLeagues() {
       try {
-        const [leaguesRes, playoffGamesRes, playoffMasterRes] = await Promise.all([
-          supabase.from('leagues').select('league_id, league_name').order('league_id', { ascending: false }),
+        const [leaguesRes, playoffGamesRes, playoffMasterRes, futureStatsRes, futureGamesRes, futureStandingsRes] = await Promise.all([
+          supabase.from('leagues').select('league_id, league_name, status').order('league_id', { ascending: false }),
           supabase.from('league_playoff_gamestats').select('league_id').then(r => r, () => ({ data: null, error: null })),
-          supabase.from('league_playoff_player_stats_master').select('league_id, season_id').then(r => r, () => ({ data: null, error: null }))
+          supabase.from('league_playoff_player_stats_master').select('league_id, season_id').then(r => r, () => ({ data: null, error: null })),
+          supabase.from('api_stats_with_names').select('league_id').gt('league_id', 40).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_gamestats').select('league_id').gt('league_id', 40).then(r => r, () => ({ data: null, error: null })),
+          supabase.from('league_standings').select('season_id').gt('season_id', 40).then(r => r, () => ({ data: null, error: null }))
         ]);
 
         const poIds = new Set<number>();
@@ -412,6 +415,17 @@ export default function NewspaperPage() {
         });
         setPlayoffSeasonIds(poIds);
 
+        const activeFutureIds = new Set<number>();
+        (futureStatsRes.data || []).forEach((r: any) => {
+          if (r.league_id != null) activeFutureIds.add(Number(r.league_id));
+        });
+        (futureGamesRes.data || []).forEach((r: any) => {
+          if (r.league_id != null) activeFutureIds.add(Number(r.league_id));
+        });
+        (futureStandingsRes.data || []).forEach((r: any) => {
+          if (r.season_id != null) activeFutureIds.add(Number(r.season_id));
+        });
+
         let data = leaguesRes.data;
         const error = leaguesRes.error;
 
@@ -423,14 +437,29 @@ export default function NewspaperPage() {
           if (fallback.data && fallback.data.length > 0) {
             data = fallback.data.map((s: any) => ({
               league_id: s.league_id,
-              league_name: s.season_name
+              league_name: s.season_name,
+              status: Number(s.league_id) <= 40 ? 'Active' : 'Upcoming'
             }));
           }
         }
 
         if (data && data.length > 0) {
-          setLeagues(data);
-          const latest = data.reduce((prev: any, curr: any) => (Number(curr.league_id) > Number(prev.league_id) ? curr : prev), data[0]);
+          // Only show Active or Archived seasons that have commenced (<= 40 or have stats/games loaded), most recent at the top
+          const activeOrArchived = data
+            .filter((l: any) => {
+              const idNum = Number(l.league_id);
+              if (isNaN(idNum) || idNum <= 0) return false;
+              const statusStr = String(l.status || '').trim().toLowerCase();
+              const isValidStatus = !statusStr || statusStr === 'active' || statusStr === 'archived';
+              if (!isValidStatus) return false;
+              if (idNum <= 40) return true;
+              return activeFutureIds.has(idNum);
+            })
+            .sort((a: any, b: any) => Number(b.league_id) - Number(a.league_id));
+
+          const finalLeagues = activeOrArchived.length > 0 ? activeOrArchived : data.sort((a: any, b: any) => Number(b.league_id) - Number(a.league_id));
+          setLeagues(finalLeagues);
+          const latest = finalLeagues[0];
           const latestId = String(latest.league_id);
           setSelectedLeague(latestId);
           loadData(latestId, 'regular');
