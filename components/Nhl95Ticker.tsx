@@ -79,13 +79,18 @@ export default function Nhl95Ticker({ className = '' }: { className?: string }) 
   useEffect(() => {
     let mounted = true;
 
+    const PREVIOUS_SEASON_FILTER = /\b(W0[1-9]|W1[0-7]|Q0[1-9]|Q1[0-9]|S0[1-9]|S1[0-7]|201[0-2])\b/i;
+
     const loadTicker = async () => {
       try {
         const res = await fetch(`/api/discord-ticker?t=${Date.now()}`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          if (mounted && Array.isArray(data?.items) && data.items.length > 0) {
-            setItems(data.items);
+          const currentOnly = Array.isArray(data?.items)
+            ? data.items.filter((txt: string) => !PREVIOUS_SEASON_FILTER.test(String(txt || '')))
+            : [];
+          if (mounted && currentOnly.length > 0) {
+            setItems(currentOnly);
             return;
           }
         }
@@ -95,7 +100,9 @@ export default function Nhl95Ticker({ className = '' }: { className?: string }) 
         const bRes = await fetch(`/daily_briefing.json?t=${Date.now()}`, { cache: 'no-store' });
         if (bRes.ok) {
           const bData = await bRes.json();
-          const parsed = formatBriefingToTickerItems(bData);
+          const parsed = formatBriefingToTickerItems(bData).filter(
+            (txt) => !PREVIOUS_SEASON_FILTER.test(String(txt || ''))
+          );
           if (mounted && parsed.length > 0) {
             setItems(parsed.slice(0, 20));
           }

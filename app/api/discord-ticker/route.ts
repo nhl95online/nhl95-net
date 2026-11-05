@@ -115,6 +115,10 @@ function formatMessageToTickerBlurb(authorRaw: string, textRaw: string, channelN
   return `${author} SUGGESTS ${base}, ${suffix}`;
 }
 
+const ACTIVE_LEAGUE_ID = 40;
+const ACTIVE_LEAGUE_CODE = 'W18';
+const PREVIOUS_SEASON_REGEX = /\b(W0[1-9]|W1[0-7]|Q0[1-9]|Q1[0-9]|S0[1-9]|S1[0-7]|201[0-2])\b/i;
+
 async function fetchScoresSeriesAndTradesBlurbs(): Promise<{
   scoreAndSeriesBlurbs: string[];
   bigTradeBlurbs: string[];
@@ -123,17 +127,26 @@ async function fetchScoresSeriesAndTradesBlurbs(): Promise<{
   const bigTradeBlurbs: string[] = [];
 
   try {
-    const [teamsRes, coachesRes, gamesRes, tradesRes] = await Promise.all([
+    const [teamsRes, coachesRes, gamesRes, poGamesRes, tradesRes] = await Promise.all([
       supabase.from('league_teams').select('*'),
       supabase.from('league_coaches').select('*'),
       supabase
         .from('league_gamestats')
         .select('*')
-        .order('id', { ascending: false })
+        .eq('league_id', ACTIVE_LEAGUE_ID)
+        .order('game_id', { ascending: false })
         .limit(45),
+      supabase
+        .from('league_playoff_gamestats')
+        .select('*')
+        .eq('league_id', ACTIVE_LEAGUE_ID)
+        .order('game_id', { ascending: false })
+        .limit(25)
+        .then((r) => r, () => ({ data: [] as any[] })),
       supabase
         .from('league_trades')
         .select('*')
+        .eq('lg', ACTIVE_LEAGUE_CODE)
         .order('trade id', { ascending: false })
         .limit(12),
     ]);
@@ -148,15 +161,16 @@ async function fetchScoresSeriesAndTradesBlurbs(): Promise<{
 
     const teamMap = new Map<
       number,
-      { name: string; abbr: string; coach: string }
+      { name: string; abbr: string; coach: string; leagueId: number }
     >();
     const abbrMap = new Map<
       string,
-      { name: string; abbr: string; coach: string }
+      { name: string; abbr: string; coach: string; leagueId: number }
     >();
 
     (teamsRes.data || []).forEach((t: any) => {
       const tid = Number(t.team_id || 0);
+      const tLeagueId = Number(t.league_id || 0);
       const name = String(t.team_name || `TEAM ${tid}`).trim().toUpperCase();
       const abbr = String(t.abbreviation || `TM${tid}`).trim().toUpperCase();
       const cid = Number(t.coach_id || 0);
@@ -164,14 +178,23 @@ async function fetchScoresSeriesAndTradesBlurbs(): Promise<{
         (cid && coachMap.get(cid)) ||
         String(t.coach_name || 'COACH').trim().toUpperCase();
       if (tid > 0) {
-        teamMap.set(tid, { name, abbr, coach });
+        const existing = teamMap.get(tid);
+        if (!existing || tLeagueId === ACTIVE_LEAGUE_ID) {
+          teamMap.set(tid, { name, abbr, coach, leagueId: tLeagueId });
+        }
       }
       if (abbr) {
-        abbrMap.set(abbr, { name, abbr, coach });
+        const existingAbbr = abbrMap.get(abbr);
+        if (!existingAbbr || tLeagueId === ACTIVE_LEAGUE_ID) {
+          abbrMap.set(abbr, { name, abbr, coach, leagueId: tLeagueId });
+        }
       }
     });
 
-    const recentGames = gamesRes.data || [];
+    const recentGames = [
+      ...(poGamesRes.data || []).map((g: any) => ({ ...g, is_playoff: true })),
+      ...(gamesRes.data || []),
+    ].filter((g: any) => Number(g.league_id || ACTIVE_LEAGUE_ID) === ACTIVE_LEAGUE_ID);
 
     // 1. Track recent head-to-head series tallies across the latest games to detect Series Wins / Sweeps
     const seriesMap = new Map<
@@ -314,15 +337,17 @@ async function fetchScoresSeriesAndTradesBlurbs(): Promise<{
       }
     }
 
-    // 3. Add Big Trades & Blockbuster Deals from league_trades
+    // 3. Add Big Trades & Blockbuster Deals from league_trades (strictly current season only)
     const recentTrades = tradesRes.data || [];
     for (const tr of recentTrades) {
-      const lg = String(tr.lg || 'W18').trim().toUpperCase();
+      const lg = String(tr.lg || '').trim().toUpperCase();
+      if (lg !== ACTIVE_LEAGUE_CODE) continue;
       const t1Abbr = String(tr.team || '').trim().toUpperCase();
       const t2Abbr = String(tr.team_1 || '').trim().toUpperCase();
       const t1Assets = String(tr.trade || '').replace(/\s+/g, ' ').trim().toUpperCase();
       const t2Assets = String(tr.trade_1 || '').replace(/\s+/g, ' ').trim().toUpperCase();
       if (!t1Abbr || !t2Abbr || !t1Assets || !t2Assets) continue;
+      if (PREVIOUS_SEASON_REGEX.test(t1Assets) || PREVIOUS_SEASON_REGEX.test(t2Assets)) continue;
 
       const t1Meta = abbrMap.get(t1Abbr);
       const t2Meta = abbrMap.get(t2Abbr);
@@ -443,11 +468,13 @@ export async function GET() {
             (c: any) =>
               (c?.type === 0 || c?.type === 5) &&
               typeof c?.name === 'string' &&
+              !PREVIOUS_SEASON_REGEX.test(c.name) &&
               targetNames.some((tn) => c.name.toLowerCase().includes(tn))
           );
 
           const blurbs: { id: string; text: string }[] = [];
           const seenTexts = new Set<string>();
+          const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
 
           await Promise.all(
             matchedChannels.slice(0, 9).map(async (ch: any) => {
@@ -465,10 +492,14 @@ export async function GET() {
 
                 for (const m of msgs) {
                   if (m?.author?.bot) continue;
+                  if (m?.timestamp) {
+                    const msgMs = Date.parse(m.timestamp);
+                    if (!isNaN(msgMs) && Date.now() - msgMs > maxAgeMs) continue;
+                  }
                   const authorName =
                     m?.member?.nick || m?.author?.global_name || m?.author?.username || 'Coach';
                   const blurb = formatMessageToTickerBlurb(authorName, m?.content || '', ch.name);
-                  if (blurb && !seenTexts.has(blurb)) {
+                  if (blurb && !PREVIOUS_SEASON_REGEX.test(blurb) && !seenTexts.has(blurb)) {
                     seenTexts.add(blurb);
                     blurbs.push({ id: String(m.id || Math.random()), text: blurb });
                   }
