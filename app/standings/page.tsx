@@ -5,8 +5,44 @@ import Link from 'next/link';
 import { Search, ChevronDown, ArrowUp, ArrowDown, Globe, Maximize2, Minimize2, List, Grid, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-type SortField = 'seed' | 'wins' | 'losses' | 'ties' | 'pts' | 'gf' | 'ga' | 'gd' | 'otWins' | 'otLosses' | 'season_id';
+type SortField = 'seed' | 'wins' | 'losses' | 'ties' | 'pts' | 'gf' | 'ga' | 'gd' | 'otWins' | 'otLosses' | 'sos' | 'season_id';
 type SortOrder = 'asc' | 'desc';
+
+const parseAtkSeconds = (raw: any): number => {
+  if (raw === undefined || raw === null || raw === '') return 0;
+  const str = String(raw).trim();
+  if (str.includes(':')) {
+    const parts = str.split(':').map((p) => Number(p));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return parts[0] * 60 + parts[1];
+    }
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+  }
+  const num = Number(str);
+  if (isNaN(num) || num <= 0) return 0;
+  if (num < 1) {
+    // Excel day fraction: (minutes + seconds/60) / 24
+    return Math.round(num * 24 * 60);
+  }
+  return Math.round(num);
+};
+
+const formatZoneTime = (seconds: number): string => {
+  if (!seconds || seconds <= 0 || !isFinite(seconds)) return '0:00';
+  const rounded = Math.round(seconds);
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+const getRankColorClass = (rank: number): string => {
+  if (rank === 1) return 'text-yellow-400';
+  if (rank === 2 || rank === 3) return 'text-orange-400';
+  if (rank >= 4 && rank <= 10) return 'text-sky-400';
+  return 'text-neutral-500';
+};
 
 const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?: string }> = {
   W: {
@@ -181,6 +217,13 @@ export default function StandingsPage() {
 
   // Playoff Cutoff Count State (loaded from Leagues table playoff_teams column)
   const [playoffCutoffCount, setPlayoffCutoffCount] = useState<number>(8);
+
+  // Hover state for Team Season Rankings popover card
+  const [hoveredTeamCard, setHoveredTeamCard] = useState<{
+    team: any;
+    x: number;
+    y: number;
+  } | null>(null);
 
   // 1. Dynamic Load: Fetch all valid seasons and rules configurations from leagues table
   useEffect(() => {
@@ -582,6 +625,18 @@ export default function StandingsPage() {
           homeWins: 0, homeLosses: 0, homeTies: 0,
           awayWins: 0, awayLosses: 0, awayTies: 0,
           otWins: 0, otLosses: 0,
+          statsGp: 0, statsGf: 0,
+          shotsFor: 0, shotsAgainst: 0,
+          ppGoals: 0, ppOpps: 0,
+          pkGoalsAgainst: 0, pkOpps: 0,
+          shGoals: 0,
+          breakawayGoals: 0, breakawayAtt: 0,
+          faceoffsWon: 0, faceoffsTotal: 0,
+          hits: 0,
+          atkSeconds: 0, defSeconds: 0,
+          pim: 0,
+          playedOpponentIds: [] as number[],
+          remainingOpponentIds: [] as number[],
           history: [] as string[],
           conference: tInfo?.conference?.trim() || null,
           division: tInfo?.division?.trim() || null,
@@ -630,6 +685,18 @@ export default function StandingsPage() {
           homeWins: 0, homeLosses: 0, homeTies: 0,
           awayWins: 0, awayLosses: 0, awayTies: 0,
           otWins: 0, otLosses: 0,
+          statsGp: 0, statsGf: 0,
+          shotsFor: 0, shotsAgainst: 0,
+          ppGoals: 0, ppOpps: 0,
+          pkGoalsAgainst: 0, pkOpps: 0,
+          shGoals: 0,
+          breakawayGoals: 0, breakawayAtt: 0,
+          faceoffsWon: 0, faceoffsTotal: 0,
+          hits: 0,
+          atkSeconds: 0, defSeconds: 0,
+          pim: 0,
+          playedOpponentIds: [] as number[],
+          remainingOpponentIds: [] as number[],
           history: [] as string[],
           conference: tInfo?.conference?.trim() || null,
           division: tInfo?.division?.trim() || null,
@@ -662,14 +729,72 @@ export default function StandingsPage() {
           }
         }
 
-        if (!isOT && statsObj) {
+        if (statsObj && (statsObj.home_stats || statsObj.away_stats)) {
           try {
-            const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : statsObj.home_stats;
-            const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : statsObj.away_stats;
-            if (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
-                Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0) {
+            const hStats = typeof statsObj.home_stats === 'string' ? JSON.parse(statsObj.home_stats) : (statsObj.home_stats || {});
+            const aStats = typeof statsObj.away_stats === 'string' ? JSON.parse(statsObj.away_stats) : (statsObj.away_stats || {});
+            if (!isOT && (Number(hStats?.home_ot_goals) > 0 || Number(aStats?.away_ot_goals) > 0 ||
+                Number(hStats?.home_ot_shots) > 0 || Number(aStats?.away_ot_shots) > 0)) {
               isOT = true;
             }
+
+            const hShots = Number(hStats?.home_shots ?? hStats?.shots ?? 0) || 0;
+            const aShots = Number(aStats?.away_shots ?? aStats?.shots ?? 0) || 0;
+            const hPpg = Number(hStats?.home_pp_goals ?? hStats?.pp_goals ?? 0) || 0;
+            const aPpg = Number(aStats?.away_pp_goals ?? aStats?.pp_goals ?? 0) || 0;
+            const hPpo = Number(hStats?.home_pp_opps ?? hStats?.pp_opps ?? 0) || 0;
+            const aPpo = Number(aStats?.away_pp_opps ?? aStats?.pp_opps ?? 0) || 0;
+            const hShg = Number(hStats?.home_sh_goals ?? hStats?.sh_goals ?? 0) || 0;
+            const aShg = Number(aStats?.away_sh_goals ?? aStats?.sh_goals ?? 0) || 0;
+            const hBrkG = Number(hStats?.home_breakaway_goals ?? hStats?.breakaway_goals ?? 0) || 0;
+            const aBrkG = Number(aStats?.away_breakaway_goals ?? aStats?.breakaway_goals ?? 0) || 0;
+            const hBrkA = Number(hStats?.home_breakaways ?? hStats?.breakaways ?? 0) || 0;
+            const aBrkA = Number(aStats?.away_breakaways ?? aStats?.breakaways ?? 0) || 0;
+            const hFoW = Number(hStats?.home_faceoff_won ?? hStats?.faceoff_won ?? 0) || 0;
+            const aFoW = Number(aStats?.away_faceoff_won ?? aStats?.faceoff_won ?? 0) || 0;
+            const totFo = hFoW + aFoW;
+            const hHits = Number(hStats?.home_bodychecks ?? hStats?.bodychecks ?? 0) || 0;
+            const aHits = Number(aStats?.away_bodychecks ?? aStats?.bodychecks ?? 0) || 0;
+            const hPim = Number(hStats?.home_pim ?? hStats?.pim ?? 0) || 0;
+            const aPim = Number(aStats?.away_pim ?? aStats?.pim ?? 0) || 0;
+            const hAtk = parseAtkSeconds(hStats?.home_atk ?? hStats?.atk);
+            const aAtk = parseAtkSeconds(aStats?.away_atk ?? aStats?.atk);
+
+            teamMap[hId].statsGp += 1;
+            teamMap[hId].statsGf += homeScore;
+            teamMap[hId].shotsFor += hShots;
+            teamMap[hId].shotsAgainst += aShots;
+            teamMap[hId].ppGoals += hPpg;
+            teamMap[hId].ppOpps += hPpo;
+            teamMap[hId].pkGoalsAgainst += aPpg;
+            teamMap[hId].pkOpps += aPpo;
+            teamMap[hId].shGoals += hShg;
+            teamMap[hId].breakawayGoals += hBrkG;
+            teamMap[hId].breakawayAtt += hBrkA;
+            teamMap[hId].faceoffsWon += hFoW;
+            teamMap[hId].faceoffsTotal += totFo;
+            teamMap[hId].hits += hHits;
+            teamMap[hId].atkSeconds += hAtk;
+            teamMap[hId].defSeconds += aAtk;
+            teamMap[hId].pim += hPim;
+
+            teamMap[aId].statsGp += 1;
+            teamMap[aId].statsGf += awayScore;
+            teamMap[aId].shotsFor += aShots;
+            teamMap[aId].shotsAgainst += hShots;
+            teamMap[aId].ppGoals += aPpg;
+            teamMap[aId].ppOpps += aPpo;
+            teamMap[aId].pkGoalsAgainst += hPpg;
+            teamMap[aId].pkOpps += hPpo;
+            teamMap[aId].shGoals += aShg;
+            teamMap[aId].breakawayGoals += aBrkG;
+            teamMap[aId].breakawayAtt += aBrkA;
+            teamMap[aId].faceoffsWon += aFoW;
+            teamMap[aId].faceoffsTotal += totFo;
+            teamMap[aId].hits += aHits;
+            teamMap[aId].atkSeconds += aAtk;
+            teamMap[aId].defSeconds += hAtk;
+            teamMap[aId].pim += aPim;
           } catch {}
         }
 
@@ -683,6 +808,8 @@ export default function StandingsPage() {
         teamMap[hId].ga += awayScore;
         teamMap[aId].gf += awayScore;
         teamMap[aId].ga += homeScore;
+        teamMap[hId].playedOpponentIds.push(aId);
+        teamMap[aId].playedOpponentIds.push(hId);
         if (!teamMap[hId].h2h) teamMap[hId].h2h = {};
         if (!teamMap[aId].h2h) teamMap[aId].h2h = {};
         if (!teamMap[hId].h2h[aId]) teamMap[hId].h2h[aId] = { wins: 0, pts: 0, gf: 0, ga: 0 };
@@ -768,16 +895,25 @@ export default function StandingsPage() {
         applyGame(hId, aId, homeScore, awayScore, stats.game_meta, stats);
       });
 
-      // Also process any schedule matches marked played not yet in gamestats
+      // Also process any schedule matches marked played not yet in gamestats, and collect unplayed remaining schedule
       allScheduleData.forEach((game: any) => {
         const gIdStr = String(game.game_id).trim();
         const rawPlayed = String(game.played || '').trim().toLowerCase();
-        const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y';
+        const isPlayed = rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || processedStatsGameIds.has(gIdStr);
 
-        if (isPlayed && !processedStatsGameIds.has(gIdStr) && game.game_meta) {
-          const homeScore = Number(game.home_score) || 0;
-          const awayScore = Number(game.away_score) || 0;
-          applyGame(game.home_team_id, game.away_team_id, homeScore, awayScore, game.game_meta, game);
+        if (isPlayed) {
+          if (!processedStatsGameIds.has(gIdStr) && game.game_meta) {
+            const homeScore = Number(game.home_score) || 0;
+            const awayScore = Number(game.away_score) || 0;
+            applyGame(game.home_team_id, game.away_team_id, homeScore, awayScore, game.game_meta, game);
+          }
+        } else {
+          const hId = resolveTeamKey(game.home_team_id);
+          const aId = resolveTeamKey(game.away_team_id);
+          if (hId && aId && hId !== aId && teamMap[hId] && teamMap[aId]) {
+            teamMap[hId].remainingOpponentIds.push(aId);
+            teamMap[aId].remainingOpponentIds.push(hId);
+          }
         }
       });
 
@@ -836,6 +972,18 @@ export default function StandingsPage() {
           gd: Number(row.gd) || 0,
           otWins: Number(row.otw) || 0,
           otLosses: Number(row.otl) || 0,
+          statsGp: 0, statsGf: 0,
+          shotsFor: 0, shotsAgainst: 0,
+          ppGoals: 0, ppOpps: 0,
+          pkGoalsAgainst: 0, pkOpps: 0,
+          shGoals: 0,
+          breakawayGoals: 0, breakawayAtt: 0,
+          faceoffsWon: 0, faceoffsTotal: 0,
+          hits: 0,
+          atkSeconds: 0, defSeconds: 0,
+          pim: 0,
+          playedOpponentIds: [] as number[],
+          remainingOpponentIds: [] as number[],
           streak: row.strk || '-',
           l10: row.l10 || '0-0-0',
           homeRecord: row.home || '0-0-0',
@@ -845,6 +993,12 @@ export default function StandingsPage() {
           clinch: row.clinch || ''
         };
       });
+    }
+
+    // If playoffCutoff was left at default 8 but league has >= 20 teams (e.g. W18 has 28 teams, 16 playoff spots), update to 16
+    if (playoffCutoff === 8 && freshStandings.length >= 20) {
+      playoffCutoff = 16;
+      setPlayoffCutoffCount(16);
     }
 
     freshStandings.sort((a: any, b: any) => {
@@ -863,19 +1017,6 @@ export default function StandingsPage() {
       }
       return b.gd - a.gd;
     });
-
-    const standardSeededList = freshStandings.map((team, idx) => ({
-      ...team,
-      seed: idx + 1
-    }));
-
-    const confs: string[] = Array.from(
-      new Set(standardSeededList.map((t) => t.conference).filter(Boolean))
-    ) as string[];
-
-    const divs: string[] = Array.from(
-      new Set(standardSeededList.map((t) => t.division).filter(Boolean))
-    ) as string[];
 
     // Extract actual schedule length from schedule data or games played
     let maxSchedGames = 0;
@@ -904,6 +1045,210 @@ export default function StandingsPage() {
     if (resolvedGamesPerTeam > 0) {
       setGamesPerTeam(resolvedGamesPerTeam);
     }
+
+    // Build lookup by team id for PTS% and SoS / Remaining Opponents calculation
+    const teamLookupById: Record<number, any> = {};
+    freshStandings.forEach((t: any) => {
+      const gp = Number(t.gp) || 0;
+      const pts = Number(t.pts) || 0;
+      t.ptsPct = gp > 0 ? pts / (gp * 2) : 0;
+      teamLookupById[Number(t.id)] = t;
+    });
+
+    // If a team has remaining games (gp < resolvedGamesPerTeam) and no unplayed rows in league_schedule,
+    // infer remaining opponents from head-to-head series counts against teams that also have remaining games
+    const allTeamIdsInSeason = freshStandings.map((t: any) => Number(t.id));
+    let modalSeriesLength = 2;
+    const pairCounts: number[] = [];
+    freshStandings.forEach((t: any) => {
+      const counts: Record<number, number> = {};
+      (t.playedOpponentIds || []).forEach((oppId: number) => {
+        counts[oppId] = (counts[oppId] || 0) + 1;
+      });
+      Object.values(counts).forEach((c) => pairCounts.push(c));
+    });
+    if (pairCounts.length > 0) {
+      const freq: Record<number, number> = {};
+      pairCounts.forEach((c) => {
+        if (c >= 2) freq[c] = (freq[c] || 0) + 1;
+      });
+      const sortedFreq = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+      if (sortedFreq.length > 0) {
+        modalSeriesLength = Number(sortedFreq[0][0]) || 2;
+      }
+    }
+
+    freshStandings.forEach((t: any) => {
+      const gp = Number(t.gp) || 0;
+      const expectedLeft = Math.max(0, resolvedGamesPerTeam - gp);
+      let remIds: number[] = [...(t.remainingOpponentIds || [])];
+
+      if (remIds.length === 0 && expectedLeft > 0) {
+        const playedCounts: Record<number, number> = {};
+        (t.playedOpponentIds || []).forEach((oppId: number) => {
+          playedCounts[oppId] = (playedCounts[oppId] || 0) + 1;
+        });
+
+        // Candidate opponents that also have games remaining and haven't completed their series against `t`
+        const candidates = allTeamIdsInSeason.filter((oppId) => {
+          if (oppId === Number(t.id)) return false;
+          const opp = teamLookupById[oppId];
+          if (!opp) return false;
+          const oppLeft = Math.max(0, resolvedGamesPerTeam - (Number(opp.gp) || 0));
+          if (oppLeft <= 0) return false;
+          const playedVsOpp = playedCounts[oppId] || 0;
+          return playedVsOpp < modalSeriesLength;
+        });
+
+        candidates.forEach((oppId) => {
+          const playedVsOpp = playedCounts[oppId] || 0;
+          const needed = Math.min(modalSeriesLength - playedVsOpp, expectedLeft - remIds.length);
+          for (let k = 0; k < needed; k++) {
+            remIds.push(oppId);
+          }
+        });
+      }
+
+      const oppCountMap: Record<number, number> = {};
+      remIds.forEach((oppId) => {
+        oppCountMap[oppId] = (oppCountMap[oppId] || 0) + 1;
+      });
+
+      const remainingOpponents = Object.entries(oppCountMap)
+        .map(([oppIdStr, count]) => {
+          const oppId = Number(oppIdStr);
+          const opp = teamLookupById[oppId];
+          return {
+            id: oppId,
+            abbr: opp?.abbr || `TM${oppId}`,
+            name: opp?.name || `Club #${oppId}`,
+            count,
+            pts: opp?.pts ?? 0,
+            gp: opp?.gp ?? 0,
+            ptsPct: opp?.ptsPct ?? 0.5
+          };
+        })
+        .sort((a, b) => b.count - a.count || b.ptsPct - a.ptsPct);
+
+      // Compute SoS: average PTS% of remaining opponents if any, else average PTS% of played opponents
+      const sosSourceIds = remIds.length > 0 ? remIds : (t.playedOpponentIds || []);
+      let sosSum = 0;
+      let sosValid = 0;
+      sosSourceIds.forEach((oppId: number) => {
+        const opp = teamLookupById[oppId];
+        if (opp && Number(opp.gp) > 0) {
+          sosSum += opp.ptsPct;
+          sosValid += 1;
+        }
+      });
+
+      t.remainingGames = remIds.length > 0 ? remIds.length : expectedLeft;
+      t.remainingOpponents = remainingOpponents;
+      t.sos = sosValid > 0 ? sosSum / sosValid : 0;
+      t.sosIsRemaining = remIds.length > 0;
+    });
+
+    // Compute league-wide ranks for the 19 stats in the hover card + SoS rank
+    const computeMetricRankMap = (
+      list: any[],
+      getValue: (t: any) => number,
+      higherIsBetter: boolean
+    ): Record<number, number> => {
+      const sorted = [...list].sort((a, b) => {
+        const va = getValue(a);
+        const vb = getValue(b);
+        if (vb !== va) return higherIsBetter ? vb - va : va - vb;
+        return (b.pts || 0) - (a.pts || 0);
+      });
+      const rankMap: Record<number, number> = {};
+      sorted.forEach((item, idx) => {
+        rankMap[Number(item.id)] = idx + 1;
+      });
+      return rankMap;
+    };
+
+    const rkPts = computeMetricRankMap(freshStandings, (t) => Number(t.pts) || 0, true);
+    const rkWins = computeMetricRankMap(freshStandings, (t) => Number(t.wins) || 0, true);
+    const rkPtsPct = computeMetricRankMap(freshStandings, (t) => t.ptsPct || 0, true);
+    const rkGf = computeMetricRankMap(freshStandings, (t) => Number(t.gf) || 0, true);
+    const rkGfPerG = computeMetricRankMap(freshStandings, (t) => (t.gp > 0 ? t.gf / t.gp : 0), true);
+    const rkGa = computeMetricRankMap(freshStandings, (t) => (t.gp > 0 ? Number(t.ga) : 9999), false);
+    const rkGaPerG = computeMetricRankMap(freshStandings, (t) => (t.gp > 0 ? t.ga / t.gp : 9999), false);
+    const rkGd = computeMetricRankMap(freshStandings, (t) => Number(t.gd) || 0, true);
+    const rkPpPct = computeMetricRankMap(freshStandings, (t) => (t.ppOpps > 0 ? t.ppGoals / t.ppOpps : 0), true);
+    const rkPkPct = computeMetricRankMap(freshStandings, (t) => (t.pkOpps > 0 ? (t.pkOpps - t.pkGoalsAgainst) / t.pkOpps : 0), true);
+    const rkShg = computeMetricRankMap(freshStandings, (t) => Number(t.shGoals) || 0, true);
+    const rkShPct = computeMetricRankMap(freshStandings, (t) => (t.shotsFor > 0 ? (t.statsGf || t.gf) / t.shotsFor : 0), true);
+    const rkBrPct = computeMetricRankMap(freshStandings, (t) => (t.breakawayAtt > 0 ? t.breakawayGoals / t.breakawayAtt : 0), true);
+    const rkFoPct = computeMetricRankMap(freshStandings, (t) => (t.faceoffsTotal > 0 ? t.faceoffsWon / t.faceoffsTotal : 0), true);
+    const rkShotsPerG = computeMetricRankMap(freshStandings, (t) => (t.statsGp > 0 ? t.shotsFor / t.statsGp : 0), true);
+    const rkHitsPerG = computeMetricRankMap(freshStandings, (t) => (t.statsGp > 0 ? t.hits / t.statsGp : 0), true);
+    const rkAtkPerG = computeMetricRankMap(freshStandings, (t) => (t.statsGp > 0 ? t.atkSeconds / t.statsGp : 0), true);
+    const rkDefPerG = computeMetricRankMap(freshStandings, (t) => (t.statsGp > 0 ? t.defSeconds / t.statsGp : 9999), false);
+    const rkPimPerG = computeMetricRankMap(freshStandings, (t) => (t.statsGp > 0 ? t.pim / t.statsGp : 9999), false);
+    const rkSos = computeMetricRankMap(freshStandings, (t) => Number(t.sos) || 0, true);
+
+    const standardSeededList = freshStandings.map((team, idx) => {
+      const tid = Number(team.id);
+      const gp = Math.max(1, Number(team.gp) || 0);
+      const sGp = Math.max(1, Number(team.statsGp) || gp);
+      const ptsPctVal = ((Number(team.pts) || 0) / (gp * 2)) * 100;
+      const gfPerGVal = (Number(team.gf) || 0) / gp;
+      const gaPerGVal = (Number(team.ga) || 0) / gp;
+      const gdVal = Number(team.gd) || 0;
+      const ppPctVal = team.ppOpps > 0 ? (team.ppGoals / team.ppOpps) * 100 : 0;
+      const pkPctVal = team.pkOpps > 0 ? ((team.pkOpps - team.pkGoalsAgainst) / team.pkOpps) * 100 : 0;
+      const shPctVal = team.shotsFor > 0 ? ((team.statsGf || team.gf) / team.shotsFor) * 100 : 0;
+      const brPctVal = team.breakawayAtt > 0 ? (team.breakawayGoals / team.breakawayAtt) * 100 : 0;
+      const foPctVal = team.faceoffsTotal > 0 ? (team.faceoffsWon / team.faceoffsTotal) * 100 : 0;
+      const shotsPerGVal = team.statsGp > 0 ? team.shotsFor / sGp : 0;
+      const hitsPerGVal = team.statsGp > 0 ? team.hits / sGp : 0;
+      const atkPerGSec = team.statsGp > 0 ? team.atkSeconds / sGp : 0;
+      const defPerGSec = team.statsGp > 0 ? team.defSeconds / sGp : 0;
+      const pimPerGVal = team.statsGp > 0 ? team.pim / sGp : 0;
+
+      const seasonRankings = [
+        { stat: 'PTS', value: `${team.pts ?? 0}`, rank: rkPts[tid] || idx + 1 },
+        { stat: 'W', value: `${team.wins ?? 0}`, rank: rkWins[tid] || idx + 1 },
+        { stat: 'PTS%', value: `${ptsPctVal.toFixed(1)}%`, rank: rkPtsPct[tid] || idx + 1 },
+        { stat: 'GF', value: `${team.gf ?? 0}`, rank: rkGf[tid] || idx + 1 },
+        { stat: 'GF/G', value: gfPerGVal.toFixed(2), rank: rkGfPerG[tid] || idx + 1 },
+        { stat: 'GA', value: `${team.ga ?? 0}`, rank: rkGa[tid] || idx + 1 },
+        { stat: 'GA/G', value: gaPerGVal.toFixed(2), rank: rkGaPerG[tid] || idx + 1 },
+        {
+          stat: 'GD',
+          value: gdVal > 0 ? `+${gdVal}` : `${gdVal}`,
+          rank: rkGd[tid] || idx + 1,
+          valueColor: gdVal > 0 ? 'text-emerald-400' : gdVal < 0 ? 'text-rose-400' : 'text-white'
+        },
+        { stat: 'PP%', value: `${ppPctVal.toFixed(1)}%`, rank: rkPpPct[tid] || idx + 1 },
+        { stat: 'PK%', value: `${pkPctVal.toFixed(1)}%`, rank: rkPkPct[tid] || idx + 1 },
+        { stat: 'SHG', value: `${team.shGoals ?? 0}`, rank: rkShg[tid] || idx + 1 },
+        { stat: 'SH%', value: `${shPctVal.toFixed(1)}%`, rank: rkShPct[tid] || idx + 1 },
+        { stat: 'BR%', value: `${brPctVal.toFixed(1)}%`, rank: rkBrPct[tid] || idx + 1 },
+        { stat: 'FO%', value: `${foPctVal.toFixed(1)}%`, rank: rkFoPct[tid] || idx + 1 },
+        { stat: 'SHOTS/G', value: shotsPerGVal.toFixed(1), rank: rkShotsPerG[tid] || idx + 1 },
+        { stat: 'HITS/G', value: hitsPerGVal.toFixed(1), rank: rkHitsPerG[tid] || idx + 1 },
+        { stat: 'ATK/G', value: formatZoneTime(atkPerGSec), rank: rkAtkPerG[tid] || idx + 1 },
+        { stat: 'DEF/G', value: formatZoneTime(defPerGSec), rank: rkDefPerG[tid] || idx + 1 },
+        { stat: 'PIM/G', value: pimPerGVal.toFixed(1), rank: rkPimPerG[tid] || idx + 1 }
+      ];
+
+      return {
+        ...team,
+        seed: idx + 1,
+        sosRank: rkSos[tid] || idx + 1,
+        seasonRankings
+      };
+    });
+
+    const confs: string[] = Array.from(
+      new Set(standardSeededList.map((t) => t.conference).filter(Boolean))
+    ) as string[];
+
+    const divs: string[] = Array.from(
+      new Set(standardSeededList.map((t) => t.division).filter(Boolean))
+    ) as string[];
 
     setAvailableConferences(confs.sort());
     setAvailableDivisions(divs.sort());
@@ -1066,7 +1411,7 @@ export default function StandingsPage() {
 
     const headers = [
       "Scope Context", "Seed ID", "Club Name", "Abbr", "Clinch Status", "Magic Number", "Elimination Number",
-      "GP", "W", "L", "T", "PTS", "GF", "GA", "+/-", "Home", "Away", "OTW", "OTL", "Streak", "L10"
+      "GP", "W", "L", "T", "PTS", "GF", "GA", "+/-", "Home", "Away", "OTW", "OTL", "Streak", "L10", "SoS", "Left To Play"
     ];
 
     const rows = processedStandings.map((t: any, idx: number) => [
@@ -1078,7 +1423,9 @@ export default function StandingsPage() {
       getMagicNumber(t, idx) ?? "-",
       getEliminationNumber(t, idx) ?? "-",
       t.gp, t.wins, t.losses, t.ties, t.pts, t.gf, t.ga, t.gd,
-      t.homeRecord, t.awayRecord, t.otWins, t.otLosses, t.streak, t.l10
+      t.homeRecord, t.awayRecord, t.otWins, t.otLosses, t.streak, t.l10,
+      t.sos ? `${(t.sos * 100).toFixed(1)}%` : "-",
+      `"${(t.remainingOpponents || []).map((o: any) => `${o.abbr} x${o.count}`).join(', ') || '0 Left'}"`
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8,"
@@ -1092,6 +1439,44 @@ export default function StandingsPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  // Playoff Line Points Required calculation
+  const playoffLineInfo = useMemo(() => {
+    if (isGlobalMode || activeCutoffCount <= 0 || rankedPool.length === 0) return null;
+    const cutoffIdx = Math.min(activeCutoffCount - 1, rankedPool.length - 1);
+    const cutoffTeam = rankedPool[cutoffIdx];
+    if (!cutoffTeam) return null;
+
+    const firstOutTeam = rankedPool[activeCutoffCount] || null;
+    const cutoffPts = Number(cutoffTeam.pts) || 0;
+    const cutoffGp = Math.max(1, Number(cutoffTeam.gp) || 0);
+    const totalSeasonGames = gamesPerTeam > 0 ? gamesPerTeam : 56;
+    const ptsPerGame = cutoffPts / cutoffGp;
+    const projectedPtsRequired = Math.max(cutoffPts, Math.round(ptsPerGame * totalSeasonGames));
+    const cutoffPtsPct = ((cutoffPts / (cutoffGp * 2)) * 100).toFixed(1);
+
+    const chasers = rankedPool.slice(activeCutoffCount);
+    let maxChaserMaxPts = cutoffPts;
+    chasers.forEach((c: any) => {
+      const m = getMaxPossiblePoints(c);
+      if (m > maxChaserMaxPts) maxChaserMaxPts = m;
+    });
+    const clinchTargetPts = Math.min(totalSeasonGames * 2, maxChaserMaxPts + 1);
+
+    return {
+      cutoffSeed: activeCutoffCount,
+      cutoffTeamAbbr: cutoffTeam.abbr,
+      cutoffTeamName: cutoffTeam.name,
+      cutoffPts,
+      cutoffGp,
+      cutoffPtsPct,
+      projectedPtsRequired,
+      clinchTargetPts,
+      totalSeasonGames,
+      firstOutAbbr: firstOutTeam?.abbr || null,
+      firstOutPts: firstOutTeam ? Number(firstOutTeam.pts) || 0 : null
+    };
+  }, [isGlobalMode, activeCutoffCount, rankedPool, gamesPerTeam]);
 
   const topFiveClinch = useMemo(() => {
     const pool = rankedPool.length > 0 ? rankedPool : processedStandings;
@@ -1130,7 +1515,7 @@ export default function StandingsPage() {
   }, [rankedPool, processedStandings, isGlobalMode, activeCutoffCount, selectedLeagueId, gamesPerTeam]);
 
   const hasGroups = availableConferences.length > 0 || availableDivisions.length > 0;
-  const colSpanCount = 19;
+  const colSpanCount = 20;
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif overflow-x-hidden">
@@ -1346,6 +1731,31 @@ export default function StandingsPage() {
           )}
         </div>
 
+        {/* Playoff Line Points Required Tracker Banner */}
+        {!isGlobalMode && playoffLineInfo && (
+          <div className="bg-neutral-950 text-white border-2 border-black px-3 py-2 mb-3 rounded-xs flex flex-wrap items-center justify-between gap-2 font-sans text-[11px] shadow-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="bg-amber-400 text-black font-black uppercase px-2 py-0.5 text-[10px] tracking-wider">
+                Playoff Line Tracker
+              </span>
+              <span className="font-bold text-neutral-200">
+                Top <strong className="text-amber-400">{playoffLineInfo.cutoffSeed}</strong> Qualify • Current Cutline (#{playoffLineInfo.cutoffSeed} {playoffLineInfo.cutoffTeamAbbr}):{' '}
+                <strong className="text-amber-400 font-mono text-xs">{playoffLineInfo.cutoffPts} PTS</strong>{' '}
+                <span className="text-neutral-400 font-mono text-[10px]">({playoffLineInfo.cutoffPtsPct}% in {playoffLineInfo.cutoffGp} GP)</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="bg-neutral-900 border border-amber-500/40 px-2.5 py-0.5 rounded-xs font-mono text-[11px]">
+                Playoff Line Points Required ({playoffLineInfo.totalSeasonGames} GP Pace):{' '}
+                <strong className="text-amber-400 font-black">{playoffLineInfo.projectedPtsRequired} PTS</strong>
+              </span>
+              <span className="text-[10px] text-neutral-400 font-mono">
+                Guaranteed Clinch Line: <strong className="text-emerald-400">{playoffLineInfo.clinchTargetPts} PTS</strong>
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Mobile Swipe Notice */}
         <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 mb-2 rounded-xs uppercase tracking-wider">
           <span>↔ Swipe table sideways for full stats</span>
@@ -1363,7 +1773,7 @@ export default function StandingsPage() {
               No matching records found.
             </div>
           ) : (
-            <table className="w-full text-left border-collapse min-w-[1020px] md:min-w-[1120px] transition-all text-[12px]">
+            <table className="w-full text-left border-collapse min-w-[1180px] md:min-w-[1300px] transition-all text-[12px]">
               <thead>
                 <tr className="border-b-2 border-black uppercase text-[10px] font-sans font-black tracking-wider text-black/70 bg-black/[0.01]">
                   {!isGlobalMode ? (
@@ -1376,8 +1786,8 @@ export default function StandingsPage() {
                     </th>
                   )}
 
-                  <th className="sticky left-[50px] sm:left-[65px] bg-[#fdfaf5] z-20 w-[180px] sm:w-[260px] text-center py-2 px-1 border-r border-black/10 shadow-[2px_0_4px_rgba(0,0,0,0.04)]">
-                    Club Identity
+                  <th className="sticky left-[50px] sm:left-[65px] bg-[#fdfaf5] z-20 w-[180px] sm:w-[260px] text-center py-2 px-1 border-r border-black/10 shadow-[2px_0_4px_rgba(0,0,0,0.04)]" title="Hover over any team to view their 19-stat Season Rankings card">
+                    Club Identity <span className="text-[8px] font-normal lowercase opacity-60 hidden sm:inline">(hover stats)</span>
                   </th>
                   <th className="w-[45px] sm:w-[50px] text-center font-sans font-black tracking-wider text-[9px] text-black/40 select-none py-2 px-1" title="Clinch Status (x = Playoff, y = Division, z = Conference, p = Presidents' Trophy)">
                     Clinch
@@ -1421,6 +1831,13 @@ export default function StandingsPage() {
                   </th>
                   <th className="text-center w-[55px] sm:w-[65px] py-2 px-1">STRK</th>
                   <th className="text-center w-[70px] sm:w-[80px] py-2 px-1">L10</th>
+                  <th
+                    onClick={() => handleSort('sos')}
+                    className="text-left w-[170px] sm:w-[210px] py-2 px-2 border-l border-black/10 bg-amber-50/40 cursor-pointer hover:bg-amber-100/40 transition-colors"
+                    title="Strength of Schedule (Opponent PTS%) & Remaining Opponents Left to Play"
+                  >
+                    SoS / Left to Play {renderSortIcon('sos')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="font-sans font-bold">
@@ -1430,6 +1847,12 @@ export default function StandingsPage() {
                   const eNumber = getEliminationNumber(team, index);
                   const targetSeason = isGlobalMode ? team.season_id : (selectedLeagueId || team.season_id);
                   const teamHref = targetSeason ? `/team/${team.id}?season=${targetSeason}` : `/team/${team.id}`;
+                  const remOpps: any[] = team.remainingOpponents || [];
+                  const remGamesCount = Number(team.remainingGames) || 0;
+                  const sosPct = team.sos ? (team.sos * 100).toFixed(1) : null;
+                  const ptsNeededForLine = playoffLineInfo
+                    ? Math.max(0, playoffLineInfo.projectedPtsRequired - (Number(team.pts) || 0))
+                    : 0;
 
                   return (
                     <React.Fragment key={`${team.id}-${team.season_id}-${index}`}>
@@ -1438,12 +1861,24 @@ export default function StandingsPage() {
                           {isGlobalMode ? team.season_display_name : team.seed}
                         </td>
 
-                        {/* Team Selection Link */}
-                        <td className="sticky left-[50px] sm:left-[65px] bg-white group-hover:bg-gray-50 z-10 flex justify-center items-center whitespace-nowrap py-1 px-1 w-[180px] sm:w-[260px] align-middle border-r border-black/5 shadow-[2px_0_4px_rgba(0,0,0,0.03)]">
+                        {/* Team Selection Link + Season Rankings Hover Trigger */}
+                        <td
+                          className="sticky left-[50px] sm:left-[65px] bg-white group-hover:bg-gray-50 z-10 flex justify-center items-center whitespace-nowrap py-1 px-1 w-[180px] sm:w-[260px] align-middle border-r border-black/5 shadow-[2px_0_4px_rgba(0,0,0,0.03)]"
+                          onMouseEnter={(e) => {
+                            if (team.seasonRankings && team.seasonRankings.length > 0) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setHoveredTeamCard({
+                                team,
+                                x: rect.right + 10,
+                                y: rect.top
+                              });
+                            }
+                          }}
+                          onMouseLeave={() => setHoveredTeamCard(null)}
+                        >
                           <Link
                             href={teamHref}
                             className="w-full flex justify-center items-center group/link cursor-pointer hover:opacity-85 transition-all duration-75"
-                            title={`View ${team.name || team.abbr} Team Page`}
                           >
                             {team.banner_url ? (
                               <div className="w-full flex justify-center max-h-[28px] items-center relative">
@@ -1549,15 +1984,68 @@ export default function StandingsPage() {
                         <td className="text-center font-mono text-rose-600 bg-rose-50/10 font-bold py-1 px-1 align-middle">{team.otLosses}</td>
                         <td className={`text-center font-mono font-black py-1 px-1 align-middle ${team.streak?.startsWith('W') ? 'text-emerald-600' : team.streak?.startsWith('OTL') ? 'text-amber-600' : team.streak?.startsWith('L') ? 'text-rose-600' : 'text-gray-400'}`}>{team.streak}</td>
                         <td className="text-center font-mono text-gray-400 font-normal py-1 px-1 align-middle">{team.l10}</td>
+
+                        {/* SoS & Whom They Have Left To Play Column */}
+                        <td
+                          className="py-1 px-2 align-middle border-l border-black/10 bg-amber-50/15 font-mono text-[10px]"
+                          title={
+                            remOpps.length > 0
+                              ? `SoS: ${sosPct}% (#${team.sosRank}) • Left to Play (${remGamesCount} GP): ${remOpps.map((o: any) => `${o.abbr} x${o.count} (${(o.ptsPct * 100).toFixed(0)}%)`).join(', ')}`
+                              : `Season Schedule Complete (0 Left) • Season SoS: ${sosPct || '50.0'}% (#${team.sosRank || '-'})`
+                          }
+                        >
+                          <div className="flex items-center justify-between gap-1 leading-tight">
+                            <span className={`font-black ${
+                              Number(team.sos) >= 0.55
+                                ? 'text-rose-700'
+                                : Number(team.sos) <= 0.45
+                                  ? 'text-emerald-700'
+                                  : 'text-amber-800'
+                            }`}>
+                              {sosPct ? `${sosPct}%` : '-'}
+                              {team.sosRank ? <span className="text-[9px] text-gray-400 font-normal ml-0.5">(#{team.sosRank})</span> : null}
+                            </span>
+                            <span className={`px-1 py-0.2 rounded-xs text-[9px] font-bold ${
+                              remGamesCount > 0 ? 'bg-amber-200/80 text-amber-950' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                              {remGamesCount > 0 ? `${remGamesCount}G Left` : '0 Left'}
+                            </span>
+                          </div>
+                          <div className="text-[9px] text-gray-600 truncate max-w-[190px] mt-0.5 font-sans font-semibold">
+                            {remOpps.length > 0 ? (
+                              <span>
+                                vs {remOpps.slice(0, 4).map((o: any) => `${o.abbr}${o.count > 1 ? `×${o.count}` : ''}`).join(', ')}
+                                {remOpps.length > 4 ? ` +${remOpps.length - 4}` : ''}
+                              </span>
+                            ) : remGamesCount > 0 ? (
+                              <span className="text-amber-800">{remGamesCount} Unscheduled GP</span>
+                            ) : (
+                              <span className="text-gray-400 italic">Schedule Done</span>
+                            )}
+                            {!isGlobalMode && ptsNeededForLine > 0 && eNumber !== 0 && mNumber !== 0 && (
+                              <span className="ml-1 text-blue-700 font-mono font-bold">
+                                • Need {ptsNeededForLine}P
+                              </span>
+                            )}
+                          </div>
+                        </td>
                       </tr>
 
                       {/* Clean Solid Dashed Playoff Border Line Injection Point */}
                       {isPlayoffBoundaryLine && (
                         <tr key={`cutoff-boundary-${team.season_id}-${index}`} className="bg-amber-100/90 border-y-2 border-dashed border-amber-600 select-none">
                           <td colSpan={colSpanCount} className="py-2 px-3 text-center font-sans font-black tracking-widest text-[10px] text-amber-950 uppercase align-middle bg-gradient-to-r from-amber-200/60 via-amber-100 to-amber-200/60 shadow-xs">
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
                               <span className="text-amber-700 font-bold">★ ★ ★</span>
-                              <span>PLAYOFF CUTOFF LINE • TOP {activeCutoffCount} QUALIFY FOR POSTSEASON</span>
+                              <span>
+                                PLAYOFF CUTOFF LINE • TOP {activeCutoffCount} QUALIFY
+                                {playoffLineInfo ? (
+                                  <>
+                                    {' '}• CURRENT LINE: <span className="underline decoration-amber-800">{playoffLineInfo.cutoffPts} PTS</span> ({playoffLineInfo.cutoffTeamAbbr}) • PLAYOFF LINE POINTS REQUIRED ({playoffLineInfo.totalSeasonGames} GP PACE):{' '}
+                                    <span className="bg-amber-900 text-amber-100 px-1.5 py-0.5 rounded-xs font-mono">{playoffLineInfo.projectedPtsRequired} PTS</span>
+                                  </>
+                                ) : null}
+                              </span>
                               <span className="text-amber-700 font-bold">★ ★ ★</span>
                             </div>
                           </td>
@@ -1570,6 +2058,49 @@ export default function StandingsPage() {
             </table>
           )}
         </div>
+
+        {/* Floating Dark Retro 19-Stat Season Rankings Popover Card */}
+        {hoveredTeamCard && hoveredTeamCard.team?.seasonRankings && (
+          <div
+            className="fixed z-[100] pointer-events-none bg-[#101017] text-white border-2 border-[#2a2a3a] shadow-[0_12px_32px_rgba(0,0,0,0.75)] rounded-xs w-[225px] font-mono select-none overflow-hidden"
+            style={{
+              left: `${Math.min(hoveredTeamCard.x, typeof window !== 'undefined' ? window.innerWidth - 240 : hoveredTeamCard.x)}px`,
+              top: `${Math.max(10, Math.min(hoveredTeamCard.y - 40, typeof window !== 'undefined' ? window.innerHeight - 535 : hoveredTeamCard.y))}px`
+            }}
+          >
+            <div className="bg-[#181824] px-3 py-1.5 border-b border-[#2a2a3a] flex items-center justify-between">
+              <span className="text-[11px] font-black tracking-wider text-amber-400 uppercase truncate">
+                {hoveredTeamCard.team.name || hoveredTeamCard.team.abbr}
+              </span>
+              <span className="text-[10px] font-bold text-neutral-400">
+                #{hoveredTeamCard.team.seed} SEED
+              </span>
+            </div>
+            <div className="grid grid-cols-3 px-3 py-1 bg-[#14141e] border-b border-[#252533] text-[9px] font-bold uppercase tracking-widest text-[#68687a]">
+              <span className="text-right pr-2">VALUE</span>
+              <span className="text-center">STAT</span>
+              <span className="text-right">RANK</span>
+            </div>
+            <div className="divide-y divide-[#1c1c28]">
+              {hoveredTeamCard.team.seasonRankings.map((row: any) => (
+                <div
+                  key={row.stat}
+                  className="grid grid-cols-3 items-center px-3 py-[3px] text-[11px] leading-tight bg-[#101017]"
+                >
+                  <span className={`text-right pr-2 font-bold ${row.valueColor || 'text-[#f2f2f7]'}`}>
+                    {row.value}
+                  </span>
+                  <span className="text-center font-bold text-[#78788c] text-[10px] tracking-wider uppercase">
+                    {row.stat}
+                  </span>
+                  <span className={`text-right font-black text-[10px] ${getRankColorClass(row.rank)}`}>
+                    #{row.rank}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="h-12"></div>
 
@@ -1584,6 +2115,8 @@ export default function StandingsPage() {
               <p><strong>STRK</strong> Active Hot/Cold Streak</p> <p><strong>L10</strong> Record Over Past 10 Matchups</p>
               <p><strong>M #</strong> Magic Number (Points to clinch playoff spot)</p>
               <p><strong>E #</strong> Elimination Number (Points before mathematical lockout)</p>
+              <p><strong>SoS / Left</strong> Opponent PTS% & Remaining Matchups</p>
+              <p><strong>Hover Club</strong> 19-Stat Season Rankings Card</p>
             </div>
           </div>
 

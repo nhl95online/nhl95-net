@@ -265,11 +265,51 @@ function normalizeName(str: string) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+const parseAtkSecondsHome = (raw: any): number => {
+  if (raw === undefined || raw === null || raw === '') return 0;
+  const str = String(raw).trim();
+  if (str.includes(':')) {
+    const parts = str.split(':').map((p) => Number(p));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return parts[0] * 60 + parts[1];
+    }
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+  }
+  const num = Number(str);
+  if (isNaN(num) || num <= 0) return 0;
+  if (num < 1) {
+    return Math.round(num * 24 * 60);
+  }
+  return Math.round(num);
+};
+
+const formatZoneTimeHome = (seconds: number): string => {
+  if (!seconds || seconds <= 0 || !isFinite(seconds)) return '0:00';
+  const rounded = Math.round(seconds);
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+const getRankColorClassHome = (rank: number): string => {
+  if (rank === 1) return 'text-yellow-400';
+  if (rank === 2 || rank === 3) return 'text-orange-400';
+  if (rank >= 4 && rank <= 10) return 'text-sky-400';
+  return 'text-neutral-500';
+};
+
 export default function HomePage() {
   // Defaulting to 40 (W18)
   const [selectedLeague, setSelectedLeague] = useState<string>('ALL');
   const [selectedSeason, setSelectedSeason] = useState<number>(40);
   const [standings, setStandings] = useState<any[]>([]);
+  const [hoveredStandingCard, setHoveredStandingCard] = useState<{
+    team: any;
+    x: number;
+    y: number;
+  } | null>(null);
   const [briefing, setBriefing] = useState<any>({ ...DEFAULT_BRIEFING, events: [] });
   const [liveDiscordEvents, setLiveDiscordEvents] = useState<any[] | null>(null);
   const [weeklyTrends, setWeeklyTrends] = useState<Array<{ badge: string; badgeColor: string; title: string; detail: string }>>([]);
@@ -1185,19 +1225,28 @@ export default function HomePage() {
             number,
             {
               gp: number;
+              statsGf: number;
               oneTimerGoals: number;
               oneTimerAtt: number;
               breakawayGoals: number;
               breakawayAtt: number;
               ppGoals: number;
               ppOpps: number;
+              pkGoalsAgainst: number;
+              pkOpps: number;
               shGoals: number;
               checks: number;
               shots: number;
               passComp: number;
               passAtt: number;
+              faceoffsWon: number;
+              faceoffsTotal: number;
+              atkSeconds: number;
+              defSeconds: number;
+              pim: number;
               otWins: number;
               otLosses: number;
+              playedOpponentIds: number[];
             }
           >();
 
@@ -1205,19 +1254,28 @@ export default function HomePage() {
             if (!byTeam.has(tid)) {
               byTeam.set(tid, {
                 gp: 0,
+                statsGf: 0,
                 oneTimerGoals: 0,
                 oneTimerAtt: 0,
                 breakawayGoals: 0,
                 breakawayAtt: 0,
                 ppGoals: 0,
                 ppOpps: 0,
+                pkGoalsAgainst: 0,
+                pkOpps: 0,
                 shGoals: 0,
                 checks: 0,
                 shots: 0,
                 passComp: 0,
                 passAtt: 0,
+                faceoffsWon: 0,
+                faceoffsTotal: 0,
+                atkSeconds: 0,
+                defSeconds: 0,
+                pim: 0,
                 otWins: 0,
-                otLosses: 0
+                otLosses: 0,
+                playedOpponentIds: []
               });
             }
             return byTeam.get(tid)!;
@@ -1233,8 +1291,16 @@ export default function HomePage() {
             const aId = Number(g.away_team_id || 0);
             const hRec = hId ? ensureTeam(hId) : null;
             const aRec = aId ? ensureTeam(aId) : null;
-            if (hRec) hRec.gp += 1;
-            if (aRec) aRec.gp += 1;
+            if (hRec) {
+              hRec.gp += 1;
+              hRec.statsGf += hScore;
+              if (aId) hRec.playedOpponentIds.push(aId);
+            }
+            if (aRec) {
+              aRec.gp += 1;
+              aRec.statsGf += aScore;
+              if (hId) aRec.playedOpponentIds.push(hId);
+            }
 
             let isOT = false;
             try {
@@ -1278,6 +1344,13 @@ export default function HomePage() {
                 const hPassA = Number(hS?.home_pass_attempts ?? hS?.passTries ?? 0);
                 const aPassA = Number(aS?.away_pass_attempts ?? aS?.passTries ?? 0);
 
+                const hFoW = Number(hS?.home_faceoff_won ?? hS?.faceoff_won ?? 0);
+                const aFoW = Number(aS?.away_faceoff_won ?? aS?.faceoff_won ?? 0);
+                const totFo = hFoW + aFoW;
+
+                const hAtk = parseAtkSecondsHome(hS?.home_atk ?? hS?.atk);
+                const aAtk = parseAtkSecondsHome(aS?.away_atk ?? aS?.atk);
+
                 const hPim = Number(hS?.home_pim ?? hS?.pim ?? 0);
                 const aPim = Number(aS?.away_pim ?? aS?.pim ?? 0);
 
@@ -1315,11 +1388,18 @@ export default function HomePage() {
                   hRec.breakawayAtt += hBrkA;
                   hRec.ppGoals += hPpG;
                   hRec.ppOpps += hPpO;
+                  hRec.pkGoalsAgainst += aPpG;
+                  hRec.pkOpps += aPpO;
                   hRec.shGoals += hShG;
                   hRec.checks += hChk;
                   hRec.shots += hShots;
                   hRec.passComp += hPassC;
                   hRec.passAtt += hPassA;
+                  hRec.faceoffsWon += hFoW;
+                  hRec.faceoffsTotal += totFo;
+                  hRec.atkSeconds += hAtk;
+                  hRec.defSeconds += aAtk;
+                  hRec.pim += hPim;
                 }
                 if (aRec) {
                   aRec.oneTimerGoals += a1tG;
@@ -1328,11 +1408,18 @@ export default function HomePage() {
                   aRec.breakawayAtt += aBrkA;
                   aRec.ppGoals += aPpG;
                   aRec.ppOpps += aPpO;
+                  aRec.pkGoalsAgainst += hPpG;
+                  aRec.pkOpps += hPpO;
                   aRec.shGoals += aShG;
                   aRec.checks += aChk;
                   aRec.shots += aShots;
                   aRec.passComp += aPassC;
                   aRec.passAtt += aPassA;
+                  aRec.faceoffsWon += aFoW;
+                  aRec.faceoffsTotal += totFo;
+                  aRec.atkSeconds += aAtk;
+                  aRec.defSeconds += hAtk;
+                  aRec.pim += aPim;
                 }
               }
             } catch {}
@@ -1840,6 +1927,201 @@ export default function HomePage() {
         }
 
         setRecordBookWatch(watchItems);
+
+        // Enrich freshStandings with 19-stat seasonRankings, SoS, and remainingOpponents for homepage standings hover & SoS column
+        const playedSetHome = new Set<string>(statsData.map((s: any) => String(s.game_id).trim()));
+        const remOppsMapHome = new Map<number, number[]>();
+        allScheduleData.forEach((g: any) => {
+          const gIdStr = String(g.game_id).trim();
+          const rawP = String(g.played || '').trim().toLowerCase();
+          const isP = rawP === 'true' || rawP === '1' || rawP === 'y' || playedSetHome.has(gIdStr);
+          if (!isP) {
+            const h = Number(g.home_team_id);
+            const a = Number(g.away_team_id);
+            if (h && a && h !== a) {
+              if (!remOppsMapHome.has(h)) remOppsMapHome.set(h, []);
+              if (!remOppsMapHome.has(a)) remOppsMapHome.set(a, []);
+              remOppsMapHome.get(h)!.push(a);
+              remOppsMapHome.get(a)!.push(h);
+            }
+          }
+        });
+
+        const stByIdHome = new Map<number, any>();
+        freshStandings.forEach((s: any) => {
+          const tid = Number(s.team_id);
+          const gp = Math.max(1, Number(s.gp) || 0);
+          s.ptsPct = (Number(s.pts) || 0) / (gp * 2);
+          s.gd = (Number(s.gf) || 0) - (Number(s.ga) || 0);
+          stByIdHome.set(tid, s);
+        });
+
+        freshStandings.forEach((s: any) => {
+          const tid = Number(s.team_id);
+          const b = curBox.byTeam.get(tid);
+          const gp = Number(s.gp) || 0;
+          const targetGp = Math.max(gp, schedCountByTeam.get(tid) || defaultTargetGp);
+          const expectedLeft = Math.max(0, targetGp - gp);
+          let remIds = [...(remOppsMapHome.get(tid) || [])];
+
+          if (remIds.length === 0 && expectedLeft > 0) {
+            const playedCounts: Record<number, number> = {};
+            (b?.playedOpponentIds || []).forEach((oppId: number) => {
+              playedCounts[oppId] = (playedCounts[oppId] || 0) + 1;
+            });
+            freshStandings.forEach((other: any) => {
+              const oppId = Number(other.team_id);
+              if (oppId === tid) return;
+              const oppLeft = Math.max(0, targetGp - (Number(other.gp) || 0));
+              if (oppLeft <= 0) return;
+              const playedVs = playedCounts[oppId] || 0;
+              if (playedVs < 2 && remIds.length < expectedLeft) {
+                const need = Math.min(2 - playedVs, expectedLeft - remIds.length);
+                for (let k = 0; k < need; k++) remIds.push(oppId);
+              }
+            });
+          }
+
+          const oppCountMap: Record<number, number> = {};
+          remIds.forEach((oppId) => {
+            oppCountMap[oppId] = (oppCountMap[oppId] || 0) + 1;
+          });
+          s.remainingOpponents = Object.entries(oppCountMap)
+            .map(([oppIdStr, count]) => {
+              const oppId = Number(oppIdStr);
+              const opp = stByIdHome.get(oppId);
+              return {
+                id: oppId,
+                abbr: opp?.league_teams?.abbreviation || `TM${oppId}`,
+                count,
+                ptsPct: opp?.ptsPct ?? 0.5
+              };
+            })
+            .sort((a, b2) => b2.count - a.count || b2.ptsPct - a.ptsPct);
+
+          const sosIds = remIds.length > 0 ? remIds : (b?.playedOpponentIds || []);
+          let sosSum = 0;
+          let sosCnt = 0;
+          sosIds.forEach((oppId) => {
+            const opp = stByIdHome.get(oppId);
+            if (opp && Number(opp.gp) > 0) {
+              sosSum += opp.ptsPct;
+              sosCnt += 1;
+            }
+          });
+          s.sos = sosCnt > 0 ? sosSum / sosCnt : 0;
+          s.remainingGames = remIds.length > 0 ? remIds.length : expectedLeft;
+          s.targetGp = targetGp;
+        });
+
+        const rankMetricHome = (getVal: (t: any) => number, desc: boolean) => {
+          const sorted = [...freshStandings].sort((a, b) => {
+            const va = getVal(a);
+            const vb = getVal(b);
+            if (vb !== va) return desc ? vb - va : va - vb;
+            return (Number(b.pts) || 0) - (Number(a.pts) || 0);
+          });
+          const map: Record<number, number> = {};
+          sorted.forEach((item, i) => {
+            map[Number(item.team_id)] = i + 1;
+          });
+          return map;
+        };
+
+        const hRkPts = rankMetricHome((t) => Number(t.pts) || 0, true);
+        const hRkW = rankMetricHome((t) => Number(t.w ?? t.wins ?? 0), true);
+        const hRkPtsPct = rankMetricHome((t) => t.ptsPct || 0, true);
+        const hRkGf = rankMetricHome((t) => Number(t.gf) || 0, true);
+        const hRkGfG = rankMetricHome((t) => (t.gp > 0 ? t.gf / t.gp : 0), true);
+        const hRkGa = rankMetricHome((t) => (t.gp > 0 ? Number(t.ga) : 9999), false);
+        const hRkGaG = rankMetricHome((t) => (t.gp > 0 ? t.ga / t.gp : 9999), false);
+        const hRkGd = rankMetricHome((t) => Number(t.gd) || 0, true);
+        const hRkPp = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.ppOpps > 0 ? b.ppGoals / b.ppOpps : 0;
+        }, true);
+        const hRkPk = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.pkOpps > 0 ? (b.pkOpps - b.pkGoalsAgainst) / b.pkOpps : 0;
+        }, true);
+        const hRkShg = rankMetricHome((t) => curBox.byTeam.get(Number(t.team_id))?.shGoals || 0, true);
+        const hRkShPct = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.shots > 0 ? (b.statsGf || Number(t.gf) || 0) / b.shots : 0;
+        }, true);
+        const hRkBr = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.breakawayAtt > 0 ? b.breakawayGoals / b.breakawayAtt : 0;
+        }, true);
+        const hRkFo = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.faceoffsTotal > 0 ? b.faceoffsWon / b.faceoffsTotal : 0;
+        }, true);
+        const hRkShotsG = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.gp > 0 ? b.shots / b.gp : 0;
+        }, true);
+        const hRkHitsG = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.gp > 0 ? b.checks / b.gp : 0;
+        }, true);
+        const hRkAtkG = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.gp > 0 ? b.atkSeconds / b.gp : 0;
+        }, true);
+        const hRkDefG = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.gp > 0 ? b.defSeconds / b.gp : 9999;
+        }, false);
+        const hRkPimG = rankMetricHome((t) => {
+          const b = curBox.byTeam.get(Number(t.team_id));
+          return b && b.gp > 0 ? b.pim / b.gp : 9999;
+        }, false);
+        const hRkSos = rankMetricHome((t) => Number(t.sos) || 0, true);
+
+        freshStandings.forEach((t: any, idx: number) => {
+          const tid = Number(t.team_id);
+          const b = curBox.byTeam.get(tid);
+          const gp = Math.max(1, Number(t.gp) || 1);
+          const sGp = Math.max(1, b?.gp || gp);
+          const gdVal = Number(t.gd) || 0;
+          const ppPct = b && b.ppOpps > 0 ? (b.ppGoals / b.ppOpps) * 100 : 0;
+          const pkPct = b && b.pkOpps > 0 ? ((b.pkOpps - b.pkGoalsAgainst) / b.pkOpps) * 100 : 0;
+          const shPct = b && b.shots > 0 ? ((b.statsGf || Number(t.gf) || 0) / b.shots) * 100 : 0;
+          const brPct = b && b.breakawayAtt > 0 ? (b.breakawayGoals / b.breakawayAtt) * 100 : 0;
+          const foPct = b && b.faceoffsTotal > 0 ? (b.faceoffsWon / b.faceoffsTotal) * 100 : 0;
+
+          t.seed = idx + 1;
+          t.sosRank = hRkSos[tid] || idx + 1;
+          t.seasonRankings = [
+            { stat: 'PTS', value: `${t.pts ?? 0}`, rank: hRkPts[tid] || idx + 1 },
+            { stat: 'W', value: `${t.w ?? t.wins ?? 0}`, rank: hRkW[tid] || idx + 1 },
+            { stat: 'PTS%', value: `${((t.ptsPct || 0) * 100).toFixed(1)}%`, rank: hRkPtsPct[tid] || idx + 1 },
+            { stat: 'GF', value: `${t.gf ?? 0}`, rank: hRkGf[tid] || idx + 1 },
+            { stat: 'GF/G', value: ((Number(t.gf) || 0) / gp).toFixed(2), rank: hRkGfG[tid] || idx + 1 },
+            { stat: 'GA', value: `${t.ga ?? 0}`, rank: hRkGa[tid] || idx + 1 },
+            { stat: 'GA/G', value: ((Number(t.ga) || 0) / gp).toFixed(2), rank: hRkGaG[tid] || idx + 1 },
+            {
+              stat: 'GD',
+              value: gdVal > 0 ? `+${gdVal}` : `${gdVal}`,
+              rank: hRkGd[tid] || idx + 1,
+              valueColor: gdVal > 0 ? 'text-emerald-400' : gdVal < 0 ? 'text-rose-400' : 'text-white'
+            },
+            { stat: 'PP%', value: `${ppPct.toFixed(1)}%`, rank: hRkPp[tid] || idx + 1 },
+            { stat: 'PK%', value: `${pkPct.toFixed(1)}%`, rank: hRkPk[tid] || idx + 1 },
+            { stat: 'SHG', value: `${b?.shGoals ?? 0}`, rank: hRkShg[tid] || idx + 1 },
+            { stat: 'SH%', value: `${shPct.toFixed(1)}%`, rank: hRkShPct[tid] || idx + 1 },
+            { stat: 'BR%', value: `${brPct.toFixed(1)}%`, rank: hRkBr[tid] || idx + 1 },
+            { stat: 'FO%', value: `${foPct.toFixed(1)}%`, rank: hRkFo[tid] || idx + 1 },
+            { stat: 'SHOTS/G', value: b ? (b.shots / sGp).toFixed(1) : '0.0', rank: hRkShotsG[tid] || idx + 1 },
+            { stat: 'HITS/G', value: b ? (b.checks / sGp).toFixed(1) : '0.0', rank: hRkHitsG[tid] || idx + 1 },
+            { stat: 'ATK/G', value: formatZoneTimeHome(b ? b.atkSeconds / sGp : 0), rank: hRkAtkG[tid] || idx + 1 },
+            { stat: 'DEF/G', value: formatZoneTimeHome(b ? b.defSeconds / sGp : 0), rank: hRkDefG[tid] || idx + 1 },
+            { stat: 'PIM/G', value: b ? (b.pim / sGp).toFixed(1) : '0.0', rank: hRkPimG[tid] || idx + 1 }
+          ];
+        });
+
+        setStandings([...freshStandings]);
 
         if (poAgg.skaters.length > 0 && regSkaters.length === 0) {
           setStatsPhase('PLAYOFFS');
@@ -3137,48 +3419,129 @@ export default function HomePage() {
             ))}
           </div>
 
+          {/* Playoff Line Points Required Banner */}
+          {(() => {
+            const cutIdx = selectedSeason === 39 ? 4 : standings.length >= 20 ? 16 : 8;
+            const cutTeam = standings[Math.min(cutIdx - 1, Math.max(0, standings.length - 1))];
+            if (!cutTeam) return null;
+            const cutPts = Number(cutTeam.pts) || 0;
+            const cutGp = Math.max(1, Number(cutTeam.gp) || 1);
+            const tGp = Number(cutTeam.targetGp) || (selectedSeason === 40 ? 56 : 56);
+            const projLine = Math.max(cutPts, Math.round((cutPts / cutGp) * tGp));
+            return (
+              <div className="mb-2.5 bg-neutral-900 border border-amber-400/50 px-2 py-1 text-[9px] font-mono flex items-center justify-between gap-1">
+                <span className="text-neutral-300">
+                  Playoff Line (<strong className="text-amber-400">#{cutIdx} {cutTeam.league_teams?.abbreviation}</strong>):{' '}
+                  <strong className="text-white">{cutPts} PTS</strong>
+                </span>
+                <span className="bg-amber-400 text-black font-black px-1.5 py-0.2">
+                  Req Pace: {projLine} PTS
+                </span>
+              </div>
+            );
+          })()}
+
           <div className="overflow-x-auto">
-            <table className="w-full text-[10px] border-collapse min-w-[240px]">
+            <table className="w-full text-[10px] border-collapse min-w-[275px]">
               <thead>
                 <tr className="border-b border-neutral-700 text-left text-neutral-300">
                   <th className="pb-1 font-bold">RK</th>
-                  <th className="pb-1 font-bold">TM</th>
+                  <th className="pb-1 font-bold" title="Hover over any team for 19-stat Season Rankings">TM</th>
                   <th className="pb-1 font-bold text-center">W-L-T-OTL</th>
                   <th className="pb-1 font-bold text-center">PTS</th>
+                  <th className="pb-1 font-bold text-right" title="Strength of Schedule & Remaining Opponents">SoS / LEFT</th>
                 </tr>
               </thead>
               <tbody>
-                {standings.map((s: any, index: number) => (
-                  <tr key={index} className="border-b border-neutral-800 hover:bg-neutral-900/70">
-                    <td className="py-1 font-bold text-neutral-400">{index + 1}</td>
-                    <td className="py-1 font-bold flex items-center gap-1.5 text-white">
-                      {s.league_teams?.logo_url && (
-                        <img
-                          src={s.league_teams.logo_url}
-                          alt={s.league_teams.abbreviation}
-                          className="w-4 h-4 object-contain shrink-0"
-                        />
-                      )}
-                      <span>{s.league_teams?.abbreviation || 'N/A'}</span>
+                {standings.map((s: any, index: number) => {
+                  const cutIdx = selectedSeason === 39 ? 4 : standings.length >= 20 ? 16 : 8;
+                  const isCutLine = index + 1 === cutIdx && standings.length > cutIdx;
+                  const cutPts = Number(s.pts) || 0;
+                  const cutGp = Math.max(1, Number(s.gp) || 1);
+                  const tGp = Number(s.targetGp) || 56;
+                  const projLine = Math.max(cutPts, Math.round((cutPts / cutGp) * tGp));
+                  const remOpps: any[] = s.remainingOpponents || [];
+                  const remG = Number(s.remainingGames) || 0;
+                  const sosStr = s.sos ? `${(s.sos * 100).toFixed(0)}%` : '-';
 
-                      {s.is_champion && getTrophyUrl(selectedSeason) && (
-                        <img
-                          src={getTrophyUrl(selectedSeason)!}
-                          alt="Championship Winner"
-                          className="w-4 h-4 ml-1 object-contain shrink-0"
-                          title="Championship Winner"
-                        />
+                  return (
+                    <React.Fragment key={index}>
+                      <tr
+                        className="border-b border-neutral-800 hover:bg-neutral-900/80 cursor-pointer"
+                        onMouseEnter={(e) => {
+                          if (s.seasonRankings && s.seasonRankings.length > 0) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setHoveredStandingCard({
+                              team: {
+                                ...s,
+                                name: s.league_teams?.team_name || s.league_teams?.abbreviation,
+                                abbr: s.league_teams?.abbreviation,
+                                seed: index + 1
+                              },
+                              x: Math.max(10, rect.left - 235),
+                              y: rect.top
+                            });
+                          }
+                        }}
+                        onMouseLeave={() => setHoveredStandingCard(null)}
+                      >
+                        <td className="py-1 font-bold text-neutral-400">{index + 1}</td>
+                        <td className="py-1 font-bold flex items-center gap-1 text-white">
+                          {s.league_teams?.logo_url && (
+                            <img
+                              src={s.league_teams.logo_url}
+                              alt={s.league_teams.abbreviation}
+                              className="w-4 h-4 object-contain shrink-0"
+                            />
+                          )}
+                          <span>{s.league_teams?.abbreviation || 'N/A'}</span>
+
+                          {s.is_champion && getTrophyUrl(selectedSeason) && (
+                            <img
+                              src={getTrophyUrl(selectedSeason)!}
+                              alt="Championship Winner"
+                              className="w-4 h-4 ml-0.5 object-contain shrink-0"
+                              title="Championship Winner"
+                            />
+                          )}
+                        </td>
+                        <td className="py-1 text-center font-mono text-neutral-300">
+                          {(s.w ?? s.wins ?? 0)}-{(s.l ?? s.losses ?? 0)}-{(s.t ?? s.ties ?? 0)}-{(s.otl ?? s.otLosses ?? 0)}
+                        </td>
+                        <td className="py-1 font-bold text-center text-amber-400">{s.pts ?? 0}</td>
+                        <td
+                          className="py-1 text-right font-mono text-[9px] leading-tight"
+                          title={
+                            remOpps.length > 0
+                              ? `SoS: ${sosStr} (#${s.sosRank}) • Left (${remG}G): ${remOpps.map((o: any) => `${o.abbr}×${o.count}`).join(', ')}`
+                              : `0 Games Left • SoS: ${sosStr}`
+                          }
+                        >
+                          <div className={Number(s.sos) >= 0.55 ? 'text-rose-400 font-bold' : Number(s.sos) <= 0.45 ? 'text-emerald-400 font-bold' : 'text-neutral-300'}>
+                            {sosStr} <span className="text-neutral-500">({remG}G)</span>
+                          </div>
+                          <div className="text-[8px] text-neutral-400 truncate max-w-[85px] ml-auto">
+                            {remOpps.length > 0
+                              ? remOpps.slice(0, 2).map((o: any) => `${o.abbr}${o.count > 1 ? `×${o.count}` : ''}`).join(', ') + (remOpps.length > 2 ? ` +${remOpps.length - 2}` : '')
+                              : remG > 0
+                                ? `${remG} Left`
+                                : 'Done'}
+                          </div>
+                        </td>
+                      </tr>
+                      {isCutLine && (
+                        <tr className="bg-amber-400/15 border-y border-dashed border-amber-400">
+                          <td colSpan={5} className="py-1 px-1.5 text-center font-mono font-black text-[8px] uppercase tracking-wider text-amber-300">
+                            ★ PLAYOFF LINE (TOP {cutIdx}) • {cutPts} PTS • {projLine} PTS PACE REQ ★
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="py-1 text-center font-mono text-neutral-300">
-                      {(s.w ?? s.wins ?? 0)}-{(s.l ?? s.losses ?? 0)}-{(s.t ?? s.ties ?? 0)}-{(s.otl ?? s.otLosses ?? 0)}
-                    </td>
-                    <td className="py-1 font-bold text-center text-amber-400">{s.pts ?? 0}</td>
-                  </tr>
-                ))}
+                    </React.Fragment>
+                  );
+                })}
                 {standings.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="py-3 text-center text-neutral-500 italic">
+                    <td colSpan={5} className="py-3 text-center text-neutral-500 italic">
                       No standings available
                     </td>
                   </tr>
@@ -3190,6 +3553,49 @@ export default function HomePage() {
             View full standings →
           </a>
         </aside>
+
+        {/* Floating Dark Retro 19-Stat Season Rankings Popover Card (Homepage Standings) */}
+        {hoveredStandingCard && hoveredStandingCard.team?.seasonRankings && (
+          <div
+            className="fixed z-[100] pointer-events-none bg-[#101017] text-white border-2 border-[#2a2a3a] shadow-[0_12px_32px_rgba(0,0,0,0.85)] rounded-xs w-[225px] font-mono select-none overflow-hidden"
+            style={{
+              left: `${Math.max(10, Math.min(hoveredStandingCard.x, typeof window !== 'undefined' ? window.innerWidth - 240 : hoveredStandingCard.x))}px`,
+              top: `${Math.max(10, Math.min(hoveredStandingCard.y - 40, typeof window !== 'undefined' ? window.innerHeight - 535 : hoveredStandingCard.y))}px`
+            }}
+          >
+            <div className="bg-[#181824] px-3 py-1.5 border-b border-[#2a2a3a] flex items-center justify-between">
+              <span className="text-[11px] font-black tracking-wider text-amber-400 uppercase truncate">
+                {hoveredStandingCard.team.name || hoveredStandingCard.team.abbr}
+              </span>
+              <span className="text-[10px] font-bold text-neutral-400">
+                #{hoveredStandingCard.team.seed} SEED
+              </span>
+            </div>
+            <div className="grid grid-cols-3 px-3 py-1 bg-[#14141e] border-b border-[#252533] text-[9px] font-bold uppercase tracking-widest text-[#68687a]">
+              <span className="text-right pr-2">VALUE</span>
+              <span className="text-center">STAT</span>
+              <span className="text-right">RANK</span>
+            </div>
+            <div className="divide-y divide-[#1c1c28]">
+              {hoveredStandingCard.team.seasonRankings.map((row: any) => (
+                <div
+                  key={row.stat}
+                  className="grid grid-cols-3 items-center px-3 py-[3px] text-[11px] leading-tight bg-[#101017]"
+                >
+                  <span className={`text-right pr-2 font-bold ${row.valueColor || 'text-[#f2f2f7]'}`}>
+                    {row.value}
+                  </span>
+                  <span className="text-center font-bold text-[#78788c] text-[10px] tracking-wider uppercase">
+                    {row.stat}
+                  </span>
+                  <span className={`text-right font-black text-[10px] ${getRankColorClassHome(row.rank)}`}>
+                    #{row.rank}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
