@@ -116,126 +116,126 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Primary Header Row - Logo & Mobile Hamburger */}
-      <div className="py-3 sm:py-5 px-4 flex justify-between sm:justify-center items-center border-b border-black relative">
-        <Link href="/" onClick={closeMobileMenu} className="flex items-center justify-center">
+      {/* Primary Header Row - Compact Left Logo + Right Navigation Links */}
+      <div className="py-1.5 sm:py-2 px-3 sm:px-6 flex items-center justify-between md:justify-start gap-4 lg:gap-8 bg-[#f4f1ea] relative">
+        <Link href="/" onClick={closeMobileMenu} className="flex items-center shrink-0">
           <img 
             src={LOGO_URL} 
             alt="NHL95 Online League" 
-            className="h-10 sm:h-14 md:h-16 max-w-[220px] sm:max-w-none object-contain" 
+            className="h-7 sm:h-8 md:h-9 w-auto object-contain" 
           />
         </Link>
+
+        {/* Desktop Navigation Links (To the right of the logo on screens >= md) */}
+        <div className="hidden md:flex items-center flex-wrap gap-3.5 lg:gap-6 text-xs lg:text-[13px] text-black uppercase font-bold tracking-wider flex-1">
+          {/* Online Arena tab (left of Standings) */}
+          <Link 
+            href="/arena" 
+            className="hover:bg-amber-400 transition px-2.5 py-0.5 bg-amber-500 text-black border border-black font-black text-xs rounded-xs shadow-2xs"
+            title="Play NHL 95 in the Browser Online Arena"
+          >
+            🏒 Arena
+          </Link>
+
+          <Link href="/standings" className="hover:underline transition">Standings</Link>
+          <Link href="/power-rankings" className="hover:underline transition text-red-900 font-black">Power Rankings</Link>
+          <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
+          <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
+
+          {/* Desktop Dropdown for Rosters & Teams */}
+          <div 
+            className="relative" 
+            onMouseEnter={() => setIsRostersOpen(true)} 
+            onMouseLeave={() => setIsRostersOpen(false)}
+          >
+            <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold py-1">
+              Rosters <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {isRostersOpen && (
+              <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
+                <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">Teams</Link>
+                <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
+                <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
+                <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Dropdown for Stats */}
+          <div 
+            className="relative" 
+            onMouseEnter={() => setIsStatsOpen(true)} 
+            onMouseLeave={() => setIsStatsOpen(false)}
+          >
+            <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold py-1">
+              Stats <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {isStatsOpen && (
+              <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
+                <Link href="/stats" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Players</Link>
+                <Link href="/stats/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Teams</Link>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Dropdown for Extras (Awards, Records, Mod My Team, Setup Guide, Arena, ROMs, Managers, Stream Overlays) */}
+          <div 
+            className="relative" 
+            onMouseEnter={() => setIsExtrasOpen(true)} 
+            onMouseLeave={() => setIsExtrasOpen(false)}
+          >
+            <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold py-1">
+              Extras <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {isExtrasOpen && (
+              <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-56 flex flex-col z-50 shadow-lg">
+                <Link href="/awards" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                  Awards
+                </Link>
+                <Link href="/records" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                  Records
+                </Link>
+                <Link href="/mod-my-team" className="px-4 py-2 hover:bg-black hover:text-white font-black transition-colors text-amber-900">
+                  Mod My Team
+                </Link>
+                <Link href="/setup-guide" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-amber-900 border-b border-black/15">
+                  Setup Guide
+                </Link>
+                <Link href="/arena" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">
+                  Online Arena (Play Now)
+                </Link>
+                <Link href="/roms" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                  ROMs & Files
+                </Link>
+                <Link href="/managers" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                  Managers Directory
+                </Link>
+                <Link href="/setup-guide?tab=overlays" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                  Stream Overlays & Tools
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Upload Action Button */}
+          <Link 
+            href="/upload" 
+            className="hover:underline transition px-2.5 py-1 text-xs font-bold rounded-xs shadow-2xs flex items-center gap-1.5 bg-black text-white hover:bg-neutral-800"
+            title="Upload Game Stats"
+          >
+            <span>Upload</span>
+          </Link>
+        </div>
 
         {/* Mobile Hamburger Toggle (Visible on screens < md) */}
         <button
           type="button"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="md:hidden p-2 text-black hover:bg-black/5 border border-black/30 rounded-xs focus:outline-none transition-colors"
+          className="md:hidden p-1.5 text-black hover:bg-black/5 border border-black/30 rounded-xs focus:outline-none transition-colors"
           aria-label="Toggle Navigation Menu"
         >
           {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
-      </div>
-
-      {/* Desktop Navigation Links Row (Visible on screens >= md) */}
-      <div className="hidden md:flex justify-center items-center flex-wrap gap-4 lg:gap-7 px-4 py-2.5 text-xs lg:text-sm text-black uppercase font-bold tracking-wider lg:tracking-widest bg-[#f4f1ea]">
-        {/* Online Arena tab (left of Standings) */}
-        <Link 
-          href="/arena" 
-          className="hover:bg-amber-400 transition px-2.5 py-0.5 bg-amber-500 text-black border border-black font-black text-xs rounded-xs shadow-2xs"
-          title="Play NHL 95 in the Browser Online Arena"
-        >
-          🏒 Arena
-        </Link>
-
-        <Link href="/standings" className="hover:underline transition">Standings</Link>
-        <Link href="/power-rankings" className="hover:underline transition text-red-900 font-black">Power Rankings</Link>
-        <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
-        <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
-
-        {/* Desktop Dropdown for Rosters & Teams */}
-        <div 
-          className="relative" 
-          onMouseEnter={() => setIsRostersOpen(true)} 
-          onMouseLeave={() => setIsRostersOpen(false)}
-        >
-          <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
-            Rosters <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-          {isRostersOpen && (
-            <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
-              <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">Teams</Link>
-              <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
-              <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
-              <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop Dropdown for Stats */}
-        <div 
-          className="relative" 
-          onMouseEnter={() => setIsStatsOpen(true)} 
-          onMouseLeave={() => setIsStatsOpen(false)}
-        >
-          <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
-            Stats <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-          {isStatsOpen && (
-            <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-48 flex flex-col z-50 shadow-lg">
-              <Link href="/stats" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Players</Link>
-              <Link href="/stats/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Teams</Link>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop Dropdown for Extras (Awards, Records, Mod My Team, Setup Guide, Arena, ROMs, Managers, Stream Overlays) */}
-        <div 
-          className="relative" 
-          onMouseEnter={() => setIsExtrasOpen(true)} 
-          onMouseLeave={() => setIsExtrasOpen(false)}
-        >
-          <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold">
-            Extras <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-          {isExtrasOpen && (
-            <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-56 flex flex-col z-50 shadow-lg">
-              <Link href="/awards" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
-                Awards
-              </Link>
-              <Link href="/records" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
-                Records
-              </Link>
-              <Link href="/mod-my-team" className="px-4 py-2 hover:bg-black hover:text-white font-black transition-colors text-amber-900">
-                Mod My Team
-              </Link>
-              <Link href="/setup-guide" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-amber-900 border-b border-black/15">
-                Setup Guide
-              </Link>
-              <Link href="/arena" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">
-                Online Arena (Play Now)
-              </Link>
-              <Link href="/roms" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
-                ROMs & Files
-              </Link>
-              <Link href="/managers" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
-                Managers Directory
-              </Link>
-              <Link href="/setup-guide?tab=overlays" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
-                Stream Overlays & Tools
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Upload Action Button */}
-        <Link 
-          href="/upload" 
-          className="hover:underline transition px-2.5 py-1 text-xs font-bold rounded-xs shadow-2xs flex items-center gap-1.5 bg-black text-white hover:bg-neutral-800"
-          title="Upload Game Stats"
-        >
-          <span>Upload</span>
-        </Link>
       </div>
 
       {/* Mobile Drawer (Visible on screens < md when toggled) */}
