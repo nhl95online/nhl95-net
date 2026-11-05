@@ -2915,7 +2915,7 @@ export default function HomePage() {
                                           />
                                         )}
                                         {sc.team_abbr && (
-                                          <span className="bg-black text-amber-300 font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs">
+                                          <span className="bg-black text-white font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs">
                                             {sc.team_abbr}
                                           </span>
                                         )}

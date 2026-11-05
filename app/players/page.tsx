@@ -1837,7 +1837,7 @@ const CompareSlotPicker = ({
                       </span>
                     </div>
                     {ovr && (
-                      <span className="bg-black text-amber-300 px-1 py-0.2 rounded-2xs text-[8px] font-black shrink-0 ml-1">
+                      <span className="bg-black text-white px-1 py-0.2 rounded-2xs text-[8px] font-black shrink-0 ml-1">
                         {ovr}
                       </span>
                     )}

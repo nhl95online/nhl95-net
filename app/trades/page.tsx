@@ -2346,7 +2346,7 @@ export default function TradesPage() {
                                       >
                                         <div className="flex items-center justify-between gap-2">
                                           <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="w-8 h-8 bg-black text-amber-400 border border-black flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                            <div className="w-8 h-8 bg-black text-white border border-black flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                                               <Sparkles className="w-4 h-4 text-amber-400" />
                                             </div>
                                             
@@ -2494,7 +2494,7 @@ export default function TradesPage() {
                                       >
                                         <div className="flex items-center justify-between gap-2">
                                           <div className="flex items-center gap-2.5 min-w-0">
-                                            <div className="w-8 h-8 bg-black text-amber-400 border border-black flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                                            <div className="w-8 h-8 bg-black text-white border border-black flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
                                               <Sparkles className="w-4 h-4 text-amber-400" />
                                             </div>
                                             

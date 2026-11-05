@@ -1009,7 +1009,7 @@ export default function PowerRankingsPage() {
       <div className="max-w-6xl mx-auto">
         {/* Masthead Header */}
         <header className="border-b-4 border-black pb-4 mb-5 text-center">
-          <div className="inline-flex items-center gap-2 bg-black text-amber-400 px-3 py-1 text-[10px] sm:text-xs font-sans font-black uppercase tracking-widest mb-2 border border-black">
+          <div className="inline-flex items-center gap-2 bg-black text-white px-3 py-1 text-[10px] sm:text-xs font-sans font-black uppercase tracking-widest mb-2 border border-black">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
             <span>NHL95 Gazette Weekly Roast & Power Poll</span>
           </div>
@@ -1228,7 +1228,7 @@ export default function PowerRankingsPage() {
                                 }}
                               />
                             ) : (
-                              <div className="w-11 h-11 shrink-0 bg-black text-amber-400 flex items-center justify-center font-sans font-black text-xs border border-black">
+                              <div className="w-11 h-11 shrink-0 bg-black text-white flex items-center justify-center font-sans font-black text-xs border border-black">
                                 {team.abbr}
                               </div>
                             )}

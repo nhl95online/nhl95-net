@@ -1,9 +1,21 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useCoachAuth } from '@/lib/coach-auth';
 import Link from 'next/link';
-import { Users, Search, Shield, Trophy, ExternalLink, Globe } from 'lucide-react';
+import {
+  Users,
+  Search,
+  Shield,
+  Trophy,
+  ExternalLink,
+  Swords,
+  ArrowLeftRight,
+  Activity,
+  ChevronRight,
+  X
+} from 'lucide-react';
 
 const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?: string }> = {
   W: {
@@ -40,6 +52,38 @@ const SEASON_TYPES: Record<number, string> = {
   31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
 };
 
+const W_LEAGUE_COACH_FALLBACK: Record<string, { coach_id: number; coach_name: string }> = {
+  AUT: { coach_id: 2, coach_name: 'Autobahn' },
+  BAR: { coach_id: 65, coach_name: 'Dasri' },
+  BAY: { coach_id: 49, coach_name: 'Jer_33' },
+  BFC: { coach_id: 58, coach_name: 'Krav1' },
+  DHG: { coach_id: 67, coach_name: 'vancecookcobxin' },
+  GRH: { coach_id: 25, coach_name: 'Moses Bogart' },
+  HAM: { coach_id: 37, coach_name: 'Derek Sutton' },
+  HIG: { coach_id: 9, coach_name: 'wolf_of_highland' },
+  ING: { coach_id: 50, coach_name: 'Don Don' },
+  ITA: { coach_id: 14, coach_name: 'Marcus Vick EBC' },
+  KAR: { coach_id: 39, coach_name: 'MattyA' },
+  MHA: { coach_id: 54, coach_name: 'red' },
+  MHT: { coach_id: 13, coach_name: 'segathon' },
+  MGG: { coach_id: 12, coach_name: 'gaelicgopher' },
+  NBK: { coach_id: 26, coach_name: 'Unholy Grail' },
+  OCW: { coach_id: 51, coach_name: 'MNYoda84' },
+  PIT: { coach_id: 17, coach_name: 'Adolf Oliver Nipples' },
+  PRO: { coach_id: 30, coach_name: 'Lloyd10Xmas' },
+  RIC: { coach_id: 19, coach_name: 'bclinton_666' },
+  ROC: { coach_id: 66, coach_name: 'The Villain CTJ' },
+  SHS: { coach_id: 60, coach_name: 'marylandmike.' },
+  SVF: { coach_id: 20, coach_name: 'Chalkitup7777' },
+  SUM: { coach_id: 21, coach_name: 'Pink Elephants' },
+  TAI: { coach_id: 28, coach_name: 'NathanMB' },
+  TEG: { coach_id: 24, coach_name: 'Ticklepuss' },
+  TBP: { coach_id: 29, coach_name: 'shawnbell' },
+  VHV: { coach_id: 15, coach_name: 'UltraMagnus' },
+  WDY: { coach_id: 63, coach_name: 'NewJerseyKiller' },
+  ETI: { coach_id: 18, coach_name: 'LHX' }
+};
+
 const getLeaguePrefix = (leagueId: number | string, seasonName?: string) => {
   if (seasonName) {
     const trimmed = seasonName.trim().toUpperCase();
@@ -69,35 +113,137 @@ const formatSeasonBadge = (seasonId: number | string, seasonName?: string) => {
   return `${type}${String(numId).padStart(2, '0')}`;
 };
 
+interface CoachTeamInfo {
+  team_id: number;
+  team_name: string;
+  abbreviation: string;
+  logo_url: string | null;
+  league_id: number;
+  season_name: string;
+  season_badge: string;
+  league_type: string;
+}
+
 interface CoachEntry {
   coach_id: number;
   coach_name: string;
   discord_tag?: string;
-  teams: {
-    team_id: number;
-    team_name: string;
-    abbreviation: string;
-    logo_url: string | null;
-    league_id: number;
-    season_name: string;
-    season_badge: string;
-    league_type: string;
-  }[];
+  teams: CoachTeamInfo[];
+}
+
+interface CoachMatchRecord {
+  id: string;
+  game_id: number | string;
+  league_id: number;
+  season_badge: string;
+  season_name: string;
+  league_type: string;
+  is_playoff: boolean;
+  round_label?: string;
+  home_coach_id: number;
+  home_coach_name: string;
+  away_coach_id: number;
+  away_coach_name: string;
+  home_team_id: number;
+  home_team_name: string;
+  home_team_abbr: string;
+  home_team_logo: string | null;
+  away_team_id: number;
+  away_team_name: string;
+  away_team_abbr: string;
+  away_team_logo: string | null;
+  home_score: number;
+  away_score: number;
+  home_shots: number | null;
+  away_shots: number | null;
+  is_ot: boolean;
+  is_tie: boolean;
+}
+
+interface OpponentH2HSummary {
+  opponentId: number;
+  opponentName: string;
+  opponentTeams: string[];
+  gp: number;
+  w: number;
+  l: number;
+  t: number;
+  otl: number;
+  pts: number;
+  winPct: number;
+  gf: number;
+  ga: number;
+  gd: number;
+  gpg: number;
+  homeW: number;
+  homeL: number;
+  homeT: number;
+  homeOtl: number;
+  awayW: number;
+  awayL: number;
+  awayT: number;
+  awayOtl: number;
+  otW: number;
+  otL: number;
+  poW: number;
+  poL: number;
+  streak: string;
+  recentOutcomes: Array<'W' | 'L' | 'T' | 'OTL'>;
+  lastGame: {
+    outcome: 'W' | 'L' | 'T' | 'OTL';
+    myScore: number;
+    oppScore: number;
+    seasonBadge: string;
+    isOT: boolean;
+    isPlayoff: boolean;
+  } | null;
+}
+
+function normalizeCoachStr(name: string): string {
+  return String(name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '');
 }
 
 export default function ManagersPage() {
+  const { currentCoach } = useCoachAuth();
+  const h2hSectionRef = useRef<HTMLDivElement>(null);
+
   const [coaches, setCoaches] = useState<CoachEntry[]>([]);
+  const [allMatches, setAllMatches] = useState<CoachMatchRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [selectedLeagueType, setSelectedLeagueType] = useState<string>("ALL");
+  const [search, setSearch] = useState('');
+  const [selectedLeagueType, setSelectedLeagueType] = useState<string>('ALL');
+
+  // Head-to-Head State
+  const [selectedCoachId, setSelectedCoachId] = useState<number | null>(null);
+  const [selectedOpponentId, setSelectedOpponentId] = useState<number | 'ALL'>('ALL');
+  const [h2hPhaseFilter, setH2hPhaseFilter] = useState<'ALL' | 'REG' | 'PLAYOFFS'>('ALL');
+  const [h2hSeasonFilter, setH2hSeasonFilter] = useState<number | 'ALL'>('ALL');
+  const [h2hOpponentSearch, setH2hOpponentSearch] = useState('');
+  const [h2hSortField, setH2hSortField] = useState<'gp' | 'w' | 'pts' | 'winPct' | 'gf' | 'gd'>('gp');
+  const [recentScoresLimit, setRecentScoresLimit] = useState<number>(20);
 
   const availableLeagueTypes = ['W', 'Q', 'O', 'V', 'G'];
 
   useEffect(() => {
-    async function loadManagersData() {
+    async function loadManagersAndH2HData() {
       setLoading(true);
       try {
-        const [coachesRes, teamsRes, seasonsRes] = await Promise.all([
+        const [
+          coachesRes,
+          teamsRes,
+          seasonsRes,
+          statsPage0,
+          statsPage1,
+          statsPage2,
+          statsPage3,
+          statsPage4,
+          poGamesRes,
+          schedPage0,
+          schedPage1
+        ] = await Promise.all([
           supabase
             .from('league_coaches')
             .select('*')
@@ -109,7 +255,62 @@ export default function ManagersPage() {
           supabase
             .from('league_seasons')
             .select('league_id, season_name')
+            .order('league_id', { ascending: false }),
+          supabase
+            .from('league_gamestats')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
             .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(0, 999),
+          supabase
+            .from('league_gamestats')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(1000, 1999),
+          supabase
+            .from('league_gamestats')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(2000, 2999),
+          supabase
+            .from('league_gamestats')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(3000, 3999),
+          supabase
+            .from('league_gamestats')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach')
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(4000, 4999),
+          supabase
+            .from('league_playoff_gamestats')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, home_stats, away_stats, home_coach, away_coach, round_number, series_id')
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(0, 999)
+            .then(r => r, () => ({ data: [] as any[] })),
+          supabase
+            .from('league_schedule')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played')
+            .not('home_score', 'is', null)
+            .not('away_score', 'is', null)
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(0, 999)
+            .then(r => r, () => ({ data: [] as any[] })),
+          supabase
+            .from('league_schedule')
+            .select('game_id, league_id, home_team_id, away_team_id, home_score, away_score, game_meta, played')
+            .not('home_score', 'is', null)
+            .not('away_score', 'is', null)
+            .order('league_id', { ascending: false })
+            .order('game_id', { ascending: false })
+            .range(1000, 1999)
+            .then(r => r, () => ({ data: [] as any[] }))
         ]);
 
         const rawCoaches = coachesRes.data || [];
@@ -136,29 +337,47 @@ export default function ManagersPage() {
 
         // Group teams by coach_id / coach_name
         const coachMap = new Map<number, CoachEntry>();
+        const coachNameLookup = new Map<string, number>();
 
         rawCoaches.forEach((c: any) => {
           const cId = Number(c.coach_id);
+          const cName = c.coach_name || `Manager #${cId}`;
           coachMap.set(cId, {
             coach_id: cId,
-            coach_name: c.coach_name || `Manager #${cId}`,
-            discord_tag: c.discord_tag || c.discord_name || c.coach_tag || null,
+            coach_name: cName,
+            discord_tag: c.discord_tag || c.discord_name || c.coach_tag || undefined,
             teams: []
           });
+          coachNameLookup.set(normalizeCoachStr(cName), cId);
         });
 
-        // Map all teams across all seasons & leagues to their respective coaches
+        // Lookup maps for resolving games -> teams & coaches
+        const seasonTeamMap = new Map<string, CoachTeamInfo & { coach_id: number }>();
+        const anyTeamIdMap = new Map<number, CoachTeamInfo & { coach_id: number }>();
+
         rawTeams.forEach((t: any) => {
-          const cId = Number(t.coach_id);
+          let cId = Number(t.coach_id);
           const tLeagueId = Number(t.league_id) || 1;
           const sName = seasonMap.get(tLeagueId) || `Season ${tLeagueId}`;
           const lType = getLeaguePrefix(tLeagueId, sName);
           const sBadge = formatSeasonBadge(tLeagueId, sName);
+          const abbr = (t.abbreviation || 'TM').trim().toUpperCase();
 
-          const teamInfo = {
+          // Resolve coach_id if not directly on team row
+          if ((!cId || !coachMap.has(cId)) && t.coach_name) {
+            const matchedByName = coachNameLookup.get(normalizeCoachStr(t.coach_name));
+            if (matchedByName) cId = matchedByName;
+          }
+          if ((!cId || !coachMap.has(cId)) && lType === 'W' && W_LEAGUE_COACH_FALLBACK[abbr]) {
+            const fb = W_LEAGUE_COACH_FALLBACK[abbr];
+            const matchedByFbName = coachNameLookup.get(normalizeCoachStr(fb.coach_name));
+            cId = matchedByFbName || fb.coach_id;
+          }
+
+          const teamInfo: CoachTeamInfo = {
             team_id: Number(t.team_id),
             team_name: t.team_name || `Team #${t.team_id}`,
-            abbreviation: t.abbreviation || 'TM',
+            abbreviation: abbr,
             logo_url: t.logo_url || null,
             league_id: tLeagueId,
             season_name: sName,
@@ -168,66 +387,776 @@ export default function ManagersPage() {
 
           if (cId && coachMap.has(cId)) {
             const entry = coachMap.get(cId)!;
-            // Prevent duplicate team assignments within the same season
             if (!entry.teams.some(existing => existing.team_id === teamInfo.team_id && existing.league_id === teamInfo.league_id)) {
               entry.teams.push(teamInfo);
             }
-          } else if (t.coach_name) {
-            // Find coach by name if coach_id wasn't linked
-            let matched = false;
-            for (const entry of Array.from(coachMap.values())) {
-              if (entry.coach_name.trim().toLowerCase() === t.coach_name.trim().toLowerCase()) {
-                if (!entry.teams.some(existing => existing.team_id === teamInfo.team_id && existing.league_id === teamInfo.league_id)) {
-                  entry.teams.push(teamInfo);
-                }
-                matched = true;
-                break;
-              }
-            }
-            if (!matched && cId) {
-              coachMap.set(cId, {
-                coach_id: cId,
-                coach_name: t.coach_name,
-                teams: [teamInfo]
-              });
+          } else if (t.coach_name && cId) {
+            coachMap.set(cId, {
+              coach_id: cId,
+              coach_name: t.coach_name,
+              teams: [teamInfo]
+            });
+            coachNameLookup.set(normalizeCoachStr(t.coach_name), cId);
+          }
+
+          if (cId && coachMap.has(cId)) {
+            seasonTeamMap.set(`${tLeagueId}-${teamInfo.team_id}`, { ...teamInfo, coach_id: cId });
+            if (!anyTeamIdMap.has(teamInfo.team_id)) {
+              anyTeamIdMap.set(teamInfo.team_id, { ...teamInfo, coach_id: cId });
             }
           }
         });
 
         // Sort each coach's teams by latest season descending
-        const compiled = Array.from(coachMap.values()).map(c => ({
-          ...c,
-          teams: c.teams.sort((a, b) => b.league_id - a.league_id)
-        })).sort((a, b) => a.coach_name.localeCompare(b.coach_name));
+        const compiledCoaches = Array.from(coachMap.values())
+          .map(c => ({
+            ...c,
+            teams: c.teams.sort((a, b) => b.league_id - a.league_id)
+          }))
+          .sort((a, b) => a.coach_name.localeCompare(b.coach_name));
 
-        setCoaches(compiled);
+        setCoaches(compiledCoaches);
+
+        // Helper to resolve (seasonId, rawTeamId, optionalCoachName) -> { coach_id, coach_name, team }
+        const resolveSide = (
+          sId: number,
+          rawTeamId: any,
+          rawCoachName?: any
+        ): {
+          coach_id: number;
+          coach_name: string;
+          team_id: number;
+          team_name: string;
+          abbreviation: string;
+          logo_url: string | null;
+        } | null => {
+          const numId = Number(rawTeamId);
+          if (!numId || numId === 999 || numId === 0 || numId === 68) return null;
+
+          // 1. Direct (season, team_id) match
+          const direct = seasonTeamMap.get(`${sId}-${numId}`);
+          if (direct && coachMap.has(direct.coach_id)) {
+            const c = coachMap.get(direct.coach_id)!;
+            return {
+              coach_id: c.coach_id,
+              coach_name: c.coach_name,
+              team_id: direct.team_id,
+              team_name: direct.team_name,
+              abbreviation: direct.abbreviation,
+              logo_url: direct.logo_url
+            };
+          }
+
+          // 2. Match via rawTeams cross-season resolution (same logic as Standings / AllTeamsContent)
+          const matchTeam = rawTeams.find(
+            (t: any) => Number(t.team_id) === numId || Number(t.coach_id) === numId
+          );
+          if (matchTeam) {
+            const seasonMatch = rawTeams.find(
+              (t: any) =>
+                Number(t.league_id) === sId &&
+                ((t.abbreviation &&
+                  t.abbreviation.trim().toUpperCase() ===
+                    (matchTeam.abbreviation || '').trim().toUpperCase()) ||
+                  (t.team_name &&
+                    t.team_name.trim().toUpperCase() ===
+                      (matchTeam.team_name || '').trim().toUpperCase()) ||
+                  (Number(t.coach_id) > 0 && Number(t.coach_id) === Number(matchTeam.coach_id)))
+            );
+            if (seasonMatch) {
+              const smDirect = seasonTeamMap.get(`${sId}-${Number(seasonMatch.team_id)}`);
+              if (smDirect && coachMap.has(smDirect.coach_id)) {
+                const c = coachMap.get(smDirect.coach_id)!;
+                return {
+                  coach_id: c.coach_id,
+                  coach_name: c.coach_name,
+                  team_id: smDirect.team_id,
+                  team_name: smDirect.team_name,
+                  abbreviation: smDirect.abbreviation,
+                  logo_url: smDirect.logo_url
+                };
+              }
+            }
+          }
+
+          // 3. Fallback to anyTeamIdMap + explicit coach name on the game row
+          const fallbackTeam = anyTeamIdMap.get(numId);
+          let resolvedCoachId = fallbackTeam?.coach_id || 0;
+          if (rawCoachName) {
+            const byName = coachNameLookup.get(normalizeCoachStr(String(rawCoachName)));
+            if (byName && coachMap.has(byName)) {
+              resolvedCoachId = byName;
+            }
+          }
+          if (resolvedCoachId && coachMap.has(resolvedCoachId)) {
+            const c = coachMap.get(resolvedCoachId)!;
+            const coachTeamInSeason =
+              c.teams.find(t => t.league_id === sId) || fallbackTeam || c.teams[0];
+            return {
+              coach_id: c.coach_id,
+              coach_name: c.coach_name,
+              team_id: coachTeamInSeason?.team_id || numId,
+              team_name: coachTeamInSeason?.team_name || matchTeam?.team_name || `Team #${numId}`,
+              abbreviation: (
+                coachTeamInSeason?.abbreviation ||
+                matchTeam?.abbreviation ||
+                `TM${numId}`
+              ).toUpperCase(),
+              logo_url: coachTeamInSeason?.logo_url || matchTeam?.logo_url || null
+            };
+          }
+
+          return null;
+        };
+
+        // Helper to parse OT / Tie / Shots from a game row
+        const parseGameDetails = (row: any, homeScore: number, awayScore: number) => {
+          let isOT = false;
+          let isTie = false;
+          let homeShots: number | null = null;
+          let awayShots: number | null = null;
+
+          if (row.game_meta) {
+            try {
+              const meta =
+                typeof row.game_meta === 'string' ? JSON.parse(row.game_meta) : row.game_meta;
+              isOT =
+                meta?.is_ot === true ||
+                meta?.is_ot === 'true' ||
+                meta?.is_ot === 1 ||
+                meta?.is_ot === '1' ||
+                meta?.isOT === true ||
+                meta?.isOT === 'true' ||
+                meta?.isOT === 1;
+              isTie =
+                meta?.is_tie === true ||
+                meta?.is_tie === 'true' ||
+                meta?.is_tie === 1 ||
+                meta?.is_tie === '1';
+            } catch {
+              const lowStr = String(row.game_meta || '').toLowerCase();
+              isOT =
+                lowStr.includes('"is_ot":true') ||
+                lowStr.includes('"is_ot":"true"') ||
+                lowStr.includes('"is_ot":1') ||
+                lowStr.includes('"isot":true');
+              isTie =
+                lowStr.includes('"is_tie":true') ||
+                lowStr.includes('"is_tie":"true"') ||
+                lowStr.includes('"is_tie":1');
+            }
+          }
+
+          try {
+            const hStats =
+              typeof row.home_stats === 'string' ? JSON.parse(row.home_stats) : row.home_stats;
+            const aStats =
+              typeof row.away_stats === 'string' ? JSON.parse(row.away_stats) : row.away_stats;
+            if (
+              !isOT &&
+              (Number(hStats?.home_ot_goals) > 0 ||
+                Number(aStats?.away_ot_goals) > 0 ||
+                Number(hStats?.home_ot_shots) > 0 ||
+                Number(aStats?.away_ot_shots) > 0)
+            ) {
+              isOT = true;
+            }
+            const hs = hStats?.home_shots ?? hStats?.shots;
+            const as = aStats?.away_shots ?? aStats?.shots;
+            if (hs !== undefined && hs !== null && !isNaN(Number(hs))) homeShots = Number(hs);
+            if (as !== undefined && as !== null && !isNaN(Number(as))) awayShots = Number(as);
+          } catch {}
+
+          if (homeScore === awayScore) {
+            isTie = true;
+          }
+
+          return { isOT, isTie, homeShots, awayShots };
+        };
+
+        const compiledMatches: CoachMatchRecord[] = [];
+        const seenRegKeys = new Set<string>();
+
+        const regGameRows = [
+          ...(statsPage0.data || []),
+          ...(statsPage1.data || []),
+          ...(statsPage2.data || []),
+          ...(statsPage3.data || []),
+          ...(statsPage4.data || [])
+        ];
+
+        regGameRows.forEach((row: any) => {
+          const sId = Number(row.league_id) || 1;
+          const gIdStr = String(row.game_id).trim();
+          const key = `reg-${sId}-${gIdStr}`;
+          if (seenRegKeys.has(key)) return;
+          seenRegKeys.add(key);
+
+          if (row.home_score === null || row.home_score === undefined || row.away_score === null || row.away_score === undefined) {
+            return;
+          }
+          const homeScore = Number(row.home_score);
+          const awayScore = Number(row.away_score);
+          if (isNaN(homeScore) || isNaN(awayScore)) return;
+
+          const homeSide = resolveSide(sId, row.home_team_id, row.home_coach);
+          const awaySide = resolveSide(sId, row.away_team_id, row.away_coach);
+          if (!homeSide || !awaySide || homeSide.coach_id === awaySide.coach_id) return;
+
+          const sName = seasonMap.get(sId) || `Season ${sId}`;
+          const sBadge = formatSeasonBadge(sId, sName);
+          const lType = getLeaguePrefix(sId, sName);
+          const { isOT, isTie, homeShots, awayShots } = parseGameDetails(row, homeScore, awayScore);
+
+          compiledMatches.push({
+            id: key,
+            game_id: row.game_id,
+            league_id: sId,
+            season_badge: sBadge,
+            season_name: sName,
+            league_type: lType,
+            is_playoff: false,
+            home_coach_id: homeSide.coach_id,
+            home_coach_name: homeSide.coach_name,
+            away_coach_id: awaySide.coach_id,
+            away_coach_name: awaySide.coach_name,
+            home_team_id: homeSide.team_id,
+            home_team_name: homeSide.team_name,
+            home_team_abbr: homeSide.abbreviation,
+            home_team_logo: homeSide.logo_url,
+            away_team_id: awaySide.team_id,
+            away_team_name: awaySide.team_name,
+            away_team_abbr: awaySide.abbreviation,
+            away_team_logo: awaySide.logo_url,
+            home_score: homeScore,
+            away_score: awayScore,
+            home_shots: homeShots,
+            away_shots: awayShots,
+            is_ot: isOT,
+            is_tie: isTie
+          });
+        });
+
+        // Include any played schedule games not already in league_gamestats
+        const schedRows = [...(schedPage0.data || []), ...(schedPage1.data || [])];
+        schedRows.forEach((row: any) => {
+          const rawPlayed = String(row.played ?? '').trim().toLowerCase();
+          const isPlayed =
+            rawPlayed === 'true' || rawPlayed === '1' || rawPlayed === 'y' || rawPlayed === 'yes';
+          if (!isPlayed) return;
+
+          const sId = Number(row.league_id) || 1;
+          const gIdStr = String(row.game_id).trim();
+          const key = `reg-${sId}-${gIdStr}`;
+          if (seenRegKeys.has(key)) return;
+          seenRegKeys.add(key);
+
+          const homeScore = Number(row.home_score);
+          const awayScore = Number(row.away_score);
+          if (isNaN(homeScore) || isNaN(awayScore)) return;
+
+          const homeSide = resolveSide(sId, row.home_team_id);
+          const awaySide = resolveSide(sId, row.away_team_id);
+          if (!homeSide || !awaySide || homeSide.coach_id === awaySide.coach_id) return;
+
+          const sName = seasonMap.get(sId) || `Season ${sId}`;
+          const sBadge = formatSeasonBadge(sId, sName);
+          const lType = getLeaguePrefix(sId, sName);
+          const { isOT, isTie, homeShots, awayShots } = parseGameDetails(row, homeScore, awayScore);
+
+          compiledMatches.push({
+            id: key,
+            game_id: row.game_id,
+            league_id: sId,
+            season_badge: sBadge,
+            season_name: sName,
+            league_type: lType,
+            is_playoff: false,
+            home_coach_id: homeSide.coach_id,
+            home_coach_name: homeSide.coach_name,
+            away_coach_id: awaySide.coach_id,
+            away_coach_name: awaySide.coach_name,
+            home_team_id: homeSide.team_id,
+            home_team_name: homeSide.team_name,
+            home_team_abbr: homeSide.abbreviation,
+            home_team_logo: homeSide.logo_url,
+            away_team_id: awaySide.team_id,
+            away_team_name: awaySide.team_name,
+            away_team_abbr: awaySide.abbreviation,
+            away_team_logo: awaySide.logo_url,
+            home_score: homeScore,
+            away_score: awayScore,
+            home_shots: homeShots,
+            away_shots: awayShots,
+            is_ot: isOT,
+            is_tie: isTie
+          });
+        });
+
+        // Include playoff games from league_playoff_gamestats
+        const seenPoKeys = new Set<string>();
+        (poGamesRes.data || []).forEach((row: any) => {
+          const sId = Number(row.league_id) || 1;
+          const gIdStr = String(row.game_id).trim();
+          const key = `po-${sId}-${gIdStr}`;
+          if (seenPoKeys.has(key)) return;
+          seenPoKeys.add(key);
+
+          if (row.home_score === null || row.home_score === undefined || row.away_score === null || row.away_score === undefined) {
+            return;
+          }
+          const homeScore = Number(row.home_score);
+          const awayScore = Number(row.away_score);
+          if (isNaN(homeScore) || isNaN(awayScore)) return;
+
+          const homeSide = resolveSide(sId, row.home_team_id, row.home_coach);
+          const awaySide = resolveSide(sId, row.away_team_id, row.away_coach);
+          if (!homeSide || !awaySide || homeSide.coach_id === awaySide.coach_id) return;
+
+          const sName = seasonMap.get(sId) || `Season ${sId}`;
+          const sBadge = formatSeasonBadge(sId, sName);
+          const lType = getLeaguePrefix(sId, sName);
+          const { isOT, isTie, homeShots, awayShots } = parseGameDetails(row, homeScore, awayScore);
+          const rNum = Number(row.round_number);
+          const roundLabel = rNum ? `R${rNum}` : 'PO';
+
+          compiledMatches.push({
+            id: key,
+            game_id: row.game_id,
+            league_id: sId,
+            season_badge: sBadge,
+            season_name: sName,
+            league_type: lType,
+            is_playoff: true,
+            round_label: roundLabel,
+            home_coach_id: homeSide.coach_id,
+            home_coach_name: homeSide.coach_name,
+            away_coach_id: awaySide.coach_id,
+            away_coach_name: awaySide.coach_name,
+            home_team_id: homeSide.team_id,
+            home_team_name: homeSide.team_name,
+            home_team_abbr: homeSide.abbreviation,
+            home_team_logo: homeSide.logo_url,
+            away_team_id: awaySide.team_id,
+            away_team_name: awaySide.team_name,
+            away_team_abbr: awaySide.abbreviation,
+            away_team_logo: awaySide.logo_url,
+            home_score: homeScore,
+            away_score: awayScore,
+            home_shots: homeShots,
+            away_shots: awayShots,
+            is_ot: isOT,
+            is_tie: isTie
+          });
+        });
+
+        // Sort all matches most recent first (by league_id desc, then playoff after reg in same season, then game_id desc)
+        compiledMatches.sort((a, b) => {
+          if (b.league_id !== a.league_id) return b.league_id - a.league_id;
+          if (a.is_playoff !== b.is_playoff) return a.is_playoff ? -1 : 1;
+          return Number(b.game_id) - Number(a.game_id);
+        });
+
+        setAllMatches(compiledMatches);
       } catch (err) {
-        console.error("Error loading coaches and team logos:", err);
+        console.error('Error loading coaches and head-to-head data:', err);
       } finally {
         setLoading(false);
       }
     }
 
-    loadManagersData();
+    loadManagersAndH2HData();
   }, []);
 
-  // Filter coaches by search query and selected league type
+  // Auto-select logged-in coach or first active coach with matches
+  useEffect(() => {
+    if (coaches.length === 0) return;
+    if (selectedCoachId !== null && coaches.some(c => c.coach_id === selectedCoachId)) return;
+
+    if (currentCoach?.coach_id && coaches.some(c => c.coach_id === Number(currentCoach.coach_id))) {
+      setSelectedCoachId(Number(currentCoach.coach_id));
+      return;
+    }
+
+    const firstWithGames = coaches.find(c =>
+      allMatches.some(m => m.home_coach_id === c.coach_id || m.away_coach_id === c.coach_id)
+    );
+    setSelectedCoachId((firstWithGames || coaches[0]).coach_id);
+  }, [coaches, allMatches, currentCoach, selectedCoachId]);
+
+  // Career summary map for every coach (for Manager Cards)
+  const careerRecordByCoach = useMemo(() => {
+    const map = new Map<
+      number,
+      { gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number }
+    >();
+    allMatches.forEach(m => {
+      if (selectedLeagueType !== 'ALL' && m.league_type !== selectedLeagueType) return;
+
+      const ensure = (id: number) => {
+        let r = map.get(id);
+        if (!r) {
+          r = { gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0 };
+          map.set(id, r);
+        }
+        return r;
+      };
+
+      const hRec = ensure(m.home_coach_id);
+      const aRec = ensure(m.away_coach_id);
+
+      hRec.gp += 1;
+      aRec.gp += 1;
+      hRec.gf += m.home_score;
+      hRec.ga += m.away_score;
+      aRec.gf += m.away_score;
+      aRec.ga += m.home_score;
+
+      if (m.is_tie || m.home_score === m.away_score) {
+        hRec.t += 1;
+        hRec.pts += 1;
+        aRec.t += 1;
+        aRec.pts += 1;
+      } else if (m.home_score > m.away_score) {
+        hRec.w += 1;
+        hRec.pts += 2;
+        if (m.is_ot && !m.is_playoff) {
+          aRec.otl += 1;
+          aRec.pts += 1;
+        } else {
+          aRec.l += 1;
+        }
+      } else {
+        aRec.w += 1;
+        aRec.pts += 2;
+        if (m.is_ot && !m.is_playoff) {
+          hRec.otl += 1;
+          hRec.pts += 1;
+        } else {
+          hRec.l += 1;
+        }
+      }
+    });
+    return map;
+  }, [allMatches, selectedLeagueType]);
+
+  // Active Coach object for Head-to-Head section
+  const activeH2HCoach = useMemo(() => {
+    return coaches.find(c => c.coach_id === selectedCoachId) || null;
+  }, [coaches, selectedCoachId]);
+
+  const activeOpponentCoach = useMemo(() => {
+    if (selectedOpponentId === 'ALL') return null;
+    return coaches.find(c => c.coach_id === Number(selectedOpponentId)) || null;
+  }, [coaches, selectedOpponentId]);
+
+  // Available seasons for the selected Coach A
+  const availableCoachSeasons = useMemo(() => {
+    if (!selectedCoachId) return [];
+    const map = new Map<number, { league_id: number; badge: string; name: string; league_type: string }>();
+    allMatches.forEach(m => {
+      if (m.home_coach_id !== selectedCoachId && m.away_coach_id !== selectedCoachId) return;
+      if (selectedLeagueType !== 'ALL' && m.league_type !== selectedLeagueType) return;
+      if (!map.has(m.league_id)) {
+        map.set(m.league_id, {
+          league_id: m.league_id,
+          badge: m.season_badge,
+          name: m.season_name,
+          league_type: m.league_type
+        });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.league_id - a.league_id);
+  }, [allMatches, selectedCoachId, selectedLeagueType]);
+
+  // All matches involving selectedCoachId under the current League / Season / Phase filters
+  const coachMatchesFiltered = useMemo(() => {
+    if (!selectedCoachId) return [];
+    return allMatches.filter(m => {
+      if (m.home_coach_id !== selectedCoachId && m.away_coach_id !== selectedCoachId) return false;
+      if (selectedLeagueType !== 'ALL' && m.league_type !== selectedLeagueType) return false;
+      if (h2hSeasonFilter !== 'ALL' && m.league_id !== Number(h2hSeasonFilter)) return false;
+      if (h2hPhaseFilter === 'REG' && m.is_playoff) return false;
+      if (h2hPhaseFilter === 'PLAYOFFS' && !m.is_playoff) return false;
+      return true;
+    });
+  }, [allMatches, selectedCoachId, selectedLeagueType, h2hSeasonFilter, h2hPhaseFilter]);
+
+  // Compute Head-to-Head summaries against every opponent coach
+  const h2hOpponentSummaries = useMemo(() => {
+    if (!selectedCoachId) return [];
+    const oppMap = new Map<
+      number,
+      {
+        opponentId: number;
+        opponentName: string;
+        teamsSet: Set<string>;
+        gp: number;
+        w: number;
+        l: number;
+        t: number;
+        otl: number;
+        pts: number;
+        gf: number;
+        ga: number;
+        homeW: number;
+        homeL: number;
+        homeT: number;
+        homeOtl: number;
+        awayW: number;
+        awayL: number;
+        awayT: number;
+        awayOtl: number;
+        otW: number;
+        otL: number;
+        poW: number;
+        poL: number;
+        outcomesNewestFirst: Array<'W' | 'L' | 'T' | 'OTL'>;
+        lastGame: OpponentH2HSummary['lastGame'];
+      }
+    >();
+
+    // coachMatchesFiltered is already ordered newest-first
+    coachMatchesFiltered.forEach(m => {
+      const isHome = m.home_coach_id === selectedCoachId;
+      const oppId = isHome ? m.away_coach_id : m.home_coach_id;
+      const oppName = isHome ? m.away_coach_name : m.home_coach_name;
+      const oppAbbr = isHome ? m.away_team_abbr : m.home_team_abbr;
+      const myScore = isHome ? m.home_score : m.away_score;
+      const oppScore = isHome ? m.away_score : m.home_score;
+
+      let entry = oppMap.get(oppId);
+      if (!entry) {
+        entry = {
+          opponentId: oppId,
+          opponentName: oppName,
+          teamsSet: new Set<string>(),
+          gp: 0,
+          w: 0,
+          l: 0,
+          t: 0,
+          otl: 0,
+          pts: 0,
+          gf: 0,
+          ga: 0,
+          homeW: 0,
+          homeL: 0,
+          homeT: 0,
+          homeOtl: 0,
+          awayW: 0,
+          awayL: 0,
+          awayT: 0,
+          awayOtl: 0,
+          otW: 0,
+          otL: 0,
+          poW: 0,
+          poL: 0,
+          outcomesNewestFirst: [],
+          lastGame: null
+        };
+        oppMap.set(oppId, entry);
+      }
+
+      if (oppAbbr) entry.teamsSet.add(oppAbbr);
+      entry.gp += 1;
+      entry.gf += myScore;
+      entry.ga += oppScore;
+
+      let outcome: 'W' | 'L' | 'T' | 'OTL' = 'L';
+      if (m.is_tie || myScore === oppScore) {
+        outcome = 'T';
+        entry.t += 1;
+        entry.pts += 1;
+        if (isHome) entry.homeT += 1;
+        else entry.awayT += 1;
+      } else if (myScore > oppScore) {
+        outcome = 'W';
+        entry.w += 1;
+        entry.pts += 2;
+        if (isHome) entry.homeW += 1;
+        else entry.awayW += 1;
+        if (m.is_ot) entry.otW += 1;
+        if (m.is_playoff) entry.poW += 1;
+      } else {
+        if (m.is_ot && !m.is_playoff) {
+          outcome = 'OTL';
+          entry.otl += 1;
+          entry.pts += 1;
+          if (isHome) entry.homeOtl += 1;
+          else entry.awayOtl += 1;
+          entry.otL += 1;
+        } else {
+          outcome = 'L';
+          entry.l += 1;
+          if (isHome) entry.homeL += 1;
+          else entry.awayL += 1;
+          if (m.is_ot) entry.otL += 1;
+          if (m.is_playoff) entry.poL += 1;
+        }
+      }
+
+      entry.outcomesNewestFirst.push(outcome);
+      if (!entry.lastGame) {
+        entry.lastGame = {
+          outcome,
+          myScore,
+          oppScore,
+          seasonBadge: m.season_badge,
+          isOT: m.is_ot,
+          isPlayoff: m.is_playoff
+        };
+      }
+    });
+
+    const summaries: OpponentH2HSummary[] = Array.from(oppMap.values()).map(e => {
+      let streak = '-';
+      if (e.outcomesNewestFirst.length > 0) {
+        const first = e.outcomesNewestFirst[0];
+        let count = 0;
+        for (const r of e.outcomesNewestFirst) {
+          if (r === first) count++;
+          else break;
+        }
+        streak = `${first}${count}`;
+      }
+
+      const winPct = e.gp > 0 ? Math.round((e.w / e.gp) * 1000) / 10 : 0;
+      const gpg = e.gp > 0 ? Math.round((e.gf / e.gp) * 100) / 100 : 0;
+
+      return {
+        opponentId: e.opponentId,
+        opponentName: e.opponentName,
+        opponentTeams: Array.from(e.teamsSet).slice(0, 4),
+        gp: e.gp,
+        w: e.w,
+        l: e.l,
+        t: e.t,
+        otl: e.otl,
+        pts: e.pts,
+        winPct,
+        gf: e.gf,
+        ga: e.ga,
+        gd: e.gf - e.ga,
+        gpg,
+        homeW: e.homeW,
+        homeL: e.homeL,
+        homeT: e.homeT,
+        homeOtl: e.homeOtl,
+        awayW: e.awayW,
+        awayL: e.awayL,
+        awayT: e.awayT,
+        awayOtl: e.awayOtl,
+        otW: e.otW,
+        otL: e.otL,
+        poW: e.poW,
+        poL: e.poL,
+        streak,
+        recentOutcomes: e.outcomesNewestFirst.slice(0, 5),
+        lastGame: e.lastGame
+      };
+    });
+
+    return summaries;
+  }, [coachMatchesFiltered, selectedCoachId]);
+
+  const sortedAndFilteredH2HOpponents = useMemo(() => {
+    const q = h2hOpponentSearch.trim().toLowerCase();
+    return h2hOpponentSummaries
+      .filter(item => {
+        if (!q) return true;
+        return (
+          item.opponentName.toLowerCase().includes(q) ||
+          item.opponentTeams.some(t => t.toLowerCase().includes(q))
+        );
+      })
+      .sort((a, b) => {
+        const diff = (Number(b[h2hSortField]) || 0) - (Number(a[h2hSortField]) || 0);
+        if (diff !== 0) return diff;
+        return b.pts - a.pts || b.w - a.w;
+      });
+  }, [h2hOpponentSummaries, h2hOpponentSearch, h2hSortField]);
+
+  // Specific 1-on-1 summary when an opponent coach is selected
+  const activeOneOnOneSummary = useMemo(() => {
+    if (selectedOpponentId === 'ALL') return null;
+    return (
+      h2hOpponentSummaries.find(s => s.opponentId === Number(selectedOpponentId)) || {
+        opponentId: Number(selectedOpponentId),
+        opponentName: activeOpponentCoach?.coach_name || 'Opponent',
+        opponentTeams: activeOpponentCoach?.teams.map(t => t.abbreviation).slice(0, 3) || [],
+        gp: 0,
+        w: 0,
+        l: 0,
+        t: 0,
+        otl: 0,
+        pts: 0,
+        winPct: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        gpg: 0,
+        homeW: 0,
+        homeL: 0,
+        homeT: 0,
+        homeOtl: 0,
+        awayW: 0,
+        awayL: 0,
+        awayT: 0,
+        awayOtl: 0,
+        otW: 0,
+        otL: 0,
+        poW: 0,
+        poL: 0,
+        streak: '-',
+        recentOutcomes: [],
+        lastGame: null
+      }
+    );
+  }, [selectedOpponentId, h2hOpponentSummaries, activeOpponentCoach]);
+
+  // Overall stats for Coach A in the current filter
+  const activeCoachOverallTotals = useMemo(() => {
+    return h2hOpponentSummaries.reduce(
+      (acc, s) => {
+        acc.gp += s.gp;
+        acc.w += s.w;
+        acc.l += s.l;
+        acc.t += s.t;
+        acc.otl += s.otl;
+        acc.pts += s.pts;
+        acc.gf += s.gf;
+        acc.ga += s.ga;
+        return acc;
+      },
+      { gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0 }
+    );
+  }, [h2hOpponentSummaries]);
+
+  // Recent scores feed (filtered by selectedOpponentId if not 'ALL')
+  const displayedRecentMatches = useMemo(() => {
+    if (selectedOpponentId === 'ALL') return coachMatchesFiltered;
+    const oppIdNum = Number(selectedOpponentId);
+    return coachMatchesFiltered.filter(
+      m => m.home_coach_id === oppIdNum || m.away_coach_id === oppIdNum
+    );
+  }, [coachMatchesFiltered, selectedOpponentId]);
+
+  // Filter coaches by search query and selected league type for the directory cards
   const filteredCoaches = useMemo(() => {
     return coaches.filter(c => {
-      // League filter check
       if (selectedLeagueType !== 'ALL') {
         const hasTeamInLeague = c.teams.some(t => t.league_type === selectedLeagueType);
         if (!hasTeamInLeague) return false;
       }
 
-      // Search filter check
       if (!search.trim()) return true;
       const q = search.toLowerCase().trim();
       const nameMatch = c.coach_name.toLowerCase().includes(q);
-      const teamMatch = c.teams.some(t =>
-        t.team_name.toLowerCase().includes(q) ||
-        t.abbreviation.toLowerCase().includes(q) ||
-        t.season_badge.toLowerCase().includes(q)
+      const teamMatch = c.teams.some(
+        t =>
+          t.team_name.toLowerCase().includes(q) ||
+          t.abbreviation.toLowerCase().includes(q) ||
+          t.season_badge.toLowerCase().includes(q)
       );
 
       return nameMatch || teamMatch;
@@ -238,16 +1167,24 @@ export default function ManagersPage() {
     return coaches.reduce((acc, c) => acc + c.teams.length, 0);
   }, [coaches]);
 
+  const handleJumpToCoachH2H = (coachId: number) => {
+    setSelectedCoachId(coachId);
+    setSelectedOpponentId('ALL');
+    h2hSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-3 sm:p-6">
       {/* Header */}
       <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 sm:mb-6 text-center">
         <span className="bg-black text-white font-mono text-[10px] sm:text-xs font-black uppercase px-2.5 py-0.5 tracking-widest inline-block mb-1">
-          Front Office Staff & Franchise Leadership
+          Front Office Staff, Head-to-Head Rivalries &amp; Franchise Leadership
         </span>
-        <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter">Managers & Coaches</h1>
+        <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter">
+          Managers &amp; Coaches
+        </h1>
         <p className="text-xs font-bold uppercase italic mt-1 text-slate-700">
-          Official Team Rosters, Logos, and Franchise History Across All Leagues
+          Head-to-Head Coaching Records, Recent Matchup Scores, Official Rosters &amp; Franchise History Across All Leagues
         </p>
       </header>
 
@@ -257,7 +1194,10 @@ export default function ManagersPage() {
         <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full no-scrollbar">
           <button
             type="button"
-            onClick={() => setSelectedLeagueType('ALL')}
+            onClick={() => {
+              setSelectedLeagueType('ALL');
+              setH2hSeasonFilter('ALL');
+            }}
             className={`px-3 py-1 text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
               selectedLeagueType === 'ALL'
                 ? 'bg-black text-white shadow-xs'
@@ -266,14 +1206,17 @@ export default function ManagersPage() {
           >
             All Leagues
           </button>
-          {availableLeagueTypes.map((type) => {
+          {availableLeagueTypes.map(type => {
             const config = LEAGUE_LOGOS[type];
             const isSelected = selectedLeagueType === type;
             return (
               <button
                 key={type}
                 type="button"
-                onClick={() => setSelectedLeagueType(type)}
+                onClick={() => {
+                  setSelectedLeagueType(type);
+                  setH2hSeasonFilter('ALL');
+                }}
                 className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 border-2 shrink-0 cursor-pointer ${
                   isSelected
                     ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
@@ -286,7 +1229,7 @@ export default function ManagersPage() {
                     src={config.logoUrl}
                     alt={config.name}
                     className="h-5 w-auto max-w-[60px] object-contain block"
-                    onError={(e) => {
+                    onError={e => {
                       if (config.fallbackUrl && e.currentTarget.src !== config.fallbackUrl) {
                         e.currentTarget.src = config.fallbackUrl;
                       }
@@ -304,7 +1247,8 @@ export default function ManagersPage() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="text-xs font-bold uppercase tracking-wider text-slate-700 font-sans">
             <span className="font-black text-black font-mono">{filteredCoaches.length}</span> Managers &bull;{' '}
-            <span className="font-black text-black font-mono">{totalTeamsManaged}</span> Franchises
+            <span className="font-black text-black font-mono">{totalTeamsManaged}</span> Franchises &bull;{' '}
+            <span className="font-black text-black font-mono">{allMatches.length}</span> Tracked Games
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-neutral-400" />
@@ -312,29 +1256,718 @@ export default function ManagersPage() {
               type="text"
               placeholder="SEARCH MANAGER OR TEAM..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               className="border border-black pl-8 pr-3 py-1.5 text-xs font-bold uppercase bg-white text-black w-full sm:w-64 focus:outline-none font-sans"
             />
           </div>
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* =================================================================== */}
+      {/* COACH HEAD-TO-HEAD RECORDS & RECENT SCORES CENTER                   */}
+      {/* =================================================================== */}
+      <section
+        ref={h2hSectionRef}
+        className="mb-8 border-2 border-black bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] overflow-hidden"
+      >
+        {/* Top Banner of Head-to-Head Center */}
+        <div className="bg-black text-white px-4 sm:px-6 py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b-2 border-black">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-500 text-black border border-white flex items-center justify-center shrink-0 rounded-xs">
+              <Swords className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-black">
+                COACH VS. COACH RIVALRY &amp; MATCHUP LEDGER
+              </div>
+              <h2 className="text-lg sm:text-2xl font-black uppercase tracking-tight text-white">
+                Head-to-Head Records &amp; Recent Scores
+              </h2>
+            </div>
+          </div>
+
+          {/* Coach & Opponent Selectors */}
+          <div className="flex flex-wrap items-center gap-2 font-sans text-xs">
+            <div className="flex items-center gap-1.5 bg-neutral-900 text-white border border-neutral-700 px-2.5 py-1.5 rounded-xs">
+              <span className="text-[10px] font-mono uppercase text-amber-400 font-black">COACH:</span>
+              <select
+                value={selectedCoachId ?? ''}
+                onChange={e => {
+                  const nextId = Number(e.target.value);
+                  setSelectedCoachId(nextId);
+                  if (selectedOpponentId === nextId) {
+                    setSelectedOpponentId('ALL');
+                  }
+                }}
+                className="bg-black text-white font-bold uppercase text-xs px-2 py-0.5 border border-neutral-600 focus:outline-none cursor-pointer"
+              >
+                {coaches.map(c => (
+                  <option key={c.coach_id} value={c.coach_id} className="bg-black text-white">
+                    {c.coach_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              disabled={selectedOpponentId === 'ALL'}
+              onClick={() => {
+                if (selectedOpponentId !== 'ALL' && selectedCoachId) {
+                  const prevCoach = selectedCoachId;
+                  setSelectedCoachId(Number(selectedOpponentId));
+                  setSelectedOpponentId(prevCoach);
+                }
+              }}
+              className="p-1.5 bg-neutral-900 hover:bg-neutral-800 disabled:opacity-40 text-white border border-neutral-700 rounded-xs cursor-pointer transition"
+              title="Swap Coach and Opponent"
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-1.5 bg-neutral-900 text-white border border-neutral-700 px-2.5 py-1.5 rounded-xs">
+              <span className="text-[10px] font-mono uppercase text-cyan-400 font-black">VS OPPONENT:</span>
+              <select
+                value={selectedOpponentId}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSelectedOpponentId(val === 'ALL' ? 'ALL' : Number(val));
+                  setRecentScoresLimit(20);
+                }}
+                className="bg-black text-white font-bold uppercase text-xs px-2 py-0.5 border border-neutral-600 focus:outline-none cursor-pointer"
+              >
+                <option value="ALL" className="bg-black text-white">
+                  All Opponents ({h2hOpponentSummaries.length} Coaches)
+                </option>
+                {coaches
+                  .filter(c => c.coach_id !== selectedCoachId)
+                  .map(c => {
+                    const summary = h2hOpponentSummaries.find(s => s.opponentId === c.coach_id);
+                    return (
+                      <option key={c.coach_id} value={c.coach_id} className="bg-black text-white">
+                        {c.coach_name} {summary ? `(${summary.w}-${summary.l}-${summary.t}${summary.otl ? `-${summary.otl}` : ''} • ${summary.gp} GP)` : '(0 GP)'}
+                      </option>
+                    );
+                  })}
+              </select>
+              {selectedOpponentId !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedOpponentId('ALL')}
+                  className="text-neutral-400 hover:text-white ml-1 cursor-pointer"
+                  title="Show All Opponents"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Sub-Filter Bar: Season, Phase (Reg / Playoffs), and Overall Coach Record Strip */}
+        <div className="bg-white border-b-2 border-black px-4 sm:px-6 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3 font-sans">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Phase Filter */}
+            <div className="flex items-center border border-black bg-[#f4f1ea] p-0.5">
+              {(
+                [
+                  { id: 'ALL', label: 'All Games' },
+                  { id: 'REG', label: 'Regular Season' },
+                  { id: 'PLAYOFFS', label: 'Playoffs' }
+                ] as const
+              ).map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setH2hPhaseFilter(p.id)}
+                  className={`px-2.5 py-1 text-[11px] font-black uppercase cursor-pointer transition ${
+                    h2hPhaseFilter === p.id
+                      ? 'bg-black text-white'
+                      : 'text-black hover:bg-black/10'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Season Filter */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-mono font-black uppercase text-slate-600">Season:</span>
+              <select
+                value={h2hSeasonFilter}
+                onChange={e =>
+                  setH2hSeasonFilter(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value))
+                }
+                className="border border-black bg-white text-black px-2.5 py-1 text-xs font-mono font-bold uppercase cursor-pointer focus:outline-none"
+              >
+                <option value="ALL">All Seasons ({availableCoachSeasons.length})</option>
+                {availableCoachSeasons.map(s => (
+                  <option key={s.league_id} value={s.league_id}>
+                    {s.badge} — {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Active Coach Overall Totals Pill */}
+          {activeH2HCoach && (
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-mono bg-[#f4f1ea] border border-black px-3 py-1.5">
+              <span className="font-black uppercase text-black">
+                {activeH2HCoach.coach_name} Overall:
+              </span>
+              <span>
+                <strong className="text-black">{activeCoachOverallTotals.gp}</strong> GP
+              </span>
+              <span className="font-black text-emerald-800">
+                {activeCoachOverallTotals.w}-{activeCoachOverallTotals.l}-{activeCoachOverallTotals.t}
+                {activeCoachOverallTotals.otl > 0 ? `-${activeCoachOverallTotals.otl}` : ''}
+              </span>
+              <span>
+                <strong className="text-blue-900">{activeCoachOverallTotals.pts}</strong> PTS
+              </span>
+              <span>
+                WIN%:{' '}
+                <strong className="text-black">
+                  {activeCoachOverallTotals.gp > 0
+                    ? `${((activeCoachOverallTotals.w / activeCoachOverallTotals.gp) * 100).toFixed(1)}%`
+                    : '0.0%'}
+                </strong>
+              </span>
+              <span>
+                GF-GA:{' '}
+                <strong className="text-black">
+                  {activeCoachOverallTotals.gf}-{activeCoachOverallTotals.ga}
+                </strong>{' '}
+                (
+                <span
+                  className={
+                    activeCoachOverallTotals.gf - activeCoachOverallTotals.ga >= 0
+                      ? 'text-emerald-700 font-bold'
+                      : 'text-red-700 font-bold'
+                  }
+                >
+                  {activeCoachOverallTotals.gf - activeCoachOverallTotals.ga >= 0
+                    ? `+${activeCoachOverallTotals.gf - activeCoachOverallTotals.ga}`
+                    : activeCoachOverallTotals.gf - activeCoachOverallTotals.ga}
+                </span>
+                )
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* DIRECT 1-ON-1 RIVALRY BANNER (WHEN AN OPPONENT COACH IS SELECTED) */}
+        {activeOneOnOneSummary && activeH2HCoach && (
+          <div className="bg-black text-white border-b-2 border-black p-4 sm:p-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-black">
+                  DIRECT HEAD-TO-HEAD COACHING TALE OF THE TAPE
+                </div>
+                <h3 className="text-lg sm:text-2xl font-black uppercase text-white flex items-center gap-2 flex-wrap">
+                  <span className="text-emerald-400">{activeH2HCoach.coach_name}</span>
+                  <span className="text-xs font-mono bg-neutral-800 text-white px-2 py-0.5 border border-neutral-600">
+                    VS
+                  </span>
+                  <span className="text-cyan-400">{activeOneOnOneSummary.opponentName}</span>
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedOpponentId('ALL')}
+                className="self-start md:self-auto px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-600 font-mono text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Show All Opponents</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 font-mono text-xs mb-4">
+              <div className="bg-neutral-900 text-white border border-neutral-700 p-3">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">H2H RECORD</div>
+                <div className="text-lg font-black text-white mt-0.5">
+                  {activeOneOnOneSummary.w}-{activeOneOnOneSummary.l}-{activeOneOnOneSummary.t}
+                  {activeOneOnOneSummary.otl > 0 ? `-${activeOneOnOneSummary.otl}` : ''}
+                </div>
+                <div className="text-[10px] text-amber-400">
+                  {activeOneOnOneSummary.gp} Games Played • {activeOneOnOneSummary.pts} PTS
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 text-white border border-neutral-700 p-3">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">WIN PERCENTAGE</div>
+                <div className="text-lg font-black text-emerald-400 mt-0.5">
+                  {activeOneOnOneSummary.winPct}%
+                </div>
+                <div className="text-[10px] text-neutral-400">
+                  Streak: <strong className="text-white">{activeOneOnOneSummary.streak}</strong>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 text-white border border-neutral-700 p-3">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">GOALS FOR / AGAINST</div>
+                <div className="text-lg font-black text-white mt-0.5">
+                  {activeOneOnOneSummary.gf} &ndash; {activeOneOnOneSummary.ga}
+                </div>
+                <div className="text-[10px] text-neutral-400">
+                  Diff:{' '}
+                  <strong
+                    className={
+                      activeOneOnOneSummary.gd >= 0 ? 'text-emerald-400' : 'text-red-400'
+                    }
+                  >
+                    {activeOneOnOneSummary.gd >= 0
+                      ? `+${activeOneOnOneSummary.gd}`
+                      : activeOneOnOneSummary.gd}
+                  </strong>{' '}
+                  • {activeOneOnOneSummary.gpg} GPG
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 text-white border border-neutral-700 p-3">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">HOME ICE RECORD</div>
+                <div className="text-lg font-black text-white mt-0.5">
+                  {activeOneOnOneSummary.homeW}-{activeOneOnOneSummary.homeL}-{activeOneOnOneSummary.homeT}
+                  {activeOneOnOneSummary.homeOtl > 0 ? `-${activeOneOnOneSummary.homeOtl}` : ''}
+                </div>
+                <div className="text-[10px] text-neutral-400">As Home Coach</div>
+              </div>
+
+              <div className="bg-neutral-900 text-white border border-neutral-700 p-3">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">ROAD RECORD</div>
+                <div className="text-lg font-black text-white mt-0.5">
+                  {activeOneOnOneSummary.awayW}-{activeOneOnOneSummary.awayL}-{activeOneOnOneSummary.awayT}
+                  {activeOneOnOneSummary.awayOtl > 0 ? `-${activeOneOnOneSummary.awayOtl}` : ''}
+                </div>
+                <div className="text-[10px] text-neutral-400">As Visiting Coach</div>
+              </div>
+
+              <div className="bg-neutral-900 text-white border border-neutral-700 p-3">
+                <div className="text-[10px] text-neutral-400 uppercase font-bold">CLUTCH / PLAYOFFS</div>
+                <div className="text-sm font-black text-white mt-1">
+                  OT: {activeOneOnOneSummary.otW}-{activeOneOnOneSummary.otL}
+                </div>
+                <div className="text-[10px] text-amber-400 mt-0.5">
+                  Playoffs: {activeOneOnOneSummary.poW}-{activeOneOnOneSummary.poL}
+                </div>
+              </div>
+            </div>
+
+            {/* Visual Win Share Bar */}
+            {activeOneOnOneSummary.gp > 0 && (
+              <div className="space-y-1 font-mono text-[11px]">
+                <div className="flex justify-between text-xs font-bold">
+                  <span className="text-emerald-400">
+                    {activeH2HCoach.coach_name}: {activeOneOnOneSummary.w} W
+                  </span>
+                  {activeOneOnOneSummary.t > 0 && (
+                    <span className="text-neutral-300">{activeOneOnOneSummary.t} T</span>
+                  )}
+                  <span className="text-cyan-400">
+                    {activeOneOnOneSummary.opponentName}: {activeOneOnOneSummary.l + activeOneOnOneSummary.otl} W
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-neutral-800 border border-neutral-600 flex overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full transition-all"
+                    style={{
+                      width: `${(activeOneOnOneSummary.w / activeOneOnOneSummary.gp) * 100}%`
+                    }}
+                  />
+                  <div
+                    className="bg-neutral-400 h-full transition-all"
+                    style={{
+                      width: `${(activeOneOnOneSummary.t / activeOneOnOneSummary.gp) * 100}%`
+                    }}
+                  />
+                  <div
+                    className="bg-cyan-500 h-full transition-all"
+                    style={{
+                      width: `${((activeOneOnOneSummary.l + activeOneOnOneSummary.otl) / activeOneOnOneSummary.gp) * 100}%`
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MAIN H2H TWO-COLUMN BODY: RECORDS VS ALL COACHES LEFT + RECENT SCORES RIGHT */}
+        <div className="p-4 sm:p-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* LEFT 7 COLS: HEAD-TO-HEAD RECORDS AGAINST ALL OTHER COACHES */}
+          <div className="xl:col-span-7 flex flex-col">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b-2 border-black">
+              <div>
+                <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-black">
+                  {activeH2HCoach?.coach_name || 'Coach'} &mdash; Record vs. Every Coach (
+                  {sortedAndFilteredH2HOpponents.length})
+                </h3>
+                <p className="text-[11px] font-sans text-slate-600">
+                  Click any opponent coach row to filter recent scores and inspect the 1-on-1 rivalry breakdown.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={h2hOpponentSearch}
+                    onChange={e => setH2hOpponentSearch(e.target.value)}
+                    placeholder="Filter opponent..."
+                    className="pl-7 pr-2.5 py-1 text-xs border border-black bg-white text-black font-sans w-40 focus:outline-none"
+                  />
+                </div>
+                <select
+                  value={h2hSortField}
+                  onChange={e => setH2hSortField(e.target.value as any)}
+                  className="bg-black text-white border border-black px-2 py-1 text-xs font-mono font-bold uppercase cursor-pointer"
+                >
+                  <option value="gp">Sort: Games (GP)</option>
+                  <option value="w">Sort: Wins (W)</option>
+                  <option value="pts">Sort: Points (PTS)</option>
+                  <option value="winPct">Sort: Win %</option>
+                  <option value="gf">Sort: Goals For (GF)</option>
+                  <option value="gd">Sort: Goal Diff (DIFF)</option>
+                </select>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="p-10 text-center font-mono text-xs uppercase text-slate-500 border border-black bg-white">
+                Computing Head-to-Head Coaching Records...
+              </div>
+            ) : sortedAndFilteredH2HOpponents.length === 0 ? (
+              <div className="p-10 text-center font-sans text-xs italic text-slate-500 border border-black bg-white">
+                No head-to-head matchups found for this coach in the selected filter.
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[520px] overflow-y-auto border-2 border-black bg-white">
+                <table className="w-full text-left border-collapse font-mono text-xs">
+                  <thead className="bg-black text-white sticky top-0 z-10 text-[10px] uppercase">
+                    <tr>
+                      <th className="py-2.5 px-2.5 border-b border-neutral-800">Opponent Coach</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">GP</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">W-L-T-OTL</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">PTS</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">WIN%</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">GF-GA</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">DIFF</th>
+                      <th className="py-2.5 px-2 border-b border-neutral-800 text-center">LAST 5</th>
+                      <th className="py-2.5 px-2.5 border-b border-neutral-800 text-right">LAST SCORE</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200">
+                    {sortedAndFilteredH2HOpponents.map(opp => {
+                      const isSelectedOpp = Number(selectedOpponentId) === opp.opponentId;
+                      return (
+                        <tr
+                          key={opp.opponentId}
+                          onClick={() =>
+                            setSelectedOpponentId(isSelectedOpp ? 'ALL' : opp.opponentId)
+                          }
+                          className={`cursor-pointer transition-colors ${
+                            isSelectedOpp
+                              ? 'bg-amber-100 font-black ring-1 ring-inset ring-black'
+                              : 'hover:bg-amber-50/70'
+                          }`}
+                          title={`Click to filter scores vs ${opp.opponentName}`}
+                        >
+                          <td className="py-2 px-2.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-black">{opp.opponentName}</span>
+                              {opp.opponentTeams.slice(0, 2).map(abbr => (
+                                <span
+                                  key={abbr}
+                                  className="bg-black text-white text-[9px] px-1 py-0.1 font-black"
+                                >
+                                  {abbr}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 text-center font-bold text-slate-700">{opp.gp}</td>
+                          <td className="py-2 px-2 text-center font-black text-black whitespace-nowrap">
+                            {opp.w}-{opp.l}-{opp.t}
+                            {opp.otl > 0 ? `-${opp.otl}` : ''}
+                          </td>
+                          <td className="py-2 px-2 text-center font-black text-blue-900">{opp.pts}</td>
+                          <td className="py-2 px-2 text-center">
+                            <span
+                              className={`font-bold ${
+                                opp.winPct >= 50 ? 'text-emerald-800' : 'text-slate-700'
+                              }`}
+                            >
+                              {opp.winPct}%
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 text-center text-slate-700 whitespace-nowrap">
+                            {opp.gf}-{opp.ga}
+                          </td>
+                          <td
+                            className={`py-2 px-2 text-center font-bold ${
+                              opp.gd > 0
+                                ? 'text-emerald-700'
+                                : opp.gd < 0
+                                ? 'text-red-700'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            {opp.gd > 0 ? `+${opp.gd}` : opp.gd}
+                          </td>
+                          <td className="py-2 px-2 text-center">
+                            <div className="flex items-center justify-center gap-0.5">
+                              {opp.recentOutcomes.map((res, rIdx) => (
+                                <span
+                                  key={rIdx}
+                                  className={`w-4 h-4 text-[9px] font-black flex items-center justify-center ${
+                                    res === 'W'
+                                      ? 'bg-emerald-600 text-white'
+                                      : res === 'L'
+                                      ? 'bg-red-600 text-white'
+                                      : res === 'OTL'
+                                      ? 'bg-amber-600 text-white'
+                                      : 'bg-slate-500 text-white'
+                                  }`}
+                                >
+                                  {res === 'OTL' ? 'O' : res}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2.5 text-right whitespace-nowrap">
+                            {opp.lastGame ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold">
+                                <span
+                                  className={
+                                    opp.lastGame.outcome === 'W'
+                                      ? 'text-emerald-700 font-black'
+                                      : opp.lastGame.outcome === 'L' || opp.lastGame.outcome === 'OTL'
+                                      ? 'text-red-700 font-black'
+                                      : 'text-slate-700 font-black'
+                                  }
+                                >
+                                  {opp.lastGame.outcome} {opp.lastGame.myScore}-{opp.lastGame.oppScore}
+                                </span>
+                                <span className="text-[9px] text-slate-500">
+                                  ({opp.lastGame.seasonBadge})
+                                </span>
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT 5 COLS: RECENT SCORES & HEAD-TO-HEAD GAME LOG */}
+          <div className="xl:col-span-5 flex flex-col">
+            <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b-2 border-black">
+              <div>
+                <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-black">
+                  {selectedOpponentId === 'ALL'
+                    ? `${activeH2HCoach?.coach_name || 'Coach'} — Recent Scores (${displayedRecentMatches.length})`
+                    : `${activeH2HCoach?.coach_name} vs. ${activeOpponentCoach?.coach_name} Scores (${displayedRecentMatches.length})`}
+                </h3>
+                <p className="text-[11px] font-sans text-slate-600">
+                  {selectedOpponentId === 'ALL'
+                    ? 'Latest scores across all opponents (click any opponent to filter)'
+                    : 'Complete head-to-head game log between these two coaches'}
+                </p>
+              </div>
+              {selectedOpponentId !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedOpponentId('ALL')}
+                  className="px-2 py-1 bg-black text-white font-mono text-[10px] font-bold uppercase cursor-pointer shrink-0"
+                >
+                  All Opponents
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="p-10 text-center font-mono text-xs uppercase text-slate-500 border border-black bg-white">
+                Loading Recent Matchup Scores...
+              </div>
+            ) : displayedRecentMatches.length === 0 ? (
+              <div className="p-10 text-center font-sans text-xs italic text-slate-500 border border-black bg-white">
+                No games played between these coaches in the selected filter.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+                {displayedRecentMatches.slice(0, recentScoresLimit).map(match => {
+                  const isHome = match.home_coach_id === selectedCoachId;
+                  const myScore = isHome ? match.home_score : match.away_score;
+                  const oppScore = isHome ? match.away_score : match.home_score;
+                  const myTeamAbbr = isHome ? match.home_team_abbr : match.away_team_abbr;
+                  const myTeamName = isHome ? match.home_team_name : match.away_team_name;
+                  const myTeamLogo = isHome ? match.home_team_logo : match.away_team_logo;
+                  const oppCoachId = isHome ? match.away_coach_id : match.home_coach_id;
+                  const oppCoachName = isHome ? match.away_coach_name : match.home_coach_name;
+                  const oppTeamAbbr = isHome ? match.away_team_abbr : match.home_team_abbr;
+                  const oppTeamName = isHome ? match.away_team_name : match.home_team_name;
+                  const oppTeamLogo = isHome ? match.away_team_logo : match.home_team_logo;
+                  const myShots = isHome ? match.home_shots : match.away_shots;
+                  const oppShots = isHome ? match.away_shots : match.home_shots;
+
+                  let outcome: 'W' | 'L' | 'T' | 'OTL' = 'L';
+                  if (match.is_tie || myScore === oppScore) outcome = 'T';
+                  else if (myScore > oppScore) outcome = 'W';
+                  else if (match.is_ot && !match.is_playoff) outcome = 'OTL';
+
+                  return (
+                    <div
+                      key={match.id}
+                      className="bg-white border-2 border-black p-2.5 flex items-center justify-between gap-2 hover:bg-amber-50/40 transition-colors"
+                    >
+                      {/* Outcome Badge & Season Info */}
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div
+                          className={`w-8 h-8 shrink-0 font-mono text-xs font-black flex items-center justify-center border border-black ${
+                            outcome === 'W'
+                              ? 'bg-emerald-600 text-white'
+                              : outcome === 'L'
+                              ? 'bg-red-600 text-white'
+                              : outcome === 'OTL'
+                              ? 'bg-amber-600 text-white'
+                              : 'bg-slate-600 text-white'
+                          }`}
+                        >
+                          {outcome}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                            <span className="bg-black text-white font-mono text-[9px] font-black px-1.5 py-0.2">
+                              {match.season_badge}
+                            </span>
+                            {match.is_playoff && (
+                              <span className="bg-amber-400 text-black border border-black font-mono text-[9px] font-black px-1 py-0.1">
+                                {match.round_label || 'PLAYOFFS'}
+                              </span>
+                            )}
+                            {match.is_ot && (
+                              <span className="bg-blue-700 text-white font-mono text-[9px] font-black px-1 py-0.1">
+                                OT
+                              </span>
+                            )}
+                            <span className="text-[10px] font-mono text-slate-500">
+                              {isHome ? 'vs' : '@'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedOpponentId(
+                                  Number(selectedOpponentId) === oppCoachId ? 'ALL' : oppCoachId
+                                )
+                              }
+                              className="font-black text-black hover:text-red-800 hover:underline truncate cursor-pointer text-left"
+                              title={`Filter H2H vs ${oppCoachName}`}
+                            >
+                              {oppCoachName}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-600 mt-0.5 truncate">
+                            <span className="inline-flex items-center gap-1 font-bold text-black">
+                              {myTeamLogo && (
+                                <img
+                                  src={myTeamLogo}
+                                  alt={myTeamAbbr}
+                                  className="w-3.5 h-3.5 object-contain"
+                                />
+                              )}
+                              {myTeamAbbr} ({myTeamName})
+                            </span>
+                            <span>vs</span>
+                            <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                              {oppTeamLogo && (
+                                <img
+                                  src={oppTeamLogo}
+                                  alt={oppTeamAbbr}
+                                  className="w-3.5 h-3.5 object-contain"
+                                />
+                              )}
+                              {oppTeamAbbr} ({oppTeamName})
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Final Score & Shots */}
+                      <div className="text-right shrink-0 font-mono">
+                        <div className="text-sm sm:text-base font-black text-black">
+                          {myScore} &ndash; {oppScore}
+                        </div>
+                        {myShots !== null && oppShots !== null ? (
+                          <div className="text-[9px] text-slate-500">
+                            SOG: {myShots}-{oppShots}
+                          </div>
+                        ) : (
+                          <div className="text-[9px] text-slate-400 uppercase">
+                            {isHome ? 'HOME' : 'AWAY'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {displayedRecentMatches.length > recentScoresLimit && (
+                  <button
+                    type="button"
+                    onClick={() => setRecentScoresLimit(prev => prev + 25)}
+                    className="w-full py-2 bg-black hover:bg-neutral-800 text-white font-mono text-xs font-black uppercase cursor-pointer"
+                  >
+                    Show More Scores ({displayedRecentMatches.length - recentScoresLimit} Remaining)
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* =================================================================== */}
+      {/* MANAGERS & FRANCHISE DIRECTORY GRID                                 */}
+      {/* =================================================================== */}
+      <div className="mb-3 flex items-center justify-between border-b-2 border-black pb-2">
+        <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight">
+          All League Managers Directory ({filteredCoaches.length})
+        </h2>
+        <span className="text-xs font-mono text-slate-600 hidden sm:inline">
+          Click &ldquo;Head-to-Head &amp; Scores&rdquo; on any manager card to inspect their matchups
+        </span>
+      </div>
+
       {loading ? (
         <div className="p-16 text-center text-xs font-black uppercase tracking-widest text-gray-500 font-mono">
-          Loading Staff Directory & Team Logos across all historical seasons...
+          Loading Staff Directory, Head-to-Head Records &amp; Team Logos across all historical seasons...
         </div>
       ) : filteredCoaches.length === 0 ? (
         <div className="p-16 text-center text-xs font-bold uppercase italic text-gray-500 border border-black bg-white">
-          No coaches or managers found matching "{search}".
+          No coaches or managers found matching &ldquo;{search}&rdquo;.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredCoaches.map((coach) => (
+          {filteredCoaches.map(coach => (
             <ManagerCard
               key={coach.coach_id}
               coach={coach}
               selectedLeagueType={selectedLeagueType}
+              careerRecord={careerRecordByCoach.get(coach.coach_id)}
+              isSelectedForH2H={selectedCoachId === coach.coach_id}
+              onSelectH2H={() => handleJumpToCoachH2H(coach.coach_id)}
             />
           ))}
         </div>
@@ -343,7 +1976,19 @@ export default function ManagersPage() {
   );
 }
 
-function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selectedLeagueType: string }) {
+function ManagerCard({
+  coach,
+  selectedLeagueType,
+  careerRecord,
+  isSelectedForH2H,
+  onSelectH2H
+}: {
+  coach: CoachEntry;
+  selectedLeagueType: string;
+  careerRecord?: { gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number };
+  isSelectedForH2H: boolean;
+  onSelectH2H: () => void;
+}) {
   const displayedTeams = useMemo(() => {
     if (selectedLeagueType === 'ALL') return coach.teams;
     return coach.teams.filter(t => t.league_type === selectedLeagueType);
@@ -357,7 +2002,11 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
   const primaryTeam = displayedTeams[0] || coach.teams[0];
 
   return (
-    <div className="border-2 border-black p-4 bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-transform duration-100 hover:translate-y-[-1px]">
+    <div
+      className={`border-2 border-black p-4 bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between transition-transform duration-100 hover:translate-y-[-1px] ${
+        isSelectedForH2H ? 'ring-2 ring-amber-500' : ''
+      }`}
+    >
       <div>
         {/* Manager Header Row */}
         <div className="flex justify-between items-start border-b-2 border-black pb-2.5 mb-3 gap-2">
@@ -387,7 +2036,7 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
 
           {/* League Badges */}
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
-            {uniqueLeagues.map((lType) => {
+            {uniqueLeagues.map(lType => {
               const conf = LEAGUE_LOGOS[lType];
               return (
                 <span
@@ -402,11 +2051,42 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
           </div>
         </div>
 
+        {/* Career Record & Quick H2H Button */}
+        <div className="mb-3 bg-white border border-black p-2 flex items-center justify-between gap-2 font-mono text-xs">
+          {careerRecord && careerRecord.gp > 0 ? (
+            <div>
+              <div className="text-[9px] uppercase text-slate-500 font-bold">
+                OVERALL RECORD ({careerRecord.gp} GP)
+              </div>
+              <div className="font-black text-black">
+                {careerRecord.w}-{careerRecord.l}-{careerRecord.t}
+                {careerRecord.otl > 0 ? `-${careerRecord.otl}` : ''}{' '}
+                <span className="text-emerald-800 text-[10px]">
+                  ({((careerRecord.w / careerRecord.gp) * 100).toFixed(1)}%)
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[10px] text-slate-500">No tracked games yet</div>
+          )}
+
+          <button
+            type="button"
+            onClick={onSelectH2H}
+            className="px-2.5 py-1 bg-black hover:bg-neutral-800 text-white font-mono text-[10px] font-black uppercase cursor-pointer flex items-center gap-1 shrink-0"
+          >
+            <Swords className="w-3 h-3" />
+            <span>H2H &amp; Scores</span>
+          </button>
+        </div>
+
         {/* Team Assignments with Logos */}
         <div className="mb-2">
           <div className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between">
-            <span>Teams & Seasons Coached ({displayedTeams.length})</span>
-            {displayedTeams.length > 0 && <span className="text-[9px] text-slate-400">Click team to view season</span>}
+            <span>Teams &amp; Seasons Coached ({displayedTeams.length})</span>
+            {displayedTeams.length > 0 && (
+              <span className="text-[9px] text-slate-400">Click team to view season</span>
+            )}
           </div>
 
           {displayedTeams.length === 0 ? (
@@ -442,7 +2122,7 @@ function ManagerCard({ coach, selectedLeagueType }: { coach: CoachEntry; selecte
   );
 }
 
-function TeamRow({ team }: { team: any }) {
+function TeamRow({ team }: { team: CoachTeamInfo }) {
   const [imgError, setImgError] = useState(false);
 
   return (

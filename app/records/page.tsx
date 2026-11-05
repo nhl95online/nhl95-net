@@ -936,7 +936,7 @@ export default function RecordsPage() {
                       >
                         <td className="py-3 px-3 border-r border-black/20 text-center font-mono font-black">
                           {isFirst ? (
-                            <span className="bg-black text-yellow-400 px-1.5 py-0.5 rounded text-[11px]">
+                            <span className="bg-black text-white px-1.5 py-0.5 rounded text-[11px]">
                               #1
                             </span>
                           ) : (

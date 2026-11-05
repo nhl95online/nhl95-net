@@ -1237,7 +1237,7 @@ export default function ModMyTeamPage() {
       <div className="max-w-[1440px] mx-auto">
         {/* Masthead */}
         <header className="border-b-4 border-black pb-4 mb-6 text-center">
-          <div className="inline-flex items-center gap-2 bg-black text-amber-400 px-3 py-1 text-[10px] sm:text-xs font-sans font-black uppercase tracking-widest mb-2 border border-black">
+          <div className="inline-flex items-center gap-2 bg-black text-white px-3 py-1 text-[10px] sm:text-xs font-sans font-black uppercase tracking-widest mb-2 border border-black">
             <Palette className="w-3.5 h-3.5 text-amber-400" />
             <span>NHL95 NOSE ROM Studio & Offseason Lineup Builder</span>
           </div>
@@ -2039,7 +2039,7 @@ export default function ModMyTeamPage() {
                                 isCut
                                   ? 'bg-red-700 text-white'
                                   : isStarter
-                                  ? 'bg-black text-amber-400'
+                                  ? 'bg-black text-white'
                                   : 'bg-zinc-200 text-black'
                               }`}
                             >

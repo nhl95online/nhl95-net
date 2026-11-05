@@ -1537,7 +1537,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
 
                       {/* Center Final Badge */}
                       <div className="text-center px-4 py-2 border-y sm:border-y-0 sm:border-x border-white/20">
-                        <span className="text-xs font-black uppercase tracking-widest text-yellow-400 bg-black px-2 py-0.5 border border-yellow-400 rounded">
+                        <span className="text-xs font-black uppercase tracking-widest text-white bg-black px-2 py-0.5 border border-yellow-400 rounded">
                           FINAL
                         </span>
                         <div className="text-xs text-gray-300 font-mono mt-1">

@@ -2502,7 +2502,7 @@ function ArenaContent() {
       <div className="bg-[#0d1b2a] border-2 border-black text-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-5 overflow-hidden">
         <div className="px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 bg-gradient-to-r from-[#09131f] via-[#112236] to-[#09131f]">
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="bg-black border-2 border-cyan-400 px-3.5 py-2 rounded-xs shadow-[0_0_15px_rgba(34,211,238,0.25)] flex items-center gap-2.5">
+            <div className="bg-black text-white border-2 border-cyan-400 px-3.5 py-2 rounded-xs shadow-[0_0_15px_rgba(34,211,238,0.25)] flex items-center gap-2.5">
               <Tv className="w-6 h-6 text-cyan-400" />
               <div>
                 <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-300 font-black leading-none">
@@ -2607,7 +2607,7 @@ function ArenaContent() {
                 onClick={() => setActiveArenaTab(tab.id as any)}
                 className={`px-3 py-1.5 font-bold uppercase text-xs transition cursor-pointer flex items-center gap-1.5 rounded-xs ${
                   activeArenaTab === tab.id
-                    ? 'bg-black text-amber-400 border-b-2 border-amber-500 shadow-2xs'
+                    ? 'bg-black text-white border-b-2 border-amber-500 shadow-2xs'
                     : 'text-slate-700 hover:bg-black/5'
                 }`}
               >
@@ -2690,7 +2690,7 @@ function ArenaContent() {
                 return (
                   <div key={g.peerId} className="px-4 py-3 flex items-center justify-between flex-wrap gap-4 hover:bg-slate-50">
                     <div className="flex items-center gap-3 min-w-[180px]">
-                      <span className="bg-neutral-900 text-amber-400 font-mono text-[10px] font-black uppercase px-2 py-1 rounded">
+                      <span className="bg-black text-white font-mono text-[10px] font-black uppercase px-2 py-1 rounded">
                         NHL &apos;95 • {g.preferredRomLabel}
                       </span>
                       <div>
@@ -2807,7 +2807,7 @@ function ArenaContent() {
                     title={`${item.fileName} — ${item.title}`}
                     className={`px-2.5 py-1.5 border transition cursor-pointer rounded-xs flex items-center gap-1.5 font-mono text-xs font-black ${
                       isSelected
-                        ? 'bg-neutral-950 text-amber-400 border-black ring-2 ring-amber-500'
+                        ? 'bg-black text-white border-black ring-2 ring-amber-500'
                         : 'bg-[#faf8f5] hover:bg-amber-50 text-black border-slate-300 hover:border-black'
                     }`}
                   >
@@ -2876,7 +2876,7 @@ function ArenaContent() {
               <span>{fallbackNotice}</span>
               <button
                 onClick={() => localRomInputRef.current?.click()}
-                className="px-2.5 py-1 bg-black text-amber-400 font-mono text-[10px] font-bold uppercase rounded-xs cursor-pointer shrink-0"
+                className="px-2.5 py-1 bg-black text-white font-mono text-[10px] font-bold uppercase rounded-xs cursor-pointer shrink-0"
               >
                 Load Local .BIN/.ZIP
               </button>
@@ -3232,7 +3232,7 @@ function ArenaContent() {
                         onClick={() => setSelectedRomId(romKey)}
                         className={`px-2.5 py-1 rounded border font-mono text-[11px] font-black uppercase cursor-pointer transition ${
                           active
-                            ? 'bg-neutral-900 text-amber-400 border-black'
+                            ? 'bg-black text-white border-black'
                             : 'bg-slate-100 text-slate-700 border-slate-300 hover:border-black'
                         }`}
                       >
@@ -3276,7 +3276,7 @@ function ArenaContent() {
                               : 'bg-slate-400'
                           }`}
                         />
-                        <div className="w-9 h-9 rounded bg-neutral-900 text-amber-400 font-serif font-black text-xs flex items-center justify-center border border-black shrink-0">
+                        <div className="w-9 h-9 rounded bg-black text-white font-serif font-black text-xs flex items-center justify-center border border-black shrink-0">
                           {player.coachName.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -3368,7 +3368,7 @@ function ArenaContent() {
                           <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => handleHostOpenRoom(false)}
-                              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-xs font-bold rounded cursor-pointer"
+                              className="px-3 py-1.5 bg-black hover:bg-neutral-800 text-white font-mono text-xs font-bold rounded cursor-pointer"
                             >
                               Host 1v1
                             </button>
@@ -3716,7 +3716,7 @@ function ArenaContent() {
                     <select
                       value={coachSortField}
                       onChange={e => setCoachSortField(e.target.value as any)}
-                      className="px-2.5 py-1.5 text-xs bg-neutral-900 text-amber-400 border border-black font-mono font-bold rounded-xs cursor-pointer"
+                      className="px-2.5 py-1.5 text-xs bg-black text-white border border-black font-mono font-bold rounded-xs cursor-pointer"
                     >
                       <option value="points">Sort: Points (PTS)</option>
                       <option value="wins">Sort: Most Wins (W)</option>
@@ -3732,7 +3732,7 @@ function ArenaContent() {
 
                 <div className="overflow-x-auto max-h-[540px] overflow-y-auto border border-black">
                   <table className="w-full text-left border-collapse font-mono text-xs">
-                    <thead className="bg-neutral-950 text-amber-400 sticky top-0 z-10 text-[10px] uppercase">
+                    <thead className="bg-black text-white sticky top-0 z-10 text-[10px] uppercase">
                       <tr>
                         <th className="py-2.5 px-2.5 border-b border-neutral-800">#</th>
                         <th className="py-2.5 px-2.5 border-b border-neutral-800">Coach</th>
@@ -3782,7 +3782,7 @@ function ArenaContent() {
                                 <div className="flex items-center gap-1.5">
                                   <span className="font-bold text-slate-900">{c.coachName}</span>
                                   {c.favoriteTeam && (
-                                    <span className="text-[10px] bg-neutral-900 text-amber-400 px-1.5 py-0.2 rounded font-bold">
+                                    <span className="text-[10px] bg-black text-white px-1.5 py-0.2 rounded font-bold">
                                       {c.favoriteTeam}
                                     </span>
                                   )}
@@ -3863,7 +3863,7 @@ function ArenaContent() {
                       onClick={() => setVaultCategory(tab.id as any)}
                       className={`px-3 py-1.5 rounded-xs font-bold uppercase text-[11px] cursor-pointer transition ${
                         vaultCategory === tab.id
-                          ? 'bg-black text-amber-400'
+                          ? 'bg-black text-white'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300'
                       }`}
                     >
@@ -3899,7 +3899,7 @@ function ArenaContent() {
                     >
                       <div>
                         <div className="flex items-center justify-between gap-1 mb-1.5">
-                          <span className="bg-black text-amber-400 font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded-xs">
+                          <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded-xs">
                             {item.categoryBadge}
                           </span>
                           {cloudFile ? (
@@ -4073,7 +4073,7 @@ function ArenaContent() {
                     </button>
                     <Link
                       href="/upload"
-                      className="bg-black hover:bg-neutral-800 text-amber-400 font-mono text-xs font-bold uppercase px-3 py-1.5 rounded-xs flex items-center gap-1.5"
+                      className="bg-black hover:bg-neutral-800 text-white font-mono text-xs font-bold uppercase px-3 py-1.5 rounded-xs flex items-center gap-1.5"
                     >
                       <span>Official League Upload &rarr;</span>
                     </Link>
@@ -4124,7 +4124,7 @@ function ArenaContent() {
           {/* COACH PROFILE CARD */}
           <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
             <div className="flex items-center gap-3.5 pb-3.5 border-b border-slate-200">
-              <div className="w-14 h-14 rounded-xs bg-neutral-900 border-2 border-black flex items-center justify-center text-amber-400 font-serif font-black text-xl shrink-0 shadow-xs">
+              <div className="w-14 h-14 rounded-xs bg-black border-2 border-black flex items-center justify-center text-white font-serif font-black text-xl shrink-0 shadow-xs">
                 {myDisplayName.slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">

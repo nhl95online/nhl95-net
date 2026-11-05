@@ -128,15 +128,6 @@ export default function Navbar() {
 
         {/* Desktop Navigation Links (Centered in the space to the right of the logo on screens >= md) */}
         <div className="hidden md:flex items-center justify-center flex-wrap gap-3.5 lg:gap-6 text-xs lg:text-[13px] text-black uppercase font-bold tracking-wider flex-1">
-          {/* Online Arena tab (left of Standings) */}
-          <Link 
-            href="/arena" 
-            className="hover:bg-amber-400 transition px-2.5 py-0.5 bg-amber-500 text-black border border-black font-black text-xs rounded-xs shadow-2xs"
-            title="Play NHL 95 in the Browser Online Arena"
-          >
-            🏒 Arena
-          </Link>
-
           <Link href="/standings" className="hover:underline transition">Standings</Link>
           <Link href="/power-rankings" className="hover:underline transition text-red-900 font-black">Power Rankings</Link>
           <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
@@ -178,7 +169,7 @@ export default function Navbar() {
             )}
           </div>
 
-          {/* Desktop Dropdown for Extras (Awards, Records, Mod My Team, Setup Guide, Arena, ROMs, Managers, Stream Overlays) */}
+          {/* Desktop Dropdown for Extras (Awards, Records, Mod My Team, Setup Guide, ROMs, Managers, Stream Overlays) */}
           <div 
             className="relative" 
             onMouseEnter={() => setIsExtrasOpen(true)} 
@@ -200,9 +191,6 @@ export default function Navbar() {
                 </Link>
                 <Link href="/setup-guide" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-amber-900 border-b border-black/15">
                   Setup Guide
-                </Link>
-                <Link href="/arena" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">
-                  Online Arena (Play Now)
                 </Link>
                 <Link href="/roms" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
                   ROMs & Files
@@ -227,6 +215,15 @@ export default function Navbar() {
           </Link>
         </div>
 
+        {/* Online Arena Button on the far right of the banner to the right of the menu options */}
+        <Link 
+          href="/arena" 
+          className="hidden md:inline-flex items-center gap-1.5 hover:bg-amber-400 transition px-3 py-1 bg-amber-500 text-black border border-black font-black text-xs uppercase tracking-wider rounded-xs shadow-2xs shrink-0 ml-auto"
+          title="Play NHL 95 in the Browser Online Arena"
+        >
+          <span>🏒 Arena</span>
+        </Link>
+
         {/* Mobile Hamburger Toggle (Visible on screens < md) */}
         <button
           type="button"
@@ -241,15 +238,6 @@ export default function Navbar() {
       {/* Mobile Drawer (Visible on screens < md when toggled) */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-[#fdfaf5] border-t border-black px-4 py-3 flex flex-col gap-2 font-sans font-bold text-xs uppercase tracking-wider shadow-lg max-h-[80vh] overflow-y-auto">
-
-          <Link 
-            href="/arena" 
-            onClick={closeMobileMenu}
-            className="py-2 px-3 bg-amber-400/30 hover:bg-amber-400/50 border border-black flex items-center justify-between font-black text-black rounded-xs"
-          >
-            <span>🏒 Online Arena (Play Now)</span> <span>→</span>
-          </Link>
-
           <Link 
             href="/standings" 
             onClick={closeMobileMenu}
@@ -391,13 +379,6 @@ export default function Navbar() {
                   • Setup Guide
                 </Link>
                 <Link 
-                  href="/arena" 
-                  onClick={closeMobileMenu}
-                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-emerald-900"
-                >
-                  • Online Arena (Play Now)
-                </Link>
-                <Link 
                   href="/roms" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
@@ -428,6 +409,14 @@ export default function Navbar() {
             className="py-2.5 px-3 bg-black text-white text-center rounded-xs font-black hover:bg-red-700 transition-colors mt-2 flex items-center justify-center gap-2"
           >
             <span>Upload Game File</span>
+          </Link>
+
+          <Link 
+            href="/arena" 
+            onClick={closeMobileMenu}
+            className="py-2.5 px-3 bg-amber-500 hover:bg-amber-400 border border-black flex items-center justify-center gap-2 font-black text-black rounded-xs"
+          >
+            <span>🏒 Arena</span>
           </Link>
         </div>
       )}
