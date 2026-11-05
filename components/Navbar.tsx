@@ -126,8 +126,8 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* Desktop Navigation Links (To the right of the logo on screens >= md) */}
-        <div className="hidden md:flex items-center flex-wrap gap-3.5 lg:gap-6 text-xs lg:text-[13px] text-black uppercase font-bold tracking-wider flex-1">
+        {/* Desktop Navigation Links (Centered in the space to the right of the logo on screens >= md) */}
+        <div className="hidden md:flex items-center justify-center flex-wrap gap-3.5 lg:gap-6 text-xs lg:text-[13px] text-black uppercase font-bold tracking-wider flex-1">
           {/* Online Arena tab (left of Standings) */}
           <Link 
             href="/arena" 
