@@ -2619,7 +2619,7 @@ export default function PlayersPage() {
             }`}
           >
             <Layers className="w-4 h-4 text-cyan-500" />
-            Active Rosters &amp; Futures
+            League Rosters
           </button>
 
           <button

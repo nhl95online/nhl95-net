@@ -37,22 +37,22 @@ export default function ExtrasPage() {
           </Link>
         </div>
 
-        {/* 2. Managers Directory */}
+        {/* 2. Coach Profile */}
         <div className="border-2 border-black p-6 bg-[#fdfaf5] shadow-[4px_4px_0px_rgba(0,0,0,1)] flex flex-col justify-between">
           <div>
             <div className="w-12 h-12 bg-blue-600 text-white flex items-center justify-center mb-4 border border-black">
               <Users className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-black uppercase mb-2">Managers Directory</h2>
+            <h2 className="text-xl font-black uppercase mb-2">Coach Profile</h2>
             <p className="font-sans text-xs text-slate-700 leading-relaxed mb-4">
-              Front office rosters, registered head coaches, discord handles, and franchise assignments across all historical seasons.
+              Coach profiles, controlled franchises across all leagues, head-to-head rivalry records, and recent matchup scores.
             </p>
           </div>
           <Link
-            href="/managers"
+            href="/team?tab=coach"
             className="block text-center bg-black hover:bg-blue-700 text-white font-mono text-xs font-bold uppercase py-2.5 transition-colors"
           >
-            View Front Office &rarr;
+            View Coach Profile &rarr;
           </Link>
         </div>
 

@@ -3817,7 +3817,7 @@ export default function DraftPage() {
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
-                Active Rosters &amp; Futures
+                League Rosters
               </button>
             </div>
           </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { W_SEASON_CONFIG, O_SEASON_CONFIG, W_LEAGUE_COACH_MAP } from '@/lib/seasons';
-import { Search, Download, Filter, RotateCcw, Users } from 'lucide-react';
+import { Search, Download, Filter, RotateCcw, Users, Columns2, Table as TableIcon, UserCheck } from 'lucide-react';
 
 const W_YEARS = [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
 const O_YEARS = [1927, 1928, 1929, 1930, 1931, 1932, 1933, 1934, 1935, 1936, 1937, 1938];
@@ -50,12 +50,10 @@ const O_TEAM_DEFAULT_NAMES: Record<string, string> = {
   TOR: 'Toronto Maple Leafs',
 };
 
-// Display-name cleanup for roster config entries
 const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
   'Martin St.Louis': 'Martin St. Louis',
 };
 
-// Normalize player name to lowercase alphanumeric
 function normName(name: string): string {
   return String(name || '')
     .normalize('NFD')
@@ -65,7 +63,6 @@ function normName(name: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
-// Secondary alias normalization (handles common first-name/initial variants)
 function normAlias(name: string): string {
   const cleaned = String(name || '')
     .normalize('NFD')
@@ -196,8 +193,7 @@ function extractOvr(row: any, ratings: any, playerInfo: any): number | null {
 }
 
 /**
- * Computes the Google Sheets 3-color conditional formatting background color
- * matching the reference image:
+ * Computes the Google Sheets 3-color conditional formatting background color:
  * - Low OVR (~40-50): #e06666 (soft salmon red)
  * - Mid OVR (~73-74): #ffffff (pure white)
  * - High OVR (~98-104): #57bb8a (rich spreadsheet green)
@@ -214,9 +210,6 @@ function getOvrHeatmapStyle(ovr: number | null | undefined): React.CSSProperties
   const midVal = 73.5;
   const maxVal = 99;
 
-  // Low color: #e06666 (224, 102, 102)
-  // Mid color: #ffffff (255, 255, 255)
-  // High color: #57bb8a (87, 187, 138)
   let r = 255;
   let g = 255;
   let b = 255;
@@ -262,8 +255,6 @@ function buildTeamBannerCandidateUrls(abbr: string, isOriginalSix: boolean, bann
 function TeamBannerCell({
   abbr,
   teamName,
-  teamId,
-  seasonId,
   isOriginalSix,
   bannerFilename,
   onSelectTeam,
@@ -294,7 +285,7 @@ function TeamBannerCell({
     <div
       onClick={() => onSelectTeam?.(abbr)}
       title={`${teamName} (${abbr}) — Click to filter team`}
-      className="w-[132px] h-[22px] bg-black flex items-center justify-center overflow-hidden cursor-pointer select-none mx-auto"
+      className="w-full h-[22px] bg-black flex items-center justify-center overflow-hidden cursor-pointer select-none"
     >
       {!failedAll && currentUrl ? (
         <img
@@ -323,12 +314,16 @@ interface RosterMatrixPlayerRow {
   teamName: string;
   teamId?: number | null;
   coachName?: string;
+  coachId?: number | null;
   bannerFilename?: string;
   playerName: string;
   displayPlayerName: string;
   pos: 'G' | 'F' | 'D';
   hand: string;
   ovrByYear: Record<number, number | null>;
+  peakOvr: number | null;
+  avgOvr: number | null;
+  activeYearsCount: number;
 }
 
 export interface ActiveRostersFuturesViewProps {
@@ -340,25 +335,30 @@ export interface ActiveRostersFuturesViewProps {
 export default function ActiveRostersFuturesView({
   initialLeagueType = 'W',
   initialTeamAbbr = 'ALL',
-  compactHeader = false,
 }: ActiveRostersFuturesViewProps) {
   const [leagueType, setLeagueType] = useState<'W' | 'O'>(initialLeagueType);
   const [selectedTeamAbbr, setSelectedTeamAbbr] = useState<string>(initialTeamAbbr);
   const [posFilter, setPosFilter] = useState<'ALL' | 'G' | 'F' | 'D'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [splitColumns, setSplitColumns] = useState<boolean>(false);
   const [teamsMetaByAbbr, setTeamsMetaByAbbr] = useState<
-    Record<string, { team_id?: number; team_name: string; coach_name?: string; banner_filename?: string }>
+    Record<string, { team_id?: number; team_name: string; coach_name?: string; coach_id?: number; banner_filename?: string }>
   >({});
   const [playerDbMap, setPlayerDbMap] = useState<
     Map<string, { hand: string; canonicalName: string; ovrByYear: Record<number, number> }>
   >(new Map());
   const [loading, setLoading] = useState<boolean>(true);
 
+  useEffect(() => {
+    if (initialTeamAbbr) {
+      setSelectedTeamAbbr(initialTeamAbbr);
+    }
+  }, [initialTeamAbbr]);
+
   const years = useMemo(() => (leagueType === 'W' ? W_YEARS : O_YEARS), [leagueType]);
   const seasonConfig = useMemo(() => (leagueType === 'W' ? W_SEASON_CONFIG : O_SEASON_CONFIG), [leagueType]);
   const activeSeasonId = seasonConfig.seasonId;
 
-  // Ordered team abbreviations from season config
   const orderedTeamAbbrs = useMemo(() => {
     const codesObj = seasonConfig.teamCodes || {};
     return Object.keys(codesObj)
@@ -366,7 +366,6 @@ export default function ActiveRostersFuturesView({
       .map((k) => codesObj[k]);
   }, [seasonConfig]);
 
-  // Reset team filter if switching leagues and current team isn't in new league
   useEffect(() => {
     if (selectedTeamAbbr !== 'ALL' && !orderedTeamAbbrs.includes(selectedTeamAbbr)) {
       setSelectedTeamAbbr('ALL');
@@ -391,12 +390,12 @@ export default function ActiveRostersFuturesView({
           }
         });
 
-        const map: Record<string, { team_id?: number; team_name: string; coach_name?: string; banner_filename?: string }> = {};
+        const map: Record<string, { team_id?: number; team_name: string; coach_name?: string; coach_id?: number; banner_filename?: string }> = {};
         (teamsRes.data || []).forEach((t: any) => {
           const abbr = String(t.abbreviation || '').trim().toUpperCase();
           if (!abbr) return;
-          // Prefer exact activeSeasonId match
           if (map[abbr] && Number(t.league_id) !== Number(activeSeasonId)) return;
+          const cId = Number(t.coach_id) || W_LEAGUE_COACH_MAP[abbr]?.coach_id || undefined;
           const cName =
             (t.coach_id && coachMap[Number(t.coach_id)]) ||
             t.coach_name ||
@@ -406,13 +405,14 @@ export default function ActiveRostersFuturesView({
             team_id: Number(t.team_id),
             team_name: t.team_name || W_TEAM_DEFAULT_NAMES[abbr] || O_TEAM_DEFAULT_NAMES[abbr] || abbr,
             coach_name: cName,
+            coach_id: cId,
             banner_filename: t.banner_filename || undefined,
           };
         });
 
         setTeamsMetaByAbbr(map);
       } catch (e) {
-        console.error('Error loading teams metadata for futures view:', e);
+        console.error('Error loading teams metadata for league rosters view:', e);
       }
     }
     loadTeamsMeta();
@@ -443,7 +443,6 @@ export default function ActiveRostersFuturesView({
         const results = await Promise.all(yearPromises);
         if (cancelled) return;
 
-        // Keyed by `${isGoalie ? 'G' : 'S'}:${normalizedName}` so Goalie Niklas Backstrom & Skater Nicklas Backstrom never collide
         const compiled = new Map<
           string,
           { hand: string; canonicalName: string; ovrByYear: Record<number, number> }
@@ -499,7 +498,7 @@ export default function ActiveRostersFuturesView({
 
         setPlayerDbMap(compiled);
       } catch (err) {
-        console.error('Error building player futures matrix:', err);
+        console.error('Error building league rosters matrix:', err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -517,6 +516,14 @@ export default function ActiveRostersFuturesView({
     const goaliesByTeam = seasonConfig.goalies || {};
     const skatersByTeam = seasonConfig.skaters || {};
 
+    const computeSummaryMetrics = (ovrByYear: Record<number, number | null>) => {
+      const vals = Object.values(ovrByYear).filter((v): v is number => v !== null && v !== undefined && v > 0);
+      if (vals.length === 0) return { peakOvr: null, avgOvr: null, activeYearsCount: 0 };
+      const peakOvr = Math.max(...vals);
+      const avgOvr = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+      return { peakOvr, avgOvr, activeYearsCount: vals.length };
+    };
+
     orderedTeamAbbrs.forEach((abbr) => {
       const meta = teamsMetaByAbbr[abbr];
       const defaultName =
@@ -525,6 +532,7 @@ export default function ActiveRostersFuturesView({
           : O_TEAM_DEFAULT_NAMES[abbr] || abbr;
       const teamName = meta?.team_name || defaultName;
       const coachName = meta?.coach_name || W_LEAGUE_COACH_MAP[abbr]?.coach_name || '';
+      const coachId = meta?.coach_id || W_LEAGUE_COACH_MAP[abbr]?.coach_id || null;
       const posCounts =
         seasonConfig.teamPositionCounts?.[abbr] || seasonConfig.defaultPositionCounts || {
           goalies: 2,
@@ -535,7 +543,6 @@ export default function ActiveRostersFuturesView({
       const teamGoalies = goaliesByTeam[abbr] || [];
       const teamSkaters = skatersByTeam[abbr] || [];
 
-      // Goalies first (pos = 'G')
       teamGoalies.forEach((gName: string) => {
         const clean = String(gName || '').trim();
         if (!clean || clean === '--') return;
@@ -547,22 +554,26 @@ export default function ActiveRostersFuturesView({
         years.forEach((yr) => {
           ovrByYear[yr] = matched?.ovrByYear?.[yr] ?? null;
         });
+        const { peakOvr, avgOvr, activeYearsCount } = computeSummaryMetrics(ovrByYear);
 
         rows.push({
           teamAbbr: abbr,
           teamName,
           teamId: meta?.team_id ?? null,
           coachName,
+          coachId,
           bannerFilename: meta?.banner_filename,
           playerName: clean,
           displayPlayerName: DISPLAY_NAME_OVERRIDES[clean] || matched?.canonicalName || clean,
           pos: 'G',
           hand: matched?.hand || 'L',
           ovrByYear,
+          peakOvr,
+          avgOvr,
+          activeYearsCount,
         });
       });
 
-      // Skaters next: first 5 are 'F', last 3 are 'D'
       const numForwards = posCounts.forwards || 5;
       teamSkaters.forEach((sName: string, idx: number) => {
         const clean = String(sName || '').trim();
@@ -576,18 +587,23 @@ export default function ActiveRostersFuturesView({
         years.forEach((yr) => {
           ovrByYear[yr] = matched?.ovrByYear?.[yr] ?? null;
         });
+        const { peakOvr, avgOvr, activeYearsCount } = computeSummaryMetrics(ovrByYear);
 
         rows.push({
           teamAbbr: abbr,
           teamName,
           teamId: meta?.team_id ?? null,
           coachName,
+          coachId,
           bannerFilename: meta?.banner_filename,
           playerName: clean,
           displayPlayerName: DISPLAY_NAME_OVERRIDES[clean] || matched?.canonicalName || clean,
           pos,
           hand: matched?.hand || 'L',
           ovrByYear,
+          peakOvr,
+          avgOvr,
+          activeYearsCount,
         });
       });
     });
@@ -611,144 +627,254 @@ export default function ActiveRostersFuturesView({
     });
   }, [allMatrixRows, selectedTeamAbbr, posFilter, searchQuery]);
 
-  // Export current view to CSV
+  // Split rows into 2 balanced columns when splitColumns is enabled
+  const splitGroups = useMemo(() => {
+    if (!splitColumns || filteredRows.length <= 10) return [filteredRows];
+    const mid = Math.ceil(filteredRows.length / 2);
+    return [filteredRows.slice(0, mid), filteredRows.slice(mid)];
+  }, [filteredRows, splitColumns]);
+
   const handleDownloadCsv = () => {
-    const header = ['Team', 'Abbr', 'Player', 'Pos', 'H', ...years.map(String)].join(',');
+    const header = ['Team', 'Abbr', 'Coach', 'Player', 'Pos', 'H', 'Peak', 'Avg', ...years.map(String)].join(',');
     const lines = filteredRows.map((r) => {
       const yrVals = years.map((yr) => (r.ovrByYear[yr] !== null && r.ovrByYear[yr] !== undefined ? r.ovrByYear[yr] : ''));
-      return [`"${r.teamName}"`, r.teamAbbr, `"${r.displayPlayerName}"`, r.pos, r.hand, ...yrVals].join(',');
+      return [
+        `"${r.teamName}"`,
+        r.teamAbbr,
+        `"${r.coachName || ''}"`,
+        `"${r.displayPlayerName}"`,
+        r.pos,
+        r.hand,
+        r.peakOvr ?? '',
+        r.avgOvr ?? '',
+        ...yrVals,
+      ].join(',');
     });
     const csv = [header, ...lines].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `nhl95_${leagueType.toLowerCase()}_active_rosters_futures.csv`;
+    a.download = `nhl95_${leagueType.toLowerCase()}_league_rosters.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="space-y-4">
-      {/* Control Bar */}
-      <div className="bg-[#fdfaf5] border-2 border-black p-3 sm:p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)] space-y-3 font-sans">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-black/15 pb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-neutral-700 mr-1 flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" /> Active League:
-            </span>
-            <button
-              type="button"
-              onClick={() => setLeagueType('W')}
-              className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black cursor-pointer transition-all ${
-                leagueType === 'W'
-                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-neutral-100'
-              }`}
+  const renderRosterTable = (rowsSlice: RosterMatrixPlayerRow[]) => (
+    <table
+      className="w-full table-fixed border-collapse select-text"
+      style={{
+        fontFamily: "'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif",
+      }}
+    >
+      <thead>
+        <tr className="bg-black text-white text-[12.5px] font-bold leading-none sticky top-0 z-20">
+          <th className="bg-black border border-black w-[132px] py-1.5 px-1 text-center uppercase">
+            Team
+          </th>
+          {!splitColumns && (
+            <th className="bg-black border border-black w-[124px] py-1.5 px-1.5 text-left uppercase">
+              Coach
+            </th>
+          )}
+          <th className={`bg-black border border-black ${splitColumns ? 'w-[140px]' : 'w-[175px]'} py-1.5 px-2 text-left uppercase`}>
+            Player
+          </th>
+          <th className="bg-black border border-black w-[34px] py-1.5 px-0.5 text-center">
+            Pos
+          </th>
+          <th className="bg-black border border-black w-[26px] py-1.5 px-0.5 text-center">
+            H
+          </th>
+          {!splitColumns && (
+            <>
+              <th className="bg-neutral-900 text-amber-300 border border-black w-[38px] py-1.5 px-0.5 text-center uppercase" title="Peak OVR across window">
+                Peak
+              </th>
+              <th className="bg-neutral-900 text-cyan-300 border border-black w-[36px] py-1.5 px-0.5 text-center uppercase" title="Average OVR across active years">
+                Avg
+              </th>
+            </>
+          )}
+          {years.map((yr) => (
+            <th
+              key={yr}
+              className="bg-black border border-black py-1.5 px-0.5 text-center font-bold tracking-tight"
             >
-              W League (2013 – 2024)
-            </button>
-            <button
-              type="button"
-              onClick={() => setLeagueType('O')}
-              className={`px-3 py-1.5 text-xs font-black uppercase border-2 border-black cursor-pointer transition-all ${
-                leagueType === 'O'
-                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
-                  : 'bg-white text-black hover:bg-neutral-100'
-              }`}
-            >
-              Original 6 (1927 – 1938)
-            </button>
-          </div>
+              {yr}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rowsSlice.map((row, idx) => {
+          const prevRow = idx > 0 ? rowsSlice[idx - 1] : null;
+          const isNewTeamGroup = prevRow && prevRow.teamAbbr !== row.teamAbbr;
 
-          {/* Legend & CSV Export */}
-          <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-bold">
-            <div className="flex items-center gap-1.5 bg-white border border-black px-2.5 py-1">
-              <span className="text-[10px] font-black uppercase text-neutral-600 mr-1">OVR Scale:</span>
-              <span
-                className="px-1.5 py-0.5 text-[10px] font-bold border border-black/20"
-                style={{ backgroundColor: '#57bb8a', color: '#000' }}
+          return (
+            <tr
+              key={`${row.teamAbbr}-${row.pos}-${row.playerName}-${idx}`}
+              className={`h-[22px] leading-none ${
+                isNewTeamGroup ? 'border-t-2 border-t-black' : ''
+              }`}
+            >
+              {/* Col A: Team Banner */}
+              <td className="p-0 border border-[#bdbdbd] bg-black align-middle">
+                <TeamBannerCell
+                  abbr={row.teamAbbr}
+                  teamName={row.teamName}
+                  teamId={row.teamId}
+                  seasonId={activeSeasonId}
+                  isOriginalSix={leagueType === 'O'}
+                  bannerFilename={row.bannerFilename}
+                  onSelectTeam={(abbr) =>
+                    setSelectedTeamAbbr((prev) => (prev === abbr ? 'ALL' : abbr))
+                  }
+                />
+              </td>
+
+              {/* Col B: Coach (links to Coach Profile) */}
+              {!splitColumns && (
+                <td className="bg-[#f9f6f0] text-black border border-[#d0d0d0] px-1.5 py-0 text-[12px] font-bold whitespace-nowrap align-middle truncate">
+                  {row.coachName ? (
+                    <Link
+                      href={`/team?tab=coach&coach=${encodeURIComponent(row.coachName)}`}
+                      className="hover:underline hover:text-red-800 block truncate"
+                      title={`View Coach Profile: ${row.coachName}`}
+                    >
+                      {row.coachName}
+                    </Link>
+                  ) : (
+                    <span className="text-neutral-400">—</span>
+                  )}
+                </td>
+              )}
+
+              {/* Col C: Player Name */}
+              <td className="bg-white text-black border border-[#d0d0d0] px-1.5 py-0 text-[13px] font-semibold whitespace-nowrap align-middle truncate">
+                <Link
+                  href={`/players?q=${encodeURIComponent(row.displayPlayerName)}`}
+                  className="hover:underline hover:text-blue-800 block truncate"
+                  title={`View ${row.displayPlayerName} in Player Database`}
+                >
+                  {row.displayPlayerName}
+                </Link>
+              </td>
+
+              {/* Col D: Position */}
+              <td className="bg-black text-white border border-[#222222] text-center font-bold text-[12.5px] align-middle">
+                {row.pos}
+              </td>
+
+              {/* Col E: Handedness */}
+              <td className="bg-white text-black border border-[#d0d0d0] text-center font-semibold text-[12.5px] align-middle">
+                {row.hand}
+              </td>
+
+              {/* Peak & Avg OVR */}
+              {!splitColumns && (
+                <>
+                  <td
+                    style={getOvrHeatmapStyle(row.peakOvr)}
+                    className="text-center text-[12.5px] font-black border border-[#bdbdbd] align-middle"
+                    title="Peak OVR"
+                  >
+                    {row.peakOvr ?? '—'}
+                  </td>
+                  <td
+                    style={getOvrHeatmapStyle(row.avgOvr)}
+                    className="text-center text-[12px] font-bold border border-[#bdbdbd] align-middle"
+                    title="Average OVR"
+                  >
+                    {row.avgOvr ?? '—'}
+                  </td>
+                </>
+              )}
+
+              {/* Year OVR Cells */}
+              {years.map((yr) => {
+                const ovr = row.ovrByYear[yr];
+                const hasOvr = ovr !== null && ovr !== undefined && ovr > 0;
+                const cellStyle = getOvrHeatmapStyle(ovr);
+
+                return (
+                  <td
+                    key={yr}
+                    style={cellStyle}
+                    className={`text-center text-[13px] font-semibold align-middle ${
+                      hasOvr ? 'border border-[#d0d0d0]/80' : 'border border-black'
+                    }`}
+                  >
+                    {hasOvr ? ovr : ''}
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Compact Zero-Dead-Space Control Bar */}
+      <div className="bg-[#fdfaf5] border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] font-sans">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Left: League Toggle + Search + Team Select + Position Pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center border-2 border-black bg-white">
+              <button
+                type="button"
+                onClick={() => setLeagueType('W')}
+                className={`px-2.5 py-1 text-xs font-black uppercase cursor-pointer transition-colors ${
+                  leagueType === 'W' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                }`}
               >
-                90+ Elite
-              </span>
-              <span
-                className="px-1.5 py-0.5 text-[10px] font-bold border border-black/20"
-                style={{ backgroundColor: '#a2d9be', color: '#000' }}
+                W League (2013–24)
+              </button>
+              <button
+                type="button"
+                onClick={() => setLeagueType('O')}
+                className={`px-2.5 py-1 text-xs font-black uppercase cursor-pointer transition-colors border-l border-black ${
+                  leagueType === 'O' ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                }`}
               >
-                80–89
-              </span>
-              <span
-                className="px-1.5 py-0.5 text-[10px] font-bold border border-black/20"
-                style={{ backgroundColor: '#ffffff', color: '#000' }}
-              >
-                73–75 Avg
-              </span>
-              <span
-                className="px-1.5 py-0.5 text-[10px] font-bold border border-black/20"
-                style={{ backgroundColor: '#f2b8b5', color: '#000' }}
-              >
-                60–71
-              </span>
-              <span
-                className="px-1.5 py-0.5 text-[10px] font-bold border border-black/20"
-                style={{ backgroundColor: '#e06666', color: '#000' }}
-              >
-                &lt;60
-              </span>
-              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-black text-white border border-black">
-                Inactive / Ret
-              </span>
+                Original 6 (1927–38)
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDownloadCsv}
-              className="bg-black text-white hover:bg-neutral-800 px-3 py-1.5 text-xs font-black uppercase border border-black flex items-center gap-1.5 cursor-pointer"
-              title="Download CSV Spreadsheet"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export CSV
-            </button>
-          </div>
-        </div>
-
-        {/* Filters Row: Search, Team Select, Position Pills */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[240px]">
-            <div className="relative w-full sm:w-64">
+            <div className="relative w-48 sm:w-56">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="SEARCH PLAYER, TEAM, OR COACH..."
-                className="w-full bg-white border-2 border-black pl-7 pr-2.5 py-1 text-xs font-bold uppercase text-black outline-none"
+                placeholder="PLAYER, TEAM, OR COACH..."
+                className="w-full bg-white border-2 border-black pl-7 pr-2 py-1 text-xs font-bold uppercase text-black outline-none"
               />
-              <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2 top-2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2 top-1.5 pointer-events-none" />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-neutral-600" />
-              <select
-                value={selectedTeamAbbr}
-                onChange={(e) => setSelectedTeamAbbr(e.target.value)}
-                className="bg-white border-2 border-black px-2.5 py-1 text-xs font-black uppercase cursor-pointer outline-none"
-              >
-                <option value="ALL">ALL TEAMS ({orderedTeamAbbrs.length})</option>
-                {orderedTeamAbbrs.map((abbr) => {
-                  const tName =
-                    teamsMetaByAbbr[abbr]?.team_name ||
-                    (leagueType === 'W' ? W_TEAM_DEFAULT_NAMES[abbr] : O_TEAM_DEFAULT_NAMES[abbr]) ||
-                    abbr;
-                  const cName =
-                    teamsMetaByAbbr[abbr]?.coach_name || W_LEAGUE_COACH_MAP[abbr]?.coach_name || '';
-                  return (
-                    <option key={abbr} value={abbr}>
-                      {abbr} — {tName} {cName ? `(${cName})` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+            <select
+              value={selectedTeamAbbr}
+              onChange={(e) => setSelectedTeamAbbr(e.target.value)}
+              className="bg-white border-2 border-black px-2 py-1 text-xs font-black uppercase cursor-pointer outline-none max-w-[220px]"
+            >
+              <option value="ALL">ALL TEAMS ({orderedTeamAbbrs.length})</option>
+              {orderedTeamAbbrs.map((abbr) => {
+                const tName =
+                  teamsMetaByAbbr[abbr]?.team_name ||
+                  (leagueType === 'W' ? W_TEAM_DEFAULT_NAMES[abbr] : O_TEAM_DEFAULT_NAMES[abbr]) ||
+                  abbr;
+                const cName =
+                  teamsMetaByAbbr[abbr]?.coach_name || W_LEAGUE_COACH_MAP[abbr]?.coach_name || '';
+                return (
+                  <option key={abbr} value={abbr}>
+                    {abbr} — {tName} {cName ? `(${cName})` : ''}
+                  </option>
+                );
+              })}
+            </select>
 
             {/* Position Filter Buttons */}
             <div className="flex items-center border-2 border-black bg-white">
@@ -757,7 +883,7 @@ export default function ActiveRostersFuturesView({
                   key={pos}
                   type="button"
                   onClick={() => setPosFilter(pos)}
-                  className={`px-2.5 py-1 text-xs font-black uppercase cursor-pointer transition-colors ${
+                  className={`px-2 py-1 text-xs font-black uppercase cursor-pointer transition-colors ${
                     posFilter === pos ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
                   }`}
                 >
@@ -774,7 +900,7 @@ export default function ActiveRostersFuturesView({
                   setPosFilter('ALL');
                   setSearchQuery('');
                 }}
-                className="bg-neutral-200 hover:bg-black hover:text-white text-black border border-black px-2.5 py-1 text-xs font-bold uppercase flex items-center gap-1 cursor-pointer transition-colors"
+                className="bg-neutral-200 hover:bg-black hover:text-white text-black border border-black px-2 py-1 text-xs font-bold uppercase flex items-center gap-1 cursor-pointer transition-colors"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset
@@ -782,126 +908,69 @@ export default function ActiveRostersFuturesView({
             )}
           </div>
 
-          <div className="text-xs font-bold text-neutral-700 uppercase">
-            Showing <span className="font-black text-black">{filteredRows.length}</span> Roster Slots
+          {/* Right: OVR Scale Legend + 2-Col Split Toggle + Slot Count + CSV Export */}
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
+            <div className="hidden xl:flex items-center gap-1 bg-white border border-black px-2 py-0.5">
+              <span className="text-[10px] font-black uppercase text-neutral-600 mr-0.5">OVR:</span>
+              <span className="px-1 py-0.5 text-[10px] font-bold border border-black/20" style={{ backgroundColor: '#57bb8a', color: '#000' }}>90+</span>
+              <span className="px-1 py-0.5 text-[10px] font-bold border border-black/20" style={{ backgroundColor: '#a2d9be', color: '#000' }}>80–89</span>
+              <span className="px-1 py-0.5 text-[10px] font-bold border border-black/20" style={{ backgroundColor: '#ffffff', color: '#000' }}>73–75</span>
+              <span className="px-1 py-0.5 text-[10px] font-bold border border-black/20" style={{ backgroundColor: '#f2b8b5', color: '#000' }}>60–71</span>
+              <span className="px-1 py-0.5 text-[10px] font-bold border border-black/20" style={{ backgroundColor: '#e06666', color: '#000' }}>&lt;60</span>
+              <span className="px-1 py-0.5 text-[10px] font-bold bg-black text-white border border-black">Ret</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSplitColumns((prev) => !prev)}
+              className={`hidden lg:inline-flex items-center gap-1 px-2.5 py-1 text-xs font-black uppercase border border-black cursor-pointer transition ${
+                splitColumns ? 'bg-amber-400 text-black' : 'bg-white text-black hover:bg-neutral-100'
+              }`}
+              title="Toggle 1-Column Full Matrix vs 2-Column Side-by-Side Split"
+            >
+              {splitColumns ? <TableIcon className="w-3.5 h-3.5" /> : <Columns2 className="w-3.5 h-3.5" />}
+              <span>{splitColumns ? '1-Col View' : '2-Col Split'}</span>
+            </button>
+
+            <span className="text-[11px] font-mono font-black text-black bg-white border border-black px-2 py-1 uppercase">
+              {filteredRows.length} Slots
+            </span>
+
+            <button
+              type="button"
+              onClick={handleDownloadCsv}
+              className="bg-black text-white hover:bg-neutral-800 px-2.5 py-1 text-xs font-black uppercase border border-black flex items-center gap-1 cursor-pointer"
+              title="Download CSV Spreadsheet"
+            >
+              <Download className="w-3.5 h-3.5" />
+              CSV
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Spreadsheet Matrix Table */}
-      <div className="bg-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] overflow-x-auto">
-        {loading ? (
-          <div className="p-12 text-center font-sans font-bold text-sm uppercase tracking-wider animate-pulse">
-            Loading Active Team Rosters &amp; Multi-Year OVR Futures ({years[0]}–{years[years.length - 1]})...
-          </div>
-        ) : filteredRows.length === 0 ? (
-          <div className="p-10 text-center font-sans font-bold text-sm uppercase text-neutral-600">
-            No roster players match your current filter criteria.
-          </div>
-        ) : (
-          <table
-            className="w-full border-collapse select-text"
-            style={{
-              fontFamily: "'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', Arial, sans-serif",
-            }}
-          >
-            <thead>
-              <tr className="bg-black text-white text-[13px] font-bold leading-none sticky top-0 z-20">
-                <th className="bg-black border border-black w-[134px] min-w-[134px] py-1.5 px-1 text-center uppercase">
-                  Team
-                </th>
-                <th className="bg-black border border-black min-w-[155px] py-1.5 px-2 text-left uppercase">
-                  Player
-                </th>
-                <th className="bg-black border border-black w-[38px] min-w-[38px] py-1.5 px-1 text-center">
-                  Pos
-                </th>
-                <th className="bg-black border border-black w-[28px] min-w-[28px] py-1.5 px-1 text-center">
-                  H
-                </th>
-                {years.map((yr) => (
-                  <th
-                    key={yr}
-                    className="bg-black border border-black w-[44px] min-w-[44px] py-1.5 px-1 text-center font-bold tracking-tight"
-                  >
-                    {yr}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row, idx) => {
-                const prevRow = idx > 0 ? filteredRows[idx - 1] : null;
-                const isNewTeamGroup = prevRow && prevRow.teamAbbr !== row.teamAbbr;
-
-                return (
-                  <tr
-                    key={`${row.teamAbbr}-${row.pos}-${row.playerName}-${idx}`}
-                    className={`h-[22px] leading-none ${
-                      isNewTeamGroup ? 'border-t-2 border-t-black' : ''
-                    }`}
-                  >
-                    {/* Col A: Team Banner */}
-                    <td className="p-0 border border-[#bdbdbd] bg-black w-[134px] min-w-[134px] align-middle">
-                      <TeamBannerCell
-                        abbr={row.teamAbbr}
-                        teamName={row.teamName}
-                        teamId={row.teamId}
-                        seasonId={activeSeasonId}
-                        isOriginalSix={leagueType === 'O'}
-                        bannerFilename={row.bannerFilename}
-                        onSelectTeam={(abbr) =>
-                          setSelectedTeamAbbr((prev) => (prev === abbr ? 'ALL' : abbr))
-                        }
-                      />
-                    </td>
-
-                    {/* Col B: Player Name */}
-                    <td className="bg-white text-black border border-[#d0d0d0] px-1.5 py-0 text-[13px] font-normal whitespace-nowrap align-middle">
-                      <Link
-                        href={`/players?q=${encodeURIComponent(row.displayPlayerName)}`}
-                        className="hover:underline hover:text-blue-800 block truncate max-w-[185px]"
-                        title={`View ${row.displayPlayerName} in Player Database`}
-                      >
-                        {row.displayPlayerName}
-                      </Link>
-                    </td>
-
-                    {/* Col C: Position (Black background, White bold text) */}
-                    <td className="bg-black text-white border border-[#222222] text-center font-bold text-[13px] w-[38px] align-middle">
-                      {row.pos}
-                    </td>
-
-                    {/* Col D: Handedness (White background, Black text) */}
-                    <td className="bg-white text-black border border-[#d0d0d0] text-center font-normal text-[13px] w-[28px] align-middle">
-                      {row.hand}
-                    </td>
-
-                    {/* Cols E..P: Year OVR Cells */}
-                    {years.map((yr) => {
-                      const ovr = row.ovrByYear[yr];
-                      const hasOvr = ovr !== null && ovr !== undefined && ovr > 0;
-                      const cellStyle = getOvrHeatmapStyle(ovr);
-
-                      return (
-                        <td
-                          key={yr}
-                          style={cellStyle}
-                          className={`text-center text-[13px] font-normal w-[44px] align-middle ${
-                            hasOvr ? 'border border-[#d0d0d0]/80' : 'border border-black'
-                          }`}
-                        >
-                          {hasOvr ? ovr : ''}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {/* Spreadsheet Matrix Table(s) */}
+      {loading ? (
+        <div className="bg-white border-2 border-black p-10 text-center font-sans font-bold text-sm uppercase tracking-wider animate-pulse">
+          Loading League Rosters &amp; Multi-Year OVR Matrix ({years[0]}–{years[years.length - 1]})...
+        </div>
+      ) : filteredRows.length === 0 ? (
+        <div className="bg-white border-2 border-black p-8 text-center font-sans font-bold text-sm uppercase text-neutral-600">
+          No roster players match your current filter criteria.
+        </div>
+      ) : splitGroups.length === 2 ? (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 items-start">
+          {splitGroups.map((slice, sIdx) => (
+            <div key={sIdx} className="bg-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] overflow-x-auto">
+              {renderRosterTable(slice)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] overflow-x-auto">
+          {renderRosterTable(filteredRows)}
+        </div>
+      )}
     </div>
   );
 }

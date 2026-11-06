@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
+import CoachProfileView, { LEAGUE_LOGOS } from '@/components/CoachProfileView';
 
 // ==========================================
 // 1. LEAGUE CONSTANTS & ROSTERS CONFIG
@@ -183,6 +184,14 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const seasonParam = searchParams.get('season');
+  const tabParam = (searchParams.get('tab') || '').toLowerCase();
+
+  const resolveInitialTab = (tp: string): 'roster' | 'futures' | 'coach' | 'schedule' => {
+    if (tp === 'futures' || tp === 'rosters' || tp === 'league-rosters') return 'futures';
+    if (tp === 'coach' || tp === 'coaches' || tp === 'seasons' || tp === 'records' || tp === 'h2h') return 'coach';
+    if (tp === 'schedule') return 'schedule';
+    return 'roster';
+  };
 
   const [seasons, setSeasons] = useState<any[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<number | null>(
@@ -196,7 +205,16 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const [currentStanding, setCurrentStanding] = useState<any>(null);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'roster' | 'futures' | 'schedule' | 'seasons' | 'records'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'futures' | 'coach' | 'schedule'>(
+    resolveInitialTab(tabParam)
+  );
+  const [showSeasonArchiveTable, setShowSeasonArchiveTable] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (tabParam) {
+      setActiveTab(resolveInitialTab(tabParam));
+    }
+  }, [tabParam]);
 
   // Season Specific Data
   const [roster, setRoster] = useState<any[]>([]);
@@ -659,6 +677,78 @@ function TeamPageContent({ teamId }: { teamId: string }) {
     return [...coachSeasonsStandings].sort((a, b) => Number(b.season_id) - Number(a.season_id));
   }, [coachSeasonsStandings, seasons, selectedSeason]);
 
+  // Grouped Franchises Controlled by Coach (merged across seasons, not broken down by season)
+  const groupedCoachFranchises = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        key: string;
+        team_id: number;
+        latest_season_id: number;
+        team_name: string;
+        abbreviation: string;
+        logo_url: string;
+        league_type: string;
+        seasons_count: number;
+        gp: number;
+        w: number;
+        l: number;
+        t: number;
+        otl: number;
+        pts: number;
+        gf: number;
+        ga: number;
+        gd: number;
+      }
+    >();
+
+    const sorted = [...coachSeasonsStandings].sort((a, b) => Number(b.season_id) - Number(a.season_id));
+    sorted.forEach((s: any) => {
+      const sCode = String(s.season_code || '').toUpperCase();
+      const lType = sCode ? sCode[0] : (SEASON_TYPES[Number(s.season_id)] || 'W');
+      const abbr = String(s.abbreviation || s.team_name?.slice(0, 3) || 'TM').trim().toUpperCase();
+      const fKey = `${lType}:${ s.team_name || abbr }`;
+      const gp = Number(s.gp) || ((Number(s.w) || 0) + (Number(s.l) || 0) + (Number(s.t) || 0) + (Number(s.otl) || 0));
+      let entry = map.get(fKey);
+      if (!entry) {
+        entry = {
+          key: fKey,
+          team_id: Number(s.team_id),
+          latest_season_id: Number(s.season_id),
+          team_name: s.team_name || 'Team',
+          abbreviation: abbr,
+          logo_url: s.logo_url || '',
+          league_type: lType,
+          seasons_count: 1,
+          gp,
+          w: Number(s.w) || 0,
+          l: Number(s.l) || 0,
+          t: Number(s.t) || 0,
+          otl: Number(s.otl) || 0,
+          pts: Number(s.pts) || 0,
+          gf: Number(s.gf) || 0,
+          ga: Number(s.ga) || 0,
+          gd: (Number(s.gf) || 0) - (Number(s.ga) || 0)
+        };
+        map.set(fKey, entry);
+      } else {
+        entry.seasons_count += 1;
+        entry.gp += gp;
+        entry.w += Number(s.w) || 0;
+        entry.l += Number(s.l) || 0;
+        entry.t += Number(s.t) || 0;
+        entry.otl += Number(s.otl) || 0;
+        entry.pts += Number(s.pts) || 0;
+        entry.gf += Number(s.gf) || 0;
+        entry.ga += Number(s.ga) || 0;
+        entry.gd = entry.gf - entry.ga;
+        if (!entry.logo_url && s.logo_url) entry.logo_url = s.logo_url;
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.pts - a.pts || b.gp - a.gp);
+  }, [coachSeasonsStandings]);
+
   // 4. Open and Fetch Boxscore for a Game
   async function handleOpenBoxscore(game: any) {
     if (!game || !game.played) return;
@@ -926,137 +1016,320 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const currentSeasonBadge = formatSeasonBadge(selectedSeason || '', currentSeasonName);
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-4 sm:p-6">
-      {/* 1. Header Banner */}
-      <header className="border-b-4 border-black pb-6 mb-6">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-5">
-            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-white border-2 border-black p-2 flex items-center justify-center rounded shadow-sm">
+    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-3 sm:p-5">
+      {/* 1. Compact Header Banner with Grouped Coach Franchises */}
+      <header className="border-b-4 border-black pb-4 mb-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black p-1.5 flex items-center justify-center rounded shadow-xs shrink-0">
               <img src={team.logo_url} alt={team.team_name} className="max-h-full max-w-full object-contain" />
             </div>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl sm:text-5xl font-black uppercase tracking-tighter">{team.team_name}</h1>
-                <span className="bg-black text-white px-2 py-0.5 text-xs font-bold uppercase rounded">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter">{team.team_name}</h1>
+                <span className="bg-black text-white px-2 py-0.5 text-xs font-mono font-bold uppercase">
                   {currentSeasonBadge}
                 </span>
+                <span className="bg-white text-black border border-black px-2 py-0.5 text-xs font-mono font-bold uppercase">
+                  Arena: {arenaName}
+                </span>
               </div>
-              <p className="text-xs font-bold uppercase italic mt-1 text-gray-700">
-                Official Gazette Team Roster & Coach Career Archives
+              <p className="text-xs font-bold uppercase italic mt-0.5 text-gray-700">
+                Official Team Roster, Multi-Year League Rosters &amp; Unified Coach Profile ({coachName})
               </p>
             </div>
           </div>
-          <Link
-            href="/team"
-            className="bg-black text-white border-2 border-black px-4 py-2 text-xs font-black uppercase hover:bg-neutral-800 transition shadow-xs flex items-center gap-1.5 self-start md:self-center cursor-pointer"
-          >
-            &larr; Return to Teams
-          </Link>
+
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-center">
+            <button
+              type="button"
+              onClick={() => setActiveTab('coach')}
+              className="bg-amber-400 text-black border-2 border-black px-3 py-1.5 text-xs font-black uppercase hover:bg-amber-300 transition shadow-[2px_2px_0px_rgba(0,0,0,1)] cursor-pointer"
+            >
+              Coach Profile: {coachName}
+            </button>
+            <Link
+              href="/team"
+              className="bg-black text-white border-2 border-black px-3.5 py-1.5 text-xs font-black uppercase hover:bg-neutral-800 transition shadow-xs flex items-center gap-1 cursor-pointer"
+            >
+              &larr; League Directory
+            </Link>
+          </div>
         </div>
 
-        {/* Season Selector & Key Info Pills */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 bg-white/80 border border-black/20 p-3 rounded">
-          <div className="flex items-center gap-3">
-            <label className="text-xs uppercase font-black">Archive Season:</label>
-            <select
-              value={selectedSeason || ""}
-              onChange={(e) => {
-                const chosenSeasonId = Number(e.target.value);
-                const chosenRecord = coachSeasonsList.find(s => Number(s.season_id) === chosenSeasonId);
-                handleSeasonChange(chosenSeasonId, chosenRecord?.team_id ? Number(chosenRecord.team_id) : undefined);
-              }}
-              className="bg-white border-2 border-black px-3 py-1 text-xs font-black uppercase cursor-pointer outline-none"
-            >
-              {coachSeasonsList.map(s => {
-                const sBadge = s.season_code || s.season_name || `Season ${s.season_id}`;
-                const tName = s.team_name ? ` - ${s.team_name}` : '';
-                return (
-                  <option key={`${s.season_id}-${s.team_id}`} value={s.season_id}>
-                    {sBadge}{tName}
-                  </option>
-                );
-              })}
-            </select>
+        {/* Coach Profile Summary & Grouped Controlled Franchises (Not Broken Down by Season) */}
+        <div className="mt-3 bg-[#fdfaf5] border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] font-sans space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/15 pb-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase">
+              <span className="bg-black text-amber-400 font-mono text-[10px] font-black px-2 py-0.5">
+                COACH PROFILE
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveTab('coach')}
+                className="font-black text-sm text-black hover:text-red-800 hover:underline uppercase cursor-pointer"
+              >
+                {coachName}
+              </button>
+              {coachCareerRecords && (
+                <span className="bg-white text-black px-2 py-0.5 font-mono text-xs font-black border border-black">
+                  All-Time Coach Career: {coachCareerRecords.totalW}-{coachCareerRecords.totalL}-{coachCareerRecords.totalT}-{coachCareerRecords.totalOTL} ({coachCareerRecords.totalPTS} PTS • {coachCareerRecords.winPct} WIN%)
+                </span>
+              )}
+              {currentStanding && (
+                <span className="bg-yellow-300 text-black px-2 py-0.5 font-mono text-xs font-black border border-black">
+                  {currentSeasonBadge}: {currentStanding.w}-{currentStanding.l}-{currentStanding.t}-{currentStanding.otl} ({currentStanding.pts} PTS)
+                </span>
+              )}
+            </div>
+
+            {/* Optional Compact Season Switcher for Season Roster/Schedule */}
+            <div className="flex items-center gap-1.5 text-xs">
+              <label className="text-[10px] font-mono uppercase font-black text-neutral-600">Roster/Sched Season:</label>
+              <select
+                value={selectedSeason || ""}
+                onChange={(e) => {
+                  const chosenSeasonId = Number(e.target.value);
+                  const chosenRecord = coachSeasonsList.find(s => Number(s.season_id) === chosenSeasonId);
+                  handleSeasonChange(chosenSeasonId, chosenRecord?.team_id ? Number(chosenRecord.team_id) : undefined);
+                }}
+                className="bg-white border border-black px-2 py-0.5 text-xs font-mono font-bold uppercase cursor-pointer outline-none"
+              >
+                {coachSeasonsList.map(s => {
+                  const sBadge = s.season_code || s.season_name || `Season ${s.season_id}`;
+                  const tName = s.team_name ? ` - ${s.team_name}` : '';
+                  return (
+                    <option key={`${s.season_id}-${s.team_id}`} value={s.season_id}>
+                      {sBadge}{tName}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
           </div>
 
-          {/* Team & Coach Summary Pills with Black Lettering */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs font-bold uppercase">
-            <Link
-              href={`/managers?q=${encodeURIComponent(coachName)}`}
-              className="bg-black text-white hover:bg-red-800 px-2.5 py-1 rounded transition-colors flex items-center gap-1"
-              title={`View ${coachName} in Managers Directory`}
-            >
-              Coach: {coachName} &rarr;
-            </Link>
-            <span className="bg-black text-white px-2.5 py-1 rounded">
-              Arena: {arenaName}
-            </span>
-            {currentStanding && (
-              <span className="bg-yellow-400 text-black px-2.5 py-1 rounded font-black border border-black">
-                Season: {currentStanding.w}-{currentStanding.l}-{currentStanding.t}-{currentStanding.otl} ({currentStanding.pts} pts)
+          {/* Grouped Franchises Controlled by Coach (Merged across seasons) */}
+          {groupedCoachFranchises.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-mono font-black uppercase text-neutral-600 shrink-0">
+                Teams Controlled by {coachName} ({groupedCoachFranchises.length}):
               </span>
-            )}
-            {coachCareerRecords && (
-              <span className="bg-white text-black px-2.5 py-1 rounded font-black border-2 border-black shadow-xs">
-                Coach Career: {coachCareerRecords.totalW}-{coachCareerRecords.totalL}-{coachCareerRecords.totalT}-{coachCareerRecords.totalOTL} ({coachCareerRecords.totalPTS} pts)
-              </span>
-            )}
-          </div>
+              {groupedCoachFranchises.map(fran => {
+                const isActiveTeam = fran.team_name.toLowerCase() === String(team.team_name || '').toLowerCase();
+                return (
+                  <button
+                    key={fran.key}
+                    type="button"
+                    onClick={() => handleSeasonChange(fran.latest_season_id, fran.team_id)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 border text-xs font-mono transition cursor-pointer ${
+                      isActiveTeam
+                        ? 'bg-black text-white border-black font-black shadow-[2px_2px_0px_rgba(0,0,0,0.4)]'
+                        : 'bg-white text-black border-black hover:bg-amber-50 font-bold'
+                    }`}
+                    title={`Switch to ${fran.team_name} (${fran.seasons_count} Seasons Combined)`}
+                  >
+                    {fran.logo_url && (
+                      <img src={fran.logo_url} alt={fran.team_name} className="w-4 h-4 object-contain shrink-0" />
+                    )}
+                    <span className="uppercase">{fran.team_name}</span>
+                    <span className="text-[9px] px-1 bg-amber-400 text-black font-black">
+                      {LEAGUE_LOGOS[fran.league_type]?.name || fran.league_type}
+                    </span>
+                    <span className={isActiveTeam ? 'text-amber-300' : 'text-emerald-800'}>
+                      {fran.w}-{fran.l}-{fran.t}{fran.otl > 0 ? `-${fran.otl}` : ''} ({fran.pts}p • {fran.seasons_count}yr)
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </header>
 
       {/* 2. Navigation Tabs */}
-      <nav className="flex flex-wrap gap-2 border-b-2 border-black pb-2 mb-6">
+      <nav className="flex flex-wrap gap-2 border-b-2 border-black pb-2 mb-4">
         <button
-          onClick={() => setActiveTab('roster')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'roster' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+          onClick={() => setActiveTab('coach')}
+          className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
+            activeTab === 'coach'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-amber-100 text-amber-950 hover:bg-amber-200'
           }`}
         >
-          Roster &amp; Stats ({roster.length})
+          Coach Profile &amp; Head-to-Head ({coachName})
+        </button>
+        <button
+          onClick={() => setActiveTab('roster')}
+          className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
+            activeTab === 'roster'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-white hover:bg-gray-100'
+          }`}
+        >
+          Team Roster &amp; Stats ({roster.length})
         </button>
         <button
           onClick={() => setActiveTab('futures')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'futures' ? 'bg-black text-white' : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100'
+          className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
+            activeTab === 'futures'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100'
           }`}
         >
-          Active Rosters &amp; Futures
+          League Rosters
         </button>
         <button
           onClick={() => setActiveTab('schedule')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'schedule' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
+          className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
+            activeTab === 'schedule'
+              ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+              : 'bg-white hover:bg-gray-100'
           }`}
         >
-          Schedule &amp; Results ({scheduleGames.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('seasons')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'seasons' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-          }`}
-        >
-          Coach All-Time Season Log ({coachSeasonsStandings.length} Seasons)
-        </button>
-        <button
-          onClick={() => setActiveTab('records')}
-          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
-            activeTab === 'records' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
-          }`}
-        >
-          Coach Career Records &amp; Bests
+          Schedule &amp; Boxscores ({scheduleGames.length})
         </button>
       </nav>
 
       {/* 3. Tab Contents */}
 
-      {/* TAB: ACTIVE ROSTERS & FUTURES */}
+      {/* TAB: LEAGUE ROSTERS (Attached 1) */}
       {activeTab === 'futures' && (
         <ActiveRostersFuturesView
           initialLeagueType={Number(selectedSeason) === 39 || currentSeasonBadge.startsWith('O') ? 'O' : 'W'}
           initialTeamAbbr={resolveTeamCode(team) || 'ALL'}
         />
+      )}
+
+      {/* TAB: UNIFIED COACH PROFILE (Merges Coach Controlled Teams, Career Highs, H2H Records & Recent Scores from Attached 2) */}
+      {activeTab === 'coach' && (
+        <div className="space-y-4">
+          {/* Full Coach Profile & Head-to-Head Matchup Center (Attached 2) */}
+          <CoachProfileView
+            initialCoachId={coachId}
+            initialCoachName={coachName}
+            embeddedOnTeamPage={true}
+            hideHeader={true}
+          />
+
+          {/* Coach Career Milestones & Optional Historical Season Breakdown */}
+          {coachCareerRecords && (
+            <div className="bg-white border-2 border-black p-4 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
+                <h2 className="text-lg font-black uppercase tracking-tight">
+                  {coachName} &mdash; Single-Season Career Highs &amp; Archive
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowSeasonArchiveTable(prev => !prev)}
+                  className="px-3 py-1 text-xs font-mono font-black uppercase border border-black bg-[#f4f1ea] hover:bg-black hover:text-white cursor-pointer transition"
+                >
+                  {showSeasonArchiveTable
+                    ? 'Hide Season-by-Season Breakdown'
+                    : `Show Season-by-Season Log (${coachSeasonsStandings.length} Seasons)`}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 font-sans">
+                <div className="border border-black p-3 bg-[#fdfaf5]">
+                  <h3 className="text-[10px] font-mono font-black uppercase text-gray-500">Most Points in a Season</h3>
+                  <p className="text-xl font-black text-black mt-0.5">
+                    {coachCareerRecords.bestSeasonByPts?.pts || 0} PTS
+                  </p>
+                  <p className="text-[11px] font-bold text-gray-700 uppercase mt-0.5">
+                    {coachCareerRecords.bestSeasonByPts?.season_code} • {coachCareerRecords.bestSeasonByPts?.team_name} ({coachCareerRecords.bestSeasonByPts?.w} W)
+                  </p>
+                </div>
+
+                <div className="border border-black p-3 bg-[#fdfaf5]">
+                  <h3 className="text-[10px] font-mono font-black uppercase text-gray-500">Most Wins in a Season</h3>
+                  <p className="text-xl font-black text-black mt-0.5">
+                    {coachCareerRecords.bestSeasonByWins?.w || 0} Wins
+                  </p>
+                  <p className="text-[11px] font-bold text-gray-700 uppercase mt-0.5">
+                    {coachCareerRecords.bestSeasonByWins?.season_code} • {coachCareerRecords.bestSeasonByWins?.team_name}
+                  </p>
+                </div>
+
+                <div className="border border-black p-3 bg-[#fdfaf5]">
+                  <h3 className="text-[10px] font-mono font-black uppercase text-gray-500">Most Goals Scored</h3>
+                  <p className="text-xl font-black text-black mt-0.5">
+                    {coachCareerRecords.mostGFSeason?.gf || 0} Goals
+                  </p>
+                  <p className="text-[11px] font-bold text-gray-700 uppercase mt-0.5">
+                    {coachCareerRecords.mostGFSeason?.season_code} • {coachCareerRecords.mostGFSeason?.team_name}
+                  </p>
+                </div>
+
+                <div className="border border-black p-3 bg-[#fdfaf5]">
+                  <h3 className="text-[10px] font-mono font-black uppercase text-gray-500">Best Goal Differential</h3>
+                  <p className="text-xl font-black text-emerald-700 mt-0.5">
+                    +{coachCareerRecords.bestGDSeason?.gd || 0} Diff
+                  </p>
+                  <p className="text-[11px] font-bold text-gray-700 uppercase mt-0.5">
+                    {coachCareerRecords.bestGDSeason?.season_code} • {coachCareerRecords.bestGDSeason?.team_name}
+                  </p>
+                </div>
+              </div>
+
+              {showSeasonArchiveTable && (
+                <div className="mt-4 overflow-x-auto border-t-2 border-black pt-3">
+                  <table className="w-full text-left text-xs border-collapse font-mono">
+                    <thead>
+                      <tr className="bg-black text-white uppercase text-[10px] font-black">
+                        <th className="p-2">Season</th>
+                        <th className="p-2">Team Coached</th>
+                        <th className="p-2 text-center">GP</th>
+                        <th className="p-2 text-center">W</th>
+                        <th className="p-2 text-center">L</th>
+                        <th className="p-2 text-center">T</th>
+                        <th className="p-2 text-center">OTL</th>
+                        <th className="p-2 text-center font-black bg-gray-900">PTS</th>
+                        <th className="p-2 text-center">GF</th>
+                        <th className="p-2 text-center">GA</th>
+                        <th className="p-2 text-center">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coachSeasonsStandings
+                        .sort((a, b) => Number(b.season_id) - Number(a.season_id))
+                        .map((s, idx) => {
+                          const w = Number(s.w) || 0;
+                          const l = Number(s.l) || 0;
+                          const t = Number(s.t) || 0;
+                          const otl = Number(s.otl) || 0;
+                          const pts = s.pts !== undefined ? Number(s.pts) : (w * 2 + otl + t);
+                          const gf = Number(s.gf) || 0;
+                          const ga = Number(s.ga) || 0;
+                          const diff = gf - ga;
+                          return (
+                            <tr
+                              key={`${s.season_id}-${s.team_id || idx}`}
+                              onClick={() => handleSeasonChange(Number(s.season_id), Number(s.team_id))}
+                              className="border-b border-gray-200 font-bold cursor-pointer hover:bg-yellow-50"
+                            >
+                              <td className="p-2 uppercase font-black">{s.season_code || s.season_name}</td>
+                              <td className="p-2 uppercase font-black">{s.team_name}</td>
+                              <td className="p-2 text-center">{s.gp || (w + l + t + otl)}</td>
+                              <td className="p-2 text-center">{w}</td>
+                              <td className="p-2 text-center">{l}</td>
+                              <td className="p-2 text-center">{t}</td>
+                              <td className="p-2 text-center">{otl}</td>
+                              <td className="p-2 text-center font-black bg-gray-100">{pts}</td>
+                              <td className="p-2 text-center">{gf}</td>
+                              <td className="p-2 text-center">{ga}</td>
+                              <td className={`p-2 text-center font-black ${diff >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                {diff > 0 ? `+${diff}` : diff}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* TAB 1: ROSTER & PLAYER STATS */}
@@ -1287,198 +1560,13 @@ function TeamPageContent({ teamId }: { teamId: string }) {
         </section>
       )}
 
-      {/* TAB 3: COACH ALL-TIME SEASON LOG (ACROSS ALL SEASONS & TEAMS) */}
-      {activeTab === 'seasons' && (
-        <section className="bg-white border-2 border-black p-4 shadow-sm">
-          <div className="border-b-2 border-black pb-2 mb-4">
-            <h2 className="text-xl font-black uppercase tracking-tight">
-              All-Time Career Seasons for Coach: {coachName}
-            </h2>
-            <p className="text-xs font-bold uppercase italic text-gray-600 mt-0.5">
-              Historical records across all seasons & teams coached by {coachName}. Click any season to load that team archive.
-            </p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-black text-white uppercase text-[10px] font-black">
-                  <th className="p-2">Season</th>
-                  <th className="p-2">Team Coached</th>
-                  <th className="p-2 text-center">GP</th>
-                  <th className="p-2 text-center">W</th>
-                  <th className="p-2 text-center">L</th>
-                  <th className="p-2 text-center">T</th>
-                  <th className="p-2 text-center">OTL</th>
-                  <th className="p-2 text-center font-black bg-gray-900">PTS</th>
-                  <th className="p-2 text-center">GF</th>
-                  <th className="p-2 text-center">GA</th>
-                  <th className="p-2 text-center">Diff</th>
-                  <th className="p-2 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {coachSeasonsStandings.length > 0 ? (
-                  coachSeasonsStandings
-                    .sort((a, b) => Number(b.season_id) - Number(a.season_id))
-                    .map((s, idx) => {
-                      const isCurrent = Number(s.season_id) === Number(selectedSeason) && Number(s.team_id) === Number(teamId);
-                      const w = Number(s.w) || 0;
-                      const l = Number(s.l) || 0;
-                      const t = Number(s.t) || 0;
-                      const otl = Number(s.otl) || 0;
-                      const pts = s.pts !== undefined ? Number(s.pts) : (w * 2 + otl + t);
-                      const gf = Number(s.gf) || 0;
-                      const ga = Number(s.ga) || 0;
-                      const diff = gf - ga;
-
-                      return (
-                        <tr
-                          key={`${s.season_id}-${s.team_id || idx}`}
-                          onClick={() => handleSeasonChange(Number(s.season_id), Number(s.team_id))}
-                          className={`border-b border-gray-200 font-bold cursor-pointer transition ${
-                            isCurrent
-                              ? 'bg-yellow-200 border-2 border-black font-black'
-                              : idx % 2 === 0 ? 'bg-gray-50 hover:bg-yellow-50' : 'bg-white hover:bg-yellow-50'
-                          }`}
-                        >
-                          <td className="p-2 uppercase flex items-center gap-2">
-                            <span className="font-black">{s.season_code || s.season_name}</span>
-                            {isCurrent && (
-                              <span className="bg-black text-white text-[9px] px-1.5 py-0.5 rounded font-black">
-                                ACTIVE
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              {s.logo_url && (
-                                <img src={s.logo_url} alt={s.team_name} className="w-5 h-5 object-contain flex-shrink-0" />
-                              )}
-                              <span className="font-black uppercase text-black">{s.team_name}</span>
-                            </div>
-                          </td>
-                          <td className="p-2 text-center">{s.gp || (w + l + t + otl)}</td>
-                          <td className="p-2 text-center">{w}</td>
-                          <td className="p-2 text-center">{l}</td>
-                          <td className="p-2 text-center">{t}</td>
-                          <td className="p-2 text-center">{otl}</td>
-                          <td className="p-2 text-center font-black bg-gray-100 text-black">{pts}</td>
-                          <td className="p-2 text-center">{gf}</td>
-                          <td className="p-2 text-center">{ga}</td>
-                          <td className={`p-2 text-center font-black ${diff > 0 ? 'text-green-700' : diff < 0 ? 'text-red-700' : 'text-gray-500'}`}>
-                            {diff > 0 ? `+${diff}` : diff}
-                          </td>
-                          <td className="p-2 text-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSeasonChange(Number(s.season_id), Number(s.team_id));
-                              }}
-                              className={`text-[10px] uppercase font-black px-2 py-0.5 border border-black rounded transition cursor-pointer ${
-                                isCurrent ? 'bg-black text-white' : 'bg-white hover:bg-black hover:text-white'
-                              }`}
-                            >
-                              {isCurrent ? 'Viewing' : 'Select'}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })
-                ) : (
-                  <tr>
-                    <td colSpan={12} className="p-4 text-center text-xs font-bold uppercase italic text-gray-500">
-                      No career standings archived for coach {coachName}.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* TAB 4: COACH CAREER RECORDS & ALL-TIME BESTS */}
-      {activeTab === 'records' && coachCareerRecords && (
-        <div className="space-y-6">
-          {/* Summary Box */}
-          <div className="bg-white border-2 border-black p-6 shadow-sm">
-            <h2 className="text-2xl font-black uppercase tracking-tight border-b-2 border-black pb-2 mb-4">
-              Coach Career Totals & All-Time Highs ({coachName})
-            </h2>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6 text-center">
-              <div className="border border-black p-3 bg-gray-50">
-                <p className="text-[10px] font-black uppercase text-gray-600">Seasons Coached</p>
-                <p className="text-2xl font-black">{coachCareerRecords.totalSeasons}</p>
-              </div>
-              <div className="border border-black p-3 bg-gray-50">
-                <p className="text-[10px] font-black uppercase text-gray-600">Career Record</p>
-                <p className="text-xl font-black">{coachCareerRecords.totalW}-{coachCareerRecords.totalL}-{coachCareerRecords.totalT}-{coachCareerRecords.totalOTL}</p>
-              </div>
-              <div className="border border-black p-3 bg-gray-50">
-                <p className="text-[10px] font-black uppercase text-gray-600">Career Points</p>
-                <p className="text-2xl font-black text-blue-700">{coachCareerRecords.totalPTS}</p>
-              </div>
-              <div className="border border-black p-3 bg-gray-50">
-                <p className="text-[10px] font-black uppercase text-gray-600">Career Win %</p>
-                <p className="text-2xl font-black text-green-700">{coachCareerRecords.winPct}</p>
-              </div>
-            </div>
-
-            {/* Coach Career Highs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="border border-black p-4 bg-white">
-                <h3 className="text-xs font-black uppercase text-gray-500 mb-1">Most Points in a Single Season</h3>
-                <p className="text-2xl font-black text-black">
-                  {coachCareerRecords.bestSeasonByPts?.pts || 0} PTS
-                </p>
-                <p className="text-xs font-bold text-gray-700 uppercase mt-1">
-                  Achieved in {coachCareerRecords.bestSeasonByPts?.season_code || `Season ${coachCareerRecords.bestSeasonByPts?.season_id}`} with {coachCareerRecords.bestSeasonByPts?.team_name} ({coachCareerRecords.bestSeasonByPts?.w} Wins)
-                </p>
-              </div>
-
-              <div className="border border-black p-4 bg-white">
-                <h3 className="text-xs font-black uppercase text-gray-500 mb-1">Most Wins in a Single Season</h3>
-                <p className="text-2xl font-black text-black">
-                  {coachCareerRecords.bestSeasonByWins?.w || 0} Wins
-                </p>
-                <p className="text-xs font-bold text-gray-700 uppercase mt-1">
-                  Achieved in {coachCareerRecords.bestSeasonByWins?.season_code || `Season ${coachCareerRecords.bestSeasonByWins?.season_id}`} with {coachCareerRecords.bestSeasonByWins?.team_name}
-                </p>
-              </div>
-
-              <div className="border border-black p-4 bg-white">
-                <h3 className="text-xs font-black uppercase text-gray-500 mb-1">Most Goals Scored in a Season</h3>
-                <p className="text-2xl font-black text-black">
-                  {coachCareerRecords.mostGFSeason?.gf || 0} Goals
-                </p>
-                <p className="text-xs font-bold text-gray-700 uppercase mt-1">
-                  Achieved in {coachCareerRecords.mostGFSeason?.season_code || `Season ${coachCareerRecords.mostGFSeason?.season_id}`} with {coachCareerRecords.mostGFSeason?.team_name}
-                </p>
-              </div>
-
-              <div className="border border-black p-4 bg-white">
-                <h3 className="text-xs font-black uppercase text-gray-500 mb-1">Best Goal Differential</h3>
-                <p className="text-2xl font-black text-green-700">
-                  +{coachCareerRecords.bestGDSeason?.gd || 0} Diff
-                </p>
-                <p className="text-xs font-bold text-gray-700 uppercase mt-1">
-                  Achieved in {coachCareerRecords.bestGDSeason?.season_code || `Season ${coachCareerRecords.bestGDSeason?.season_id}`} with {coachCareerRecords.bestGDSeason?.team_name}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Bottom Return to Teams navigation */}
-      <div className="mt-10 pt-6 border-t-2 border-black flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="mt-8 pt-4 border-t-2 border-black flex flex-col sm:flex-row justify-between items-center gap-4">
         <Link
           href="/team"
           className="bg-black text-white border-2 border-black px-5 py-2 text-xs font-black uppercase hover:bg-neutral-800 transition shadow-sm inline-flex items-center gap-2 cursor-pointer"
         >
-          &larr; Return to All Teams Directory
+          &larr; Return to League Directory
         </Link>
         <span className="text-xs font-bold uppercase italic text-gray-600">
           Official NHL95 League Gazette Archive

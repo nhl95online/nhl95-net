@@ -144,8 +144,9 @@ export default function Navbar() {
             </button>
             {isRostersOpen && (
               <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-56 flex flex-col z-50 shadow-lg">
-                <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">Teams</Link>
-                <Link href="/team?tab=futures" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">Active Rosters &amp; Futures</Link>
+                <Link href="/team" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-red-800">League Directory</Link>
+                <Link href="/team?tab=rosters" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-emerald-900">League Rosters</Link>
+                <Link href="/team?tab=coach" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-amber-900">Coach Profile</Link>
                 <Link href="/trades" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Trade Machine</Link>
                 <Link href="/draft" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Draft Central</Link>
                 <Link href="/players" className="px-4 py-2 hover:bg-black hover:text-white transition-colors">Player Database</Link>
@@ -196,8 +197,8 @@ export default function Navbar() {
                 <Link href="/roms" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
                   ROMs & Files
                 </Link>
-                <Link href="/managers" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
-                  Managers Directory
+                <Link href="/team?tab=coach" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
+                  Coach Profile
                 </Link>
                 <Link href="/setup-guide?tab=overlays" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">
                   Stream Overlays & Tools
@@ -284,14 +285,21 @@ export default function Navbar() {
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-red-800"
                 >
-                  • Teams
+                  • League Directory
                 </Link>
                 <Link 
-                  href="/team?tab=futures" 
+                  href="/team?tab=rosters" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-emerald-900"
                 >
-                  • Active Rosters &amp; Futures
+                  • League Rosters
+                </Link>
+                <Link 
+                  href="/team?tab=coach" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-amber-900"
+                >
+                  • Coach Profile
                 </Link>
                 <Link 
                   href="/trades" 
@@ -394,11 +402,11 @@ export default function Navbar() {
                   • ROMs & Files
                 </Link>
                 <Link 
-                  href="/managers" 
+                  href="/team?tab=coach" 
                   onClick={closeMobileMenu}
                   className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
                 >
-                  • Managers Directory
+                  • Coach Profile
                 </Link>
                 <Link 
                   href="/setup-guide?tab=overlays" 
