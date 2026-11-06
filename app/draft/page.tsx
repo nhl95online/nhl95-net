@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useCoachAuth } from '@/lib/coach-auth';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
+import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 import {
   W_LEAGUE_GOALIES,
   W_LEAGUE_SKATERS,
@@ -618,8 +619,8 @@ function CardAttribute({ label, value }: { label: string; value: any }) {
 export default function DraftPage() {
   const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
   
-  // Top-Level Mode: 'floor' (Draft Central), 'past' (Past Drafts Archive), 'capital' (Draft Capital)
-  const [activeTab, setActiveTab] = useState<'floor' | 'past' | 'capital' | 'prospects'>('floor');
+  // Top-Level Mode: 'floor' (Draft Central), 'past' (Past Drafts Archive), 'capital' (Draft Capital), 'futures' (Active Rosters & Futures)
+  const [activeTab, setActiveTab] = useState<'floor' | 'past' | 'capital' | 'prospects' | 'futures'>('floor');
 
   // Core Data
   const [data, setData] = useState<DraftData[]>([]);
@@ -3806,6 +3807,18 @@ export default function DraftPage() {
                 <Award className="w-3.5 h-3.5" />
                 Past Drafts
               </button>
+
+              <button
+                onClick={() => { setActiveTab('futures'); setShowCapital(false); }}
+                className={`px-3.5 py-1.5 text-xs font-black uppercase border-2 border-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeTab === 'futures'
+                    ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                    : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                Active Rosters &amp; Futures
+              </button>
             </div>
           </div>
 
@@ -6472,6 +6485,12 @@ export default function DraftPage() {
             </div>
 
           </div>
+        )}
+
+        {activeTab === 'futures' && (
+          <ActiveRostersFuturesView
+            initialLeagueType={floorLeague === 'O' ? 'O' : 'W'}
+          />
         )}
 
       </div>

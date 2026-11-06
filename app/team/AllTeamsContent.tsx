@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 
 const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?: string }> = {
   W: {
@@ -76,15 +77,27 @@ export default function AllTeamsContent() {
   const router = useRouter();
   const coachParam = searchParams.get('coach') || "";
   const seasonParam = searchParams.get('season');
+  const tabParam = searchParams.get('tab') || "";
   const query = searchParams.get('q') || coachParam || "";
   const [searchVal, setSearchVal] = useState(query);
   const [selectedSeason, setSelectedSeason] = useState<number>(seasonParam ? Number(seasonParam) : 0);
+  const [activeTab, setActiveTab] = useState<'directory' | 'futures'>(
+    tabParam === 'futures' || tabParam === 'active' || tabParam === 'rosters' ? 'futures' : 'directory'
+  );
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     setSearchVal(query);
   }, [query]);
+
+  useEffect(() => {
+    if (tabParam === 'futures' || tabParam === 'active' || tabParam === 'rosters') {
+      setActiveTab('futures');
+    } else if (tabParam === 'directory') {
+      setActiveTab('directory');
+    }
+  }, [tabParam]);
 
   const availableLeagueTypes = ['W', 'Q', 'O', 'V', 'G'];
 
@@ -434,158 +447,200 @@ export default function AllTeamsContent() {
   return (
     <div className="min-h-screen bg-[#f4f1ea] p-4 sm:p-6 font-serif text-black">
       {/* Header bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-4 border-black mb-6 pb-3 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b-4 border-black mb-4 pb-3 gap-4">
         <div>
           <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter">League Directory</h1>
-          <p className="text-xs font-bold uppercase italic text-gray-700 mt-0.5">Official Team Information & Rosters</p>
+          <p className="text-xs font-bold uppercase italic text-gray-700 mt-0.5">Official Team Information, Active Rosters &amp; Multi-Year Futures</p>
         </div>
         <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
-          <Link
-            href="/team"
-            onClick={() => {
-              setSearchVal("");
-              setSelectedLeagueType("ALL");
-              setSelectedSeason(0);
-              router.push("/team");
-            }}
-            className="font-bold border border-black px-3 py-1 text-xs uppercase hover:bg-black hover:text-white transition cursor-pointer"
-          >
-            All Teams
-          </Link>
-          <input
-            type="text"
-            placeholder="SEARCH TEAMS..."
-            className="border border-black px-2.5 py-1 text-xs font-bold bg-white text-black outline-none w-full sm:w-56"
-            value={searchVal}
-            onChange={(e) => {
-              setSearchVal(e.target.value);
-              router.push(`/team?q=${encodeURIComponent(e.target.value)}`);
-            }}
-          />
-        </div>
-      </div>
-
-      {/* League Selection Buttons & Season archive selector */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* League Type Buttons */}
-          <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => handleLeagueTypeChange('ALL')}
-              className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
-                selectedLeagueType === 'ALL'
-                  ? 'bg-black text-white shadow-xs'
-                  : 'text-black hover:bg-neutral-100'
+              onClick={() => {
+                setActiveTab('directory');
+                router.push('/team');
+              }}
+              className={`font-black border-2 border-black px-3.5 py-1.5 text-xs uppercase transition cursor-pointer ${
+                activeTab === 'directory'
+                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                  : 'bg-white text-black hover:bg-neutral-100'
               }`}
-              title="All Leagues"
             >
-              ALL
+              Team Directory
             </button>
-            {availableLeagueTypes.map((type) => {
-              const config = LEAGUE_LOGOS[type];
-              const isSelected = selectedLeagueType === type;
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleLeagueTypeChange(type)}
-                  className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
-                    isSelected
-                      ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
-                      : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
-                  }`}
-                  title={config?.name || `${type} League`}
-                >
-                  {config?.logoUrl ? (
-                    <img
-                      src={config.logoUrl}
-                      alt={config.name || `${type} League`}
-                      className="h-5 md:h-6 w-auto max-w-[60px] md:max-w-[80px] object-contain block"
-                      onError={(e) => {
-                        if (config.fallbackUrl && e.currentTarget.src !== config.fallbackUrl) {
-                          e.currentTarget.src = config.fallbackUrl;
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="font-black text-xs uppercase px-1">{type}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Season archive selector */}
-          <div className="flex items-center gap-2">
-            <label className="font-bold uppercase text-xs">Archive Season:</label>
-            <select
-              value={selectedSeason}
-              onChange={(e) => setSelectedSeason(Number(e.target.value))}
-              className="bg-white border border-black px-2 py-1 text-xs font-bold cursor-pointer uppercase outline-none"
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('futures');
+                router.push('/team?tab=futures');
+              }}
+              className={`font-black border-2 border-black px-3.5 py-1.5 text-xs uppercase transition cursor-pointer ${
+                activeTab === 'futures'
+                  ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                  : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100'
+              }`}
             >
-              <option value={0}>
-                {selectedLeagueType === 'ALL' ? 'ALL SEASONS' : `ALL ${selectedLeagueType} SEASONS`}
-              </option>
-              {filteredSeasons.map(s => (
-                <option key={s.league_id} value={s.league_id}>{s.season_name}</option>
-              ))}
-            </select>
+              Active Rosters &amp; Futures
+            </button>
           </div>
+          {activeTab === 'directory' && (
+            <>
+              <Link
+                href="/team"
+                onClick={() => {
+                  setSearchVal("");
+                  setSelectedLeagueType("ALL");
+                  setSelectedSeason(0);
+                  router.push("/team");
+                }}
+                className="font-bold border border-black px-3 py-1.5 text-xs uppercase hover:bg-black hover:text-white transition cursor-pointer bg-white"
+              >
+                All Teams
+              </Link>
+              <input
+                type="text"
+                placeholder="SEARCH TEAMS..."
+                className="border border-black px-2.5 py-1.5 text-xs font-bold bg-white text-black outline-none w-full sm:w-56"
+                value={searchVal}
+                onChange={(e) => {
+                  setSearchVal(e.target.value);
+                  router.push(`/team?q=${encodeURIComponent(e.target.value)}`);
+                }}
+              />
+            </>
+          )}
         </div>
-
-        {query && (
-          <span className="text-xs font-bold text-gray-700 italic">
-            Showing results for &ldquo;{query}&rdquo; ({filteredTeams.length} teams found)
-          </span>
-        )}
       </div>
 
-      {loading ? (
-        <div className="p-8 text-center font-bold text-sm italic">Loading teams directory...</div>
-      ) : filteredTeams.length === 0 ? (
-        <div className="p-8 text-center font-bold text-sm italic border border-black bg-white">
-          No teams found matching your criteria.
-        </div>
-      ) : divisionGroups.hasDivisions && !query && selectedSeason !== 0 ? (
-        /* Division-Grouped View */
-        <div className="space-y-8">
-          {Object.entries(divisionGroups.groups).map(([divisionName, groupTeams]) => {
-            const displayTitle = divisionName.toLowerCase().includes('division')
-              ? divisionName
-              : `${divisionName} Division`;
-
-            return (
-              <div key={divisionName} className="border-t-2 border-black pt-4">
-                <h2 className="text-xl font-black uppercase tracking-tight text-black mb-4">
-                  {displayTitle}
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                  {groupTeams.map((team, idx) => (
-                    <TeamCard
-                      key={`${team.team_id}-${team.league_id || idx}`}
-                      team={team}
-                      selectedSeason={selectedSeason}
-                      seasonName={seasons.find(s => Number(s.league_id) === Number(team.league_id))?.season_name}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {activeTab === 'futures' ? (
+        <ActiveRostersFuturesView
+          initialLeagueType={selectedLeagueType === 'O' ? 'O' : 'W'}
+        />
       ) : (
-        /* 2-Column Flat Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {filteredTeams.map((team, idx) => (
-            <TeamCard
-              key={`${team.team_id}-${team.league_id || idx}`}
-              team={team}
-              selectedSeason={selectedSeason}
-              seasonName={seasons.find(s => Number(s.league_id) === Number(team.league_id))?.season_name}
-            />
-          ))}
-        </div>
+        <>
+          {/* League Selection Buttons & Season archive selector */}
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* League Type Buttons */}
+              <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full">
+                <button
+                  type="button"
+                  onClick={() => handleLeagueTypeChange('ALL')}
+                  className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${
+                    selectedLeagueType === 'ALL'
+                      ? 'bg-black text-white shadow-xs'
+                      : 'text-black hover:bg-neutral-100'
+                  }`}
+                  title="All Leagues"
+                >
+                  ALL
+                </button>
+                {availableLeagueTypes.map((type) => {
+                  const config = LEAGUE_LOGOS[type];
+                  const isSelected = selectedLeagueType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => handleLeagueTypeChange(type)}
+                      className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
+                          : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
+                      }`}
+                      title={config?.name || `${type} League`}
+                    >
+                      {config?.logoUrl ? (
+                        <img
+                          src={config.logoUrl}
+                          alt={config.name || `${type} League`}
+                          className="h-5 md:h-6 w-auto max-w-[60px] md:max-w-[80px] object-contain block"
+                          onError={(e) => {
+                            if (config.fallbackUrl && e.currentTarget.src !== config.fallbackUrl) {
+                              e.currentTarget.src = config.fallbackUrl;
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="font-black text-xs uppercase px-1">{type}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Season archive selector */}
+              <div className="flex items-center gap-2">
+                <label className="font-bold uppercase text-xs">Archive Season:</label>
+                <select
+                  value={selectedSeason}
+                  onChange={(e) => setSelectedSeason(Number(e.target.value))}
+                  className="bg-white border border-black px-2 py-1 text-xs font-bold cursor-pointer uppercase outline-none"
+                >
+                  <option value={0}>
+                    {selectedLeagueType === 'ALL' ? 'ALL SEASONS' : `ALL ${selectedLeagueType} SEASONS`}
+                  </option>
+                  {filteredSeasons.map(s => (
+                    <option key={s.league_id} value={s.league_id}>{s.season_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {query && (
+              <span className="text-xs font-bold text-gray-700 italic">
+                Showing results for &ldquo;{query}&rdquo; ({filteredTeams.length} teams found)
+              </span>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="p-8 text-center font-bold text-sm italic">Loading teams directory...</div>
+          ) : filteredTeams.length === 0 ? (
+            <div className="p-8 text-center font-bold text-sm italic border border-black bg-white">
+              No teams found matching your criteria.
+            </div>
+          ) : divisionGroups.hasDivisions && !query && selectedSeason !== 0 ? (
+            /* Division-Grouped View */
+            <div className="space-y-8">
+              {Object.entries(divisionGroups.groups).map(([divisionName, groupTeams]) => {
+                const displayTitle = divisionName.toLowerCase().includes('division')
+                  ? divisionName
+                  : `${divisionName} Division`;
+
+                return (
+                  <div key={divisionName} className="border-t-2 border-black pt-4">
+                    <h2 className="text-xl font-black uppercase tracking-tight text-black mb-4">
+                      {displayTitle}
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                      {groupTeams.map((team, idx) => (
+                        <TeamCard
+                          key={`${team.team_id}-${team.league_id || idx}`}
+                          team={team}
+                          selectedSeason={selectedSeason}
+                          seasonName={seasons.find(s => Number(s.league_id) === Number(team.league_id))?.season_name}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* 2-Column Flat Grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+              {filteredTeams.map((team, idx) => (
+                <TeamCard
+                  key={`${team.team_id}-${team.league_id || idx}`}
+                  team={team}
+                  selectedSeason={selectedSeason}
+                  seasonName={seasons.find(s => Number(s.league_id) === Number(team.league_id))?.season_name}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

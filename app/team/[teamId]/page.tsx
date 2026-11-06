@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, use, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 
 // ==========================================
 // 1. LEAGUE CONSTANTS & ROSTERS CONFIG
@@ -195,7 +196,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const [currentStanding, setCurrentStanding] = useState<any>(null);
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'roster' | 'schedule' | 'seasons' | 'records'>('roster');
+  const [activeTab, setActiveTab] = useState<'roster' | 'futures' | 'schedule' | 'seasons' | 'records'>('roster');
 
   // Season Specific Data
   const [roster, setRoster] = useState<any[]>([]);
@@ -1012,7 +1013,15 @@ function TeamPageContent({ teamId }: { teamId: string }) {
             activeTab === 'roster' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
           }`}
         >
-          Roster & Stats ({roster.length})
+          Roster &amp; Stats ({roster.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('futures')}
+          className={`px-4 py-2 text-xs font-black uppercase transition border border-black cursor-pointer ${
+            activeTab === 'futures' ? 'bg-black text-white' : 'bg-emerald-50 text-emerald-950 hover:bg-emerald-100'
+          }`}
+        >
+          Active Rosters &amp; Futures
         </button>
         <button
           onClick={() => setActiveTab('schedule')}
@@ -1020,7 +1029,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
             activeTab === 'schedule' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
           }`}
         >
-          Schedule & Results ({scheduleGames.length})
+          Schedule &amp; Results ({scheduleGames.length})
         </button>
         <button
           onClick={() => setActiveTab('seasons')}
@@ -1036,11 +1045,19 @@ function TeamPageContent({ teamId }: { teamId: string }) {
             activeTab === 'records' ? 'bg-black text-white' : 'bg-white hover:bg-gray-100'
           }`}
         >
-          Coach Career Records & Bests
+          Coach Career Records &amp; Bests
         </button>
       </nav>
 
       {/* 3. Tab Contents */}
+
+      {/* TAB: ACTIVE ROSTERS & FUTURES */}
+      {activeTab === 'futures' && (
+        <ActiveRostersFuturesView
+          initialLeagueType={Number(selectedSeason) === 39 || currentSeasonBadge.startsWith('O') ? 'O' : 'W'}
+          initialTeamAbbr={resolveTeamCode(team) || 'ALL'}
+        />
+      )}
 
       {/* TAB 1: ROSTER & PLAYER STATS */}
       {activeTab === 'roster' && (

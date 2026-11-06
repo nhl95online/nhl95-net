@@ -8,6 +8,7 @@ import {
   Check, HelpCircle, Layers, TrendingUp, ArrowRightLeft,
   BarChart2
 } from 'lucide-react';
+import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 
 // =========================================================================
 // 1. CONSTANTS & HELPER FUNCTIONS
@@ -2105,7 +2106,7 @@ interface PlayerGroup {
 }
 
 export default function PlayersPage() {
-  const [activeTab, setActiveTab] = useState<'database' | 'compare'>('database');
+  const [activeTab, setActiveTab] = useState<'database' | 'futures' | 'compare'>('database');
   const [playerGroups, setPlayerGroups] = useState<PlayerGroup[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [selectedCareerData, setSelectedCareerData] = useState<any[]>([]);
@@ -2596,10 +2597,10 @@ export default function PlayersPage() {
         </div>
 
         {/* Right: View Switcher Tabs */}
-        <div className="flex items-center gap-2 font-black uppercase text-xs w-full md:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2 font-black uppercase text-xs w-full md:w-auto justify-end">
           <button
             onClick={() => setActiveTab('database')}
-            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${
+            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'database'
                 ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                 : 'bg-white hover:bg-slate-100 text-black'
@@ -2610,8 +2611,20 @@ export default function PlayersPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab('futures')}
+            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'futures'
+                ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
+                : 'bg-white hover:bg-slate-100 text-black'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-cyan-500" />
+            Active Rosters &amp; Futures
+          </button>
+
+          <button
             onClick={() => setActiveTab('compare')}
-            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all ${
+            className={`py-2 px-3 sm:px-4 rounded border-2 border-black flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'compare'
                 ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
                 : 'bg-white hover:bg-slate-100 text-black'
@@ -2996,6 +3009,8 @@ export default function PlayersPage() {
 
 
         </div>
+      ) : activeTab === 'futures' ? (
+        <ActiveRostersFuturesView />
       ) : (
         /* Compare Players Tab View */
         <CompareView
