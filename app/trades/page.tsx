@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCoachAuth } from '@/lib/coach-auth';
+import { getDraftPickValueOrEstimate } from '@/lib/draftPickValues';
 import Link from 'next/link';
 import { 
   ArrowLeftRight, Check, Copy, RotateCcw, AlertTriangle, ShieldCheck, 
@@ -209,15 +210,11 @@ interface PickAsset {
   year: number | string;
   value: number;
   team_id: number | string;
+  pickNumber?: number; // Overall pick # (from Draft Capital in league_drafts), when known
 }
 
-const PICK_WEIGHTS: Record<string, number> = {
-  '1st': 100,
-  '2nd': 50,
-  '3rd': 30,
-  '4th': 15,
-  '5th': 8
-};
+// Round label -> round number (e.g. '1st' -> 1)
+const ROUND_LABEL_TO_NUM: Record<string, number> = { '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '5th': 5 };
 
 // Current active leagues metadata configuration with exact official bucket logos
 const CURRENT_LEAGUES_CONFIG = [
@@ -452,12 +449,28 @@ export default function TradesPage() {
     const generated: PickAsset[] = [];
     futureYears.forEach((yr) => {
       rounds.forEach((rd) => {
+        const rdNum = ROUND_LABEL_TO_NUM[rd] || 1;
+        // Look up this team's slot in the uploaded Draft Capital (league_drafts) to get the overall pick #
+        const ownedRows = (allDrafts || []).filter((d: any) => {
+          const ownerId = d.league_teams?.team_id ?? d.team_id;
+          return (
+            Number(d.year) === Number(yr) &&
+            Number(d.round) === rdNum &&
+            String(ownerId) === String(tId) &&
+            !d.league_player_database?.player_name
+          );
+        });
+        const ownRow =
+          ownedRows.find((d: any) => !/via|from/i.test(String(d.transaction_type || ''))) || ownedRows[0];
+        const pickNumber = ownRow?.pick_number ? Number(ownRow.pick_number) : undefined;
+
         generated.push({
           id: `${tId}-pick-${yr}-${rd}`,
           round: rd,
           year: yr,
-          value: PICK_WEIGHTS[rd] || 50,
-          team_id: tId
+          value: getDraftPickValueOrEstimate(pickNumber, rdNum),
+          team_id: tId,
+          pickNumber
         });
       });
     });
@@ -772,7 +785,7 @@ export default function TradesPage() {
       setTeamBSendingPlayers([]);
       setTeamBSendingPicks([]);
     }
-  }, [teamAId, teamBId, simLeague, leagueTeams]);
+  }, [teamAId, teamBId, simLeague, leagueTeams, allDrafts]);
 
   // Simulator Calculations
   const teamA = leagueTeams.find(t => String(t.team_id) === String(teamAId));
@@ -845,7 +858,7 @@ export default function TradesPage() {
         .join('\n') || '• No players';
     const aPickList =
       teamASendingPicks
-        .map((pk) => `• ${pk.year} ${pk.round} Round Pick (${pk.value} pts)`)
+        .map((pk) => `• ${pk.year} ${pk.round} Round Pick${pk.pickNumber ? ` (#${pk.pickNumber})` : ''} (${pk.value} pts)`)
         .join('\n') || '• No draft picks';
     const bPlayerList =
       teamBSendingPlayers
@@ -856,7 +869,7 @@ export default function TradesPage() {
         .join('\n') || '• No players';
     const bPickList =
       teamBSendingPicks
-        .map((pk) => `• ${pk.year} ${pk.round} Round Pick (${pk.value} pts)`)
+        .map((pk) => `• ${pk.year} ${pk.round} Round Pick${pk.pickNumber ? ` (#${pk.pickNumber})` : ''} (${pk.value} pts)`)
         .join('\n') || '• No draft picks';
 
     const teamAName = teamA?.team_name || 'Team A';
@@ -1045,11 +1058,11 @@ export default function TradesPage() {
       let isDraftOccurred = false;
 
       if (isPick) {
-        if (lower.includes('1st')) { pickRound = '1st Round'; rdNum = 1; itemVal = PICK_WEIGHTS['1st'] || 100; }
-        else if (lower.includes('2nd')) { pickRound = '2nd Round'; rdNum = 2; itemVal = PICK_WEIGHTS['2nd'] || 50; }
-        else if (lower.includes('3rd')) { pickRound = '3rd Round'; rdNum = 3; itemVal = PICK_WEIGHTS['3rd'] || 30; }
-        else if (lower.includes('4th')) { pickRound = '4th Round'; rdNum = 4; itemVal = PICK_WEIGHTS['4th'] || 15; }
-        else if (lower.includes('5th')) { pickRound = '5th Round'; rdNum = 5; itemVal = PICK_WEIGHTS['5th'] || 8; }
+        if (lower.includes('1st')) { pickRound = '1st Round'; rdNum = 1; }
+        else if (lower.includes('2nd')) { pickRound = '2nd Round'; rdNum = 2; }
+        else if (lower.includes('3rd')) { pickRound = '3rd Round'; rdNum = 3; }
+        else if (lower.includes('4th')) { pickRound = '4th Round'; rdNum = 4; }
+        else if (lower.includes('5th')) { pickRound = '5th Round'; rdNum = 5; }
 
         const yearMatch = item.match(/\b(19\d\d|20\d\d)\b/);
         if (yearMatch) pickYear = yearMatch[1];
@@ -1154,6 +1167,9 @@ export default function TradesPage() {
         if (numYear > 0 && numYear <= 2013) {
           isDraftOccurred = true;
         }
+
+        // Value from the Draft Pick Value Chart (exact pick # when known, else mid-round estimate)
+        itemVal = getDraftPickValueOrEstimate(pickNum ?? draftedPlayer?.pickNumber, rdNum);
       } else {
         itemVal = 75;
       }
@@ -1630,7 +1646,7 @@ export default function TradesPage() {
                               key={pk.id}
                               className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
                             >
-                              <span>{pk.year} {pk.round} Rd</span>
+                              <span>{pk.year} {pk.round} Rd{pk.pickNumber ? ` (#${pk.pickNumber})` : ''}</span>
                               <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
                                 {pk.value} pts
                               </span>
@@ -1694,7 +1710,7 @@ export default function TradesPage() {
                               key={pk.id}
                               className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
                             >
-                              <span>{pk.year} {pk.round} Rd</span>
+                              <span>{pk.year} {pk.round} Rd{pk.pickNumber ? ` (#${pk.pickNumber})` : ''}</span>
                               <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
                                 {pk.value} pts
                               </span>
@@ -1942,7 +1958,7 @@ export default function TradesPage() {
                                         : 'bg-white border-neutral-300 hover:border-black'
                                     }`}
                                   >
-                                    <span>{pk.round} Rd</span>
+                                    <span>{pk.round} Rd{pk.pickNumber ? ` #${pk.pickNumber}` : ''}</span>
                                     <span className="opacity-75 font-mono">+{pk.value}</span>
                                   </button>
                                 );
@@ -2104,7 +2120,7 @@ export default function TradesPage() {
                                         : 'bg-white border-neutral-300 hover:border-black'
                                     }`}
                                   >
-                                    <span>{pk.round} Rd</span>
+                                    <span>{pk.round} Rd{pk.pickNumber ? ` #${pk.pickNumber}` : ''}</span>
                                     <span className="opacity-75 font-mono">+{pk.value}</span>
                                   </button>
                                 );

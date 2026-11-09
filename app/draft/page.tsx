@@ -11,6 +11,7 @@ import {
   Users, MessageSquare
 } from 'lucide-react';
 import { useCoachAuth } from '@/lib/coach-auth';
+import { getDraftPickValue } from '@/lib/draftPickValues';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
 import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 import {
@@ -6084,6 +6085,8 @@ export default function DraftPage() {
                       });
                     });
 
+                    const totalCapitalValue = ownedPicks.reduce((sum, p) => sum + getDraftPickValue(p.pk), 0);
+
                     return (
                       <div key={team.team_id} className="bg-white border-2 border-black p-3 flex flex-col justify-between shadow-2xs">
                         <div>
@@ -6101,9 +6104,17 @@ export default function DraftPage() {
                                 {team.abbreviation} &bull; Coach: {team.coach_name || 'TBD'}
                               </div>
                             </div>
-                            <span className="bg-black text-amber-300 font-mono text-[10px] font-black px-1.5 py-0.5 shrink-0">
-                              {ownedPicks.length} Picks
-                            </span>
+                            <div className="flex flex-col items-end gap-0.5 shrink-0">
+                              <span className="bg-black text-amber-300 font-mono text-[10px] font-black px-1.5 py-0.5">
+                                {ownedPicks.length} Picks
+                              </span>
+                              <span
+                                className="bg-amber-300 text-black border border-black font-mono text-[9px] font-black px-1.5 py-0"
+                                title="Total draft capital value (Pick Value Chart)"
+                              >
+                                {totalCapitalValue} PTS
+                              </span>
+                            </div>
                           </div>
 
                           <div className="space-y-1">
@@ -6119,13 +6130,18 @@ export default function DraftPage() {
                                 <span>
                                   {pk.year} ({pk.badge}) &bull; Rd {pk.rd} (#{pk.pk})
                                 </span>
-                                {pk.viaAbbr ? (
-                                  <span className="bg-black text-amber-300 px-1 py-0 text-[9px] uppercase">
-                                    via {pk.viaAbbr}
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-black text-emerald-800" title="Pick value">
+                                    {getDraftPickValue(pk.pk)} pts
                                   </span>
-                                ) : (
-                                  <span className="text-[9px] text-slate-500 uppercase">Own</span>
-                                )}
+                                  {pk.viaAbbr ? (
+                                    <span className="bg-black text-amber-300 px-1 py-0 text-[9px] uppercase">
+                                      via {pk.viaAbbr}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-500 uppercase">Own</span>
+                                  )}
+                                </span>
                               </div>
                             ))}
                             {tradedAwayPicks.map((tp, idx) => (
@@ -6164,6 +6180,7 @@ export default function DraftPage() {
                       <tr className="bg-black text-white text-[10px] uppercase tracking-wider font-mono">
                         <th className="py-2.5 px-3 text-center">RD</th>
                         <th className="py-2.5 px-3 text-center">PICK</th>
+                        <th className="py-2.5 px-3 text-center">VALUE</th>
                         <th className="py-2.5 px-3">ORIGINAL FRANCHISE (STANDINGS SEED)</th>
                         <th className="py-2.5 px-3">CURRENT PICK OWNER (ASSIGN TRADED PICK)</th>
                         <th className="py-2.5 px-3">COACH ON CLOCK</th>
@@ -6181,6 +6198,7 @@ export default function DraftPage() {
                           <tr key={slot.id} className={isTraded ? 'bg-amber-50/70 font-bold' : 'hover:bg-neutral-50'}>
                             <td className="py-2 px-3 text-center font-mono font-bold">Rd {slot.rd}</td>
                             <td className="py-2 px-3 text-center font-mono font-black">#{slot.pk}</td>
+                            <td className="py-2 px-3 text-center font-mono font-black text-emerald-800">{getDraftPickValue(slot.pk)}</td>
                             <td className="py-2 px-3">
                               <div className="flex items-center gap-2">
                                 {origTeam?.logo_url && <img src={origTeam.logo_url} className="w-5 h-5 object-contain" alt="" />}
