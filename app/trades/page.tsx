@@ -248,8 +248,8 @@ const CURRENT_LEAGUES_CONFIG = [
     draftRounds: ['1st', '2nd', '3rd'],
     accentColor: 'amber',
     badgeText: 'Classic Era',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackLogoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png'
   },
   { 
     id: 'Q', 

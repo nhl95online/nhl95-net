@@ -26,8 +26,8 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   O: {
     name: 'Original 6',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original%206.png',
-    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Original%206.png'
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Original6.png',
+    fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Classic%20Cup.png'
   },
   V: {
     name: 'Vintage',
@@ -36,7 +36,7 @@ const LEAGUE_LOGOS: Record<string, { name: string; logoUrl: string; fallbackUrl?
   },
   G: {
     name: 'Golden Era',
-    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/Golden%20Era.png',
+    logoUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/images%20for%20site/GoldenEra.png',
     fallbackUrl: 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/awards/Golden%20Era.png'
   }
 };
@@ -894,17 +894,7 @@ export default function SchedulePage() {
   }, [selectedGame, periodSummary, homeStatsObj, awayStatsObj, gameBoxscore]);
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif pb-16">
-      {/* Header Banner */}
-      <div className="border-b-4 border-black pb-4 mb-6 text-center">
-        <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight">
-          League Schedule & Boxscores
-        </h1>
-        <p className="text-xs md:text-sm uppercase tracking-widest mt-1 text-slate-700 italic">
-          Official Gazette Fixtures, Completed Boxscores & Remaining Schedule
-        </p>
-      </div>
-
+    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif pb-16 pt-2">
       {/* Main Container */}
       <div className="max-w-[1400px] mx-auto px-4">
         {/* Controls & Filter Strip */}
