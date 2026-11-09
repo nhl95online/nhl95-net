@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
@@ -56,14 +56,149 @@ const SEASON_TYPES: Record<number, string> = {
   1: 'W', 2: 'W', 3: 'W', 4: 'W', 5: 'Q', 6: 'W', 7: 'Q', 8: 'Q', 9: 'W', 10: 'Q',
   11: 'W', 12: 'Q', 13: 'Q', 14: 'W', 15: 'Q', 16: 'G', 17: 'Q', 18: 'W', 19: 'Q', 20: 'V',
   21: 'Q', 22: 'W', 23: 'Q', 24: 'W', 25: 'Q', 26: 'Q', 27: 'Q', 28: 'W', 29: 'Q', 30: 'Q',
-  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W'
+  31: 'W', 32: 'Q', 33: 'W', 34: 'Q', 35: 'W', 36: 'Q', 37: 'W', 38: 'W', 39: 'O', 40: 'W',
+  41: 'W', 42: 'W', 43: 'W', 44: 'W', 45: 'W', 46: 'W', 47: 'W', 48: 'W', 49: 'W', 50: 'W',
+  51: 'W', 52: 'W', 53: 'W', 54: 'O', 55: 'O', 56: 'O', 57: 'O', 58: 'O', 59: 'O', 60: 'O'
 };
 
-const formatSeasonBadge = (seasonId: number | string) => {
+const SEASON_LABELS: Record<number, string> = {
+  1: 'W01', 2: 'W02', 3: 'W03', 4: 'W04', 5: 'Q01', 6: 'W05', 7: 'Q02', 8: 'Q03', 9: 'W06', 10: 'Q04',
+  11: 'W07', 12: 'Q05', 13: 'Q06', 14: 'W08', 15: 'Q07', 16: 'G01', 17: 'Q08', 18: 'W09', 19: 'Q09', 20: 'V01',
+  21: 'Q10', 22: 'W10', 23: 'Q11', 24: 'W11', 25: 'Q12', 26: 'Q13', 27: 'Q14', 28: 'W12', 29: 'Q15', 30: 'Q16',
+  31: 'W13', 32: 'Q17', 33: 'W14', 34: 'Q18', 35: 'W15', 36: 'Q19', 37: 'W16', 38: 'W17', 39: 'O01', 40: 'W18',
+  41: 'W19', 42: 'W20', 43: 'W21', 44: 'W22', 45: 'W23', 46: 'W24', 47: 'W25', 48: 'W26', 49: 'W27', 50: 'W28',
+  51: 'W29', 52: 'W30', 53: 'W31', 54: 'O02', 55: 'O03', 56: 'O04', 57: 'O05', 58: 'O06', 59: 'O07', 60: 'O08'
+};
+
+const getLeaguePrefix = (seasonId: number | string, seasonName?: string): string => {
+  if (seasonName) {
+    const trimmed = String(seasonName).trim().toUpperCase();
+    if (trimmed.includes('ORIGINAL') || trimmed.startsWith('O6') || trimmed.startsWith('O')) return 'O';
+    if (trimmed.includes('THE Q') || trimmed.startsWith('Q')) return 'Q';
+    if (trimmed.includes('VINTAGE') || trimmed.startsWith('V')) return 'V';
+    if (trimmed.includes('GOLDEN') || trimmed.startsWith('G')) return 'G';
+    if (trimmed.includes('W LEAGUE') || trimmed.startsWith('W')) return 'W';
+    const match = trimmed.match(/^[A-Z]+/);
+    if (match && match[0]) return match[0];
+  }
+  const numId = Number(seasonId);
+  if (!isNaN(numId) && SEASON_TYPES[numId]) return SEASON_TYPES[numId];
+  return 'W';
+};
+
+const formatSeasonBadge = (seasonId: number | string, seasonNameMap?: Map<number, string>): string => {
   const numId = Number(seasonId);
   if (isNaN(numId) || numId <= 0) return String(seasonId || 'Career');
-  const type = SEASON_TYPES[numId] || 'W';
+  if (SEASON_LABELS[numId]) return SEASON_LABELS[numId];
+  const rawName = seasonNameMap?.get(numId);
+  if (rawName) {
+    const trimmed = rawName.trim();
+    const match = trimmed.match(/^([A-Za-z]+)\s*(\d+)$/);
+    if (match) {
+      return `${match[1].toUpperCase()}${match[2].padStart(2, '0')}`;
+    }
+    if (/^[A-Za-z]\d+$/i.test(trimmed)) {
+      return trimmed.toUpperCase();
+    }
+  }
+  const type = getLeaguePrefix(numId, rawName);
   return `${type}${String(numId).padStart(2, '0')}`;
+};
+
+const DISPLAY_NAME_OVERRIDES: Record<string, string> = {
+  'Martin St.Louis': 'Martin St. Louis',
+  'P.A. Parenteau': 'P.A. Parenteau',
+  'P.K. Subban': 'P.K. Subban',
+  'T.J. Oshie': 'T.J. Oshie',
+  'T.J. Brodie': 'T.J. Brodie',
+  'J.T. Miller': 'J.T. Miller'
+};
+
+// Normalize player name so all entries of the same player across all seasons/ROMs/IDs merge into one
+const normalizePlayerKey = (name: string): string => {
+  const cleaned = String(name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.'’`\-_,]/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  if (!cleaned) return '';
+
+  const fullOverride: Record<string, string> = {
+    'p a parenteau': 'paparenteau',
+    'pierre alexandre parenteau': 'paparenteau',
+    'pa parenteau': 'paparenteau',
+    't j brodie': 'tjbrodie',
+    'tj brodie': 'tjbrodie',
+    't j oshie': 'tjoshie',
+    'tj oshie': 'tjoshie',
+    'p k subban': 'pksubban',
+    'pk subban': 'pksubban',
+    'j t miller': 'jtmiller',
+    'jt miller': 'jtmiller',
+    'jean sebastien giguere': 'jsgiguere',
+    'j s giguere': 'jsgiguere',
+    'js giguere': 'jsgiguere',
+    'marc andre fleury': 'marcandrefleury',
+    'marc edouard vlasic': 'marcedouardvlasic',
+    'john ross roach': 'johnrossroach',
+    'charley mcveigh': 'charliemcveigh',
+    'charlie mcveigh': 'charliemcveigh',
+    'martin st louis': 'martinstlouis'
+  };
+  if (fullOverride[cleaned]) return fullOverride[cleaned];
+
+  const parts = cleaned.split(' ').filter(Boolean);
+  if (parts.length < 2) return cleaned.replace(/[^a-z0-9]/g, '');
+
+  const firstMap: Record<string, string> = {
+    alexander: 'alex',
+    michael: 'mike',
+    matthew: 'matt',
+    christopher: 'chris',
+    nicholas: 'nick',
+    daniel: 'dan',
+    steven: 'steve',
+    stephen: 'steve',
+    anthony: 'tony',
+    thomas: 'tom',
+    william: 'bill',
+    robert: 'bob',
+    edward: 'ed',
+    joseph: 'joe',
+    zachary: 'zach',
+    bradley: 'brad',
+    patrick: 'pat',
+    samuel: 'sam',
+    benjamin: 'ben',
+    jonathan: 'jon',
+    evgeny: 'evgeni'
+  };
+  const first = firstMap[parts[0]] || parts[0];
+  return `${first}${parts.slice(1).join('')}`.replace(/[^a-z0-9]/g, '');
+};
+
+const isInvalidPlayerName = (name: string): boolean => {
+  const c = String(name || '').trim();
+  if (!c || c === '--' || c === '-') return true;
+  const low = c.toLowerCase();
+  if (
+    low === 'n/a' ||
+    low === 'unknown' ||
+    low === 'unknown player' ||
+    low === 'goalie' ||
+    low === 'skater' ||
+    low === 'player' ||
+    low === 'none' ||
+    /^player\s*#?\d+$/i.test(c) ||
+    /^skater\s*#?\d+$/i.test(c) ||
+    /^goalie\s*#?\d+$/i.test(c)
+  ) {
+    return true;
+  }
+  return false;
 };
 
 const SUB_CATEGORIES: Record<string, { id: string; label: string; unit: string; group: string; isSeasonHigh?: boolean; isGameHigh?: boolean }[]> = {
@@ -117,6 +252,21 @@ export default function RecordsPage() {
   const [summaryList, setSummaryList] = useState<any[]>([]);
   const [teamRecordWatch, setTeamRecordWatch] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [masterEnriched, setMasterEnriched] = useState<boolean>(false);
+
+  const archiveCacheRef = useRef<{
+    loaded: boolean;
+    masterLoaded: boolean;
+    masterLoadingPromise: Promise<void> | null;
+    apiRows: any[];
+    masterRows: any[];
+    teamsData: any[];
+    leaguesData: any[];
+    coachesData: any[];
+    standingsData: any[];
+    playerNameById: Map<number, string>;
+    seasonPidToMeta: Map<string, { name: string; teamId: number }>;
+  } | null>(null);
 
   // Helper to switch main category
   const handleRecordTypeChange = (newType: string) => {
@@ -136,175 +286,622 @@ export default function RecordsPage() {
     }
   };
 
-  // 2. Fetch or Calculate Records from Supabase
+  // 2. Fetch or Calculate Records from Supabase across ALL seasons
   useEffect(() => {
+    let cancelled = false;
+
+    async function fetchAllPaginated(
+      table: string,
+      selectCols = '*',
+      waveSize = 5,
+      maxRows = 60000,
+      applyFilter?: (q: any) => any
+    ): Promise<any[]> {
+      const all: any[] = [];
+      const pageSize = 1000;
+      let offset = 0;
+
+      const fetchPageWithRetry = async (from: number, to: number): Promise<{ data: any[] | null; done: boolean }> => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            let query: any = supabase.from(table).select(selectCols);
+            if (applyFilter) {
+              query = applyFilter(query);
+            }
+            const res = await query.range(from, to);
+            if (!res.error && Array.isArray(res.data)) {
+              return { data: res.data, done: res.data.length < pageSize };
+            }
+            const errCode = String((res.error as any)?.code || (res.error as any)?.status || '');
+            const errMsg = String((res.error as any)?.message || '');
+            if (errCode === '416' || errCode === 'PGRST103' || errMsg.includes('Range Not Satisfiable')) {
+              return { data: [], done: true };
+            }
+          } catch {
+            // retry on transient network error
+          }
+          await new Promise((r) => setTimeout(r, 120 * (attempt + 1)));
+        }
+        return { data: [], done: true };
+      };
+
+      while (offset < maxRows) {
+        const promises: Promise<{ data: any[] | null; done: boolean }>[] = [];
+        for (let i = 0; i < waveSize && offset + i * pageSize < maxRows; i++) {
+          const from = offset + i * pageSize;
+          const to = from + pageSize - 1;
+          promises.push(fetchPageWithRetry(from, to));
+        }
+
+        const results = await Promise.all(promises);
+        let reachedEnd = false;
+        for (const res of results) {
+          if (res.data && res.data.length > 0) {
+            all.push(...res.data);
+          }
+          if (res.done || !res.data || res.data.length < pageSize) {
+            reachedEnd = true;
+            break;
+          }
+        }
+        if (reachedEnd) break;
+        offset += waveSize * pageSize;
+      }
+
+      return all;
+    }
+
+    async function ensureArchiveLoaded() {
+      if (archiveCacheRef.current?.loaded) {
+        return archiveCacheRef.current;
+      }
+
+      const [
+        apiRows,
+        teamsRes,
+        leaguesRes,
+        coachesRes,
+        standingsRows
+      ] = await Promise.all([
+        fetchAllPaginated('api_stats_with_names', '*', 5, 20000),
+        Promise.resolve(
+          supabase
+            .from('league_teams')
+            .select('team_id, team_name, abbreviation, logo_url, coach_id, league_id')
+            .range(0, 4999)
+        ).catch(() => ({ data: [] })),
+        Promise.resolve(
+          supabase.from('leagues').select('*').range(0, 999)
+        ).catch(() => ({ data: [] })),
+        Promise.resolve(
+          supabase.from('league_coaches').select('coach_id, coach_name').range(0, 999)
+        ).catch(() => ({ data: [] })),
+        fetchAllPaginated(
+          'league_standings',
+          'season_id, team_id, gp, w, l, t, otl, pts, gf, ga, gd, league_teams(team_id, team_name, abbreviation, logo_url)',
+          3,
+          5000
+        )
+      ]);
+
+      const playerNameById = new Map<number, string>();
+      const seasonPidToMeta = new Map<string, { name: string; teamId: number }>();
+
+      apiRows.forEach((r: any) => {
+        const pid = Number(r.player_id || 0);
+        const sid = Number(r.league_id ?? r.season_id ?? 0);
+        const name = String(r.player_name || r.name || '').trim();
+        if (pid > 1 && name && !isInvalidPlayerName(name)) {
+          const clean = DISPLAY_NAME_OVERRIDES[name] || name;
+          playerNameById.set(pid, clean);
+          if (sid > 0) {
+            seasonPidToMeta.set(`${sid}_${pid}`, {
+              name: clean,
+              teamId: Number(r.team_id || 0)
+            });
+          }
+        }
+      });
+
+      const cacheObj = {
+        loaded: true,
+        masterLoaded: false,
+        masterLoadingPromise: null as Promise<void> | null,
+        apiRows,
+        masterRows: [] as any[],
+        teamsData: teamsRes?.data || [],
+        leaguesData: leaguesRes?.data || [],
+        coachesData: coachesRes?.data || [],
+        standingsData: standingsRows || [],
+        playerNameById,
+        seasonPidToMeta
+      };
+      archiveCacheRef.current = cacheObj;
+
+      // Kick off background fetch of multi-point games from league_player_stats_master
+      // so Single-Game Highs and 2+/3+/4+/5+ Point Game records populate without blocking initial load
+      cacheObj.masterLoadingPromise = (async () => {
+        try {
+          const multiPtRows = await fetchAllPaginated(
+            'league_player_stats_master',
+            'game_id, league_id, team_id, player_id, pos_played, goals, assists',
+            6,
+            60000,
+            (q) => q.or('goals.gte.2,assists.gte.2,and(goals.gte.1,assists.gte.1)')
+          );
+          cacheObj.masterRows = multiPtRows;
+          cacheObj.masterLoaded = true;
+          setMasterEnriched(true);
+        } catch {
+          cacheObj.masterLoaded = true;
+        }
+      })();
+
+      return cacheObj;
+    }
+
     async function loadRecordsData() {
-      setLoading(true);
+      if (!archiveCacheRef.current?.loaded) {
+        setLoading(true);
+      }
 
       try {
-        // Resolve season IDs for selected league
-        const targetSeasonIds: number[] = [];
-        for (const [sIdStr, lType] of Object.entries(SEASON_TYPES)) {
-          const sId = Number(sIdStr);
-          if (selectedLeague === 'ALL' || lType === selectedLeague) {
-            targetSeasonIds.push(sId);
-          }
+        const archive = await ensureArchiveLoaded();
+        const needsMasterImmediately =
+          specificRecord.startsWith('max_game_') ||
+          specificRecord.endsWith('_pt_games');
+        if (needsMasterImmediately && !archive.masterLoaded && archive.masterLoadingPromise) {
+          await archive.masterLoadingPromise;
         }
+        if (cancelled) return;
 
-        // A. Attempt fetching from view_all_time_skater_records
-        let viewData: any[] = [];
-        try {
-          let viewQuery = supabase.from('view_all_time_skater_records').select('*');
-          if (selectedLeague !== 'ALL') {
-            viewQuery = viewQuery.or(`league_id.eq.${selectedLeague},league_type.eq.${selectedLeague},league_id.in.(${targetSeasonIds.join(',')})`);
+        // Build season label & league prefix maps combining static maps + DB leagues table
+        const dynamicSeasonLabels = new Map<number, string>();
+        const dynamicSeasonPrefix = new Map<number, string>();
+        Object.entries(SEASON_LABELS).forEach(([k, v]) => {
+          const sid = Number(k);
+          dynamicSeasonLabels.set(sid, v);
+          dynamicSeasonPrefix.set(sid, getLeaguePrefix(sid));
+        });
+        archive.leaguesData.forEach((l: any) => {
+          const sid = Number(l.league_id);
+          if (!Number.isFinite(sid) || sid <= 0) return;
+          const label = String(l.season_label || l.league_name || l.name || '').trim();
+          if (label && !dynamicSeasonLabels.has(sid)) {
+            dynamicSeasonLabels.set(sid, formatSeasonBadge(sid, new Map([[sid, label]])));
           }
-          const { data: vRows, error: vErr } = await viewQuery.limit(500);
-          if (!vErr && vRows && vRows.length > 0) {
-            viewData = vRows;
-          }
-        } catch {
-          viewData = [];
-        }
-
-        // B. Fetch detailed player stats from api_stats_with_names or league_player_stats_master as fallback
-        let allSeasonStats: any[] = [];
-        try {
-          let statsQuery = supabase.from('api_stats_with_names').select('*');
-          if (selectedLeague !== 'ALL') {
-            statsQuery = statsQuery.in('league_id', targetSeasonIds);
-          }
-          const { data: rawStats } = await statsQuery;
-          if (rawStats && rawStats.length > 0) {
-            allSeasonStats = rawStats;
-          }
-        } catch {}
-
-        if (allSeasonStats.length === 0) {
-          try {
-            let masterQuery = supabase.from('league_player_stats_master').select('*');
-            if (selectedLeague !== 'ALL') {
-              masterQuery = masterQuery.in('league_id', targetSeasonIds);
-            }
-            const { data: mStats } = await masterQuery;
-            if (mStats && mStats.length > 0) {
-              allSeasonStats = mStats;
-            }
-          } catch {}
-        }
-
-        // Also fetch game single-game records from league_player_stats_master if possible
-        let gameStatsMaster: any[] = [];
-        try {
-          const { data: gRows } = await supabase
-            .from('league_player_stats_master')
-            .select('player_id, player_name, goals, assists, points, shots, pim, game_id, team_id')
-            .order('points', { ascending: false })
-            .limit(500);
-          gameStatsMaster = gRows || [];
-        } catch {}
-
-        // C. Aggregate Stats per Player
-        const playerAggMap = new Map<string, any>();
-
-        allSeasonStats.forEach((row: any) => {
-          const pName = (row.player_name || '').trim();
-          if (!pName) return;
-
-          const pKey = row.player_id ? String(row.player_id) : pName.toLowerCase();
-          const sPoints = Number(row.total_points ?? row.points ?? 0);
-          const sGoals = Number(row.total_goals ?? row.goals ?? 0);
-          const sAssists = Number(row.total_assists ?? row.assists ?? 0);
-          const sGp = Number(row.gp ?? 0);
-          const sShots = Number(row.shots ?? row.sog ?? 0);
-          const sPim = Number(row.pim ?? 0);
-          const sTwoPt = Number(row.two_pt_games ?? 0);
-          const sThreePt = Number(row.three_pt_games ?? 0);
-          const sFourPt = Number(row.four_pt_games ?? 0);
-          const sFivePt = Number(row.five_pt_games ?? 0);
-          const sLeagueId = Number(row.league_id);
-          const sName = formatSeasonBadge(sLeagueId);
-          const tName = row.team_name || 'Team';
-          const tLogo = row.logo_url || '';
-
-          if (!playerAggMap.has(pKey)) {
-            playerAggMap.set(pKey, {
-              player_id: row.player_id,
-              player_name: pName,
-              teams: [tName],
-              team_logos: tLogo ? [tLogo] : [],
-              first_season: sName,
-              last_season: sName,
-              seasons_played: [sLeagueId],
-              total_points: sPoints,
-              total_goals: sGoals,
-              total_assists: sAssists,
-              total_games: sGp,
-              total_shots: sShots,
-              total_pim: sPim,
-              two_pt_games: sTwoPt,
-              three_pt_games: sThreePt,
-              four_pt_games: sFourPt,
-              five_pt_games: sFivePt,
-              max_season_points: sPoints,
-              max_season_points_season: sName,
-              max_season_goals: sGoals,
-              max_season_goals_season: sName,
-              max_season_assists: sAssists,
-              max_season_assists_season: sName,
-              max_game_points: 0,
-              max_game_goals: 0,
-              max_game_assists: 0
-            });
-          } else {
-            const cur = playerAggMap.get(pKey);
-            if (tName && !cur.teams.includes(tName)) cur.teams.push(tName);
-            if (tLogo && !cur.team_logos.includes(tLogo)) cur.team_logos.push(tLogo);
-
-            cur.total_points += sPoints;
-            cur.total_goals += sGoals;
-            cur.total_assists += sAssists;
-            cur.total_games += sGp;
-            cur.total_shots += sShots;
-            cur.total_pim += sPim;
-            cur.two_pt_games += sTwoPt;
-            cur.three_pt_games += sThreePt;
-            cur.four_pt_games += sFourPt;
-            cur.five_pt_games += sFivePt;
-
-            if (sPoints > cur.max_season_points) {
-              cur.max_season_points = sPoints;
-              cur.max_season_points_season = sName;
-            }
-            if (sGoals > cur.max_season_goals) {
-              cur.max_season_goals = sGoals;
-              cur.max_season_goals_season = sName;
-            }
-            if (sAssists > cur.max_season_assists) {
-              cur.max_season_assists = sAssists;
-              cur.max_season_assists_season = sName;
-            }
-
-            cur.seasons_played.push(sLeagueId);
-            const minS = Math.min(...cur.seasons_played);
-            const maxS = Math.max(...cur.seasons_played);
-            cur.first_season = formatSeasonBadge(minS);
-            cur.last_season = formatSeasonBadge(maxS);
+          const lType = String(l.league_type || '').trim().toUpperCase();
+          if (lType && ['W', 'Q', 'O', 'V', 'G'].includes(lType)) {
+            dynamicSeasonPrefix.set(sid, lType);
+          } else if (!dynamicSeasonPrefix.has(sid)) {
+            dynamicSeasonPrefix.set(sid, getLeaguePrefix(sid, label));
           }
         });
 
-        // Attach single game highs if available
-        gameStatsMaster.forEach((gm: any) => {
-          const gmName = (gm.player_name || '').trim();
-          const pKey = gm.player_id ? String(gm.player_id) : gmName.toLowerCase();
-          const gPts = Number(gm.points ?? ((gm.goals || 0) + (gm.assists || 0)));
-          const gGoals = Number(gm.goals || 0);
-          const gAssists = Number(gm.assists || 0);
+        const getSeasonBadgeLocal = (seasonId: number | string | null | undefined): string => {
+          if (seasonId === null || seasonId === undefined || seasonId === '') return 'Career';
+          const num = Number(seasonId);
+          if (!isNaN(num) && dynamicSeasonLabels.has(num)) return dynamicSeasonLabels.get(num)!;
+          return formatSeasonBadge(seasonId);
+        };
 
-          if (playerAggMap.has(pKey)) {
+        const matchesSelectedLeague = (seasonId: number): boolean => {
+          if (selectedLeague === 'ALL') return true;
+          if (!Number.isFinite(seasonId) || seasonId <= 0) return false;
+          const pref = dynamicSeasonPrefix.get(seasonId) || getLeaguePrefix(seasonId);
+          return pref === selectedLeague;
+        };
+
+        // Team metadata lookup by team_id
+        const teamById = new Map<number, { name: string; abbr: string; logo: string; seasonId: number }>();
+        archive.teamsData.forEach((t: any) => {
+          const tid = Number(t.team_id || 0);
+          if (tid > 0) {
+            teamById.set(tid, {
+              name: String(t.team_name || `Team ${tid}`).trim(),
+              abbr: String(t.abbreviation || '').trim(),
+              logo: String(t.logo_url || '').trim(),
+              seasonId: Number(t.league_id || 0)
+            });
+          }
+        });
+
+        // Canonical display name per normalized player key (prefer clean full names)
+        const canonicalNameByKey = new Map<string, string>();
+        const registerDisplayName = (rawName: string) => {
+          const clean = DISPLAY_NAME_OVERRIDES[rawName.trim()] || rawName.trim();
+          if (!clean || isInvalidPlayerName(clean)) return '';
+          const pKey = normalizePlayerKey(clean);
+          if (!pKey) return '';
+          const existing = canonicalNameByKey.get(pKey);
+          if (!existing || (clean.length > existing.length && !clean.includes('.'))) {
+            canonicalNameByKey.set(pKey, clean);
+          }
+          return pKey;
+        };
+
+        // STAGE 1A: Aggregate api_stats_with_names per (pKey, seasonId) across all teams & positions
+        type SeasonTeamBucket = {
+          gp: number;
+          goals: number;
+          assists: number;
+          points: number;
+          shots: number;
+          pim: number;
+          twoPt: number;
+          threePt: number;
+          fourPt: number;
+          fivePt: number;
+          teamName: string;
+          teamLogo: string;
+        };
+
+        const apiPerPlayerSeasonTeam = new Map<string, Map<string, SeasonTeamBucket>>();
+
+        archive.apiRows.forEach((row: any) => {
+          const sid = Number(row.league_id ?? row.season_id ?? 0);
+          if (!sid || !matchesSelectedLeague(sid)) return;
+
+          const pos = String(row.pos ?? row.position ?? row.pos_played ?? '').trim().toUpperCase();
+          if (pos === 'G') return;
+
+          const pid = Number(row.player_id || 0);
+          let rawName = String(row.player_name || row.name || '').trim();
+          if ((!rawName || isInvalidPlayerName(rawName)) && pid > 1) {
+            rawName =
+              archive.seasonPidToMeta.get(`${sid}_${pid}`)?.name ||
+              archive.playerNameById.get(pid) ||
+              '';
+          }
+          if (!rawName || isInvalidPlayerName(rawName)) return;
+
+          const gp = Number(row.gp ?? row.games_played ?? 0);
+          const goals = Number(row.total_goals ?? row.goals ?? 0);
+          const assists = Number(row.total_assists ?? row.assists ?? 0);
+          const points = Number(row.total_points ?? row.points ?? goals + assists);
+          const shots = Number(row.total_sog ?? row.shots ?? row.sog ?? 0);
+          const pim = Number(row.total_pim ?? row.pim ?? 0);
+          const twoPt = Number(row.two_pt_games ?? 0);
+          const threePt = Number(row.three_pt_games ?? 0);
+          const fourPt = Number(row.four_pt_games ?? 0);
+          const fivePt = Number(row.five_pt_games ?? 0);
+
+          // Ignore placeholder player_id 25000 (Jay Mazur 0-stat dummy bench entries across 19 teams)
+          if (pid === 25000 && points <= 0 && goals <= 0 && assists <= 0) {
+            return;
+          }
+          if (gp <= 0 && goals <= 0 && assists <= 0 && points <= 0 && shots <= 0 && pim <= 0) {
+            return;
+          }
+
+          const pKey = registerDisplayName(rawName);
+          if (!pKey) return;
+
+          const tid = Number(row.team_id || 0);
+          const tmMeta = tid > 0 ? teamById.get(tid) : undefined;
+          const tName = String(row.team_name || tmMeta?.name || '').trim();
+          const tLogo = String(row.logo_url || tmMeta?.logo || '').trim();
+          // Include position in bucket key so a player who played both F and D on the same team has both rows summed
+          const teamPosKey = `${(tName || (tid > 0 ? `tid_${tid}` : 'default')).toLowerCase()}__${pos || 'S'}`;
+
+          const psKey = `${pKey}__${sid}`;
+          if (!apiPerPlayerSeasonTeam.has(psKey)) {
+            apiPerPlayerSeasonTeam.set(psKey, new Map());
+          }
+          const teamMap = apiPerPlayerSeasonTeam.get(psKey)!;
+          const existing = teamMap.get(teamPosKey);
+          if (!existing) {
+            teamMap.set(teamPosKey, {
+              gp,
+              goals,
+              assists,
+              points,
+              shots,
+              pim,
+              twoPt,
+              threePt,
+              fourPt,
+              fivePt,
+              teamName: tName,
+              teamLogo: tLogo
+            });
+          } else {
+            existing.gp = Math.max(existing.gp, gp);
+            existing.goals = Math.max(existing.goals, goals);
+            existing.assists = Math.max(existing.assists, assists);
+            existing.points = Math.max(existing.points, points, existing.goals + existing.assists);
+            existing.shots = Math.max(existing.shots, shots);
+            existing.pim = Math.max(existing.pim, pim);
+            existing.twoPt = Math.max(existing.twoPt, twoPt);
+            existing.threePt = Math.max(existing.threePt, threePt);
+            existing.fourPt = Math.max(existing.fourPt, fourPt);
+            existing.fivePt = Math.max(existing.fivePt, fivePt);
+            if (!existing.teamName && tName) existing.teamName = tName;
+            if (!existing.teamLogo && tLogo) existing.teamLogo = tLogo;
+          }
+        });
+
+        type SeasonAgg = {
+          pKey: string;
+          seasonId: number;
+          gp: number;
+          goals: number;
+          assists: number;
+          points: number;
+          shots: number;
+          pim: number;
+          twoPt: number;
+          threePt: number;
+          fourPt: number;
+          fivePt: number;
+          maxGamePoints: number;
+          maxGameGoals: number;
+          maxGameAssists: number;
+          teams: string[];
+          logos: string[];
+        };
+
+        const mergedPlayerSeasons = new Map<string, SeasonAgg>();
+
+        apiPerPlayerSeasonTeam.forEach((teamMap, psKey) => {
+          const [pKey, sidStr] = psKey.split('__');
+          const seasonId = Number(sidStr);
+          let gp = 0;
+          let goals = 0;
+          let assists = 0;
+          let points = 0;
+          let shots = 0;
+          let pim = 0;
+          let twoPt = 0;
+          let threePt = 0;
+          let fourPt = 0;
+          let fivePt = 0;
+          const teams: string[] = [];
+          const logos: string[] = [];
+
+          teamMap.forEach((b) => {
+            gp += b.gp;
+            goals += b.goals;
+            assists += b.assists;
+            points += Math.max(b.points, b.goals + b.assists);
+            shots += b.shots;
+            pim += b.pim;
+            twoPt += b.twoPt;
+            threePt += b.threePt;
+            fourPt += b.fourPt;
+            fivePt += b.fivePt;
+            if (b.teamName && !teams.includes(b.teamName)) teams.push(b.teamName);
+            if (b.teamLogo && !logos.includes(b.teamLogo)) logos.push(b.teamLogo);
+          });
+
+          mergedPlayerSeasons.set(psKey, {
+            pKey,
+            seasonId,
+            gp,
+            goals,
+            assists,
+            points,
+            shots,
+            pim,
+            twoPt,
+            threePt,
+            fourPt,
+            fivePt,
+            maxGamePoints: 0,
+            maxGameGoals: 0,
+            maxGameAssists: 0,
+            teams,
+            logos
+          });
+        });
+
+        // STAGE 1B: Enrich multi-point game counts & single-game highs from league_player_stats_master
+        // Deduplicate by (pKey, seasonId, gameId) so duplicate boxscore entries aren't counted twice
+        const masterGamesByPlayerSeason = new Map<
+          string,
+          {
+            pKey: string;
+            seasonId: number;
+            seenGames: Set<string>;
+            twoPt: number;
+            threePt: number;
+            fourPt: number;
+            fivePt: number;
+            maxGamePoints: number;
+            maxGameGoals: number;
+            maxGameAssists: number;
+            teams: string[];
+            logos: string[];
+          }
+        >();
+
+        archive.masterRows.forEach((row: any, idx: number) => {
+          const sid = Number(row.league_id ?? row.season_id ?? 0);
+          if (!sid || !matchesSelectedLeague(sid)) return;
+
+          const pos = String(row.pos_played ?? row.pos ?? '').trim().toUpperCase();
+          if (pos === 'G') return;
+
+          const pid = Number(row.player_id || 0);
+          let rawName = String(row.player_name || '').trim();
+          if ((!rawName || isInvalidPlayerName(rawName)) && pid > 1) {
+            rawName =
+              archive.seasonPidToMeta.get(`${sid}_${pid}`)?.name ||
+              archive.playerNameById.get(pid) ||
+              '';
+          }
+          if (!rawName || isInvalidPlayerName(rawName)) return;
+
+          const pKey = registerDisplayName(rawName);
+          if (!pKey) return;
+
+          const psKey = `${pKey}__${sid}`;
+          const gId = row.game_id != null ? String(row.game_id) : `row_${idx}`;
+
+          if (!masterGamesByPlayerSeason.has(psKey)) {
+            masterGamesByPlayerSeason.set(psKey, {
+              pKey,
+              seasonId: sid,
+              seenGames: new Set<string>(),
+              twoPt: 0,
+              threePt: 0,
+              fourPt: 0,
+              fivePt: 0,
+              maxGamePoints: 0,
+              maxGameGoals: 0,
+              maxGameAssists: 0,
+              teams: [],
+              logos: []
+            });
+          }
+
+          const bucket = masterGamesByPlayerSeason.get(psKey)!;
+          if (bucket.seenGames.has(gId)) return;
+          bucket.seenGames.add(gId);
+
+          const gGoals = Number(row.goals || 0);
+          const gAssists = Number(row.assists || 0);
+          const gPoints = Number(row.points ?? gGoals + gAssists);
+
+          if (gPoints >= 2) bucket.twoPt += 1;
+          if (gPoints >= 3) bucket.threePt += 1;
+          if (gPoints >= 4) bucket.fourPt += 1;
+          if (gPoints >= 5) bucket.fivePt += 1;
+
+          if (gPoints > bucket.maxGamePoints) bucket.maxGamePoints = gPoints;
+          if (gGoals > bucket.maxGameGoals) bucket.maxGameGoals = gGoals;
+          if (gAssists > bucket.maxGameAssists) bucket.maxGameAssists = gAssists;
+
+          const tid = Number(row.team_id || archive.seasonPidToMeta.get(`${sid}_${pid}`)?.teamId || 0);
+          const tmMeta = tid > 0 ? teamById.get(tid) : undefined;
+          if (tmMeta?.name && !bucket.teams.includes(tmMeta.name)) {
+            bucket.teams.push(tmMeta.name);
+          }
+          if (tmMeta?.logo && !bucket.logos.includes(tmMeta.logo)) {
+            bucket.logos.push(tmMeta.logo);
+          }
+        });
+
+        // Merge Stage 1B (multi-point & single-game highs) into Stage 1A (api season rows)
+        masterGamesByPlayerSeason.forEach((mBucket, psKey) => {
+          const existing = mergedPlayerSeasons.get(psKey);
+          if (existing) {
+            existing.twoPt = Math.max(existing.twoPt, mBucket.twoPt);
+            existing.threePt = Math.max(existing.threePt, mBucket.threePt);
+            existing.fourPt = Math.max(existing.fourPt, mBucket.fourPt);
+            existing.fivePt = Math.max(existing.fivePt, mBucket.fivePt);
+            existing.maxGamePoints = Math.max(existing.maxGamePoints, mBucket.maxGamePoints);
+            existing.maxGameGoals = Math.max(existing.maxGameGoals, mBucket.maxGameGoals);
+            existing.maxGameAssists = Math.max(existing.maxGameAssists, mBucket.maxGameAssists);
+            mBucket.teams.forEach((t) => {
+              if (t && !existing.teams.includes(t)) existing.teams.push(t);
+            });
+            mBucket.logos.forEach((l) => {
+              if (l && !existing.logos.includes(l)) existing.logos.push(l);
+            });
+          }
+        });
+
+        // STAGE 2: Combine all seasons for each player (pKey) into ONE unified career entry
+        const playerAggMap = new Map<string, any>();
+
+        // Sort seasons chronologically so team history & season badges accumulate in order
+        const sortedSeasonEntries = Array.from(mergedPlayerSeasons.values()).sort(
+          (a, b) => a.seasonId - b.seasonId
+        );
+
+        sortedSeasonEntries.forEach((sRow) => {
+          const { pKey, seasonId } = sRow;
+          const displayName = canonicalNameByKey.get(pKey) || pKey;
+          const sBadge = getSeasonBadgeLocal(seasonId);
+
+          if (!playerAggMap.has(pKey)) {
+            playerAggMap.set(pKey, {
+              player_key: pKey,
+              player_name: displayName,
+              teams: [...sRow.teams],
+              team_logos: [...sRow.logos],
+              first_season: sBadge,
+              last_season: sBadge,
+              seasons_played: [seasonId],
+              total_points: sRow.points,
+              total_goals: sRow.goals,
+              total_assists: sRow.assists,
+              total_games: sRow.gp,
+              total_shots: sRow.shots,
+              total_pim: sRow.pim,
+              two_pt_games: sRow.twoPt,
+              three_pt_games: sRow.threePt,
+              four_pt_games: sRow.fourPt,
+              five_pt_games: sRow.fivePt,
+              max_season_points: sRow.points,
+              max_season_points_season: sBadge,
+              max_season_goals: sRow.goals,
+              max_season_goals_season: sBadge,
+              max_season_assists: sRow.assists,
+              max_season_assists_season: sBadge,
+              max_game_points: sRow.maxGamePoints,
+              max_game_points_season: sRow.maxGamePoints > 0 ? sBadge : '',
+              max_game_goals: sRow.maxGameGoals,
+              max_game_goals_season: sRow.maxGameGoals > 0 ? sBadge : '',
+              max_game_assists: sRow.maxGameAssists,
+              max_game_assists_season: sRow.maxGameAssists > 0 ? sBadge : ''
+            });
+          } else {
             const cur = playerAggMap.get(pKey);
-            if (gPts > cur.max_game_points) cur.max_game_points = gPts;
-            if (gGoals > cur.max_game_goals) cur.max_game_goals = gGoals;
-            if (gAssists > cur.max_game_assists) cur.max_game_assists = gAssists;
+            cur.player_name = canonicalNameByKey.get(pKey) || cur.player_name;
+
+            sRow.teams.forEach((t) => {
+              if (t && !cur.teams.includes(t)) cur.teams.push(t);
+            });
+            sRow.logos.forEach((l) => {
+              if (l && !cur.team_logos.includes(l)) cur.team_logos.push(l);
+            });
+
+            cur.total_points += sRow.points;
+            cur.total_goals += sRow.goals;
+            cur.total_assists += sRow.assists;
+            cur.total_games += sRow.gp;
+            cur.total_shots += sRow.shots;
+            cur.total_pim += sRow.pim;
+            cur.two_pt_games += sRow.twoPt;
+            cur.three_pt_games += sRow.threePt;
+            cur.four_pt_games += sRow.fourPt;
+            cur.five_pt_games += sRow.fivePt;
+
+            if (sRow.points > cur.max_season_points) {
+              cur.max_season_points = sRow.points;
+              cur.max_season_points_season = sBadge;
+            }
+            if (sRow.goals > cur.max_season_goals) {
+              cur.max_season_goals = sRow.goals;
+              cur.max_season_goals_season = sBadge;
+            }
+            if (sRow.assists > cur.max_season_assists) {
+              cur.max_season_assists = sRow.assists;
+              cur.max_season_assists_season = sBadge;
+            }
+
+            if (sRow.maxGamePoints > cur.max_game_points) {
+              cur.max_game_points = sRow.maxGamePoints;
+              cur.max_game_points_season = sBadge;
+            }
+            if (sRow.maxGameGoals > cur.max_game_goals) {
+              cur.max_game_goals = sRow.maxGameGoals;
+              cur.max_game_goals_season = sBadge;
+            }
+            if (sRow.maxGameAssists > cur.max_game_assists) {
+              cur.max_game_assists = sRow.maxGameAssists;
+              cur.max_game_assists_season = sBadge;
+            }
+
+            if (!cur.seasons_played.includes(seasonId)) {
+              cur.seasons_played.push(seasonId);
+            }
+            const minS = Math.min(...cur.seasons_played);
+            const maxS = Math.max(...cur.seasons_played);
+            cur.first_season = getSeasonBadgeLocal(minS);
+            cur.last_season = getSeasonBadgeLocal(maxS);
           }
         });
 
@@ -318,27 +915,40 @@ export default function RecordsPage() {
 
           const list = [...aggregatedList].filter(p => (Number(p[metricKey]) || 0) > 0);
 
-          list.sort((a, b) => (Number(b[metricKey]) || 0) - (Number(a[metricKey]) || 0));
+          list.sort((a, b) => {
+            const diff = (Number(b[metricKey]) || 0) - (Number(a[metricKey]) || 0);
+            if (diff !== 0) return diff;
+            return (Number(b.total_points) || 0) - (Number(a.total_points) || 0);
+          });
 
           return list.map((row, idx) => {
+            const seasonsCount = Array.isArray(row.seasons_played) ? row.seasons_played.length : 1;
             let recordSeason = 'Career';
             if (isSeasonStat) {
               recordSeason = row[`${metricKey}_season`] || row.last_season || 'Season';
             } else if (isGameStat) {
-              recordSeason = row.last_season || 'Single Game';
+              recordSeason = row[`${metricKey}_season`] || row.last_season || 'Single Game';
             } else {
-              recordSeason = `${row.first_season} - ${row.last_season}`;
+              const spanText =
+                row.first_season === row.last_season
+                  ? row.first_season
+                  : `${row.first_season} - ${row.last_season}`;
+              recordSeason = `${seasonsCount} ${seasonsCount === 1 ? 'Season' : 'Seasons'} (${spanText})`;
             }
 
             return {
               rank: idx + 1,
               player_name: row.player_name,
-              teams: Array.isArray(row.teams) ? row.teams.join(', ') : (row.teams || 'Team'),
-              team_logo: row.team_logos?.[0] || '',
+              teams:
+                Array.isArray(row.teams) && row.teams.length > 0
+                  ? row.teams.join(', ')
+                  : 'League Alumni',
+              team_logo: row.team_logos?.[row.team_logos.length - 1] || row.team_logos?.[0] || '',
               value: row[metricKey] ?? 0,
               record_season: recordSeason,
               first_season: row.first_season,
-              last_season: row.last_season
+              last_season: row.last_season,
+              seasons_count: seasonsCount
             };
           });
         };
@@ -369,24 +979,33 @@ export default function RecordsPage() {
 
         // F. Compute Team Record Book Watch (Active Season Teams on Track to Beat Single-Season Records)
         try {
-          const activeSeasonId =
-            targetSeasonIds.length > 0 ? Math.max(...targetSeasonIds) : 40;
-          const [stRes, tmRes, chRes] = await Promise.all([
-            supabase
-              .from('league_standings')
-              .select('season_id, team_id, gp, w, l, t, otl, pts, gf, ga, gd, league_teams(team_id, team_name, abbreviation, logo_url)')
-              .order('pts', { ascending: false })
-              .limit(600),
-            supabase.from('league_teams').select('team_id, team_name, abbreviation, logo_url, coach_id, league_id'),
-            supabase.from('league_coaches').select('coach_id, coach_name')
-          ]);
-
-          const allStandings = stRes.data || [];
-          const allTeams = tmRes.data || [];
-          const coachById = new Map<number, string>();
-          (chRes.data || []).forEach((c: any) => {
-            if (c.coach_id != null && c.coach_name) coachById.set(Number(c.coach_id), String(c.coach_name).trim());
+          const targetSeasonIds: number[] = [];
+          dynamicSeasonPrefix.forEach((pref, sid) => {
+            if (selectedLeague === 'ALL' || pref === selectedLeague) {
+              targetSeasonIds.push(sid);
+            }
           });
+
+          const allStandings = archive.standingsData || [];
+          const allTeams = archive.teamsData || [];
+          const coachById = new Map<number, string>();
+          (archive.coachesData || []).forEach((c: any) => {
+            if (c.coach_id != null && c.coach_name) {
+              coachById.set(Number(c.coach_id), String(c.coach_name).trim());
+            }
+          });
+
+          const standingsSeasonsInScope = Array.from(
+            new Set(
+              allStandings
+                .map((r: any) => Number(r.season_id || 0))
+                .filter((sid: number) => sid > 0 && matchesSelectedLeague(sid))
+            )
+          ).sort((a, b) => b - a);
+
+          const activeSeasonId =
+            standingsSeasonsInScope[0] ||
+            (targetSeasonIds.length > 0 ? Math.max(...targetSeasonIds) : 40);
 
           const resolveTeamMeta = (row: any) => {
             const tid = Number(row?.team_id || 0);
@@ -406,7 +1025,7 @@ export default function RecordsPage() {
             (r: any) =>
               Number(r.season_id) !== activeSeasonId &&
               Number(r.gp || 0) >= 20 &&
-              (selectedLeague === 'ALL' || targetSeasonIds.includes(Number(r.season_id)))
+              matchesSelectedLeague(Number(r.season_id))
           );
 
           const maxGpCur = curRows.reduce((m: number, r: any) => Math.max(m, Number(r.gp || 0)), 0);
@@ -422,17 +1041,17 @@ export default function RecordsPage() {
             const topPts = [...histRows].sort((a, b) => Number(b.pts || 0) - Number(a.pts || 0))[0];
             if (topPts && Number(topPts.pts) > 0) {
               const m = resolveTeamMeta(topPts);
-              recPts = { val: Number(topPts.pts), holder: `${m.name} (${m.abbr})`, season: formatSeasonBadge(topPts.season_id) };
+              recPts = { val: Number(topPts.pts), holder: `${m.name} (${m.abbr})`, season: getSeasonBadgeLocal(topPts.season_id) };
             }
             const topW = [...histRows].sort((a, b) => Number(b.w || 0) - Number(a.w || 0))[0];
             if (topW && Number(topW.w) > 0) {
               const m = resolveTeamMeta(topW);
-              recWins = { val: Number(topW.w), holder: `${m.name} (${m.abbr})`, season: formatSeasonBadge(topW.season_id) };
+              recWins = { val: Number(topW.w), holder: `${m.name} (${m.abbr})`, season: getSeasonBadgeLocal(topW.season_id) };
             }
             const topGf = [...histRows].sort((a, b) => Number(b.gf || 0) - Number(a.gf || 0))[0];
             if (topGf && Number(topGf.gf) > 0) {
               const m = resolveTeamMeta(topGf);
-              recGf = { val: Number(topGf.gf), holder: `${m.name} (${m.abbr})`, season: formatSeasonBadge(topGf.season_id) };
+              recGf = { val: Number(topGf.gf), holder: `${m.name} (${m.abbr})`, season: getSeasonBadgeLocal(topGf.season_id) };
             }
             const topGd = [...histRows].sort(
               (a, b) => (Number(b.gf || 0) - Number(b.ga || 0)) - (Number(a.gf || 0) - Number(a.ga || 0))
@@ -442,7 +1061,7 @@ export default function RecordsPage() {
               recGd = {
                 val: Number(topGd.gf || 0) - Number(topGd.ga || 0),
                 holder: `${m.name} (${m.abbr})`,
-                season: formatSeasonBadge(topGd.season_id)
+                season: getSeasonBadgeLocal(topGd.season_id)
               };
             }
             const topGag = [...histRows]
@@ -453,13 +1072,13 @@ export default function RecordsPage() {
               recGag = {
                 val: Number((Number(topGag.ga) / Number(topGag.gp)).toFixed(2)),
                 holder: `${m.name} (${m.abbr})`,
-                season: formatSeasonBadge(topGag.season_id)
+                season: getSeasonBadgeLocal(topGag.season_id)
               };
             }
           }
 
           const watchList: any[] = [];
-          const activeSeasonBadge = formatSeasonBadge(activeSeasonId);
+          const activeSeasonBadge = getSeasonBadgeLocal(activeSeasonId);
 
           if (curRows.length > 0) {
             const byPts = [...curRows].sort(
@@ -599,12 +1218,17 @@ export default function RecordsPage() {
       } catch (err) {
         console.error("Error loading records:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     loadRecordsData();
-  }, [selectedLeague, specificRecord]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLeague, specificRecord, masterEnriched]);
 
   // Current active sub-category definition
   const currentCategoryDef = useMemo(() => {
@@ -622,7 +1246,7 @@ export default function RecordsPage() {
   }, [leaderboard]);
 
   const activeLeagueObj = useMemo(() => {
-    return LEAGUES.find(l => l.id === selectedLeague) || LEAGUES[1];
+    return LEAGUES.find(l => l.id === selectedLeague) || LEAGUES[0];
   }, [selectedLeague]);
 
   const leagueName = activeLeagueObj.name || `${selectedLeague} League`;
