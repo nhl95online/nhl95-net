@@ -7,10 +7,12 @@ import { Menu, X, ChevronDown, Lock, ShieldCheck, LogIn, LogOut } from 'lucide-r
 import { useCoachAuth } from '@/lib/coach-auth';
 
 export default function Navbar() {
+  const [isResultsOpen, setIsResultsOpen] = useState(false);
   const [isRostersOpen, setIsRostersOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isExtrasOpen, setIsExtrasOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileResultsOpen, setIsMobileResultsOpen] = useState(false);
   const [isMobileRostersOpen, setIsMobileRostersOpen] = useState(false);
   const [isMobileStatsOpen, setIsMobileStatsOpen] = useState(false);
   const [isMobileExtrasOpen, setIsMobileExtrasOpen] = useState(false);
@@ -31,6 +33,7 @@ export default function Navbar() {
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
+    setIsMobileResultsOpen(false);
     setIsMobileRostersOpen(false);
     setIsMobileStatsOpen(false);
     setIsMobileExtrasOpen(false);
@@ -130,8 +133,23 @@ export default function Navbar() {
         <div className="hidden md:flex items-center justify-center flex-wrap gap-3.5 lg:gap-6 text-xs lg:text-[13px] text-black uppercase font-bold tracking-wider flex-1">
           <Link href="/standings" className="hover:underline transition">Standings</Link>
           <Link href="/power-rankings" className="hover:underline transition text-red-900 font-black">Power Rankings</Link>
-          <Link href="/playoffs" className="hover:underline transition">Playoffs</Link>
-          <Link href="/schedule" className="hover:underline transition">Schedule & Scores</Link>
+
+          {/* Desktop Dropdown for Results (Schedule & Scores + Playoffs) */}
+          <div
+            className="relative"
+            onMouseEnter={() => setIsResultsOpen(true)}
+            onMouseLeave={() => setIsResultsOpen(false)}
+          >
+            <button className="hover:underline transition cursor-pointer uppercase flex items-center gap-1 font-bold py-1">
+              Results <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {isResultsOpen && (
+              <div className="absolute top-full left-0 bg-[#f4f1ea] border-2 border-black py-1 w-52 flex flex-col z-50 shadow-lg">
+                <Link href="/schedule" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors">Schedule &amp; Scores</Link>
+                <Link href="/playoffs" className="px-4 py-2 hover:bg-black hover:text-white font-bold transition-colors text-amber-900">Playoffs</Link>
+              </div>
+            )}
+          </div>
 
           {/* Desktop Dropdown for Rosters & Teams */}
           <div 
@@ -254,20 +272,35 @@ export default function Navbar() {
           >
             Power Rankings <span>→</span>
           </Link>
-          <Link 
-            href="/playoffs" 
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
-          >
-            Playoffs <span>→</span>
-          </Link>
-          <Link 
-            href="/schedule" 
-            onClick={closeMobileMenu}
-            className="py-2 px-3 hover:bg-black/5 border-b border-black/10 flex items-center justify-between"
-          >
-            Schedule & Scores <span>→</span>
-          </Link>
+
+          {/* Mobile Collapsible Results Section */}
+          <div className="border-b border-black/10">
+            <button
+              onClick={() => setIsMobileResultsOpen(!isMobileResultsOpen)}
+              className="w-full py-2 px-3 hover:bg-black/5 flex items-center justify-between uppercase font-bold text-xs"
+            >
+              <span>Results</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${isMobileResultsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isMobileResultsOpen && (
+              <div className="pl-4 pb-2 flex flex-col gap-1 bg-black/5 pt-1 rounded-xs">
+                <Link 
+                  href="/schedule" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold"
+                >
+                  • Schedule &amp; Scores
+                </Link>
+                <Link 
+                  href="/playoffs" 
+                  onClick={closeMobileMenu}
+                  className="py-1.5 px-3 hover:bg-black hover:text-white rounded-xs font-semibold text-amber-900"
+                >
+                  • Playoffs
+                </Link>
+              </div>
+            )}
+          </div>
 
           {/* Mobile Collapsible Rosters Section */}
           <div className="border-b border-black/10">

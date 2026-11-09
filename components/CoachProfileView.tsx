@@ -2115,58 +2115,6 @@ export default function CoachProfileView({
           </div>
         </div>
       </section>
-
-      {/* =================================================================== */}
-      {/* ALL COACH PROFILES DIRECTORY GRID (GROUPED BY COACH & FRANCHISES)   */}
-      {/* =================================================================== */}
-      <div className="pt-2">
-        <div className="mb-3 flex flex-wrap items-center justify-between border-b-2 border-black pb-2 gap-2">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight">
-              All League Coach Profiles ({filteredCoaches.length})
-            </h2>
-            {embeddedOnTeamPage && (
-              <button
-                type="button"
-                onClick={() => setShowDirectoryGrid(prev => !prev)}
-                className="px-2.5 py-1 text-xs font-mono font-black uppercase border border-black bg-white hover:bg-black hover:text-white cursor-pointer transition"
-              >
-                {showDirectoryGrid ? 'Hide Full Coach Directory' : 'Browse All Coach Profiles'}
-              </button>
-            )}
-          </div>
-          <span className="text-xs font-mono text-slate-600 hidden sm:inline">
-            Teams are grouped by Franchise per Coach • Click &ldquo;Load Coach Profile&rdquo; to inspect H2H &amp; Scores
-          </span>
-        </div>
-
-        {showDirectoryGrid && (
-          <>
-            {loading ? (
-              <div className="p-12 text-center text-xs font-black uppercase tracking-widest text-gray-500 font-mono border border-black bg-white">
-                Loading Coach Profiles, Controlled Franchises &amp; Head-to-Head Records...
-              </div>
-            ) : filteredCoaches.length === 0 ? (
-              <div className="p-12 text-center text-xs font-bold uppercase italic text-gray-500 border border-black bg-white">
-                No coaches found matching &ldquo;{search}&rdquo;.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCoaches.map(coach => (
-                  <CoachProfileCard
-                    key={coach.coach_id}
-                    coach={coach}
-                    selectedLeagueType={selectedLeagueType}
-                    careerRecord={careerRecordByCoach.get(coach.coach_id)}
-                    isSelectedForH2H={selectedCoachId === coach.coach_id}
-                    onSelectH2H={() => handleJumpToCoachH2H(coach.coach_id)}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
     </div>
   );
 }
