@@ -351,6 +351,75 @@ export default function RecordsPage() {
       return all;
     }
 
+    async function fetchApiStatsAllSeasons(): Promise<any[]> {
+      // Group seasons into 3-season chunks so each chunk is < 900 rows (OFFSET 0)
+      // and Postgres pushes league_id IN (...) down to the index, avoiding the anon 3s statement timeout
+      const seasonChunks: number[][] = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9],
+        [10, 11, 12],
+        [13, 14, 15],
+        [16, 17, 18],
+        [19, 20, 21],
+        [22, 23, 24],
+        [25, 26, 27],
+        [28, 29, 30],
+        [31, 32, 33],
+        [34, 35, 36],
+        [37, 38, 39],
+        [40, 41, 42, 43, 44, 45, 54, 55]
+      ];
+
+      const fetchChunk = async (ids: number[]): Promise<any[]> => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await supabase
+              .from('api_stats_with_names')
+              .select('*')
+              .in('league_id', ids)
+              .range(0, 999);
+            if (!res.error && Array.isArray(res.data)) {
+              return res.data;
+            }
+          } catch {
+            // retry
+          }
+          await new Promise((r) => setTimeout(r, 150 * (attempt + 1)));
+        }
+        // Fallback: fetch each seasonId individually if a 3-season chunk timed out
+        const singleRows: any[] = [];
+        for (const id of ids) {
+          try {
+            const r = await supabase
+              .from('api_stats_with_names')
+              .select('*')
+              .eq('league_id', id)
+              .range(0, 999);
+            if (!r.error && Array.isArray(r.data)) {
+              singleRows.push(...r.data);
+            }
+          } catch {
+            // ignore
+          }
+        }
+        return singleRows;
+      };
+
+      const all: any[] = [];
+      const concurrency = 3;
+      for (let i = 0; i < seasonChunks.length; i += concurrency) {
+        const batch = seasonChunks.slice(i, i + concurrency);
+        const batchRes = await Promise.all(batch.map((c) => fetchChunk(c)));
+        for (const rows of batchRes) {
+          if (rows && rows.length > 0) {
+            all.push(...rows);
+          }
+        }
+      }
+      return all;
+    }
+
     async function ensureArchiveLoaded() {
       if (archiveCacheRef.current?.loaded) {
         return archiveCacheRef.current;
@@ -363,7 +432,7 @@ export default function RecordsPage() {
         coachesRes,
         standingsRows
       ] = await Promise.all([
-        fetchAllPaginated('api_stats_with_names', '*', 5, 20000),
+        fetchApiStatsAllSeasons(),
         Promise.resolve(
           supabase
             .from('league_teams')
@@ -418,18 +487,38 @@ export default function RecordsPage() {
       };
       archiveCacheRef.current = cacheObj;
 
-      // Kick off background fetch of multi-point games from league_player_stats_master
-      // so Single-Game Highs and 2+/3+/4+/5+ Point Game records populate without blocking initial load
+      // Kick off background fetch of multi-point games from league_player_stats_master per season chunk
+      // so Single-Game Highs and 2+/3+/4+/5+ Point Game records populate without hitting statement timeouts
       cacheObj.masterLoadingPromise = (async () => {
         try {
-          const multiPtRows = await fetchAllPaginated(
-            'league_player_stats_master',
-            'game_id, league_id, team_id, player_id, pos_played, goals, assists',
-            6,
-            60000,
-            (q) => q.or('goals.gte.2,assists.gte.2,and(goals.gte.1,assists.gte.1)')
-          );
-          cacheObj.masterRows = multiPtRows;
+          const allMultiPt: any[] = [];
+          const mChunks: number[][] = [
+            [1, 2], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15],
+            [17, 18], [19, 20], [21, 22], [23, 24], [25, 26], [27, 28],
+            [29, 30], [31, 32], [33, 34], [35, 36], [37, 38], [39, 40]
+          ];
+          for (let i = 0; i < mChunks.length; i += 3) {
+            const slice = mChunks.slice(i, i + 3);
+            const batch = await Promise.all(
+              slice.map(async (ids) => {
+                const rows = await fetchAllPaginated(
+                  'league_player_stats_master',
+                  'game_id, league_id, team_id, player_id, pos_played, goals, assists',
+                  3,
+                  5000,
+                  (q) =>
+                    q
+                      .in('league_id', ids)
+                      .or('goals.gte.2,assists.gte.2,and(goals.gte.1,assists.gte.1)')
+                );
+                return rows;
+              })
+            );
+            for (const r of batch) {
+              if (r && r.length > 0) allMultiPt.push(...r);
+            }
+          }
+          cacheObj.masterRows = allMultiPt;
           cacheObj.masterLoaded = true;
           setMasterEnriched(true);
         } catch {
