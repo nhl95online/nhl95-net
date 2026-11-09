@@ -1519,32 +1519,19 @@ export default function StandingsPage() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-serif overflow-x-hidden">
-      <div className={isFullScreen ? 'fixed inset-0 bg-[#f4f1ea] z-50 overflow-y-auto p-4 md:p-8' : 'max-w-[1400px] mx-auto px-4 py-8'}>
+      <div className={isFullScreen ? 'fixed inset-0 bg-[#f4f1ea] z-50 overflow-y-auto p-4 md:p-6' : 'max-w-[1400px] mx-auto px-2 sm:px-4 py-2 sm:py-3'}>
 
-        <div className="border-b-4 border-black pt-2 sm:pt-4 pb-3 sm:pb-4 text-center relative">
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tight">League Standings</h1>
-          <p className="text-xs sm:text-sm uppercase tracking-widest mt-1 sm:mt-2 italic">The Official Record of NHL95 Athletics</p>
-
-          {isFullScreen && (
-            <button
-              onClick={() => setIsFullScreen(false)}
-              className="absolute right-2 top-2 sm:top-4 flex items-center gap-1 text-xs border border-black px-2 py-1 font-sans font-bold uppercase hover:bg-black hover:text-white transition-all rounded-xs cursor-pointer"
-            >
-              <Minimize2 className="w-3 h-3" /> <span className="hidden sm:inline">Close Full Screen</span>
-            </button>
-          )}
-        </div>
-
-        <div className="border-y border-black p-2 flex flex-col lg:flex-row items-center justify-between mt-3 sm:mt-4 mb-3 gap-3 sm:gap-4">
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full lg:w-auto">
+        {/* Clean Top Standings Control Bar */}
+        <div className="border-2 border-black bg-white/95 shadow-[3px_3px_0px_#000] px-3 py-2 flex flex-col lg:flex-row items-center justify-between mb-3 gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 w-full lg:w-auto">
             {/* League Type Buttons */}
-            <div className="flex items-center gap-1.5 bg-white border-2 border-black p-1 shadow-xs overflow-x-auto max-w-full no-scrollbar">
+            <div className="flex items-center gap-1 bg-[#f4f1ea] border border-black p-1 overflow-x-auto max-w-full no-scrollbar">
               <button
                 type="button"
                 onClick={() => handleLeagueTypeChange('ALL')}
-                className={`px-2.5 py-1 h-8 md:h-9 flex items-center justify-center text-xs font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL' && !isGlobalMode
-                  ? 'bg-black text-white shadow-xs'
-                  : 'text-black hover:bg-neutral-100'
+                className={`px-2.5 py-1 h-8 flex items-center justify-center text-xs font-mono font-black uppercase transition-all shrink-0 cursor-pointer ${selectedLeagueType === 'ALL' && !isGlobalMode
+                  ? 'bg-black text-white'
+                  : 'text-black hover:bg-neutral-200'
                   }`}
                 title="All Leagues"
               >
@@ -1553,30 +1540,44 @@ export default function StandingsPage() {
               {availableLeagueTypes.map((type) => {
                 const config = LEAGUE_LOGOS[type];
                 const isSelected = selectedLeagueType === type && !isGlobalMode;
+                const badgeLabel = type === 'O' ? 'O6' : type;
                 return (
                   <button
                     key={type}
                     type="button"
                     onClick={() => handleLeagueTypeChange(type)}
-                    className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 md:h-9 border-2 shrink-0 cursor-pointer ${isSelected
-                      ? 'bg-yellow-100 border-black shadow-xs ring-1 ring-black'
-                      : 'border-transparent bg-transparent opacity-65 hover:opacity-100 hover:border-black/30 hover:bg-neutral-50'
+                    className={`px-2 py-0.5 flex items-center justify-center transition-all h-8 border shrink-0 cursor-pointer ${isSelected
+                      ? 'bg-amber-300 border-black ring-1 ring-black'
+                      : 'border-transparent bg-transparent opacity-75 hover:opacity-100 hover:border-black/40 hover:bg-white'
                       }`}
                     title={config?.name || `${type} League`}
                   >
                     {config?.logoUrl ? (
-                      <img
-                        src={config.logoUrl}
-                        alt={config.name || `${type} League`}
-                        className="h-5 md:h-6 w-auto max-w-[60px] md:max-w-[80px] object-contain block"
-                        onError={(e) => {
-                          if (config.fallbackUrl && e.currentTarget.src !== config.fallbackUrl) {
-                            e.currentTarget.src = config.fallbackUrl;
-                          }
-                        }}
-                      />
+                      <>
+                        <img
+                          src={config.logoUrl}
+                          alt={config.name || `${type} League`}
+                          className="h-5 md:h-6 w-auto max-w-[56px] md:max-w-[72px] object-contain block"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (config.fallbackUrl && target.src !== config.fallbackUrl) {
+                              target.src = config.fallbackUrl;
+                            } else {
+                              target.style.display = 'none';
+                              const fallbackSpan = target.nextElementSibling as HTMLElement | null;
+                              if (fallbackSpan) fallbackSpan.style.display = 'inline';
+                            }
+                          }}
+                        />
+                        <span
+                          style={{ display: 'none' }}
+                          className="font-mono font-black text-xs uppercase px-1 text-black"
+                        >
+                          {badgeLabel}
+                        </span>
+                      </>
                     ) : (
-                      <span className="font-black text-xs uppercase px-1">{type}</span>
+                      <span className="font-mono font-black text-xs uppercase px-1">{badgeLabel}</span>
                     )}
                   </button>
                 );
@@ -1584,8 +1585,8 @@ export default function StandingsPage() {
             </div>
 
             {/* Season Selector */}
-            <div className="flex items-center gap-2">
-              <label className="font-bold text-xs uppercase opacity-70">Season:</label>
+            <div className="flex items-center gap-1.5 bg-[#f4f1ea] border border-black px-2.5 py-1 h-10">
+              <label className="font-mono font-bold text-[11px] uppercase text-neutral-600">Season:</label>
               <select
                 value={isGlobalMode ? 'GLOBAL' : selectedLeagueId}
                 onChange={(e) => {
@@ -1596,7 +1597,7 @@ export default function StandingsPage() {
                     setSelectedLeagueId(e.target.value);
                   }
                 }}
-                className="bg-transparent font-bold text-xs md:text-sm uppercase border-b-2 border-black focus:outline-none cursor-pointer font-sans p-1"
+                className="bg-transparent font-mono font-black text-xs md:text-sm uppercase focus:outline-none cursor-pointer pr-1"
               >
                 {!isGlobalMode && filteredSeasons.map((s) => (
                   <option key={s.league_id} value={s.league_id} className="bg-[#fdfaf5]">
@@ -1609,44 +1610,43 @@ export default function StandingsPage() {
               </select>
             </div>
 
-            <div className="flex items-center gap-1 border-l border-black/20 pl-3 sm:pl-4 font-sans font-bold text-xs">
+            <div className="flex items-center gap-1.5 font-sans font-bold text-xs">
               <button
                 onClick={() => setIsCompactView(!isCompactView)}
-                className={`p-1 border rounded-xs mr-1 transition-colors cursor-pointer ${isCompactView ? 'bg-black text-white border-black' : 'border-black/20 text-black/60 hover:text-black'}`}
+                className={`px-2 py-1.5 h-10 border flex items-center gap-1.5 transition-colors cursor-pointer ${isCompactView ? 'bg-black text-white border-black' : 'bg-[#f4f1ea] border-black/30 text-black/80 hover:border-black hover:text-black'}`}
                 title="Toggle Compact Spacing View"
               >
                 {isCompactView ? <Grid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline text-[11px] font-mono uppercase">Compact</span>
               </button>
-              <span className="opacity-60 hidden sm:inline">Compact</span>
 
-              {!isFullScreen && (
-                <button
-                  onClick={() => setIsFullScreen(true)}
-                  className="p-1 border border-black/20 rounded-xs ml-2 sm:ml-3 text-black/60 hover:text-black hover:border-black transition-colors cursor-pointer"
-                  title="Maximize to Full Screen Display"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <button
+                onClick={() => setIsFullScreen(!isFullScreen)}
+                className="px-2 py-1.5 h-10 border border-black/30 bg-[#f4f1ea] text-black/80 hover:text-black hover:border-black transition-colors cursor-pointer flex items-center gap-1"
+                title={isFullScreen ? "Exit Full Screen" : "Maximize to Full Screen Display"}
+              >
+                {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                {isFullScreen && <span className="hidden sm:inline text-[11px] font-mono uppercase">Exit</span>}
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 w-full lg:w-auto justify-end">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto justify-end">
             <div className="relative w-full sm:w-auto">
-              <Search className="absolute left-2 top-1.5 text-gray-500 w-3 h-3" />
+              <Search className="absolute left-2.5 top-2.5 text-neutral-500 w-3.5 h-3.5" />
               <input
                 type="text"
                 placeholder={isGlobalMode ? "Global Search Team..." : "Search Team..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-transparent border-b border-black text-xs pl-8 pb-1 focus:outline-none w-full sm:w-48 font-sans"
+                className="bg-[#f4f1ea] border border-black/40 focus:border-black text-xs pl-8 pr-2.5 py-1.5 h-9 focus:outline-none w-full sm:w-48 font-sans"
               />
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
               <button
                 onClick={downloadCSV}
-                className="flex items-center gap-1 text-xs border border-black/20 font-sans font-bold uppercase px-2.5 py-1 hover:border-black transition-colors text-black/70 hover:text-black rounded-xs cursor-pointer"
+                className="flex items-center gap-1 text-[11px] h-9 border border-black/40 bg-[#f4f1ea] font-mono font-bold uppercase px-2.5 hover:border-black hover:bg-neutral-200 transition-colors text-black cursor-pointer"
                 title="Export Active Lines to Spreadsheets"
               >
                 <Download className="w-3 h-3" /> <span className="hidden sm:inline">Export</span> CSV
@@ -1657,79 +1657,77 @@ export default function StandingsPage() {
                   setIsGlobalMode(!isGlobalMode);
                   if (isGlobalMode) setSortField('pts');
                 }}
-                className={`flex items-center gap-1.5 text-xs font-black uppercase shrink-0 px-2.5 py-1 border transition-all duration-75 cursor-pointer ${isGlobalMode ? 'bg-black text-white border-black rounded-xs' : 'border-black/20 hover:border-black rounded-xs text-black/70 hover:text-black'
+                className={`flex items-center gap-1.5 text-[11px] h-9 font-mono font-black uppercase shrink-0 px-2.5 border transition-all duration-75 cursor-pointer ${isGlobalMode ? 'bg-black text-white border-black' : 'bg-[#f4f1ea] border-black/40 hover:border-black text-black hover:bg-neutral-200'
                   }`}
               >
                 <Globe className="w-3 h-3" />
-                Global {isGlobalMode ? 'Active' : ''} <ChevronDown className="w-3 h-3 opacity-40" />
+                Global {isGlobalMode ? 'Active' : ''} <ChevronDown className="w-3 h-3 opacity-50" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Dynamic Structural Grid Layout Area */}
-        <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 mb-4 font-sans select-none text-xs">
-          {isGlobalMode ? (
-            <div className="text-[10px] font-sans font-bold uppercase text-emerald-800 py-1 italic tracking-wider flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              Cross-Season Global Query Grid Enabled: Search filters historical standings for all iterations of a matching club.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-              <div className="md:col-span-2 border-b md:border-b-0 md:border-r border-black/10 pb-2 md:pb-0 md:pr-2">
-                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">League</div>
-                <button
-                  onClick={() => setCurrentTab('ALL')}
-                  className={`w-full text-left px-2 py-1 font-black uppercase tracking-tight text-[11px] rounded-xs transition-all cursor-pointer ${currentTab === 'ALL' ? 'bg-black text-white shadow-xs' : 'text-black/70 hover:bg-black/5 hover:text-black'
-                    }`}
-                >
-                  Overall League
-                </button>
+        {/* Conference / Division Filter Bar (only rendered when Global Mode is active or when the season actually has Conferences/Divisions) */}
+        {(isGlobalMode || hasGroups) && (
+          <div className="bg-[#ebd9c0]/40 border border-black/20 rounded-xs p-3 mb-3 font-sans select-none text-xs">
+            {isGlobalMode ? (
+              <div className="text-[10px] font-sans font-bold uppercase text-emerald-800 py-0.5 italic tracking-wider flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                Cross-Season Global Query Grid Enabled: Search filters historical standings for all iterations of a matching club.
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                <div className="md:col-span-2 border-b md:border-b-0 md:border-r border-black/10 pb-2 md:pb-0 md:pr-2">
+                  <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">League</div>
+                  <button
+                    onClick={() => setCurrentTab('ALL')}
+                    className={`w-full text-left px-2 py-1 font-black uppercase tracking-tight text-[11px] rounded-xs transition-all cursor-pointer ${currentTab === 'ALL' ? 'bg-black text-white shadow-xs' : 'text-black/70 hover:bg-black/5 hover:text-black'
+                      }`}
+                  >
+                    Overall League
+                  </button>
+                </div>
 
-              <div className="md:col-span-3 border-b md:border-b-0 md:border-r border-black/10 pb-2 md:pb-0 md:pr-2">
-                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">Conference</div>
-                {hasGroups && availableConferences.length > 0 ? (
-                  <div className="flex flex-wrap md:flex-col gap-1">
-                    {availableConferences.map((conf) => (
-                      <button
-                        key={conf}
-                        onClick={() => setCurrentTab(conf)}
-                        className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all cursor-pointer ${currentTab === conf ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
-                          }`}
-                      >
-                        {conf} Conf.
-                      </button>
-                    ))}
+                {availableConferences.length > 0 && (
+                  <div className="md:col-span-3 border-b md:border-b-0 md:border-r border-black/10 pb-2 md:pb-0 md:pr-2">
+                    <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">Conference</div>
+                    <div className="flex flex-wrap md:flex-col gap-1">
+                      {availableConferences.map((conf) => (
+                        <button
+                          key={conf}
+                          onClick={() => setCurrentTab(conf)}
+                          className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all cursor-pointer ${currentTab === conf ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
+                            }`}
+                        >
+                          {conf} Conf.
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-black/30 italic py-1 pl-2">— None Found</div>
+                )}
+
+                {availableDivisions.length > 0 && (
+                  <div className="md:col-span-7">
+                    <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">Divisions</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                      {availableDivisions.map((div) => (
+                        <button
+                          key={div}
+                          onClick={() => setCurrentTab(div)}
+                          className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer ${currentTab === div ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
+                            }`}
+                          title={`${div} Division`}
+                        >
+                          {div} Div.
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-
-              <div className="md:col-span-7">
-                <div className="font-sans font-black text-[10px] tracking-widest text-black/40 uppercase mb-1 md:mb-2">Divisions</div>
-                {hasGroups && availableDivisions.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-                    {availableDivisions.map((div) => (
-                      <button
-                        key={div}
-                        onClick={() => setCurrentTab(div)}
-                        className={`text-left px-2 py-1 font-bold uppercase text-[11px] rounded-xs transition-all whitespace-nowrap overflow-hidden text-ellipsis cursor-pointer ${currentTab === div ? 'bg-black text-white' : 'text-black/70 hover:bg-black/5 hover:text-black'
-                          }`}
-                        title={`${div} Division`}
-                      >
-                        {div} Div.
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-black/30 italic py-1 pl-2">— None Found</div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Playoff Line Points Required Tracker Banner */}
         {!isGlobalMode && playoffLineInfo && (
