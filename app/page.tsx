@@ -3501,28 +3501,6 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Playoff Line Points Required Banner */}
-          {(() => {
-            const cutIdx = selectedSeason === 39 ? 4 : standings.length >= 20 ? 16 : 8;
-            const cutTeam = standings[Math.min(cutIdx - 1, Math.max(0, standings.length - 1))];
-            if (!cutTeam) return null;
-            const cutPts = Number(cutTeam.pts) || 0;
-            const cutGp = Math.max(1, Number(cutTeam.gp) || 1);
-            const tGp = Number(cutTeam.targetGp) || (selectedSeason === 40 ? 56 : 56);
-            const projLine = Math.max(cutPts, Math.round((cutPts / cutGp) * tGp));
-            return (
-              <div className="mb-2.5 bg-neutral-900 border border-amber-400/50 px-2 py-1 text-[9px] font-mono flex items-center justify-between gap-1">
-                <span className="text-neutral-300">
-                  Playoff Line (<strong className="text-amber-400">#{cutIdx} {cutTeam.league_teams?.abbreviation}</strong>):{' '}
-                  <strong className="text-white">{cutPts} PTS</strong>
-                </span>
-                <span className="bg-amber-400 text-black font-black px-1.5 py-0.2">
-                  Req Pace: {projLine} PTS
-                </span>
-              </div>
-            );
-          })()}
-
           <div className="overflow-x-auto">
             <table className="w-full text-[10px] border-collapse min-w-[275px]">
               <thead>

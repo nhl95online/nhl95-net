@@ -1729,31 +1729,6 @@ export default function StandingsPage() {
           </div>
         )}
 
-        {/* Playoff Line Points Required Tracker Banner */}
-        {!isGlobalMode && playoffLineInfo && (
-          <div className="bg-neutral-950 text-white border-2 border-black px-3 py-2 mb-3 rounded-xs flex flex-wrap items-center justify-between gap-2 font-sans text-[11px] shadow-xs">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="bg-amber-400 text-black font-black uppercase px-2 py-0.5 text-[10px] tracking-wider">
-                Playoff Line Tracker
-              </span>
-              <span className="font-bold text-neutral-200">
-                Top <strong className="text-amber-400">{playoffLineInfo.cutoffSeed}</strong> Qualify • Current Cutline (#{playoffLineInfo.cutoffSeed} {playoffLineInfo.cutoffTeamAbbr}):{' '}
-                <strong className="text-amber-400 font-mono text-xs">{playoffLineInfo.cutoffPts} PTS</strong>{' '}
-                <span className="text-neutral-400 font-mono text-[10px]">({playoffLineInfo.cutoffPtsPct}% in {playoffLineInfo.cutoffGp} GP)</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="bg-neutral-900 border border-amber-500/40 px-2.5 py-0.5 rounded-xs font-mono text-[11px]">
-                Playoff Line Points Required ({playoffLineInfo.totalSeasonGames} GP Pace):{' '}
-                <strong className="text-amber-400 font-black">{playoffLineInfo.projectedPtsRequired} PTS</strong>
-              </span>
-              <span className="text-[10px] text-neutral-400 font-mono">
-                Guaranteed Clinch Line: <strong className="text-emerald-400">{playoffLineInfo.clinchTargetPts} PTS</strong>
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Mobile Swipe Notice */}
         <div className="md:hidden flex items-center justify-between text-[10px] font-sans font-bold text-black/60 px-3 py-1.5 bg-[#ebd9c0]/50 border border-black/15 mb-2 rounded-xs uppercase tracking-wider">
           <span>↔ Swipe table sideways for full stats</span>
