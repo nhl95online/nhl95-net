@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Nhl95Ticker from '@/components/Nhl95Ticker';
 
@@ -891,7 +891,7 @@ export default function HomePage() {
           }
         });
 
-        const recentPoItems: RecentGameItem[] = poGamesData.slice(0, 12).map((g: any) => {
+        const recentPoItems: RecentGameItem[] = poGamesData.slice(0, 20).map((g: any) => {
           const h = getTeamDisplay(g.home_team_id);
           const a = getTeamDisplay(g.away_team_id);
           const extra = parseGameExtra(g);
@@ -918,7 +918,7 @@ export default function HomePage() {
           };
         });
 
-        const recentRegItems: RecentGameItem[] = statsData.slice(0, 12).map((g: any) => {
+        const recentRegItems: RecentGameItem[] = statsData.slice(0, 20).map((g: any) => {
           const h = getTeamDisplay(g.home_team_id);
           const a = getTeamDisplay(g.away_team_id);
           const extra = parseGameExtra(g);
@@ -2350,13 +2350,29 @@ export default function HomePage() {
     }
   };
 
-  // Filtered recent games for scoreboard wire
+  const scoreTickerRef = useRef<HTMLDivElement | null>(null);
+  const scrollScoreTicker = (dir: 'left' | 'right') => {
+    if (!scoreTickerRef.current) return;
+    scoreTickerRef.current.scrollBy({
+      left: dir === 'left' ? -440 : 440,
+      behavior: 'smooth',
+    });
+  };
+
+  // Filtered recent games for scoreboard wire (last 20 games)
   const displayedRecentGames = useMemo(() => {
     let list = recentGames;
     if (gameFilter === 'PLAYOFFS') list = recentGames.filter(g => g.isPlayoff);
     else if (gameFilter === 'REG') list = recentGames.filter(g => !g.isPlayoff);
-    return list.slice(0, 8);
+    return list.slice(0, 20);
   }, [recentGames, gameFilter]);
+
+  const activeExpandedGame = useMemo(() => {
+    if (!expandedGameKey) return null;
+    return displayedRecentGames.find(
+      (g) => `${g.isPlayoff ? 'PO' : 'REG'}_${g.game_id}` === expandedGameKey
+    ) || null;
+  }, [displayedRecentGames, expandedGameKey]);
 
   // Active stat leaders list based on phase & tab
   const activeLeaderList = useMemo(() => {
@@ -2410,9 +2426,306 @@ export default function HomePage() {
 
   return (
     <div className="w-full min-h-screen bg-[#f4f1ea] text-black font-serif p-1 sm:p-3 md:p-4">
-      <header className="border-b-4 border-black pb-3 sm:pb-4 mb-4 text-center">
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black uppercase tracking-tighter">NHL95 Gazette</h1>
-      </header>
+      {/* TOP SCORE TICKER (REPLACING NHL95 GAZETTE MASTHEAD — LAST 20 GAMES) */}
+      <section className="border-2 border-black bg-white/95 shadow-[3px_3px_0px_#000] mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-black text-white px-3 py-1.5 border-b-2 border-black">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="bg-amber-400 text-black font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
+              {activeSeasonLabel} SCORE TICKER
+            </span>
+            <h1 className="font-mono font-black uppercase tracking-wider text-xs sm:text-sm text-white">
+              Last {displayedRecentGames.length} Games &amp; Boxscores
+            </h1>
+            <span className="hidden md:inline text-[10px] text-neutral-400 italic font-serif">
+              — Click any matchup for scoring summary &amp; top stars
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono font-bold mr-1">
+              <a href="/schedule" className="text-amber-400 hover:underline">
+                Schedule →
+              </a>
+              <span className="text-neutral-600">|</span>
+              <a href="/playoffs" className="text-amber-400 hover:underline">
+                Playoffs →
+              </a>
+            </div>
+
+            <div className="flex items-center gap-1 font-mono text-[10px]">
+              {(['ALL', 'PLAYOFFS', 'REG'] as const).map((flt) => (
+                <button
+                  key={flt}
+                  type="button"
+                  onClick={() => setGameFilter(flt)}
+                  className={`px-2 py-0.5 font-bold uppercase border transition-colors cursor-pointer ${
+                    gameFilter === flt
+                      ? 'bg-amber-400 text-black border-amber-400 font-black'
+                      : 'bg-neutral-900 text-neutral-200 border-neutral-700 hover:bg-neutral-800'
+                  }`}
+                >
+                  {flt === 'REG' ? 'REG SEASON' : flt}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1 font-mono text-[10px]">
+              <button
+                type="button"
+                onClick={() => scrollScoreTicker('left')}
+                aria-label="Scroll scores left"
+                className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-neutral-700 font-black cursor-pointer"
+              >
+                ◀
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollScoreTicker('right')}
+                aria-label="Scroll scores right"
+                className="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 text-amber-400 border border-neutral-700 font-black cursor-pointer"
+              >
+                ▶
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {displayedRecentGames.length > 0 ? (
+          <div
+            ref={scoreTickerRef}
+            className="flex items-stretch overflow-x-auto divide-x divide-neutral-300 bg-[#faf8f3] scroll-smooth"
+          >
+            {displayedRecentGames.map((g) => {
+              const key = `${g.isPlayoff ? 'PO' : 'REG'}_${g.game_id}`;
+              const isExpanded = expandedGameKey === key;
+              const awayWon = g.away_score > g.home_score;
+              const homeWon = g.home_score > g.away_score;
+
+              return (
+                <div
+                  key={key}
+                  onClick={() => handleToggleBoxscore(g)}
+                  className={`min-w-[195px] sm:min-w-[215px] max-w-[235px] shrink-0 p-2 cursor-pointer select-none transition-colors ${
+                    isExpanded
+                      ? 'bg-amber-100/90 ring-2 ring-inset ring-black'
+                      : 'hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1 text-[8px] font-mono uppercase mb-1 pb-1 border-b border-neutral-200">
+                    <span
+                      className={`font-black px-1 py-0.2 truncate max-w-[110px] ${
+                        g.isPlayoff
+                          ? 'bg-amber-400 text-black border border-black'
+                          : 'bg-neutral-200 text-neutral-800'
+                      }`}
+                    >
+                      {g.isPlayoff ? (g.roundLabel || 'PLAYOFFS') : 'REG SEASON'}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {g.home_shots !== null && g.away_shots !== null && (
+                        <span className="text-neutral-500">
+                          SOG {g.away_shots}-{g.home_shots}
+                        </span>
+                      )}
+                      <span
+                        className={`font-bold px-1 ${
+                          g.isOT ? 'bg-red-700 text-white' : 'text-neutral-700'
+                        }`}
+                      >
+                        {g.isOT ? `FINAL/${g.otLabel}` : 'FINAL'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Away Team Row */}
+                  <div className="flex items-center justify-between py-0.5 gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {g.away_logo ? (
+                        <img
+                          src={g.away_logo}
+                          alt={g.away_abbr}
+                          className="w-4 h-4 object-contain shrink-0"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 bg-neutral-200 border border-neutral-400 text-[7px] font-mono font-bold flex items-center justify-center shrink-0">
+                          {g.away_abbr.slice(0, 3)}
+                        </div>
+                      )}
+                      <span
+                        className={`text-xs uppercase truncate ${
+                          awayWon ? 'font-black text-black' : 'font-semibold text-neutral-600'
+                        }`}
+                      >
+                        {g.away_abbr}
+                      </span>
+                      {g.away_coach && (
+                        <span className="text-[8px] font-mono text-neutral-400 truncate max-w-[78px]">
+                          ({g.away_coach})
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`font-mono text-xs sm:text-sm shrink-0 ${
+                        awayWon ? 'font-black text-black' : 'font-bold text-neutral-500'
+                      }`}
+                    >
+                      {g.away_score}
+                    </span>
+                  </div>
+
+                  {/* Home Team Row */}
+                  <div className="flex items-center justify-between py-0.5 gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {g.home_logo ? (
+                        <img
+                          src={g.home_logo}
+                          alt={g.home_abbr}
+                          className="w-4 h-4 object-contain shrink-0"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 bg-neutral-200 border border-neutral-400 text-[7px] font-mono font-bold flex items-center justify-center shrink-0">
+                          {g.home_abbr.slice(0, 3)}
+                        </div>
+                      )}
+                      <span
+                        className={`text-xs uppercase truncate ${
+                          homeWon ? 'font-black text-black' : 'font-semibold text-neutral-600'
+                        }`}
+                      >
+                        {g.home_abbr}
+                      </span>
+                      {g.home_coach && (
+                        <span className="text-[8px] font-mono text-neutral-400 truncate max-w-[78px]">
+                          ({g.home_coach})
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`font-mono text-xs sm:text-sm shrink-0 ${
+                        homeWon ? 'font-black text-black' : 'font-bold text-neutral-500'
+                      }`}
+                    >
+                      {g.home_score}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="py-3 px-4 text-center text-xs italic text-neutral-500 bg-[#faf8f3]">
+            No completed games recorded for {activeSeasonLabel} under this filter.
+          </div>
+        )}
+
+        {/* Expandable Boxscore Summary Drawer below the Ticker */}
+        {activeExpandedGame && (
+          <div className="border-t-2 border-black bg-white p-3 text-[11px] font-mono space-y-2">
+            <div className="flex items-center justify-between border-b border-neutral-200 pb-1">
+              <span className="font-black uppercase text-[10px]">
+                Game #{activeExpandedGame.game_id} Boxscore Summary ({activeExpandedGame.away_name}{' '}
+                {activeExpandedGame.away_score} @ {activeExpandedGame.home_name}{' '}
+                {activeExpandedGame.home_score})
+              </span>
+              <button
+                type="button"
+                onClick={() => setExpandedGameKey(null)}
+                className="text-[10px] font-bold underline hover:text-red-700 cursor-pointer"
+              >
+                [CLOSE ×]
+              </button>
+            </div>
+
+            {boxscoreDetails.loading ? (
+              <div className="py-2 text-center italic text-neutral-500">Loading game tape...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[9px] font-black uppercase text-neutral-500 mb-1">
+                    Scoring Summary ({boxscoreDetails.scoring.length} Goals)
+                  </div>
+                  {boxscoreDetails.scoring.length > 0 ? (
+                    <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                      {boxscoreDetails.scoring.map((sc: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5 flex items-center gap-1 flex-wrap"
+                        >
+                          <span className="font-bold text-neutral-500">
+                            P{sc.period} {sc.time_formatted || ''}
+                          </span>
+                          {sc.team_logo && (
+                            <img
+                              src={sc.team_logo}
+                              alt={sc.team_abbr || 'Team'}
+                              className="w-3.5 h-3.5 object-contain shrink-0"
+                            />
+                          )}
+                          {sc.team_abbr && (
+                            <span className="bg-black text-white font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs">
+                              {sc.team_abbr}
+                            </span>
+                          )}
+                          <span className="font-black text-black">{sc.scorer}</span>
+                          {sc.assist1 && sc.assist1 !== '--' && (
+                            <span className="text-neutral-600">
+                              ({sc.assist1}
+                              {sc.assist2 && sc.assist2 !== '--' ? `, ${sc.assist2}` : ''})
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] italic text-neutral-400">
+                      Detailed goal log unavailable.
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-[9px] font-black uppercase text-neutral-500 mb-1">
+                    Top Performers
+                  </div>
+                  {boxscoreDetails.topPlayers.length > 0 ? (
+                    <div className="space-y-1">
+                      {boxscoreDetails.topPlayers.map((tp: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-[10px] border-b border-neutral-100 pb-0.5"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {tp.team_logo && (
+                              <img
+                                src={tp.team_logo}
+                                alt={tp.team_abbr || 'Team'}
+                                className="w-4 h-4 object-contain shrink-0"
+                              />
+                            )}
+                            {tp.team_abbr && (
+                              <span className="bg-neutral-200 border border-neutral-400 text-black font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs shrink-0">
+                                {tp.team_abbr}
+                              </span>
+                            )}
+                            <span className="font-bold truncate">{tp.name}</span>
+                          </div>
+                          <span className="font-black shrink-0 ml-2">
+                            {tp.g}G {tp.a}A ({tp.pts}P)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] italic text-neutral-400">
+                      Player stats summary unavailable.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* Real-World NHL Current News Wire Bar (only shown when live/updated articles exist, not static placeholders) */}
       {(() => {
@@ -2757,237 +3070,6 @@ export default function HomePage() {
 
         {/* CENTER COLUMN: FULL LEAGUE HUB */}
         <main className="col-span-12 md:col-span-12 lg:col-span-6 xl:col-span-7 order-1 md:order-1 lg:order-2 space-y-5 sm:space-y-6 min-w-0">
-          {/* SECTION 1: RECENT SCOREBOARD & BOXSCORE WIRE */}
-          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
-                    {activeSeasonLabel} WIRE
-                  </span>
-                  <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
-                    Recent Games &amp; Boxscores
-                  </h2>
-                </div>
-                <p className="text-[10px] text-neutral-600 italic mt-0.5">
-                  Click any matchup to inspect scoring summary &amp; top stars
-                </p>
-              </div>
-
-              <div className="flex items-center gap-1 font-mono text-[10px]">
-                {(['ALL', 'PLAYOFFS', 'REG'] as const).map((flt) => (
-                  <button
-                    key={flt}
-                    type="button"
-                    onClick={() => setGameFilter(flt)}
-                    className={`px-2 py-0.5 font-bold uppercase border border-black transition-colors cursor-pointer ${
-                      gameFilter === flt
-                        ? 'bg-black text-white'
-                        : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
-                    }`}
-                  >
-                    {flt === 'REG' ? 'REG SEASON' : flt}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {displayedRecentGames.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {displayedRecentGames.map((g) => {
-                  const key = `${g.isPlayoff ? 'PO' : 'REG'}_${g.game_id}`;
-                  const isExpanded = expandedGameKey === key;
-                  const awayWon = g.away_score > g.home_score;
-                  const homeWon = g.home_score > g.away_score;
-
-                  return (
-                    <div
-                      key={key}
-                      className={`border border-black transition-all ${
-                        isExpanded ? 'sm:col-span-2 bg-amber-50/60 shadow-sm' : 'bg-[#faf8f3] hover:bg-white'
-                      }`}
-                    >
-                      <div
-                        onClick={() => handleToggleBoxscore(g)}
-                        className="p-2.5 cursor-pointer select-none"
-                      >
-                        <div className="flex items-center justify-between text-[9px] font-mono uppercase mb-1.5 pb-1 border-b border-neutral-200">
-                          <span className={`font-black px-1.5 py-0.2 ${
-                            g.isPlayoff ? 'bg-amber-400 text-black border border-black' : 'bg-neutral-200 text-neutral-800'
-                          }`}>
-                            {g.isPlayoff ? (g.roundLabel || 'PLAYOFFS') : 'REGULAR SEASON'}
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            {g.home_shots !== null && g.away_shots !== null && (
-                              <span className="text-neutral-500">
-                                SOG {g.away_shots}-{g.home_shots}
-                              </span>
-                            )}
-                            <span className={`font-bold px-1 ${g.isOT ? 'bg-red-700 text-white' : 'text-neutral-700'}`}>
-                              {g.isOT ? `FINAL/${g.otLabel}` : 'FINAL'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Away Row */}
-                        <div className="flex items-center justify-between py-0.5">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {g.away_logo ? (
-                              <img src={g.away_logo} alt={g.away_abbr} className="w-5 h-5 object-contain shrink-0" />
-                            ) : (
-                              <div className="w-5 h-5 bg-neutral-200 border border-neutral-400 text-[8px] font-mono font-bold flex items-center justify-center shrink-0">
-                                {g.away_abbr.slice(0, 3)}
-                              </div>
-                            )}
-                            <span className={`text-xs uppercase truncate ${awayWon ? 'font-black text-black' : 'font-semibold text-neutral-600'}`}>
-                              {g.away_abbr}
-                            </span>
-                            {g.away_coach && (
-                              <span className="text-[9px] font-mono text-neutral-400 truncate">
-                                ({g.away_coach})
-                              </span>
-                            )}
-                          </div>
-                          <span className={`font-mono text-sm ${awayWon ? 'font-black text-black' : 'font-bold text-neutral-500'}`}>
-                            {g.away_score}
-                          </span>
-                        </div>
-
-                        {/* Home Row */}
-                        <div className="flex items-center justify-between py-0.5">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {g.home_logo ? (
-                              <img src={g.home_logo} alt={g.home_abbr} className="w-5 h-5 object-contain shrink-0" />
-                            ) : (
-                              <div className="w-5 h-5 bg-neutral-200 border border-neutral-400 text-[8px] font-mono font-bold flex items-center justify-center shrink-0">
-                                {g.home_abbr.slice(0, 3)}
-                              </div>
-                            )}
-                            <span className={`text-xs uppercase truncate ${homeWon ? 'font-black text-black' : 'font-semibold text-neutral-600'}`}>
-                              {g.home_abbr}
-                            </span>
-                            {g.home_coach && (
-                              <span className="text-[9px] font-mono text-neutral-400 truncate">
-                                ({g.home_coach})
-                              </span>
-                            )}
-                          </div>
-                          <span className={`font-mono text-sm ${homeWon ? 'font-black text-black' : 'font-bold text-neutral-500'}`}>
-                            {g.home_score}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Expanded Boxscore Summary */}
-                      {isExpanded && (
-                        <div className="border-t border-black bg-white p-2.5 text-[11px] font-mono space-y-2">
-                          <div className="flex items-center justify-between border-b border-neutral-200 pb-1">
-                            <span className="font-black uppercase text-[10px]">
-                              Game #{g.game_id} Boxscore Summary ({g.away_name} @ {g.home_name})
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setExpandedGameKey(null)}
-                              className="text-[10px] font-bold underline hover:text-red-700 cursor-pointer"
-                            >
-                              [CLOSE ×]
-                            </button>
-                          </div>
-
-                          {boxscoreDetails.loading ? (
-                            <div className="py-2 text-center italic text-neutral-500">Loading game tape...</div>
-                          ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <div className="text-[9px] font-black uppercase text-neutral-500 mb-1">
-                                  Scoring Summary ({boxscoreDetails.scoring.length} Goals)
-                                </div>
-                                {boxscoreDetails.scoring.length > 0 ? (
-                                  <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                                    {boxscoreDetails.scoring.map((sc: any, idx: number) => (
-                                      <div key={idx} className="text-[10px] leading-tight border-b border-neutral-100 pb-0.5 flex items-center gap-1 flex-wrap">
-                                        <span className="font-bold text-neutral-500">P{sc.period} {sc.time_formatted || ''}</span>
-                                        {sc.team_logo && (
-                                          <img
-                                            src={sc.team_logo}
-                                            alt={sc.team_abbr || 'Team'}
-                                            className="w-3.5 h-3.5 object-contain shrink-0"
-                                          />
-                                        )}
-                                        {sc.team_abbr && (
-                                          <span className="bg-black text-white font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs">
-                                            {sc.team_abbr}
-                                          </span>
-                                        )}
-                                        <span className="font-black text-black">{sc.scorer}</span>
-                                        {sc.assist1 && sc.assist1 !== '--' && (
-                                          <span className="text-neutral-600">({sc.assist1}{sc.assist2 && sc.assist2 !== '--' ? `, ${sc.assist2}` : ''})</span>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-[10px] italic text-neutral-400">Detailed goal log unavailable.</div>
-                                )}
-                              </div>
-
-                              <div>
-                                <div className="text-[9px] font-black uppercase text-neutral-500 mb-1">
-                                  Top Performers
-                                </div>
-                                {boxscoreDetails.topPlayers.length > 0 ? (
-                                  <div className="space-y-1">
-                                    {boxscoreDetails.topPlayers.map((tp: any, idx: number) => (
-                                      <div key={idx} className="flex items-center justify-between text-[10px] border-b border-neutral-100 pb-0.5">
-                                        <div className="flex items-center gap-1.5 min-w-0">
-                                          {tp.team_logo && (
-                                            <img
-                                              src={tp.team_logo}
-                                              alt={tp.team_abbr || 'Team'}
-                                              className="w-4 h-4 object-contain shrink-0"
-                                            />
-                                          )}
-                                          {tp.team_abbr && (
-                                            <span className="bg-neutral-200 border border-neutral-400 text-black font-mono text-[8px] font-black uppercase px-1 py-0.1 rounded-xs shrink-0">
-                                              {tp.team_abbr}
-                                            </span>
-                                          )}
-                                          <span className="font-bold truncate">{tp.name}</span>
-                                        </div>
-                                        <span className="font-black shrink-0 ml-2">
-                                          {tp.g}G {tp.a}A ({tp.pts}P)
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-[10px] italic text-neutral-400">Player stats summary unavailable.</div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="py-6 text-center text-xs italic text-neutral-500 border border-dashed border-neutral-300">
-                No completed games recorded for {activeSeasonLabel} under this filter.
-              </div>
-            )}
-
-            <div className="flex items-center justify-between mt-3 pt-2 border-t border-neutral-200 text-[10px] font-mono font-bold">
-              <a href="/schedule" className="hover:underline text-blue-900">
-                Full Season Schedule &amp; Boxscores →
-              </a>
-              <a href="/playoffs" className="hover:underline text-blue-900">
-                Playoff Series Hub →
-              </a>
-            </div>
-          </section>
-
           {/* SECTION 2: PLAYOFF SERIES TRACKER OR CHAMPIONSHIP RACE */}
           <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
             <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
