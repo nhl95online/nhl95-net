@@ -1,18 +1,35 @@
-name: Discord Save State Ingestion Bot (Cloud Fallback)
+name: Discord Save State Bot (24/7 on GitHub)
+
+# Runs the full NHL95 Discord bot live on GitHub Actions — no local PC needed.
+# Each run stays connected to Discord for ~5h45m (live save-state ingestion, boxscores,
+# standings/bracket posts, partner webhook sync and channel commands), then exits cleanly.
+# The schedule keeps one run queued at all times so the next run takes over immediately.
+# Every run also does a 96h catch-up scan on startup, so nothing dropped in a gap is missed.
 
 on:
   schedule:
-    # Runs automatically every 5 minutes in the cloud so save states are parsed even when the local PC is turned off
-    - cron: '*/5 * * * *'
-  # Allows manual trigger from the Actions tab in GitHub anytime
+    - cron: '*/20 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/discord_savestate_bot.py'
+      - 'lib/seasons/**'
+      - '.github/workflows/savestate_bot.yml'
+
+# Only one bot online at a time. Scheduled runs queue behind the live one;
+# a code push or manual run replaces the live one so new code takes effect right away.
+concurrency:
+  group: discord-savestate-bot
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 permissions:
   contents: read
 
 jobs:
-  ingest-savestates:
+  bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
 
     steps:
       - name: Checkout Code
@@ -22,19 +39,48 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: '.github/workflows/savestate_bot.yml'
 
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
           pip install discord.py Pillow
+          sudo apt-get install -y -qq fonts-dejavu-core > /dev/null || true
 
-      - name: Scan and Ingest New Save States
+      # Persist coach mute settings (FUCK OFF / GAME ON) and MODE PLAYOFFS/SEASON triggers between runs
+      - name: Restore Bot State
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/coach_notifications.json
+            data/league_mode.json
+          key: bot-state-${{ github.run_id }}
+          restore-keys: |
+            bot-state-
+
+      - name: Run Bot Live (~5h45m)
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           PARTNER_INGEST_URL: ${{ secrets.PARTNER_INGEST_URL || 'https://gwaiwtgwdqadxmimiskf.supabase.co/functions/v1/process-game-state' }}
           PARTNER_WEBHOOK_SECRET: ${{ secrets.PARTNER_WEBHOOK_SECRET }}
+          PYTHONUNBUFFERED: '1'
         run: |
-          python scripts/discord_savestate_bot.py --once --backfill-hours 96
+          if [ -z "$DISCORD_BOT_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Missing DISCORD_BOT_TOKEN or SUPABASE_SERVICE_ROLE_KEY repository secret."
+            exit 1
+          fi
+          python scripts/discord_savestate_bot.py --max-runtime-minutes 340 --backfill-hours 96
+
+      - name: Save Bot State
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/coach_notifications.json
+            data/league_mode.json
+          key: bot-state-${{ github.run_id }}

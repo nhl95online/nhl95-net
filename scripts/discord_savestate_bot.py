@@ -5608,6 +5608,18 @@ class NHL95SaveStateBot(discord.Client):
             print("📡 Listening for .state / .sav drops across all accessible save-state channels")
         print("=" * 68)
 
+        deadline = getattr(self, "max_runtime_deadline", 0.0)
+        if deadline and not getattr(self, "_deadline_task_started", False):
+            self._deadline_task_started = True
+
+            async def _close_at_deadline() -> None:
+                import time as _t
+                await asyncio.sleep(max(0.0, deadline - _t.time()))
+                print("⏱️ Max runtime reached — closing so the next scheduled GitHub Actions run can take over.")
+                await self.close()
+
+            asyncio.create_task(_close_at_deadline())
+
         if self.backfill_hours > 0:
             discord_now = await asyncio.to_thread(self.get_discord_utc_now)
             cutoff = discord_now - timedelta(hours=self.backfill_hours)
@@ -6147,6 +6159,12 @@ def main():
         help="Optional comma-separated Discord channel IDs to restrict listening to",
     )
     parser.add_argument(
+        "--max-runtime-minutes",
+        type=float,
+        default=0.0,
+        help="Run live (with auto-reconnect) for N minutes, then exit cleanly. Used by the GitHub Actions host (0 = run forever)",
+    )
+    parser.add_argument(
         "--post-boxscore-stdin",
         action="store_true",
         help="Read JSON {game, awayTeam, homeTeam, seasonId} from stdin, render boxscore.png, and post to Discord",
@@ -6192,6 +6210,26 @@ def main():
         return
 
     import time
+    if args.max_runtime_minutes > 0:
+        deadline = time.time() + args.max_runtime_minutes * 60.0
+        while time.time() < deadline - 30:
+            try:
+                bot = NHL95SaveStateBot(
+                    backfill_hours=args.backfill_hours,
+                    allowed_channel_ids=channel_ids,
+                    run_once=False,
+                    intents=intents,
+                )
+                bot.max_runtime_deadline = deadline
+                bot.run(DISCORD_BOT_TOKEN, reconnect=True)
+            except KeyboardInterrupt:
+                break
+            except Exception as crash_err:
+                print(f"⚠️ Bot disconnected or encountered error ({crash_err}), restarting in 5s...")
+                time.sleep(5)
+        print("✅ Runtime window finished. Exiting cleanly.")
+        return
+
     keep_windows_awake()
     while True:
         try:
