@@ -1,5 +1,9 @@
 name: Discord Save State Bot (24/7 on GitHub)
 
+# Every run shows the same title in the Actions list (instead of the commit message),
+# so it's clear each run is just the next shift of the same always-on bot.
+run-name: "🏒 Discord Save State Bot — Live Shift (${{ github.event_name == 'schedule' && 'auto handoff' || github.event_name == 'push' && 'new code' || 'manual start' }})"
+
 # Runs the full NHL95 Discord bot live on GitHub Actions — no local PC needed.
 # Each run stays connected to Discord for ~5h45m (live save-state ingestion, boxscores,
 # standings/bracket posts, partner webhook sync and channel commands), then exits cleanly.
