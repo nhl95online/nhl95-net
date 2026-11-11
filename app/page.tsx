@@ -2651,313 +2651,237 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 4. Weekly League Trends & Historic Record Watch */}
+          {/* 3. Compact Playoff Series Tracker (or Cutline Watch) */}
           <div className="border-t border-neutral-800 pt-3">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5 mb-2.5">
-              <h2 className="font-bold uppercase tracking-wider text-xs sm:text-sm text-white">
-                Trends of the Week
+            <div className="flex items-center justify-between border-b border-neutral-700 mb-2.5 pb-1">
+              <h2 className="font-bold uppercase tracking-tight text-sm text-white leading-tight">
+                {playoffSeries.length > 0 ? `${activeSeasonLabel} Playoffs` : `${activeSeasonLabel} Cutline`}
               </h2>
-              <span className="text-[9px] font-mono font-black uppercase bg-amber-400 text-black px-1.5 py-0.5">
-                {activeSeasonLabel} PULSE
-              </span>
-            </div>
-
-            <div className="space-y-2.5">
-              {(weeklyTrends.length > 0
-                ? weeklyTrends
-                : [
-                    {
-                      badge: 'OT HEARTBREAK ▲ UP',
-                      badgeColor: 'bg-red-700 text-white',
-                      title: 'Losing in OT is up across the league this week',
-                      detail: 'Sudden-death overtime finishes are climbing as playoff-caliber defenses tighten up in the third period.'
-                    },
-                    {
-                      badge: '1X TIMERS ▼ LOWER',
-                      badgeColor: 'bg-amber-400 text-black',
-                      title: '1x Timers are lower at this stage this season than last',
-                      detail: 'Manual goalie reads and slot stick-checks have cut cross-crease one-timer conversions down ~14% vs. last season.'
-                    },
-                    {
-                      badge: 'RECORD WATCH ★',
-                      badgeColor: 'bg-emerald-500 text-black',
-                      title: 'Historic League Records in Sight of Being Broken',
-                      detail: 'Top clubs and scoring leaders are on pace to challenge all-time single-season NHL95 record book marks.'
-                    }
-                  ]
-              ).map((tr, idx) => (
-                <div
-                  key={idx}
-                  className="border border-neutral-800 bg-neutral-900 p-2.5 hover:border-amber-400/60 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-1.5 mb-1">
-                    <span className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 ${tr.badgeColor}`}>
-                      {tr.badge}
-                    </span>
-                    <span className="text-[9px] font-mono text-neutral-500">WK #{idx + 1}</span>
-                  </div>
-                  <h3 className="font-bold text-xs leading-snug text-white mb-1">
-                    {tr.title}
-                  </h3>
-                  <p className="text-[11px] text-neutral-300 leading-relaxed font-serif">
-                    {tr.detail}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
-              <a href="/stats/team" className="text-amber-400 hover:text-amber-300 font-bold uppercase">
-                Full Team Stats →
-              </a>
-              <a href="/power-rankings" className="text-neutral-400 hover:text-white font-bold uppercase">
-                Power Poll →
-              </a>
-            </div>
-          </div>
-
-          {/* 5. Record Book Watch: Teams On Track to Beat a Record */}
-          <div className="border-t-2 border-emerald-500/40 pt-3">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5 mb-2.5">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                <h2 className="font-bold uppercase tracking-wider text-xs sm:text-sm text-white">
-                  Record Book Watch
-                </h2>
-              </div>
-              <span className="text-[9px] font-mono font-black uppercase bg-emerald-500 text-black px-1.5 py-0.5">
-                ON TRACK
-              </span>
-            </div>
-
-            <p className="text-[10px] text-neutral-400 font-serif italic mb-2.5 leading-snug">
-              Clubs currently on pace in {activeSeasonLabel} to break or challenge single-season record book marks:
-            </p>
-
-            <div className="space-y-2.5">
-              {recordBookWatch.length > 0 ? (
-                recordBookWatch.map((rw, idx) => (
-                  <div
-                    key={idx}
-                    className="border border-neutral-800 bg-neutral-900/95 p-2.5 hover:border-emerald-400/70 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-1 mb-1.5">
-                      <span className="text-[9px] font-mono font-black uppercase text-neutral-300 tracking-wider truncate">
-                        {rw.category}
-                      </span>
-                      <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 shrink-0 ${rw.statusColor}`}>
-                        {rw.statusBadge}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-1.5">
-                      {rw.teamLogo ? (
-                        <img
-                          src={rw.teamLogo}
-                          alt={rw.teamAbbr}
-                          className="w-5 h-5 object-contain shrink-0 bg-white/10 p-0.5"
-                        />
-                      ) : (
-                        <span className="w-5 h-5 bg-neutral-800 border border-neutral-700 text-[9px] font-mono font-black flex items-center justify-center shrink-0 text-amber-400">
-                          {rw.teamAbbr}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-black uppercase text-white truncate">
-                          {rw.teamName} <span className="text-amber-400 font-mono text-[10px]">({rw.teamAbbr})</span>
-                        </div>
-                        <div className="text-[9px] font-mono text-neutral-400 truncate">
-                          Coach: {rw.coachName}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-black/70 border border-neutral-800 p-1.5 text-[10px] font-mono space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-400">NOW:</span>
-                        <span className="text-white font-bold">{rw.currentDisplay}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-emerald-400 font-bold">FULL PACE:</span>
-                        <span className="text-emerald-300 font-black">{rw.paceDisplay}</span>
-                      </div>
-                      <div className="flex items-center justify-between border-t border-neutral-800/80 pt-1">
-                        <span className="text-amber-400/90">RECORD:</span>
-                        <span className="text-amber-300 font-bold">
-                          {rw.recordDisplay} <span className="text-neutral-500 text-[9px]">({rw.holderInfo})</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-1.5 w-full bg-neutral-800 h-1.5 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-500"
-                        style={{ width: `${Math.min(100, Math.max(15, rw.progressPct))}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-xs italic text-neutral-400">
-                  Calculating live single-season record pace projections...
-                </p>
-              )}
-            </div>
-
-            <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
-              <a href="/records" className="text-emerald-400 hover:text-emerald-300 font-bold uppercase">
-                View All-Time Record Book →
-              </a>
-              <a href="/standings" className="text-neutral-400 hover:text-white font-bold uppercase">
-                Standings →
-              </a>
-            </div>
-          </div>
-          {false && (
-            <div>
-              <div>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* CENTER COLUMN: FULL LEAGUE HUB */}
-        <main className="col-span-12 md:col-span-12 lg:col-span-6 xl:col-span-7 order-1 md:order-1 lg:order-2 space-y-5 sm:space-y-6 min-w-0">
-          {/* SECTION 2: PLAYOFF SERIES TRACKER OR CHAMPIONSHIP RACE */}
-          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
-            <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="bg-amber-400 text-black border border-black font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
-                  POSTSEASON
-                </span>
-                <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
-                  {playoffSeries.length > 0 ? `${activeSeasonLabel} Playoff Series Tracker` : `${activeSeasonLabel} Top Table & Cutline Watch`}
-                </h2>
-              </div>
-              <a href="/playoffs" className="text-[10px] font-mono font-bold uppercase underline hover:text-blue-800">
-                Full Bracket →
+              <a href="/playoffs" className="text-[9px] font-mono font-bold uppercase text-amber-400 hover:underline shrink-0">
+                Bracket →
               </a>
             </div>
 
             {playoffSeries.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {playoffSeries.slice(0, 8).map((ser) => (
-                  <a
-                    key={ser.id}
-                    href="/playoffs"
-                    className="block border border-black bg-[#faf8f3] hover:bg-amber-50/50 p-2.5 transition-colors"
-                  >
-                    <div className="flex items-center justify-between text-[9px] font-mono uppercase mb-1.5 pb-1 border-b border-neutral-200">
-                      <span className="font-bold text-neutral-600 truncate">{ser.matchLabel}</span>
-                      <span className={`font-black px-1.5 py-0.2 ${
-                        ser.isComplete
-                          ? 'bg-black text-white'
-                          : ser.leader
-                          ? 'bg-amber-300 text-black border border-black'
-                          : 'bg-neutral-200 text-neutral-700'
-                      }`}>
-                        {ser.statusPill}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {ser.homeSeed !== undefined && (
-                            <span className="text-[9px] font-mono font-bold text-neutral-400 w-4">
-                              #{ser.homeSeed}
-                            </span>
-                          )}
-                          {ser.homeLogo && (
-                            <img src={ser.homeLogo} alt={ser.homeAbbr} className="w-4 h-4 object-contain shrink-0" />
-                          )}
-                          <span className={`text-xs uppercase truncate ${ser.homeWins > ser.awayWins ? 'font-black' : 'font-semibold text-neutral-700'}`}>
-                            {ser.homeName}
-                          </span>
+              <div className="space-y-1.5">
+                {[...playoffSeries]
+                  .sort((a, b) => Number(a.isComplete) - Number(b.isComplete))
+                  .map((ser) => (
+                    <a
+                      key={ser.id}
+                      href="/playoffs"
+                      className={`block border p-1.5 transition-colors ${ser.isComplete ? 'border-neutral-800 bg-neutral-900/60' : 'border-amber-400/50 bg-neutral-900 hover:border-amber-400'}`}
+                    >
+                      <div className="flex items-center justify-between gap-1 text-[8px] font-mono uppercase mb-1">
+                        <span className="text-neutral-400 truncate">{ser.matchLabel}</span>
+                        <span className={`font-black px-1 shrink-0 ${ser.isComplete ? 'bg-neutral-700 text-white' : 'bg-amber-400 text-black'}`}>
+                          {ser.statusPill}
+                        </span>
+                      </div>
+                      {[
+                        { seed: ser.homeSeed, logo: ser.homeLogo, abbr: ser.homeAbbr, wins: ser.homeWins, lead: ser.homeWins > ser.awayWins },
+                        { seed: ser.awaySeed, logo: ser.awayLogo, abbr: ser.awayAbbr, wins: ser.awayWins, lead: ser.awayWins > ser.homeWins },
+                      ].map((tm, tIdx) => (
+                        <div key={tIdx} className="flex items-center justify-between text-[11px] leading-tight">
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span className="text-[8px] font-mono text-neutral-500 w-4 shrink-0">{tm.seed !== undefined ? `#${tm.seed}` : ''}</span>
+                            {tm.logo && <img src={tm.logo} alt={tm.abbr} className="w-3.5 h-3.5 object-contain shrink-0" />}
+                            <span className={`uppercase truncate ${tm.lead ? 'font-black text-white' : 'text-neutral-400'}`}>{tm.abbr}</span>
+                          </div>
+                          <span className={`font-mono font-black ${tm.lead ? 'text-amber-400' : 'text-neutral-400'}`}>{tm.wins}</span>
                         </div>
-                        <span className="font-mono text-sm font-black">{ser.homeWins}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {ser.awaySeed !== undefined && (
-                            <span className="text-[9px] font-mono font-bold text-neutral-400 w-4">
-                              #{ser.awaySeed}
-                            </span>
-                          )}
-                          {ser.awayLogo && (
-                            <img src={ser.awayLogo} alt={ser.awayAbbr} className="w-4 h-4 object-contain shrink-0" />
-                          )}
-                          <span className={`text-xs uppercase truncate ${ser.awayWins > ser.homeWins ? 'font-black' : 'font-semibold text-neutral-700'}`}>
-                            {ser.awayName}
-                          </span>
-                        </div>
-                        <span className="font-mono text-sm font-black">{ser.awayWins}</span>
-                      </div>
-                    </div>
-
-                    {ser.games.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2 pt-1.5 border-t border-neutral-200 font-mono text-[9px]">
-                        {ser.games.map((gm) => (
-                          <span key={gm.gameNumber} className="bg-white border border-neutral-300 px-1 py-0.2 text-neutral-700">
-                            G{gm.gameNumber}: <strong>{gm.homeScore}-{gm.awayScore}</strong>{gm.isOT ? ' OT' : ''}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </a>
-                ))}
+                      ))}
+                    </a>
+                  ))}
               </div>
             ) : standings.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="border border-neutral-300 bg-[#faf8f3] p-2.5">
-                  <div className="text-[10px] font-mono font-black uppercase border-b border-black pb-1 mb-2">
-                    ★ Top 4 Championship Contenders
+              <div className="space-y-1">
+                {standings.slice(0, 18).map((t: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between text-[11px] ${idx === 15 ? 'border-b border-dashed border-red-600 pb-1' : ''}`}
+                  >
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[9px] font-mono text-neutral-500 w-5 shrink-0">#{idx + 1}</span>
+                      {t.league_teams?.logo_url && <img src={t.league_teams.logo_url} alt="" className="w-3.5 h-3.5 object-contain shrink-0" />}
+                      <span className="font-bold truncate">{t.league_teams?.abbreviation}</span>
+                    </div>
+                    <span className="font-mono text-amber-400 font-bold">{t.pts}</span>
                   </div>
-                  <div className="space-y-1.5">
-                    {standings.slice(0, 4).map((t: any, idx: number) => (
-                      <div key={idx} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-[10px] w-4">#{idx + 1}</span>
-                          {t.league_teams?.logo_url && (
-                            <img src={t.league_teams.logo_url} alt="" className="w-4 h-4 object-contain" />
-                          )}
-                          <span className="font-bold">{t.league_teams?.team_name || t.league_teams?.abbreviation}</span>
-                        </div>
-                        <span className="font-mono font-black text-xs">{t.pts} PTS</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="border border-neutral-300 bg-[#faf8f3] p-2.5">
-                  <div className="text-[10px] font-mono font-black uppercase border-b border-black pb-1 mb-2">
-                    ⚔ Playoff Cutline Battle (Seeds 13–18)
-                  </div>
-                  <div className="space-y-1.5">
-                    {standings.slice(12, 18).map((t: any, idx: number) => {
-                      const seed = idx + 13;
-                      return (
-                        <div key={seed} className={`flex items-center justify-between text-xs ${seed === 16 ? 'border-b border-dashed border-red-700 pb-1' : ''}`}>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold text-[10px] w-5">#{seed}</span>
-                            {t.league_teams?.logo_url && (
-                              <img src={t.league_teams.logo_url} alt="" className="w-4 h-4 object-contain" />
-                            )}
-                            <span className="font-bold">{t.league_teams?.abbreviation}</span>
-                          </div>
-                          <span className="font-mono text-[11px] font-bold">
-                            {t.gp}GP • {t.pts} PTS
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                ))}
               </div>
             ) : (
-              <p className="text-xs italic text-neutral-500">No playoff bracket data available for this season.</p>
+              <p className="text-xs italic text-neutral-400">No playoff bracket data yet.</p>
             )}
+          </div>
+        </section>
+
+        {/* CENTER COLUMN: FULL LEAGUE HUB */}
+        <main className="col-span-12 md:col-span-12 lg:col-span-6 xl:col-span-7 order-1 md:order-1 lg:order-2 space-y-5 sm:space-y-6 min-w-0">
+          {/* SECTION 2: TRENDS OF THE WEEK & RECORD BOOK WATCH (CENTER, WIDE GRID) */}
+          <section className="bg-black text-white border-2 border-black p-3.5 sm:p-4 shadow-[3px_3px_0px_#000] space-y-5">
+            {/* 4. Weekly League Trends & Historic Record Watch */}
+            <div>
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5 mb-2.5">
+                <h2 className="font-bold uppercase tracking-wider text-xs sm:text-sm text-white">
+                  Trends of the Week
+                </h2>
+                <span className="text-[9px] font-mono font-black uppercase bg-amber-400 text-black px-1.5 py-0.5">
+                  {activeSeasonLabel} PULSE
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {(weeklyTrends.length > 0
+                  ? weeklyTrends
+                  : [
+                      {
+                        badge: 'OT HEARTBREAK ▲ UP',
+                        badgeColor: 'bg-red-700 text-white',
+                        title: 'Losing in OT is up across the league this week',
+                        detail: 'Sudden-death overtime finishes are climbing as playoff-caliber defenses tighten up in the third period.'
+                      },
+                      {
+                        badge: '1X TIMERS ▼ LOWER',
+                        badgeColor: 'bg-amber-400 text-black',
+                        title: '1x Timers are lower at this stage this season than last',
+                        detail: 'Manual goalie reads and slot stick-checks have cut cross-crease one-timer conversions down ~14% vs. last season.'
+                      },
+                      {
+                        badge: 'RECORD WATCH ★',
+                        badgeColor: 'bg-emerald-500 text-black',
+                        title: 'Historic League Records in Sight of Being Broken',
+                        detail: 'Top clubs and scoring leaders are on pace to challenge all-time single-season NHL95 record book marks.'
+                      }
+                    ]
+                ).map((tr, idx) => (
+                  <div
+                    key={idx}
+                    className="border border-neutral-800 bg-neutral-900 p-2.5 hover:border-amber-400/60 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-1.5 mb-1">
+                      <span className={`text-[9px] font-mono font-black uppercase px-1.5 py-0.5 ${tr.badgeColor}`}>
+                        {tr.badge}
+                      </span>
+                      <span className="text-[9px] font-mono text-neutral-500">WK #{idx + 1}</span>
+                    </div>
+                    <h3 className="font-bold text-sm leading-snug text-white mb-1">
+                      {tr.title}
+                    </h3>
+                    <p className="text-xs text-neutral-300 leading-relaxed font-serif">
+                      {tr.detail}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
+                <a href="/stats/team" className="text-amber-400 hover:text-amber-300 font-bold uppercase">
+                  Full Team Stats →
+                </a>
+                <a href="/power-rankings" className="text-neutral-400 hover:text-white font-bold uppercase">
+                  Power Poll →
+                </a>
+              </div>
+            </div>
+
+            {/* 5. Record Book Watch: Teams On Track to Beat a Record */}
+            <div className="border-t-2 border-emerald-500/40 pt-3">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5 mb-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <h2 className="font-bold uppercase tracking-wider text-xs sm:text-sm text-white">
+                    Record Book Watch
+                  </h2>
+                </div>
+                <span className="text-[9px] font-mono font-black uppercase bg-emerald-500 text-black px-1.5 py-0.5">
+                  ON TRACK
+                </span>
+              </div>
+
+              <p className="text-[10px] text-neutral-400 font-serif italic mb-2.5 leading-snug">
+                Clubs currently on pace in {activeSeasonLabel} to break or challenge single-season record book marks:
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {recordBookWatch.length > 0 ? (
+                  recordBookWatch.map((rw, idx) => (
+                    <div
+                      key={idx}
+                      className="border border-neutral-800 bg-neutral-900/95 p-2.5 hover:border-emerald-400/70 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1.5">
+                        <span className="text-[9px] font-mono font-black uppercase text-neutral-300 tracking-wider truncate">
+                          {rw.category}
+                        </span>
+                        <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 shrink-0 ${rw.statusColor}`}>
+                          {rw.statusBadge}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 mb-1.5">
+                        {rw.teamLogo ? (
+                          <img
+                            src={rw.teamLogo}
+                            alt={rw.teamAbbr}
+                            className="w-7 h-7 object-contain shrink-0 bg-white/10 p-0.5"
+                          />
+                        ) : (
+                          <span className="w-5 h-5 bg-neutral-800 border border-neutral-700 text-[9px] font-mono font-black flex items-center justify-center shrink-0 text-amber-400">
+                            {rw.teamAbbr}
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-black uppercase text-white truncate">
+                            {rw.teamName} <span className="text-amber-400 font-mono text-[10px]">({rw.teamAbbr})</span>
+                          </div>
+                          <div className="text-[9px] font-mono text-neutral-400 truncate">
+                            Coach: {rw.coachName}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-black/70 border border-neutral-800 p-1.5 text-[11px] font-mono space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-neutral-400">NOW:</span>
+                          <span className="text-white font-bold">{rw.currentDisplay}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-emerald-400 font-bold">FULL PACE:</span>
+                          <span className="text-emerald-300 font-black">{rw.paceDisplay}</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-neutral-800/80 pt-1">
+                          <span className="text-amber-400/90">RECORD:</span>
+                          <span className="text-amber-300 font-bold">
+                            {rw.recordDisplay} <span className="text-neutral-500 text-[9px]">({rw.holderInfo})</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-1.5 w-full bg-neutral-800 h-1.5 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(15, rw.progressPct))}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs italic text-neutral-400">
+                    Calculating live single-season record pace projections...
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono">
+                <a href="/records" className="text-emerald-400 hover:text-emerald-300 font-bold uppercase">
+                  View All-Time Record Book →
+                </a>
+                <a href="/standings" className="text-neutral-400 hover:text-white font-bold uppercase">
+                  Standings →
+                </a>
+              </div>
+            </div>
           </section>
 
           {/* SECTION 3: LEAGUE STATISTICAL LEADERS SPOTLIGHT */}
