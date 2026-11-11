@@ -148,7 +148,7 @@ function generateDefaultPaletteForTeam(
   name: string,
   dbColors?: TeamColors | null
 ): { home: JerseyPalette; away: JerseyPalette } {
-  // 1. Colors managed in Supabase `team_colors` (jersey_home / jersey_away, or primary/secondary) win
+  // 1. Colors managed in league_teams.team_meta.colors (jersey_home / jersey_away, or primary/secondary) win
   if (dbColors) {
     const curated = TEAM_DEFAULT_PALETTES[(abbr || '').trim().toUpperCase()];
     const base = curated
@@ -566,7 +566,7 @@ export default function ModMyTeamPage() {
     [teams, selectedTeamId]
   );
 
-  // Team colors managed in Supabase `team_colors` (override hardcoded default jerseys)
+  // Team colors managed in league_teams.team_meta.colors (override hardcoded default jerseys)
   const [dbTeamColors, setDbTeamColors] = useState<Map<string, TeamColors> | null>(null);
   useEffect(() => {
     fetchAllTeamColors().then(setDbTeamColors);

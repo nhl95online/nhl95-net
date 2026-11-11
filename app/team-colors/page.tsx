@@ -3,11 +3,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { normalizeHex, readableTextOn, tintHex, type TeamJerseyPalette } from '@/lib/teamColors';
+import { normalizeHex, readableTextOn, tintHex, teamColorsFromMeta, type TeamJerseyPalette } from '@/lib/teamColors';
 
 // ==========================================
-// Team Colors Admin — edits the Supabase `team_colors` table
-// (the same table you can edit directly in Supabase -> Table Editor -> team_colors)
+// Team Colors Admin — writes league_teams.team_meta.colors for every season row of a franchise
+// (the same JSON you can edit directly in Supabase -> league_teams -> team_meta)
 // ==========================================
 
 const PW_STORAGE_KEY = 'nhl95_team_colors_pw';
@@ -176,13 +176,20 @@ export default function TeamColorsAdminPage() {
     if (!unlocked) return;
     (async () => {
       setLoading(true);
-      const [teamsRes, colorsRes] = await Promise.all([
-        supabase.from('league_teams').select('team_id, team_name, abbreviation, logo_url, league_id').order('league_id', { ascending: false }).range(0, 4999),
-        supabase.from('team_colors').select('*').range(0, 999),
-      ]);
-      setTableMissing(!!colorsRes.error);
+      const teamsRes = await supabase
+        .from('league_teams')
+        .select('team_id, team_name, abbreviation, logo_url, league_id, team_meta')
+        .order('league_id', { ascending: false })
+        .range(0, 4999);
+      setTableMissing(!!teamsRes.error);
+      // Colors are stored in league_teams.team_meta.colors (latest season row with colors wins)
       const colorMap = new Map<string, any>();
-      (colorsRes.data || []).forEach((c: any) => colorMap.set(String(c.abbreviation || '').toUpperCase(), c));
+      (teamsRes.data || []).forEach((t: any) => {
+        const ab = String(t.abbreviation || '').trim().toUpperCase();
+        if (!ab || colorMap.has(ab)) return;
+        const tc = teamColorsFromMeta(ab, t.team_name, t.team_meta);
+        if (tc) colorMap.set(ab, tc);
+      });
 
       const latest = new Map<string, any>();
       (teamsRes.data || []).forEach((t: any) => {
@@ -191,9 +198,6 @@ export default function TeamColorsAdminPage() {
         const prev = latest.get(ab);
         if (!prev) latest.set(ab, { ...t });
         else if (!prev.logo_url && t.logo_url) prev.logo_url = t.logo_url;
-      });
-      colorMap.forEach((c, ab) => {
-        if (!latest.has(ab)) latest.set(ab, { abbreviation: ab, team_name: c.team_name || ab, logo_url: '', team_id: null, league_id: 0 });
       });
 
       const list: TeamRow[] = Array.from(latest.values()).map((t: any) => {
@@ -326,7 +330,7 @@ export default function TeamColorsAdminPage() {
         <div>
           <h1 className="text-3xl sm:text-4xl font-black uppercase tracking-tighter">Team Colors Admin</h1>
           <p className="text-xs font-bold uppercase italic text-gray-700">
-            Theme colors for team pages + default home/away jerseys for Mod My Team. Saved to Supabase <code>team_colors</code>.
+            Theme colors for team pages + default home/away jerseys for Mod My Team. Saved to Supabase <code>league_teams.team_meta.colors</code> (every season of the franchise).
           </p>
         </div>
         <button
@@ -344,7 +348,7 @@ export default function TeamColorsAdminPage() {
 
       {tableMissing && (
         <div className="mb-4 border-2 border-red-700 bg-red-50 text-red-800 p-3 text-xs font-bold">
-          The <code>team_colors</code> table doesn&apos;t exist yet. Run <code>supabase/team_colors.sql</code> in the Supabase SQL Editor, then reload.
+          Could not load <code>league_teams</code> from Supabase. Reload the page to try again.
         </div>
       )}
 

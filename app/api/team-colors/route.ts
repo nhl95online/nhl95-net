@@ -30,6 +30,20 @@ function cleanJersey(v: unknown): Record<string, string> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+function parseMeta(raw: unknown): Record<string, any> {
+  if (!raw) return {};
+  if (typeof raw === 'object') return { ...(raw as Record<string, any>) };
+  if (typeof raw === 'string') {
+    try {
+      const p = JSON.parse(raw);
+      return p && typeof p === 'object' ? p : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 function checkPassword(supplied: unknown): NextResponse | null {
   if (!adminPassword) {
     return NextResponse.json(
@@ -49,8 +63,11 @@ function checkPassword(supplied: unknown): NextResponse | null {
   return null;
 }
 
-/** POST { password, verifyOnly?: true } -> checks the password.
- *  POST { password, team: { abbreviation, team_name, primary_color, secondary_color, accent_color?, text_color?, jersey_home?, jersey_away? } } -> upserts one team. */
+/**
+ * POST { password, verifyOnly: true } -> checks the password.
+ * POST { password, team: { abbreviation, primary_color, secondary_color, text_color?, accent_color?, jersey_home?, jersey_away? } }
+ *   -> writes team_meta.colors on EVERY league_teams row with that abbreviation (arena/division etc. are preserved).
+ */
 export async function POST(req: NextRequest) {
   let body: any;
   try {
@@ -64,7 +81,7 @@ export async function POST(req: NextRequest) {
   if (body?.verifyOnly) return NextResponse.json({ ok: true });
 
   const t = body?.team || {};
-  const abbreviation = String(t.abbreviation || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  const abbreviation = String(t.abbreviation || '').trim().toUpperCase();
   const primary = cleanHex(t.primary_color);
   const secondary = cleanHex(t.secondary_color);
   if (!abbreviation || !primary || !secondary) {
@@ -74,35 +91,44 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const row = {
-    abbreviation,
-    team_name: String(t.team_name || abbreviation).trim().slice(0, 80),
-    primary_color: primary,
-    secondary_color: secondary,
-    accent_color: cleanHex(t.accent_color),
-    text_color: cleanHex(t.text_color),
+  const colors = {
+    primary,
+    secondary,
+    text: cleanHex(t.text_color),
+    accent: cleanHex(t.accent_color),
     jersey_home: cleanJersey(t.jersey_home),
     jersey_away: cleanJersey(t.jersey_away),
   };
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-  const { data, error } = await supabase
-    .from('team_colors')
-    .upsert(row, { onConflict: 'abbreviation' })
-    .select()
-    .single();
+  const { data: rows, error: readErr } = await supabase
+    .from('league_teams')
+    .select('team_id, abbreviation, team_meta')
+    .ilike('abbreviation', abbreviation);
 
-  if (error) {
-    const missing = /relation .*team_colors.* does not exist|Could not find the table/i.test(error.message || '');
+  if (readErr) {
+    return NextResponse.json({ ok: false, error: readErr.message }, { status: 500 });
+  }
+  const targets = (rows || []).filter((r: any) => String(r.abbreviation || '').trim().toUpperCase() === abbreviation);
+  if (targets.length === 0) {
+    return NextResponse.json({ ok: false, error: `No league_teams rows found for ${abbreviation}.` }, { status: 404 });
+  }
+
+  const failures: string[] = [];
+  await Promise.all(
+    targets.map(async (r: any) => {
+      const meta = parseMeta(r.team_meta);
+      meta.colors = colors;
+      const { error } = await supabase.from('league_teams').update({ team_meta: meta }).eq('team_id', r.team_id);
+      if (error) failures.push(`team_id ${r.team_id}: ${error.message}`);
+    })
+  );
+
+  if (failures.length > 0) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: missing
-          ? 'The team_colors table does not exist yet. Run supabase/team_colors.sql in the Supabase SQL Editor first.'
-          : error.message,
-      },
+      { ok: false, error: `Saved ${targets.length - failures.length}/${targets.length} rows. ${failures[0]}` },
       { status: 500 }
     );
   }
-  return NextResponse.json({ ok: true, team: data });
+  return NextResponse.json({ ok: true, rowsUpdated: targets.length, colors });
 }

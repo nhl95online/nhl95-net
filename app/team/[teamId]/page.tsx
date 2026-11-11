@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 import CoachProfileView, { LEAGUE_LOGOS } from '@/components/CoachProfileView';
-import { useTeamColors, readableTextOn, tintHex } from '@/lib/teamColors';
+import { useTeamColors, teamColorsFromMeta, readableTextOn, tintHex } from '@/lib/teamColors';
 
 // ==========================================
 // 1. LEAGUE CONSTANTS & ROSTERS CONFIG
@@ -205,8 +205,11 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const [arenaName, setArenaName] = useState<string>('TBD');
   const [currentStanding, setCurrentStanding] = useState<any>(null);
 
-  // Team theme colors (Supabase `team_colors`, edited in the Supabase Table Editor)
-  const teamColors = useTeamColors(team?.abbreviation);
+  // Team theme colors (league_teams.team_meta.colors — this season's row first, else the franchise's latest)
+  const franchiseColors = useTeamColors(team?.abbreviation);
+  const teamColors =
+    (team ? teamColorsFromMeta(String(team.abbreviation || '').toUpperCase(), team.team_name, team.team_meta) : null) ||
+    franchiseColors;
   const themePrimary = teamColors?.primary_color || '#111111';
   const themeSecondary = teamColors?.secondary_color || '#f59e0b';
   const themeText = teamColors?.text_color || readableTextOn(themePrimary);

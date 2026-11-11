@@ -4,11 +4,19 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 /**
- * Team colors live in the Supabase `team_colors` table (see supabase/team_colors.sql).
- * Edit them in Supabase -> Table Editor -> team_colors; the site reads them on page load.
+ * Team colors live inside `league_teams.team_meta.colors` (JSON), next to arena/division:
  *
- *  - primary_color / secondary_color / accent_color / text_color: team page theme
- *  - jersey_home / jersey_away: default NOSE jersey palettes for /mod-my-team
+ *   "colors": {
+ *     "primary": "#0c5454",            // team page theme
+ *     "secondary": "#111111",
+ *     "text": null,                    // optional header text color (null = auto black/white)
+ *     "accent": null,                  // optional
+ *     "jersey_home": { "helmet": "#..", "jerseyMain": "#..", ... },   // Mod My Team defaults
+ *     "jersey_away": { ... }
+ *   }
+ *
+ * Edit them at /team-colors (password protected) or directly in Supabase -> league_teams -> team_meta.
+ * The admin page writes the same colors to every season row of a franchise (same abbreviation).
  */
 
 export interface TeamJerseyPalette {
@@ -67,31 +75,67 @@ export function tintHex(hex: string, amount: number): string {
   return `#${mix(1)}${mix(3)}${mix(5)}`;
 }
 
+/** Parses team_meta (object or JSON string) safely. */
+export function parseTeamMeta(raw: unknown): Record<string, any> {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw as Record<string, any>;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+/** Converts a league_teams row's team_meta.colors into TeamColors (null when not set). */
+export function teamColorsFromMeta(abbreviation: string, teamName: string | null | undefined, rawMeta: unknown): TeamColors | null {
+  const meta = parseTeamMeta(rawMeta);
+  let colors = meta.colors;
+  // Fallback: older rows store flat team_meta.primary_color / secondary_color
+  if ((!colors || typeof colors !== 'object' || !colors.primary) && meta.primary_color) {
+    colors = { primary: meta.primary_color, secondary: meta.secondary_color };
+  }
+  if (!colors || typeof colors !== 'object' || !colors.primary) return null;
+  return {
+    abbreviation,
+    team_name: teamName || abbreviation,
+    primary_color: normalizeHex(colors.primary, '#111111'),
+    secondary_color: normalizeHex(colors.secondary, '#f59e0b'),
+    text_color: colors.text ? normalizeHex(colors.text, '') || null : null,
+    accent_color: colors.accent ? normalizeHex(colors.accent, '') || null : null,
+    jersey_home: colors.jersey_home && typeof colors.jersey_home === 'object' ? colors.jersey_home : null,
+    jersey_away: colors.jersey_away && typeof colors.jersey_away === 'object' ? colors.jersey_away : null,
+  };
+}
+
 let cache: Map<string, TeamColors> | null = null;
 let inflight: Promise<Map<string, TeamColors>> | null = null;
 
-/** Loads every row of team_colors once per page session (keyed by upper-case abbreviation). */
+/** Loads colors for every franchise once per page session (keyed by upper-case abbreviation, latest season wins). */
 export async function fetchAllTeamColors(): Promise<Map<string, TeamColors>> {
   if (cache) return cache;
   if (inflight) return inflight;
   inflight = (async () => {
     const map = new Map<string, TeamColors>();
     try {
-      const { data, error } = await supabase.from('team_colors').select('*').range(0, 999);
+      const { data, error } = await supabase
+        .from('league_teams')
+        .select('abbreviation, team_name, league_id, team_meta')
+        .order('league_id', { ascending: false })
+        .range(0, 4999);
       if (!error && Array.isArray(data)) {
         for (const row of data as any[]) {
           const abbr = String(row.abbreviation || '').trim().toUpperCase();
-          if (!abbr) continue;
-          map.set(abbr, {
-            ...row,
-            abbreviation: abbr,
-            primary_color: normalizeHex(row.primary_color, '#111111'),
-            secondary_color: normalizeHex(row.secondary_color, '#f59e0b'),
-          });
+          if (!abbr || map.has(abbr)) continue;
+          const tc = teamColorsFromMeta(abbr, row.team_name, row.team_meta);
+          if (tc) map.set(abbr, tc);
         }
       }
     } catch {
-      // table missing or offline: callers fall back to their defaults
+      // offline: callers fall back to their defaults
     }
     cache = map;
     inflight = null;
