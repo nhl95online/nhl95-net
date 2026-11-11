@@ -1,0 +1,40 @@
+name: Discord Save State Ingestion Bot (Cloud Fallback)
+
+on:
+  schedule:
+    # Runs automatically every 5 minutes in the cloud so save states are parsed even when the local PC is turned off
+    - cron: '*/5 * * * *'
+  # Allows manual trigger from the Actions tab in GitHub anytime
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ingest-savestates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install discord.py Pillow
+
+      - name: Scan and Ingest New Save States
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          PARTNER_INGEST_URL: ${{ secrets.PARTNER_INGEST_URL || 'https://gwaiwtgwdqadxmimiskf.supabase.co/functions/v1/process-game-state' }}
+          PARTNER_WEBHOOK_SECRET: ${{ secrets.PARTNER_WEBHOOK_SECRET }}
+        run: |
+          python scripts/discord_savestate_bot.py --once --backfill-hours 96

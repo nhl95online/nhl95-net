@@ -72,6 +72,8 @@ SUPABASE_KEY = (
 )
 DISCORD_BOXSCORE_WEBHOOK_URL = os.getenv("DISCORD_BOXSCORE_WEBHOOK_URL") or os.getenv("DISCORD_WEBHOOK_URL") or ""
 DISCORD_WATCH_CHANNELS_ENV = os.getenv("DISCORD_SAVESTATE_CHANNELS", "")
+PARTNER_INGEST_URL = os.getenv("PARTNER_INGEST_URL", "")
+PARTNER_WEBHOOK_SECRET = os.getenv("PARTNER_WEBHOOK_SECRET", "")
 
 # --- CONSTANTS & MAPS (Matching lib/seasons/index.ts & lib/parsers/savestate.ts) ---
 
@@ -1079,13 +1081,23 @@ def _fetch_pil_image(url: str) -> Any:
     try:
         from PIL import Image
         req = urllib.request.Request(url, headers={"User-Agent": "NHL95Bot/1.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=6) as resp:
             img = Image.open(io.BytesIO(resp.read())).convert("RGBA")
             _IMAGE_CACHE[url] = img
             return img.copy()
     except Exception:
         _IMAGE_CACHE[url] = None
         return None
+
+
+def _prefetch_pil_images(urls: List[str]) -> None:
+    """Downloads multiple images concurrently into _IMAGE_CACHE so bracket/standings render in ~1s."""
+    missing = [u for u in dict.fromkeys(urls) if u and u not in _IMAGE_CACHE]
+    if not missing:
+        return
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        list(pool.map(_fetch_pil_image, missing))
 
 
 def render_retro_boxscore_png(
@@ -1718,7 +1730,7 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
 
     # Center-top circular League Badge
     badge_url = (
-        f"{SUPABASE_URL}/storage/v1/object/public/images%20for%20site/Original%206.png"
+        f"{SUPABASE_URL}/storage/v1/object/public/images%20for%20site/Original6.png"
         if is_orig6
         else f"{SUPABASE_URL}/storage/v1/object/public/images%20for%20site/WN95HL.png"
     )
@@ -1812,6 +1824,18 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
     for label, cx, anc in st_headers:
         draw.text((cx, hy), label, fill=WHITE, font=f_row, anchor=anc)
     draw.line([(4, hy + 13), (446, hy + 13)], fill=RULE, width=1)
+
+    # Pre-fetch all standings logos in parallel
+    _prefetch_urls = []
+    for st in standings_sorted:
+        tid = int(st.get("team_id") or 0)
+        t_meta = team_map.get(tid, {})
+        abbr = t_meta.get("abbreviation") or "TM"
+        if abbr in TEAM_SMALL_LOGO_URLS:
+            _prefetch_urls.append(TEAM_SMALL_LOGO_URLS[abbr])
+        elif t_meta.get("logo_url"):
+            _prefetch_urls.append(str(t_meta["logo_url"]).replace(" ", "%20"))
+    _prefetch_pil_images(_prefetch_urls)
 
     ry = hy + 17
     for idx, st in enumerate(standings_sorted, start=1):
@@ -2500,6 +2524,13 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
     )
 
     logo_cache: Dict[str, Any] = {}
+    _bracket_urls = [cup_url]
+    for m_obj in compiled_matches:
+        for side_k in ("home_team", "away_team"):
+            lu = (m_obj.get(side_k) or {}).get("logo_url")
+            if lu:
+                _bracket_urls.append(str(lu).replace(" ", "%20"))
+    _prefetch_pil_images(_bracket_urls)
 
     def get_cached_img(url: Optional[str], max_w: int, max_h: int):
         if not url:
@@ -2509,12 +2540,14 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
             return logo_cache[key]
         try:
             safe_u = url.replace(" ", "%20")
-            req = urllib.request.Request(safe_u, headers={"User-Agent": "NHL95Bot/1.0"})
-            with urllib.request.urlopen(req, timeout=6) as resp:
-                im = Image.open(io.BytesIO(resp.read())).convert("RGBA")
-                im.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
-                logo_cache[key] = im
-                return im
+            base_im = _fetch_pil_image(safe_u)
+            if base_im is None:
+                logo_cache[key] = None
+                return None
+            im = base_im.copy()
+            im.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
+            logo_cache[key] = im
+            return im
         except Exception:
             logo_cache[key] = None
             return None
@@ -3337,56 +3370,114 @@ def resolve_active_league_season(is_orig6: bool, channel_name: str = "") -> int:
     return default_id
 
 
+LEAGUE_MODE_FILE_PATH = os.path.join(BASE_DIR, "data", "league_mode.json")
+
+
+def get_league_mode_override(season_id: int) -> Optional[str]:
+    """Reads optional Season/Playoffs mode trigger from data/league_mode.json."""
+    if os.path.isfile(LEAGUE_MODE_FILE_PATH):
+        try:
+            with open(LEAGUE_MODE_FILE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                mode = data.get(str(season_id)) or data.get("default")
+                if mode in ("Season", "Playoffs"):
+                    return mode
+        except Exception:
+            pass
+    return None
+
+
+def set_league_mode_override(season_id: int, mode: Optional[str]) -> None:
+    """Persists Season/Playoffs mode trigger in data/league_mode.json (None = auto)."""
+    data: Dict[str, Any] = {}
+    if os.path.isfile(LEAGUE_MODE_FILE_PATH):
+        try:
+            with open(LEAGUE_MODE_FILE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    if mode in ("Season", "Playoffs"):
+        data[str(season_id)] = mode
+    else:
+        data.pop(str(season_id), None)
+    os.makedirs(os.path.dirname(LEAGUE_MODE_FILE_PATH), exist_ok=True)
+    with open(LEAGUE_MODE_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+def resolve_default_game_mode(season_id: int, is_playoffs_hint: bool, is_season_hint: bool) -> str:
+    """Resolves 'Season' vs 'Playoffs' using explicit hints, saved mode trigger, active league_playoffs, or schedule completion."""
+    if is_playoffs_hint:
+        return "Playoffs"
+    if is_season_hint:
+        return "Season"
+    override = get_league_mode_override(season_id)
+    if override in ("Season", "Playoffs"):
+        return override
+    try:
+        s_int = int(season_id)
+        po_rows = supabase.select(
+            "league_playoffs",
+            {"select": "playoff_id,is_complete", "league_id": f"eq.{s_int}"},
+        ) or []
+        if any(not r.get("is_complete") for r in po_rows):
+            return "Playoffs"
+
+        # Automatic Schedule-Completion Trigger: if all regular-season schedule games are played, auto-trigger Playoffs
+        sched_rows = supabase.select(
+            "league_schedule",
+            {"select": "game_id,played", "league_id": f"eq.{s_int}"},
+        ) or []
+        if sched_rows:
+            stats_rows = supabase.select(
+                "league_gamestats",
+                {"select": "game_id", "league_id": f"eq.{s_int}"},
+            ) or []
+            played_ids = {str(g.get("game_id")).strip() for g in stats_rows if g.get("game_id") is not None}
+            any_unplayed = any(
+                str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes")
+                and str(g.get("game_id") or "").strip() not in played_ids
+                for g in sched_rows
+            )
+            if not any_unplayed:
+                return "Playoffs"
+    except Exception:
+        pass
+    return "Season"
+
+
 def detect_context_from_discord(
     raw_bytes: bytes,
     channel_name: str,
     message_text: str,
     filename: str,
+    category_name: str = "",
+    channel_id: int = 0,
+    category_id: int = 0,
 ) -> Tuple[int, str, bool]:
     """
     Auto-detects (season_id, game_mode, allow_overwrite) from Discord channel name,
-    message text, filename, and save state team bytes.
+    category name/ID, message text, filename, and save state team bytes.
     Dynamically resolves the active season in The W or Original 6.
     """
-    combined = f"{channel_name} {message_text} {filename}".lower()
+    ch_low = (channel_name or "").lower()
+    cat_low = (category_name or "").lower()
+    ch_and_cat = f"{cat_low} {ch_low}".strip()
+    combined = f"{cat_low} {ch_low} {message_text} {filename}".lower()
 
     allow_overwrite = bool(re.search(r"\b(overwrite|resubmit|replace|force)\b", combined))
     is_playoffs_hint = bool(
         re.search(r"\b(playoff|playoffs|po|qf|sf|cf|final|finals|series|bracket)\b", combined)
         or re.search(r"\b[wo]\d{1,2}p\b", combined)
     )
+    is_season_hint = bool(
+        re.search(r"\b(regular[\s_-]*season|season[\s_-]*mode|reg[\s_-]*season)\b", combined)
+        or bool(re.search(r"#season\b", combined))
+    )
 
-    # 0. Check for {year}-save-states channel naming convention (e.g. 2013-save-states, 2014-save-states, 1927-save-states)
-    ch_year_match = re.search(r"\b(19\d{2}|20\d{2})\b", channel_name.lower())
-    if ch_year_match:
-        yr = int(ch_year_match.group(1))
-        resolved_sid = resolve_season_id_from_year(yr)
-        return (resolved_sid, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
-
-    # Also check for explicit W/O code in channel/message (e.g. w18p, w19, w20, o01p, o02, o03)
-    wo_code_match = re.search(r"\b([wo])(\d{1,2})p?\b", combined)
-    if wo_code_match:
-        prefix = wo_code_match.group(1).upper()
-        num = int(wo_code_match.group(2))
-        if prefix == "O":
-            return (39 if num == 1 else (52 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
-        if prefix == "W" and num >= 17:
-            return (resolve_active_league_season(False, channel_name) if num in (17, 18) else (22 + num), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
-
-    # 1. Explicit league/season keywords
-    if re.search(r"\b(o01|o-league|o_league|oleague|original[\s_-]*6|s39|season[\s_-]*39)\b", combined):
-        return (resolve_active_league_season(True, channel_name), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
-
-    if re.search(r"\b(w17|s38|season[\s_-]*38|season[\s_-]*17)\b", combined):
-        return (resolve_active_league_season(False, channel_name), "Playoffs", allow_overwrite)
-
-    if re.search(r"\b(w18|s40|season[\s_-]*40|w-league|w_league|wleague)\b", combined):
-        return (resolve_active_league_season(False, channel_name), "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
-
-    active_w_sid = resolve_active_league_season(False, channel_name)
-    active_o_sid = resolve_active_league_season(True, channel_name)
-
-    # 2. Inspect team bytes if no explicit season keyword was given
+    # Inspect team bytes early so we know if team indices are > 5 (which can ONLY be W-League)
+    home_byte = -1
+    away_byte = -1
     if len(raw_bytes) >= 52000:
         offset = 32
         if raw_bytes[48980 + offset] > 30 and raw_bytes[48980] <= 30:
@@ -3394,53 +3485,460 @@ def detect_context_from_discord(
         home_byte = raw_bytes[48980 + offset]
         away_byte = raw_bytes[48982 + offset]
 
-        # O-League only has team indices 0..5. If bytes are 0..5, check if active W season has an active scheduled game
-        # between these indices; if not, and active O season does, auto-select active O season!
-        if home_byte <= 5 and away_byte <= 5:
-            try:
-                w_cfg = get_season_config(active_w_sid)
-                w_home_code = w_cfg.get("teamCodes", {}).get(str(home_byte), "")
-                w_away_code = w_cfg.get("teamCodes", {}).get(str(away_byte), "")
-                w_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": f"eq.{active_w_sid}"})
-                w_h = match_team_from_list(w_home_code, w_teams)
-                w_a = match_team_from_list(w_away_code, w_teams)
-                w_sched = []
-                if w_h and w_a and w_h.get("team_id") and w_a.get("team_id"):
-                    w_sched = supabase.select(
+    is_o6_channel = (
+        channel_id == 1459581476289908838
+        or category_id == 1459581291476422696
+        or ch_low == "season-saves"
+        or "orig" in cat_low
+        or "golden" in cat_low
+        or "orig" in ch_low
+        or bool(re.search(r"\b19[2-6]\d\b", ch_and_cat))
+    )
+    is_w_channel = (
+        channel_id == 1537489552002916372
+        or "the w" in cat_low
+        or cat_low == "w"
+        or bool(re.search(r"\b20\d{2}\b", ch_and_cat))
+    )
+
+    # 0. Check for explicit W/O code in filename or message text first (e.g. w18p, w19, o01p, o1, o02)
+    msg_and_file = f"{message_text} {filename}".lower()
+    wo_code_match = re.search(r"\b([wo])0?(\d{1,2})p?\b", msg_and_file)
+    if wo_code_match:
+        prefix = wo_code_match.group(1).upper()
+        num = int(wo_code_match.group(2))
+        if prefix == "O" and home_byte <= 5 and away_byte <= 5:
+            sid = 39 if num == 1 else (52 + num)
+            return (sid, resolve_default_game_mode(sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+        if prefix == "W" and num >= 17:
+            sid = resolve_active_league_season(False, ch_and_cat) if num in (17, 18) else (22 + num)
+            return (sid, resolve_default_game_mode(sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+
+    # 0B. If dropped in the Original 6 saves channel (#season-saves / Original 6 - Golden Era) and team bytes <= 5
+    if is_o6_channel and (home_byte <= 5 and away_byte <= 5):
+        sid = resolve_active_league_season(True, ch_and_cat)
+        return (sid, resolve_default_game_mode(sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+
+    # 0C. Check for {year}-save-states channel naming convention (e.g. 2013-saves, 2014-save-states, 1927-save-states)
+    ch_year_match = re.search(r"\b(19\d{2}|20\d{2})\b", ch_and_cat)
+    if ch_year_match:
+        yr = int(ch_year_match.group(1))
+        resolved_sid = resolve_season_id_from_year(yr)
+        return (resolved_sid, resolve_default_game_mode(resolved_sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+
+    # 1. Explicit league/season keywords
+    if re.search(r"\b(o01|o1|o-league|o_league|oleague|original[\s_-]*6|s39|season[\s_-]*39)\b", combined) and home_byte <= 5 and away_byte <= 5:
+        sid = resolve_active_league_season(True, ch_and_cat)
+        return (sid, resolve_default_game_mode(sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+
+    if re.search(r"\b(w17|s38|season[\s_-]*38|season[\s_-]*17)\b", combined):
+        return (resolve_active_league_season(False, ch_and_cat), "Playoffs", allow_overwrite)
+
+    if re.search(r"\b(w18|s40|season[\s_-]*40|w-league|w_league|wleague)\b", combined) or is_w_channel:
+        sid = resolve_active_league_season(False, ch_and_cat)
+        return (sid, resolve_default_game_mode(sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+
+    active_w_sid = resolve_active_league_season(False, ch_and_cat)
+    active_o_sid = resolve_active_league_season(True, ch_and_cat)
+
+    # 2. Inspect team bytes if no explicit season keyword was given
+    if 0 <= home_byte <= 5 and 0 <= away_byte <= 5:
+        try:
+            w_cfg = get_season_config(active_w_sid)
+            w_home_code = w_cfg.get("teamCodes", {}).get(str(home_byte), "")
+            w_away_code = w_cfg.get("teamCodes", {}).get(str(away_byte), "")
+            w_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": f"eq.{active_w_sid}"})
+            w_h = match_team_from_list(w_home_code, w_teams)
+            w_a = match_team_from_list(w_away_code, w_teams)
+            w_sched = []
+            w_po = []
+            if w_h and w_a and w_h.get("team_id") and w_a.get("team_id"):
+                w_sched = supabase.select(
+                    "league_schedule",
+                    {
+                        "select": "game_id,played",
+                        "league_id": f"eq.{active_w_sid}",
+                        "home_team_id": f"eq.{w_h['team_id']}",
+                        "away_team_id": f"eq.{w_a['team_id']}",
+                    },
+                )
+                all_w_po = supabase.select("league_playoffs", {"select": "playoff_id,home_team_id,away_team_id,is_complete", "league_id": f"eq.{active_w_sid}"}) or []
+                w_po = [
+                    m for m in all_w_po
+                    if not m.get("is_complete")
+                    and {int(m.get("home_team_id") or 0), int(m.get("away_team_id") or 0)} == {int(w_h["team_id"]), int(w_a["team_id"])}
+                ]
+            w_has_active = any(str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes") for g in w_sched) or bool(w_po)
+
+            if not w_has_active:
+                o_cfg = get_season_config(active_o_sid)
+                o_home_code = o_cfg.get("teamCodes", {}).get(str(home_byte), "")
+                o_away_code = o_cfg.get("teamCodes", {}).get(str(away_byte), "")
+                o_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": f"eq.{active_o_sid}"})
+                o_h = match_team_from_list(o_home_code, o_teams)
+                o_a = match_team_from_list(o_away_code, o_teams)
+                if o_h and o_a and o_h.get("team_id") and o_a.get("team_id"):
+                    o_sched = supabase.select(
                         "league_schedule",
                         {
                             "select": "game_id,played",
-                            "league_id": f"eq.{active_w_sid}",
-                            "home_team_id": f"eq.{w_h['team_id']}",
-                            "away_team_id": f"eq.{w_a['team_id']}",
+                            "league_id": f"eq.{active_o_sid}",
+                            "home_team_id": f"eq.{o_h['team_id']}",
+                            "away_team_id": f"eq.{o_a['team_id']}",
                         },
                     )
-                w_has_unplayed = any(str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes") for g in w_sched)
+                    all_o_po = supabase.select("league_playoffs", {"select": "playoff_id,home_team_id,away_team_id,is_complete", "league_id": f"eq.{active_o_sid}"}) or []
+                    o_po = [
+                        m for m in all_o_po
+                        if not m.get("is_complete")
+                        and {int(m.get("home_team_id") or 0), int(m.get("away_team_id") or 0)} == {int(o_h["team_id"]), int(o_a["team_id"])}
+                    ]
+                    o_has_active = any(str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes") for g in o_sched) or bool(o_po)
+                    if o_has_active:
+                        return (active_o_sid, resolve_default_game_mode(active_o_sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+        except Exception:
+            pass
 
-                if not w_has_unplayed:
-                    o_cfg = get_season_config(active_o_sid)
-                    o_home_code = o_cfg.get("teamCodes", {}).get(str(home_byte), "")
-                    o_away_code = o_cfg.get("teamCodes", {}).get(str(away_byte), "")
-                    o_teams = supabase.select("league_teams", {"select": "team_id,team_name,abbreviation,coach_id", "league_id": f"eq.{active_o_sid}"})
-                    o_h = match_team_from_list(o_home_code, o_teams)
-                    o_a = match_team_from_list(o_away_code, o_teams)
-                    if o_h and o_a and o_h.get("team_id") and o_a.get("team_id"):
-                        o_sched = supabase.select(
-                            "league_schedule",
-                            {
-                                "select": "game_id,played",
-                                "league_id": f"eq.{active_o_sid}",
-                                "home_team_id": f"eq.{o_h['team_id']}",
-                                "away_team_id": f"eq.{o_a['team_id']}",
-                            },
-                        )
-                        o_has_unplayed = any(str(g.get("played") or "").strip().lower() not in ("true", "1", "y", "yes") for g in o_sched)
-                        if o_has_unplayed:
-                            return (active_o_sid, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+    return (active_w_sid, resolve_default_game_mode(active_w_sid, is_playoffs_hint, is_season_hint), allow_overwrite)
+
+
+def _format_partner_interval(time_str: Any) -> str:
+    if not time_str:
+        return "00:00:00"
+    parts = [int(p) if p.isdigit() else 0 for p in str(time_str).strip().split(":")]
+    if len(parts) == 3:
+        return f"{parts[0]:02d}:{parts[1]:02d}:{parts[2]:02d}"
+    mins = parts[0] if len(parts) > 0 else 0
+    secs = parts[1] if len(parts) > 1 else 0
+    return f"00:{mins:02d}:{secs:02d}"
+
+
+def _format_partner_goal_time(time_str: Any) -> str:
+    if not time_str:
+        return "00:00"
+    parts = [int(p) if p.isdigit() else 0 for p in str(time_str).strip().split(":")]
+    mins = parts[0] if len(parts) > 0 else 0
+    secs = parts[1] if len(parts) > 1 else 0
+    return f"{mins:02d}:{secs:02d}"
+
+
+def _normalize_partner_score_type(raw_type: Any) -> str:
+    t = str(raw_type or "EV").upper()
+    if t.startswith("PP"):
+        return "PP"
+    if t.startswith("SH"):
+        return "SH"
+    if t.startswith("PS"):
+        return "PS"
+    return "EV"
+
+
+def forward_game_to_partner_webhook(
+    game: Dict[str, Any],
+    season_id: int,
+    home_team_code: str,
+    away_team_code: str,
+    home_team_id: int,
+    away_team_id: int,
+    home_coach_name: str,
+    away_coach_name: str,
+    is_playoff_mode: bool,
+    active_playoff_series: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Forwards W-League game results to partner coach's Supabase ingestion webhook."""
+    partner_url = os.getenv("PARTNER_INGEST_URL") or PARTNER_INGEST_URL
+    partner_secret = os.getenv("PARTNER_WEBHOOK_SECRET") or PARTNER_WEBHOOK_SECRET
+    if not partner_url or not partner_secret:
+        return {"synced": False, "skipped": True}
+
+    lg = get_league_code(season_id).upper()
+    # Only forward W-League games (W17, W18, W19, etc.) — skip Original 6 (O01, O02, etc.)
+    if not lg.startswith("W"):
+        return {"synced": False, "skipped": True}
+
+    ht = game.get("homeTeam") or {}
+    at = game.get("awayTeam") or {}
+    home_goals = int(ht.get("goals") or 0)
+    away_goals = int(at.get("goals") or 0)
+
+    if is_playoff_mode:
+        home_seed = 0
+        away_seed = 0
+        # Partner bracket uses overall 1-16 seeds (1 vs 16, 2 vs 15, ..., 3 TAI vs 6 WDY).
+        # Check if league_playoffs has 1-16 seeds for this season; otherwise rank all teams 1-16 overall.
+        try:
+            po_rows = supabase.select("league_playoffs", {"select": "home_team_id,away_team_id,home_team_seed,away_team_seed", "league_id": f"eq.{season_id}"}) or []
+            max_po_seed = max(
+                [int(r.get("home_team_seed") or 0) for r in po_rows] + [int(r.get("away_team_seed") or 0) for r in po_rows] + [0]
+            )
+            if max_po_seed > 8:
+                for r in po_rows:
+                    hid_r = int(r.get("home_team_id") or 0)
+                    aid_r = int(r.get("away_team_id") or 0)
+                    hs_r = int(r.get("home_team_seed") or 0)
+                    as_r = int(r.get("away_team_seed") or 0)
+                    if hid_r == home_team_id and hs_r > 0 and not home_seed:
+                        home_seed = hs_r
+                    if aid_r == home_team_id and as_r > 0 and not home_seed:
+                        home_seed = as_r
+                    if hid_r == away_team_id and hs_r > 0 and not away_seed:
+                        away_seed = hs_r
+                    if aid_r == away_team_id and as_r > 0 and not away_seed:
+                        away_seed = as_r
+        except Exception:
+            pass
+
+        if not home_seed or not away_seed:
+            try:
+                st_rows = supabase.select("league_standings", {"select": "team_id,pts,w,gd,gf", "season_id": f"eq.{season_id}"}) or []
+                sorted_st = sorted(
+                    st_rows,
+                    key=lambda r: (-int(r.get("pts") or 0), -int(r.get("w") or 0), -int(r.get("gd") or 0), -int(r.get("gf") or 0)),
+                )
+                for idx_s, r in enumerate(sorted_st):
+                    tid_s = int(r.get("team_id") or 0)
+                    if tid_s == home_team_id and not home_seed:
+                        home_seed = idx_s + 1
+                    if tid_s == away_team_id and not away_seed:
+                        away_seed = idx_s + 1
             except Exception:
                 pass
 
-    return (active_w_sid, "Playoffs" if is_playoffs_hint else "Season", allow_overwrite)
+        if (not home_seed or not away_seed) and active_playoff_series:
+            s_hid = int(active_playoff_series.get("home_team_id") or 0)
+            s_aid = int(active_playoff_series.get("away_team_id") or 0)
+            if home_team_id == s_hid and active_playoff_series.get("home_team_seed") and not home_seed:
+                home_seed = int(active_playoff_series["home_team_seed"])
+            elif home_team_id == s_aid and active_playoff_series.get("away_team_seed") and not home_seed:
+                home_seed = int(active_playoff_series["away_team_seed"])
+            if away_team_id == s_aid and active_playoff_series.get("away_team_seed") and not away_seed:
+                away_seed = int(active_playoff_series["away_team_seed"])
+            elif away_team_id == s_hid and active_playoff_series.get("home_team_seed") and not away_seed:
+                away_seed = int(active_playoff_series["home_team_seed"])
+
+        if not home_seed:
+            home_seed = 1
+        if not away_seed:
+            away_seed = 2
+
+    mode_str = "playoff" if is_playoff_mode else "season"
+    scoring_plays = []
+    for idx_g, g in enumerate(game.get("goals") or []):
+        play: Dict[str, Any] = {
+            "season": lg,
+            "mode": mode_str,
+            "goal_num": int(g.get("goalNum") or (idx_g + 1)),
+            "period": int(g.get("period") or 1),
+            "g_time": _format_partner_goal_time(g.get("time")),
+            "g_team": str(g.get("team") or (home_team_code if g.get("side") == "Home" else away_team_code)).upper(),
+            "goal_player_name": str(g.get("scorer") or ""),
+            "score_type": _normalize_partner_score_type(g.get("type")),
+        }
+        if g.get("assist1") and g.get("assist1") != "--":
+            play["assist_primary_name"] = str(g["assist1"])
+        if g.get("assist2") and g.get("assist2") != "--":
+            play["assist_secondary_name"] = str(g["assist2"])
+        scoring_plays.append(play)
+
+    skater_rows = []
+    for side_code, sk_list in ((home_team_code, game.get("homeSkaters") or []), (away_team_code, game.get("awaySkaters") or [])):
+        for sk in sk_list:
+            s_name = str(sk.get("name") or sk.get("player") or "").strip()
+            if not s_name:
+                continue
+            s_g = int(sk.get("goals") or sk.get("g") or 0)
+            s_a = int(sk.get("assists") or sk.get("a") or 0)
+            skater_rows.append({
+                "lg": lg,
+                "type": mode_str,
+                "team_code": side_code,
+                "player_name": s_name,
+                "goals": s_g,
+                "assists": s_a,
+                "points": int(sk.get("points") or sk.get("pts") or (s_g + s_a)),
+                "shots": int(sk.get("shots") or sk.get("sog") or 0),
+                "chk": int(sk.get("checks") or sk.get("chk") or 0),
+                "pim": int(sk.get("pim") or 0),
+                "toi": _format_partner_interval(sk.get("toi") or "00:00"),
+            })
+
+    goalie_rows = []
+    for side_code, gl_list in ((home_team_code, game.get("homeGoalies") or []), (away_team_code, game.get("awayGoalies") or [])):
+        for gl in gl_list:
+            g_name = str(gl.get("name") or gl.get("goalie") or gl.get("player") or "").strip()
+            if not g_name:
+                continue
+            g_toi = str(gl.get("toi") or "0:00").strip()
+            g_shots = int(gl.get("shots") or gl.get("sa") or 0)
+            g_saves = int(gl.get("saves") or gl.get("sv") or 0)
+            g_ga = int(gl.get("ga") or gl.get("goalsAgainst") or 0)
+            if g_toi in ("0:00", "00:00", "0") and g_shots == 0 and g_saves == 0 and g_ga == 0:
+                continue
+            g_g = int(gl.get("goals") or gl.get("g") or 0)
+            g_a = int(gl.get("assists") or gl.get("a") or 0)
+            goalie_rows.append({
+                "lg": lg,
+                "type": mode_str,
+                "team_code": side_code,
+                "player_name": g_name,
+                "goals": g_g,
+                "assists": g_a,
+                "points": g_g + g_a,
+                "shots": 0,
+                "goals_against": g_ga,
+                "saves": g_saves,
+                "shots_against": g_shots,
+                "shutouts": 1 if (g_ga == 0 and g_shots > 0) else 0,
+                "toi": _format_partner_interval(g_toi),
+            })
+
+    team_stats_obj = {
+        "season": lg,
+        "type": mode_str,
+        "home": home_team_code,
+        "away": away_team_code,
+        "home_score": home_goals,
+        "away_score": away_goals,
+        "home_shots": int(ht.get("shots") or 0),
+        "away_shots": int(at.get("shots") or 0),
+        "home_pp_g": int(ht.get("ppGoals") or 0),
+        "away_pp_g": int(at.get("ppGoals") or 0),
+        "home_pp_amt": int(ht.get("ppTries") or 0),
+        "away_pp_amt": int(at.get("ppTries") or 0),
+        "home_pp_shots": int(ht.get("ppShots") or 0),
+        "away_pp_shots": int(at.get("ppShots") or 0),
+        "home_pp_mins": _format_partner_interval(ht.get("ppTime")),
+        "away_pp_mins": _format_partner_interval(at.get("ppTime")),
+        "home_shg": int(ht.get("shGoals") or 0),
+        "away_shg": int(at.get("shGoals") or 0),
+        "home_pens": int(ht.get("penalties") or 0),
+        "away_pens": int(at.get("penalties") or 0),
+        "home_pim": int(ht.get("pim") or 0),
+        "away_pim": int(at.get("pim") or 0),
+        "home_fow": int(ht.get("faceoffWins") or 0),
+        "away_fow": int(at.get("faceoffWins") or 0),
+        "fo_total": int(game.get("totalFaceoffs") or (int(ht.get("faceoffWins") or 0) + int(at.get("faceoffWins") or 0))),
+        "home_chk": int(ht.get("checks") or 0),
+        "away_chk": int(at.get("checks") or 0),
+        "home_attack": _format_partner_interval(ht.get("attackZoneTime")),
+        "away_attack": _format_partner_interval(at.get("attackZoneTime")),
+        "home_pass_attempts": int(ht.get("passTries") or 0),
+        "away_pass_attempts": int(at.get("passTries") or 0),
+        "home_pass_complete": int(ht.get("passComps") or 0),
+        "away_pass_complete": int(at.get("passComps") or 0),
+        "home_break_attempts": int(ht.get("breakawayTries") or 0),
+        "away_break_attempts": int(at.get("breakawayTries") or 0),
+        "home_break_goals": int(ht.get("breakawayGoals") or 0),
+        "away_break_goals": int(at.get("breakawayGoals") or 0),
+        "home_1xa": int(ht.get("oneTimerTries") or 0),
+        "away_1xa": int(at.get("oneTimerTries") or 0),
+        "home_1xg": int(ht.get("oneTimerGoals") or 0),
+        "away_1xg": int(at.get("oneTimerGoals") or 0),
+        "home_ps": int(ht.get("penaltyShotTries") or 0),
+        "away_ps": int(at.get("penaltyShotTries") or 0),
+        "home_psg": int(ht.get("penaltyShotGoals") or 0),
+        "away_psg": int(at.get("penaltyShotGoals") or 0),
+        "home_1p_s": int(ht.get("shotsP1") or 0),
+        "away_1p_s": int(at.get("shotsP1") or 0),
+        "home_2p_s": int(ht.get("shotsP2") or 0),
+        "away_2p_s": int(at.get("shotsP2") or 0),
+        "home_3p_s": int(ht.get("shotsP3") or 0),
+        "away_3p_s": int(at.get("shotsP3") or 0),
+        "home_ot_s": int(ht.get("shotsOT") or 0),
+        "away_ot_s": int(at.get("shotsOT") or 0),
+        "home_1p_g": int(ht.get("goalsP1") or 0),
+        "away_1p_g": int(at.get("goalsP1") or 0),
+        "home_2p_g": int(ht.get("goalsP2") or 0),
+        "away_2p_g": int(at.get("goalsP2") or 0),
+        "home_3p_g": int(ht.get("goalsP3") or 0),
+        "away_3p_g": int(at.get("goalsP3") or 0),
+        "home_ot_g": int(ht.get("goalsOT") or 0),
+        "away_ot_g": int(at.get("goalsOT") or 0),
+        "ot_flag": 1 if game.get("isOT") else 0,
+        "total_time": _format_partner_interval(game.get("gameLength") or "15:00"),
+    }
+
+    if is_playoff_mode:
+        home_is_higher = home_seed <= away_seed
+        payload: Dict[str, Any] = {
+            "type": "playoff",
+            "lg": lg,
+            "seed_a": home_seed if home_is_higher else away_seed,
+            "seed_b": away_seed if home_is_higher else home_seed,
+            "team_code_a": home_team_code if home_is_higher else away_team_code,
+            "team_code_b": away_team_code if home_is_higher else home_team_code,
+            "score_a": home_goals if home_is_higher else away_goals,
+            "score_b": away_goals if home_is_higher else home_goals,
+            "game_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "teamStats": team_stats_obj,
+            "scoring": scoring_plays,
+            "skaters": skater_rows,
+            "goalies": goalie_rows,
+        }
+    else:
+        payload = {
+            "game": {
+                "lg": lg,
+                "mode": "season",
+                "home": home_team_code,
+                "away": away_team_code,
+                "coach_home": home_coach_name,
+                "coach_away": away_coach_name,
+                "score_home": home_goals,
+                "score_away": away_goals,
+                "ot": 1 if game.get("isOT") else 0,
+            },
+            "teamStats": team_stats_obj,
+            "scoring": scoring_plays,
+            "skaters": skater_rows,
+            "goalies": goalie_rows,
+        }
+
+    def _post_partner(p_obj: Dict[str, Any]) -> Dict[str, Any]:
+        req = urllib.request.Request(
+            partner_url,
+            data=json.dumps(p_obj).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-webhook-secret": partner_secret,
+                "User-Agent": "NHL95Bot/1.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body_str = resp.read().decode("utf-8")
+            resp_json = json.loads(body_str) if body_str else {}
+            print(f"✅ Partner webhook synced ({lg} • {away_team_code} @ {home_team_code}): {resp_json}")
+            return {"synced": True, "status": resp.status, "response": resp_json}
+
+    try:
+        return _post_partner(payload)
+    except urllib.error.HTTPError as he:
+        err_body = ""
+        try:
+            err_body = he.read().decode("utf-8")
+        except Exception:
+            pass
+        # If Round 2+ on partner bracket has top/bottom feeder seeds reversed (e.g. #6 WDY on top as seed_a, #3 TAI on bottom as seed_b), retry with swapped seed_a/seed_b
+        if is_playoff_mode and he.code == 404 and "Series not found" in err_body:
+            swapped_payload = dict(payload)
+            swapped_payload["seed_a"] = payload["seed_b"]
+            swapped_payload["seed_b"] = payload["seed_a"]
+            swapped_payload["team_code_a"] = payload.get("team_code_b")
+            swapped_payload["team_code_b"] = payload.get("team_code_a")
+            swapped_payload["score_a"] = payload["score_b"]
+            swapped_payload["score_b"] = payload["score_a"]
+            try:
+                return _post_partner(swapped_payload)
+            except urllib.error.HTTPError as he2:
+                try:
+                    err_body = he2.read().decode("utf-8")
+                except Exception:
+                    pass
+                print(f"⚠️ Partner webhook HTTP {he2.code}: {err_body}")
+                return {"synced": False, "status": he2.code, "error": err_body or f"HTTP {he2.code}"}
+        print(f"⚠️ Partner webhook HTTP {he.code}: {err_body}")
+        return {"synced": False, "status": he.code, "error": err_body or f"HTTP {he.code}"}
 
 
 def ingest_save_state_to_supabase(
@@ -4332,6 +4830,24 @@ def ingest_save_state_to_supabase(
             )
         recalculate_and_save_season_standings(s_id)
 
+    partner_webhook_result: Dict[str, Any] = {"synced": False, "skipped": True}
+    try:
+        partner_webhook_result = forward_game_to_partner_webhook(
+            game=game,
+            season_id=s_id,
+            home_team_code=home_team_code,
+            away_team_code=away_team_code,
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
+            home_coach_name=home_coach_name,
+            away_coach_name=away_coach_name,
+            is_playoff_mode=is_playoff_mode,
+            active_playoff_series=active_playoff_series,
+        )
+    except Exception as pw_err:
+        print(f"Non-fatal warning forwarding to partner webhook: {pw_err}")
+        partner_webhook_result = {"synced": False, "error": str(pw_err)}
+
     embed_dict = build_discord_boxscore_embed(
         game=game,
         season_id=s_id,
@@ -4344,16 +4860,30 @@ def ingest_save_state_to_supabase(
         uploaded_by=uploaded_by,
     )
 
-    boxscore_png_bytes = render_retro_boxscore_png(
-        game=game,
-        away_team=away_team or {"team_name": away_team_code, "abbreviation": away_team_code},
-        home_team=home_team or {"team_name": home_team_code, "abbreviation": home_team_code},
-    )
+    try:
+        boxscore_png_bytes = render_retro_boxscore_png(
+            game=game,
+            away_team=away_team or {"team_name": away_team_code, "abbreviation": away_team_code},
+            home_team=home_team or {"team_name": home_team_code, "abbreviation": home_team_code},
+        )
+    except Exception as bx_err:
+        print(f"Non-fatal warning rendering boxscore.png: {bx_err}")
+        boxscore_png_bytes = None
     if boxscore_png_bytes:
         embed_dict["image"] = {"url": "attachment://boxscore.png"}
 
-    standings_png_bytes = render_standings_and_leaders_png(s_id, is_playoff_mode) if render_summary_graphics else None
-    playoff_bracket_png_bytes = (render_playoff_bracket_png(s_id) if is_playoff_mode else None) if render_summary_graphics else None
+    standings_png_bytes = None
+    playoff_bracket_png_bytes = None
+    if render_summary_graphics:
+        try:
+            standings_png_bytes = render_standings_and_leaders_png(s_id, is_playoff_mode)
+        except Exception as st_err:
+            print(f"Non-fatal warning rendering standings_leaders.png: {st_err}")
+        if is_playoff_mode:
+            try:
+                playoff_bracket_png_bytes = render_playoff_bracket_png(s_id)
+            except Exception as br_err:
+                print(f"Non-fatal warning rendering playoff_bracket.png: {br_err}")
 
     return {
         "success": True,
@@ -4385,7 +4915,7 @@ def is_savestate_attachment(att: discord.Attachment) -> bool:
         return True
     # Also accept extensionless or custom-named files if their byte size matches RetroArch Genesis save states (52KB - 250KB)
     # and they are not images/videos/audio/text
-    if 52000 <= (att.size or 0) <= 260000:
+    if 52000 <= (att.size or 0) <= 2000000:
         bad_exts = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".mov", ".mp3", ".wav", ".pdf", ".txt", ".json", ".csv", ".zip")
         if not fname.endswith(bad_exts):
             return True
@@ -4572,35 +5102,55 @@ def get_remaining_opponents_for_team(abbr: str, s_id: int = 40) -> Tuple[int, Li
             opp_counts[opp_ab] = opp_counts.get(opp_ab, 0) + 1
             total_rem += 1
 
-    # If all regular-season games are complete, check if this team has an active Playoff series in s_id
-    if total_rem == 0:
-        try:
-            po_series = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"}) or []
-            active_po = [
-                m for m in po_series
-                if not m.get("is_complete")
-                and (int(m.get("home_team_id") or 0) == target_tid or int(m.get("away_team_id") or 0) == target_tid)
-                and int(m.get("home_team_id") or 0) != int(m.get("away_team_id") or -1)
-            ]
-            for m in active_po:
-                pid = int(m.get("playoff_id") or 0)
-                h_id = int(m.get("home_team_id") or 0)
-                a_id = int(m.get("away_team_id") or 0)
-                opp_id = a_id if h_id == target_tid else h_id
-                opp_ab = tid_to_abbr.get(opp_id)
-                if not opp_ab:
-                    continue
-                s_len = int(m.get("series_length") or 7)
-                wins_needed = math.ceil(s_len / 2.0)
-                po_games = supabase.select("league_playoff_gamestats", {"select": "home_team_id,away_team_id,home_score,away_score", "playoff_id": f"eq.{pid}"}) or []
-                h_wins = sum(1 for pg in po_games if int(pg.get("home_score") or 0) > int(pg.get("away_score") or 0) and int(pg.get("home_team_id") or 0) == h_id) + sum(1 for pg in po_games if int(pg.get("away_score") or 0) > int(pg.get("home_score") or 0) and int(pg.get("away_team_id") or 0) == h_id)
-                a_wins = len(po_games) - h_wins
-                if h_wins < wins_needed and a_wins < wins_needed:
-                    rem_in_series = max(1, s_len - len(po_games))
-                    opp_counts[opp_ab] = opp_counts.get(opp_ab, 0) + rem_in_series
-                    total_rem += rem_in_series
-        except Exception:
-            pass
+    sorted_opps = sorted(opp_counts.items(), key=lambda x: (-x[1], x[0]))
+    if total_rem > 0 and sorted_opps:
+        return (total_rem, sorted_opps)
+
+    # If regular-season schedule is complete, check active Playoff series in s_id
+    try:
+        po_series = supabase.select("league_playoffs", {"select": "*", "league_id": f"eq.{s_id}", "order": "playoff_id.asc"}) or []
+        po_games = supabase.select(
+            "league_playoff_gamestats",
+            {"select": "playoff_id,game_number,home_team_id,away_team_id,home_score,away_score", "league_id": f"eq.{s_id}"},
+        ) or []
+        for m in po_series:
+            if m.get("is_complete"):
+                continue
+            h_id = int(m.get("home_team_id") or 0)
+            a_id = int(m.get("away_team_id") or 0)
+            if not h_id or not a_id or h_id == a_id:
+                continue
+            if target_tid not in (h_id, a_id):
+                continue
+            pid = int(m.get("playoff_id") or 0)
+            s_len = int(m.get("series_length") or 7)
+            wins_needed = math.ceil(s_len / 2.0)
+            m_games = [g for g in po_games if int(g.get("playoff_id") or 0) == pid]
+            hw = 0
+            aw = 0
+            for g in m_games:
+                hs = int(g.get("home_score") or 0)
+                as_ = int(g.get("away_score") or 0)
+                if hs > as_:
+                    if int(g.get("home_team_id") or 0) == h_id:
+                        hw += 1
+                    else:
+                        aw += 1
+                elif as_ > hs:
+                    if int(g.get("away_team_id") or 0) == a_id:
+                        aw += 1
+                    else:
+                        hw += 1
+            if hw >= wins_needed or aw >= wins_needed:
+                continue
+            opp_id = a_id if h_id == target_tid else h_id
+            opp_ab = tid_to_abbr.get(opp_id)
+            if opp_ab:
+                rem_in_series = max(1, s_len - len(m_games))
+                opp_counts[opp_ab] = opp_counts.get(opp_ab, 0) + rem_in_series
+                total_rem += rem_in_series
+    except Exception:
+        pass
 
     sorted_opps = sorted(opp_counts.items(), key=lambda x: (-x[1], x[0]))
     return (total_rem, sorted_opps)
@@ -4691,16 +5241,28 @@ def render_remaining_opponents_png(opp_counts: List[Tuple[str, int]]) -> Optiona
 
 
 class NHL95SaveStateBot(discord.Client):
-    def __init__(self, backfill_hours: float = 0.5, allowed_channel_ids: Optional[List[int]] = None, **kwargs):
+    def __init__(
+        self,
+        backfill_hours: float = 96.0,
+        allowed_channel_ids: Optional[List[int]] = None,
+        run_once: bool = False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.backfill_hours = float(backfill_hours)
+        self.run_once = bool(run_once)
+        self._clock_offset: Optional[timedelta] = None
         self._startup_cutoff = self.get_discord_utc_now() - timedelta(hours=max(0.0, self.backfill_hours))
         self.allowed_channel_ids = set(allowed_channel_ids or [])
         self.processed_attachment_ids = set()
+        self.processed_command_msg_ids = set()
         self._processing_lock = asyncio.Lock()
+        self._scan_lock = asyncio.Lock()
 
     def get_discord_utc_now(self) -> datetime:
-        """Fetches real-world UTC time from Discord's HTTP Date header so local PC clock skew never breaks history cutoffs."""
+        """Fetches real-world UTC time from Discord's HTTP Date header once and caches the offset so local PC clock skew never breaks history cutoffs."""
+        if self._clock_offset is not None:
+            return datetime.now(timezone.utc) + self._clock_offset
         try:
             import email.utils
             import ssl
@@ -4718,7 +5280,9 @@ class NHL95SaveStateBot(discord.Client):
                     dt = email.utils.parsedate_to_datetime(date_hdr)
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=timezone.utc)
-                    return dt.astimezone(timezone.utc)
+                    discord_utc = dt.astimezone(timezone.utc)
+                    self._clock_offset = discord_utc - datetime.now(timezone.utc)
+                    return discord_utc
         except Exception as e:
             print(f"   [Clock sync note: {e}]")
         return datetime.now(timezone.utc)
@@ -4726,9 +5290,13 @@ class NHL95SaveStateBot(discord.Client):
     def is_channel_allowed(self, channel: discord.abc.GuildChannel) -> bool:
         if self.allowed_channel_ids:
             return channel.id in self.allowed_channel_ids
-        # If the server uses {year}-save-states channels, ignore non-savestate channels like {year}-boxscores
+        ch_id = getattr(channel, "id", 0)
+        if ch_id in (1537489552002916372, 1459581476289908838):
+            return True
         ch_name = (getattr(channel, "name", "") or "").lower()
-        if "boxscore" in ch_name:
+        if "boxscore" in ch_name or "test" in ch_name:
+            return False
+        if "save" not in ch_name:
             return False
         return True
 
@@ -4738,7 +5306,7 @@ class NHL95SaveStateBot(discord.Client):
           - The W (#2013-saves / season 40) -> The W -> #2013-boxscores (1537489581077692646)
           - Original 6 (#season-saves / season 39, 54+) -> Original 6 - Golden Era -> #boxscores (1459581630581838045)
           - Other years -> #{year}-boxscores or #boxscores in the same category
-        Falls back to source_channel if no matching boxscores channel exists.
+        Always falls back to the league's primary boxscores channel (#2013-boxscores or #boxscores).
         """
         guild = source_channel.guild
         if not guild:
@@ -4798,14 +5366,30 @@ class NHL95SaveStateBot(discord.Client):
                 if year_str in cname and "boxscore" in cname:
                     return ch
 
+        # Always guarantee routing to the official league boxscores channel (#boxscores for Original 6, #2013-boxscores for The W)
+        fallback_box_id = 1459581630581838045 if is_orig6 else 1537489581077692646
+        fallback_ch = guild.get_channel(fallback_box_id)
+        if isinstance(fallback_ch, discord.TextChannel):
+            return fallback_ch
+
         return source_channel
 
     async def has_bot_reaction(self, message: discord.Message) -> bool:
+        # A recent bot ⏳ means another bot instance (local PC or GitHub Actions cloud fallback)
+        # is processing this message right now — skip it to avoid double-processing.
+        # Stale ⏳ (older than 20 min, e.g. from a crashed run) is ignored so the message is retried.
+        msg_age = datetime.now(timezone.utc) - message.created_at
+        watched = ("✅", "⚠️", "❌", "⏳") if msg_age < timedelta(minutes=20) else ("✅", "⚠️", "❌")
         for reaction in message.reactions:
-            if str(reaction.emoji) in ("✅", "⚠️", "❌"):
-                async for user in reaction.users():
-                    if self.user and user.id == self.user.id:
-                        return True
+            if str(reaction.emoji) in watched:
+                if getattr(reaction, "me", False):
+                    return True
+                try:
+                    async for user in reaction.users():
+                        if self.user and user.id == self.user.id:
+                            return True
+                except Exception:
+                    pass
         return False
 
     async def process_savestate_message(self, message: discord.Message, is_backfill: bool = False) -> None:
@@ -4832,6 +5416,16 @@ class NHL95SaveStateBot(discord.Client):
                     self.processed_attachment_ids.add(att.id)
                 return
 
+            announced_game_tags: set = set()
+            if is_backfill:
+                try:
+                    async for hm in message.channel.history(limit=50):
+                        if self.user and hm.author.id == self.user.id and hm.content:
+                            for m_gid in re.findall(r"Game \*\*#(\d+)\*\*", hm.content):
+                                announced_game_tags.add(int(m_gid))
+                except Exception:
+                    pass
+
             total_atts = len(savestate_attachments)
             batch_game_ids = set()
             for idx_att, att in enumerate(savestate_attachments):
@@ -4852,6 +5446,9 @@ class NHL95SaveStateBot(discord.Client):
                 try:
                     raw_bytes = await att.read()
 
+                    cat_name = getattr(getattr(message.channel, "category", None), "name", "") or ""
+                    cat_id = getattr(message.channel, "category_id", 0) or 0
+
                     # Run blocking HTTP/Supabase I/O in a worker thread so the Discord heartbeat never blocks
                     season_id, game_mode, allow_overwrite = await asyncio.to_thread(
                         detect_context_from_discord,
@@ -4859,6 +5456,9 @@ class NHL95SaveStateBot(discord.Client):
                         channel_name,
                         message.clean_content or "",
                         att.filename or "",
+                        cat_name,
+                        message.channel.id,
+                        cat_id,
                     )
                     print(f"   🔎 Auto-Detected: Season {season_id} ({get_league_code(season_id)}) | Mode: {game_mode} | Overwrite: {allow_overwrite}")
 
@@ -4879,6 +5479,16 @@ class NHL95SaveStateBot(discord.Client):
                         await message.remove_reaction("⏳", self.user)
                     except Exception:
                         pass
+
+                    # If this exact game ID was already announced by the bot in this channel (e.g. from a re-upload),
+                    # mark the message ✅ and avoid duplicate boxscore posts.
+                    if is_backfill and result.get("gameId") and int(result["gameId"]) in announced_game_tags:
+                        try:
+                            await message.add_reaction("✅")
+                        except Exception:
+                            pass
+                        print(f"   ⏭️ Game #{result['gameId']} was already announced in #{channel_name}; marked message ✅.")
+                        continue
 
                     # Avoid duplicating the 3 boxscores that BoxscoreBot already posted before crashing on msg 1565907439759392849
                     skip_single_boxscore = (
@@ -4909,24 +5519,7 @@ class NHL95SaveStateBot(discord.Client):
                                     st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
                                     await target_boxscore_ch.send(file=st_att)
                             except Exception as send_err:
-                                print(f"   ⚠️ Could not post to #{target_boxscore_ch.name} ({send_err}), trying webhook fallback...")
-                                if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
-                                    wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
-                                    if not skip_single_boxscore:
-                                        await asyncio.to_thread(
-                                            wh.send,
-                                            file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
-                                        )
-                                    if is_last_att and result.get("playoffBracketPngBytes"):
-                                        await asyncio.to_thread(
-                                            wh.send,
-                                            file=discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png"),
-                                        )
-                                    if is_last_att and result.get("standingsPngBytes"):
-                                        await asyncio.to_thread(
-                                            wh.send,
-                                            file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
-                                        )
+                                print(f"   ⚠️ Could not post to #{target_boxscore_ch.name} ({send_err})")
                             if not skip_single_boxscore:
                                 confirm_text = (
                                     f"✅ **Save State Recorded to Database!** (`{att.filename}`)\n"
@@ -4953,24 +5546,7 @@ class NHL95SaveStateBot(discord.Client):
                                     st_att = discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png")
                                     await message.channel.send(file=st_att)
                             except Exception as reply_err:
-                                print(f"   ⚠️ Could not reply in #{channel_name} ({reply_err}), trying webhook fallback...")
-                                if DISCORD_BOXSCORE_WEBHOOK_URL and result.get("boxscorePngBytes"):
-                                    wh = discord.SyncWebhook.from_url(DISCORD_BOXSCORE_WEBHOOK_URL)
-                                    if not skip_single_boxscore:
-                                        await asyncio.to_thread(
-                                            wh.send,
-                                            file=discord.File(io.BytesIO(result["boxscorePngBytes"]), filename="boxscore.png"),
-                                        )
-                                    if is_last_att and result.get("playoffBracketPngBytes"):
-                                        await asyncio.to_thread(
-                                            wh.send,
-                                            file=discord.File(io.BytesIO(result["playoffBracketPngBytes"]), filename="playoff_bracket.png"),
-                                        )
-                                    if is_last_att and result.get("standingsPngBytes"):
-                                        await asyncio.to_thread(
-                                            wh.send,
-                                            file=discord.File(io.BytesIO(result["standingsPngBytes"]), filename="standings_leaders.png"),
-                                        )
+                                print(f"   ⚠️ Could not reply in #{channel_name} ({reply_err})")
                             print(f"   ✅ SUCCESS: Saved Game #{result['gameId']} ({result['gameResults']}) and posted boxscore + standings in #{channel_name}!")
 
                     elif result.get("alreadyPlayed"):
@@ -5029,7 +5605,7 @@ class NHL95SaveStateBot(discord.Client):
         if self.allowed_channel_ids:
             print(f"📡 Restricted to Channel IDs: {sorted(self.allowed_channel_ids)}")
         else:
-            print("📡 Listening for .state / .sav drops across all accessible text channels")
+            print("📡 Listening for .state / .sav drops across all accessible save-state channels")
         print("=" * 68)
 
         if self.backfill_hours > 0:
@@ -5042,49 +5618,52 @@ class NHL95SaveStateBot(discord.Client):
                     if not self.is_channel_allowed(channel):
                         continue
                     cname = channel.name.lower()
-                    if not ("save" in cname or "test" in cname):
+                    if "save" not in cname or "test" in cname:
                         continue
                     perms = channel.permissions_for(guild.me)
                     if not (perms.read_messages and perms.read_message_history):
                         continue
                     try:
-                        recent_msgs = [m async for m in channel.history(limit=35)]
+                        recent_msgs = [m async for m in channel.history(limit=50)]
                         for msg in reversed(recent_msgs):
                             if msg.created_at >= cutoff:
                                 await self.process_savestate_message(msg, is_backfill=True)
                     except Exception as e:
                         print(f"   Notice: Could not scan history in #{channel.name}: {e}")
-            print("✅ Startup catch-up scan complete! Now listening live 24/7 for new save states...\n")
+            await self.scan_unanswered_game_commands(discord_now - timedelta(minutes=30))
+            if self.run_once:
+                print("✅ One-shot catch-up scan complete (--once). Exiting cleanly.")
+                await self.close()
+                return
+            print("✅ Startup catch-up scan complete! Now listening live 24/7 for new save states & season games...\n")
 
         if not getattr(self, "_savestate_watcher_started", False):
             self._savestate_watcher_started = True
             asyncio.create_task(self.savestate_watcher_loop())
 
-        if not getattr(self, "_draft_watcher_started", False):
-            self._draft_watcher_started = True
-            self._announced_draft_ids = set()
-            asyncio.create_task(self.draft_picks_watcher_loop())
-
     async def savestate_watcher_loop(self) -> None:
-        """Continuously polls save-state channels every 15 seconds so that even if a Discord gateway
-        event is missed during a reconnect or attachment upload, any new save state set is processed immediately."""
+        """Continuously polls save-state and season-games channels every 15 seconds (and across a 72h+ rolling window)
+        so that even if a Discord gateway event is missed during a reconnect, attachment upload, or PC sleep,
+        any unprocessed save state set or season-games command is processed immediately."""
         while not self.is_closed():
+            keep_windows_awake()
             await asyncio.sleep(15)
             try:
                 discord_now = await asyncio.to_thread(self.get_discord_utc_now)
-                cutoff = max(self._startup_cutoff, discord_now - timedelta(minutes=30))
+                lookback_h = max(self.backfill_hours, 72.0)
+                cutoff = min(self._startup_cutoff, discord_now - timedelta(hours=lookback_h))
                 for guild in self.guilds:
                     for channel in guild.text_channels:
                         if not self.is_channel_allowed(channel):
                             continue
                         cname = channel.name.lower()
-                        if not ("save" in cname or "test" in cname):
+                        if "save" not in cname or "test" in cname:
                             continue
                         perms = channel.permissions_for(guild.me)
                         if not (perms.read_messages and perms.read_message_history):
                             continue
                         try:
-                            recent_msgs = [m async for m in channel.history(limit=15)]
+                            recent_msgs = [m async for m in channel.history(limit=25)]
                             for msg in reversed(recent_msgs):
                                 if msg.created_at < cutoff:
                                     continue
@@ -5098,212 +5677,132 @@ class NHL95SaveStateBot(discord.Client):
                                 await self.process_savestate_message(msg, is_backfill=True)
                         except Exception:
                             pass
+                await self.scan_unanswered_game_commands(discord_now - timedelta(minutes=30))
             except Exception as e:
                 print(f"Savestate watcher note: {e}")
 
-    async def draft_picks_watcher_loop(self) -> None:
-        """Watches public.league_drafts for new picks in active drafts (e.g. O02 = 54, W19 = 41)
-        and posts them to the appropriate Discord draft channel (#draft for Original 6, #draft-official for The W)."""
-        O6_DRAFT_CHANNEL_ID = int(os.getenv("DISCORD_O6_DRAFT_CHANNEL_ID", "1459581429271892080"))
-        W_DRAFT_CHANNEL_ID = int(os.getenv("DISCORD_W_DRAFT_CHANNEL_ID", "1484345470158376960"))
+    def is_valid_season_games_command_text(self, raw_text: str) -> bool:
+        upper_text = re.sub(r"[!?.]+$", "", (raw_text or "").strip().upper()).strip()
+        if not upper_text:
+            return False
+        if upper_text in (
+            "LEAGUE OVERVIEW", "LEAGUE DATA", "LEAGUE COMMANDS", "BOT COMMANDS", "COMMANDS", "HELP",
+            "SEASON GAMES", "SEASONGAMES", "GAMES", "GAMES LEFT", "REMAINING",
+            "FUCK OFF", "FUCKOFF", "DND", "MUTE",
+            "GAME ON", "GAMEON", "UNMUTE",
+            "BRACKET", "PLAYOFF BRACKET", "PLAYOFFS", "PLAYOFF",
+            "STANDINGS", "STANDING", "LEADERS", "LEADER", "LEAGUE LEADERS",
+            "MODE PLAYOFFS", "PLAYOFF MODE", "PLAYOFFS MODE", "TRIGGER PLAYOFFS", "SET PLAYOFFS",
+            "MODE SEASON", "SEASON MODE", "REGULAR SEASON MODE", "TRIGGER SEASON", "SET SEASON",
+            "MODE AUTO", "AUTO MODE",
+            "THT", "KAK",
+        ):
+            return True
+        return upper_text in TEAM_DISCORD_META
 
-        LEAGUE_BADGE_MAP = {
-            41: "W19 (2014)",
-            42: "W20 (2015)",
-            43: "W21 (2016)",
-            44: "W22 (2017)",
-            54: "O02 (1928)",
-            55: "O03 (1929)",
-            56: "O04 (1930)",
-        }
+    @staticmethod
+    def build_league_commands_embed(is_orig6: bool = False, season_id: int = 40) -> discord.Embed:
+        league_title = "Original 6 - Golden Era" if is_orig6 else "The W League"
+        code_badge = get_league_code(season_id)
+        team_examples = "`BOS`, `CHI`, `DET`, `MTL`, `NYR`, `TOR`" if is_orig6 else "`VHV`, `TEG`, `PRO`, `PIT`, `TBP`, `WDY`, etc."
+        embed = discord.Embed(
+            title=f"🏒 NHL95.net — {league_title} ({code_badge}) On-Demand Commands",
+            description="Type any of the single-line commands below in the channel to pull live league data on demand:",
+            color=0xF59E0B if is_orig6 else 0x38BDF8,
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.add_field(
+            name="📅 Schedule, Playoff Series & Coach Pings (`#season-games` / `#games`)",
+            value=(
+                "• **`SEASON GAMES`** *(or `GAMES`, `REMAINING`)* — Shows **your** remaining regular-season or active playoff opponents logo strip, games left, and pings unmuted coaches.\n"
+                f"• **`<TEAM ABBR>`** *(e.g. {team_examples})* — Shows **that team's** remaining regular-season or playoff opponents logo strip, games left, and pings unmuted coaches.\n"
+                "• **`FUCK OFF`** *(or `MUTE`, `DND`)* — Disables `@mention` game alerts for your coach account.\n"
+                "• **`GAME ON`** *(or `UNMUTE`)* — Turns `@mention` game alerts back on and checks your remaining games."
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="📊 Live Standings, Leaders & Playoff Bracket",
+            value=(
+                "• **`STANDINGS`** *(or `LEADERS`, `LEAGUE LEADERS`)* — Posts the live **Standings & League Leaders** graphic (`PTS`, `G`, `A`, `GAA`, `SV%`).\n"
+                "• **`BRACKET`** *(or `PLAYOFFS`, `PLAYOFF BRACKET`)* — Posts the live **Playoff Bracket** graphic with series scores & seeds."
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="⚙️ Save State & Mode Controls",
+            value=(
+                "• **Drop `.state` / `.sav` file** in saves channel — Automatically parses stats, updates website & DB, and posts the Retro Boxscore + Standings/Bracket.\n"
+                "• Add **`overwrite`** in message text with a save state — Replaces a previously recorded game.\n"
+                "• **`MODE PLAYOFFS`** / **`MODE SEASON`** / **`MODE AUTO`** — Switches save-state recording mode.\n"
+                "• **`LEAGUE OVERVIEW`** *(or `LEAGUE DATA`, `COMMANDS`)* — Displays this command reference card anytime."
+            ),
+            inline=False,
+        )
+        embed.set_footer(text="NHL95.net Live Discord Bot • Type LEAGUE OVERVIEW or LEAGUE DATA anytime to view this list")
+        return embed
 
-        TEAM_USER_ID_MAP = {
-            "AUTOBAHN": "692039117499793469",
-            "BARRIE": "882284979441258567",
-            "BAYTOWN": "241253413722128385",
-            "BETTY FORD": "1211045587483623484",
-            "DEVIL HILL": "378302345894821909",
-            "DEVIN HILL": "378302345894821909",
-            "EASTER ISLAND": "873331397782294569",
-            "GRAND RIVER": "692183787509121046",
-            "HAMILTON": "932744327191490651",
-            "HIGHLAND": "694697891733831761",
-            "INGLEWOOD": "939897819681161296",
-            "ITALY": "373576219129806859",
-            "KAROLINA": "918583918838546443",
-            "MINNESOTA": "691684263698890878",
-            "MARYHILL": "1049531278531252224",
-            "MINHATTRICK": "144973906070077440",
-            "NORTH BAY": "897864347764789290",
-            "ORANGE COUNTY": "1009697012737921055",
-            "PITT": "874726051790594051",
-            "PROVIDENCE": "904808850681638923",
-            "RICHFIELD": "691747327261671534",
-            "ROCKFORD": "291228680825470978",
-            "SOUTH HILLS": "1042251245609549824",
-            "SUMTER": "874999566200635393",
-            "SUGAR VALLEY": "628241421781958684",
-            "TAIPEI": "802225742523531325",
-            "THUNDER BAY": "694688440440193186",
-            "TEGUCIGALPA": "582240735793774618",
-            "VALHALLA": "869668599550332958",
-            "WOODLYNNE": "204681486484373505",
-            "BOSTON": "378302345894821909",
-            "CHICAGO": "939897819681161296",
-            "DETROIT": "918583918838546443",
-            "MONTREAL": "869668599550332958",
-            "NEW YORK": "291228680825470978",
-            "TORONTO": "932744327191490651",
-        }
-
-        while not self.is_closed():
-            try:
-                rows = await asyncio.to_thread(
-                    supabase.select,
-                    "league_drafts",
-                    {
-                        "select": "*,league_player_database(player_name,pos,ratings),league_teams(team_id,team_name,abbreviation,logo_url,coach_id)",
-                        "league_id": "gte.41",
-                        "order": "league_id.asc,pick_number.asc",
-                    },
-                )
-                if isinstance(rows, list) and rows:
-                    by_league: Dict[int, List[Dict[str, Any]]] = {}
-                    for r in rows:
-                        lid = int(r.get("league_id") or 0)
-                        if lid >= 41:
-                            by_league.setdefault(lid, []).append(r)
-
-                    for lid, lrows in by_league.items():
-                        lrows.sort(key=lambda x: int(x.get("pick_number") or 0))
-                        filled = [r for r in lrows if r.get("player_id") is not None]
-                        if not filled:
+    async def scan_unanswered_game_commands(self, cutoff: datetime) -> None:
+        """Checks #season-games (The W) and #games (Original 6) as well as boxscore/saves channels
+        for any unanswered command message after the last bot reply."""
+        for guild in self.guilds:
+            for channel in guild.text_channels:
+                cname = (channel.name or "").lower()
+                if cname not in ("season-games", "games", "2013-boxscores", "boxscores", "2013-saves", "season-saves") and not re.match(r"^(19\d{2}|20\d{2})-(games|saves|boxscores)$", cname):
+                    continue
+                perms = channel.permissions_for(guild.me)
+                if not (perms.read_messages and perms.read_message_history and perms.send_messages):
+                    continue
+                try:
+                    recent_msgs = [m async for m in channel.history(limit=10)]
+                    unanswered_cmds: List[discord.Message] = []
+                    for m in recent_msgs:
+                        if self.user and m.author.id == self.user.id:
+                            break
+                        if m.author.bot or m.created_at < cutoff:
                             continue
-
-                        is_o6 = lid >= 54
-                        ch_id = O6_DRAFT_CHANNEL_ID if is_o6 else W_DRAFT_CHANNEL_ID
-                        ch = self.get_channel(ch_id)
-                        if ch is None:
-                            try:
-                                ch = await self.fetch_channel(ch_id)
-                            except Exception:
-                                ch = None
-                        if ch is None or not isinstance(ch, discord.TextChannel):
+                        if m.id in self.processed_command_msg_ids:
                             continue
-
-                        # Inspect recent messages in target channel so we don't duplicate
-                        recent_texts: List[str] = []
-                        try:
-                            async for m in ch.history(limit=25):
-                                txt = (m.content or "") + " " + " ".join((e.title or "") + " " + (e.description or "") for e in (m.embeds or []))
-                                recent_texts.append(txt.lower())
-                        except Exception:
-                            continue
-
-                        badge = LEAGUE_BADGE_MAP.get(lid, f"{'O' if is_o6 else 'W'} Draft ({lid})")
-                        for idx, pick_row in enumerate(filled):
-                            did = int(pick_row.get("draft_id") or 0)
-                            if did in self._announced_draft_ids:
-                                continue
-                            pk_num = int(pick_row.get("pick_number") or 1)
-                            rd_num = int(pick_row.get("round") or 1)
-                            p_obj = pick_row.get("league_player_database") or {}
-                            if isinstance(p_obj, list):
-                                p_obj = p_obj[0] if p_obj else {}
-                            t_obj = pick_row.get("league_teams") or {}
-                            if isinstance(t_obj, list):
-                                t_obj = t_obj[0] if t_obj else {}
-
-                            p_name = str(p_obj.get("player_name") or "").strip()
-                            if not p_name or p_name.upper() == "N/A":
-                                continue
-
-                            # Check if already announced in channel
-                            already = any(p_name.lower() in rt and f"#{pk_num}" in rt for rt in recent_texts)
-                            if already:
-                                self._announced_draft_ids.add(did)
-                                continue
-
-                            t_name = str(t_obj.get("team_name") or "Team").strip()
-                            c_name = str(t_obj.get("coach_name") or "").strip()
-                            p_pos = str(p_obj.get("pos") or "F").strip()
-
-                            # Find next open slot in this draft
-                            next_open = next(
-                                (s for s in lrows if int(s.get("pick_number") or 0) > pk_num and s.get("player_id") is None),
-                                None,
-                            )
-
-                            headline = (
-                                f"🚨 **PICK IS IN! ({badge})** **{t_name}**"
-                                f"{f' ({c_name})' if c_name else ''} selects **{p_name}** ({p_pos}) "
-                                f"with Pick **#{pk_num}** (Rd {rd_num})!"
-                            )
-
-                            embed = discord.Embed(
-                                title=f"Round {rd_num} • Pick #{pk_num} — {p_name} ({p_pos})",
-                                description=(
-                                    f"With Pick **#{pk_num}** (Round {rd_num}), **{t_name}**"
-                                    f"{f' (Coach **{c_name}**)' if c_name else ''} selects **{p_name}** (**{p_pos}**)!"
-                                ),
-                                color=0xF59E0B,
-                                timestamp=datetime.now(timezone.utc),
-                            )
-                            embed.set_author(name=f"{badge} • OFFICIAL DRAFT SELECTION — {t_name}")
-                            embed.set_footer(text=f"NHL95.net Draft War Room • {badge}")
-
-                            if next_open:
-                                nt_obj = next_open.get("league_teams") or {}
-                                if isinstance(nt_obj, list):
-                                    nt_obj = nt_obj[0] if nt_obj else {}
-                                nt_name = str(nt_obj.get("team_name") or "Next Team").strip()
-                                nc_name = str(nt_obj.get("coach_name") or "").strip()
-                                npk = int(next_open.get("pick_number") or (pk_num + 1))
-                                nrd = int(next_open.get("round") or rd_num)
-                                win_mins = 10 if nrd == 1 else 5
-                                mention_str = ""
-                                for kw, uid in TEAM_USER_ID_MAP.items():
-                                    if kw in nt_name.upper():
-                                        mention_str = f"<@{uid}>"
-                                        break
-                                coach_disp = " • ".join(filter(None, [f"Coach **{nc_name}**" if nc_name else "", mention_str]))
-                                embed.add_field(
-                                    name=f"⏱️ On The Clock Next ({win_mins}:00 Window)",
-                                    value=f"Pick **#{npk}** (Rd {nrd}) — **{nt_name}**{f' ({coach_disp})' if coach_disp else ''}",
-                                    inline=False,
-                                )
-                                headline += (
-                                    f"\n⏱️ **On The Clock Next ({win_mins}:00 Window):** "
-                                    f"Pick **#{npk}** (Rd {nrd}) — **{nt_name}**"
-                                    f"{f' — {mention_str}' if mention_str else ''}"
-                                )
-
-                            await ch.send(content=headline, embed=embed)
-                            self._announced_draft_ids.add(did)
-                            print(f"📢 Announced {badge} Pick #{pk_num} ({p_name} -> {t_name}) in #{ch.name}")
-            except Exception as e:
-                print(f"Draft watcher note: {e}")
-
-            await asyncio.sleep(10)
+                        txt = (m.clean_content or m.content or "").strip()
+                        if self.is_valid_season_games_command_text(txt):
+                            unanswered_cmds.append(m)
+                    for m in unanswered_cmds[1:]:
+                        self.processed_command_msg_ids.add(m.id)
+                    if unanswered_cmds:
+                        await self.process_season_games_command(unanswered_cmds[0])
+                except Exception:
+                    pass
 
     async def process_season_games_command(self, message: discord.Message) -> None:
         if message.author.bot:
             return
         if not isinstance(message.channel, discord.TextChannel):
             return
+        if message.id in self.processed_command_msg_ids:
+            return
 
         ch_name = (message.channel.name or "").lower()
-        # Listen for game commands in any #season-games, #2013-games, #games, #test, #testing channel
-        if "boxscore" in ch_name or "save" in ch_name:
+        if ch_name == "game-code":
             return
-        if "game" not in ch_name and "test" not in ch_name:
-            return
-
         raw_text = (message.clean_content or message.content or "").strip()
         if not raw_text:
             return
-
         upper_text = re.sub(r"[!?.]+$", "", raw_text.upper()).strip()
+
+        is_explicit_global_trigger = upper_text in (
+            "LEAGUE OVERVIEW", "LEAGUE DATA", "LEAGUE COMMANDS", "BOT COMMANDS", "COMMANDS", "HELP",
+            "MODE PLAYOFFS", "PLAYOFF MODE", "PLAYOFFS MODE", "TRIGGER PLAYOFFS", "SET PLAYOFFS",
+            "MODE SEASON", "SEASON MODE", "REGULAR SEASON MODE", "TRIGGER SEASON", "SET SEASON",
+            "MODE AUTO", "AUTO MODE",
+            "BRACKET", "PLAYOFF BRACKET", "PLAYOFFS", "PLAYOFF",
+            "STANDINGS", "STANDING", "LEADERS", "LEADER", "LEAGUE LEADERS",
+        )
+        is_box_or_save_ch = "boxscore" in ch_name or "save" in ch_name
+        if not is_explicit_global_trigger and not is_box_or_save_ch and ch_name not in ("season-games", "games") and not ch_name.endswith("-games"):
+            return
+
+        self.processed_command_msg_ids.add(message.id)
+
         cat_id = getattr(message.channel, "category_id", None)
         cat_name = (getattr(getattr(message.channel, "category", None), "name", "") or "").lower()
         is_orig6 = (
@@ -5311,20 +5810,97 @@ class NHL95SaveStateBot(discord.Client):
             or "orig" in cat_name
             or "192" in cat_name
             or "193" in cat_name
-            or ch_name == "games"
+            or ch_name in ("games", "season-saves", "boxscores")
             or "192" in ch_name
             or "193" in ch_name
             or "orig" in ch_name
         )
         s_id = await asyncio.to_thread(resolve_active_league_season, is_orig6, f"{cat_name} {ch_name}")
 
+        # 0A. LEAGUE OVERVIEW / LEAGUE DATA / COMMANDS -> Post interactive command reference card
+        if upper_text in ("LEAGUE OVERVIEW", "LEAGUE DATA", "LEAGUE COMMANDS", "BOT COMMANDS", "COMMANDS", "HELP"):
+            cmd_embed = self.build_league_commands_embed(is_orig6=is_orig6, season_id=s_id)
+            await message.channel.send(embed=cmd_embed)
+            return
+
+        # 0. Explicit Season / Playoffs Mode Trigger (works in games, saves, or boxscores channels)
+        if upper_text in ("MODE PLAYOFFS", "PLAYOFF MODE", "PLAYOFFS MODE", "TRIGGER PLAYOFFS", "SET PLAYOFFS"):
+            try:
+                await message.add_reaction("🏆")
+            except Exception:
+                pass
+            await asyncio.to_thread(set_league_mode_override, s_id, "Playoffs")
+            await message.channel.send(
+                f"🏆 **Playoff Mode Triggered** for Season **{s_id} ({get_league_code(s_id)})**! "
+                f"All dropped save states will be recorded to the Playoff Bracket Series."
+            )
+            print(f"🏆 [TRIGGER] {message.author} set Season {s_id} ({get_league_code(s_id)}) to PLAYOFFS mode in #{ch_name}")
+            return
+
+        if upper_text in ("MODE SEASON", "SEASON MODE", "REGULAR SEASON MODE", "TRIGGER SEASON", "SET SEASON"):
+            try:
+                await message.add_reaction("📅")
+            except Exception:
+                pass
+            await asyncio.to_thread(set_league_mode_override, s_id, "Season")
+            await message.channel.send(
+                f"📅 **Regular Season Mode Triggered** for Season **{s_id} ({get_league_code(s_id)})**! "
+                f"All dropped save states will be recorded to the Regular Season Schedule (auto-upgrading if an active Playoff series matches)."
+            )
+            print(f"📅 [TRIGGER] {message.author} set Season {s_id} ({get_league_code(s_id)}) to SEASON mode in #{ch_name}")
+            return
+
+        if upper_text in ("MODE AUTO", "AUTO MODE"):
+            try:
+                await message.add_reaction("🤖")
+            except Exception:
+                pass
+            await asyncio.to_thread(set_league_mode_override, s_id, None)
+            await message.channel.send(
+                f"🤖 **Auto Mode Enabled** for Season **{s_id} ({get_league_code(s_id)})**! "
+                f"Save states will auto-detect Season vs. Playoffs from active series and filenames."
+            )
+            print(f"🤖 [TRIGGER] {message.author} set Season {s_id} ({get_league_code(s_id)}) to AUTO mode in #{ch_name}")
+            return
+
+        # 2B. BRACKET / PLAYOFFS / STANDINGS -> Render and post live PNGs (allowed in boxscores/saves/games channels)
+        if upper_text in ("BRACKET", "PLAYOFF BRACKET", "PLAYOFFS", "PLAYOFF"):
+            try:
+                await message.add_reaction("🏆")
+            except Exception:
+                pass
+            bracket_bytes = await asyncio.to_thread(render_playoff_bracket_png, s_id)
+            if bracket_bytes:
+                br_file = discord.File(io.BytesIO(bracket_bytes), filename="playoff_bracket.png")
+                await message.channel.send(file=br_file)
+                print(f"🏆 [BRACKET] Posted playoff_bracket.png for Season {s_id} in #{ch_name}")
+            return
+
+        if upper_text in ("STANDINGS", "STANDING", "LEADERS", "LEADER", "LEAGUE LEADERS"):
+            try:
+                await message.add_reaction("📊")
+            except Exception:
+                pass
+            is_po = await asyncio.to_thread(resolve_default_game_mode, s_id, False, False) == "Playoffs"
+            st_bytes = await asyncio.to_thread(render_standings_and_leaders_png, s_id, is_po)
+            if st_bytes:
+                st_file = discord.File(io.BytesIO(st_bytes), filename="standings_leaders.png")
+                await message.channel.send(file=st_file)
+                print(f"📊 [STANDINGS] Posted standings_leaders.png for Season {s_id} in #{ch_name}")
+            return
+
+        # Allow all on-demand commands across #season-games, #games, #2013-boxscores, #boxscores, #2013-saves, #season-saves
         user_id_str = str(message.author.id)
         username_str = str(message.author.name or "")
         display_str = str(message.author.display_name or "")
 
         # 1. FUCK OFF -> Disable notifications for this coach
         if upper_text in ("FUCK OFF", "FUCKOFF", "DND", "MUTE"):
-            user_abbr = resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6) or ""
+            user_abbr = (
+                resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6)
+                or resolve_team_abbr_for_user(user_id_str, username_str, display_str, not is_orig6)
+                or ""
+            )
             nick = TEAM_DISCORD_META.get(user_abbr, {}).get("nick") or display_str
             await asyncio.to_thread(set_coach_muted, user_id_str, user_abbr, True)
             await message.channel.send(f"`{nick} will not be alerted (FUCK OFF mode enabled — type GAME ON to turn notifications back on)`")
@@ -5332,21 +5908,17 @@ class NHL95SaveStateBot(discord.Client):
 
         # 2. GAME ON -> Re-enable notifications for this coach (and check season games)
         if upper_text in ("GAME ON", "GAMEON", "UNMUTE"):
-            user_abbr = resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6) or ""
+            user_abbr = (
+                resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6)
+                or resolve_team_abbr_for_user(user_id_str, username_str, display_str, not is_orig6)
+                or ""
+            )
             nick = TEAM_DISCORD_META.get(user_abbr, {}).get("nick") or display_str
             await asyncio.to_thread(set_coach_muted, user_id_str, user_abbr, False)
             await message.channel.send(f"{nick} will be alerted")
             if not user_abbr:
                 return
             upper_text = "SEASON GAMES"
-
-        # 2B. BRACKET / PLAYOFFS -> Render and post the live Playoff Bracket PNG
-        if upper_text in ("BRACKET", "PLAYOFF BRACKET", "PLAYOFFS"):
-            bracket_bytes = await asyncio.to_thread(render_playoff_bracket_png, s_id)
-            if bracket_bytes:
-                br_file = discord.File(io.BytesIO(bracket_bytes), filename="playoff_bracket.png")
-                await message.channel.send(file=br_file)
-            return
 
         async def send_team_remaining_and_pings(target_abbr: str, target_sid: int, ping_coaches: bool = True) -> None:
             t_meta = TEAM_DISCORD_META.get(target_abbr, {})
@@ -5400,9 +5972,21 @@ class NHL95SaveStateBot(discord.Client):
         # 3. SEASON GAMES / GAMES -> Ping all unmuted coaches that still have games left vs the sender + show logo strip
         if upper_text in ("SEASON GAMES", "SEASONGAMES", "GAMES", "GAMES LEFT", "REMAINING"):
             user_abbr = resolve_team_abbr_for_user(user_id_str, username_str, display_str, is_orig6)
+            target_sid = s_id
             if not user_abbr:
-                return
-            await send_team_remaining_and_pings(user_abbr, s_id, ping_coaches=True)
+                alt_abbr = resolve_team_abbr_for_user(user_id_str, username_str, display_str, not is_orig6)
+                if alt_abbr:
+                    user_abbr = alt_abbr
+                    orig6_set = {"BOS", "CHI", "DET", "DTC", "MTL", "NYR", "TOR"}
+                    target_sid = await asyncio.to_thread(resolve_active_league_season, user_abbr in orig6_set, f"{cat_name} {ch_name}")
+            if user_abbr:
+                await send_team_remaining_and_pings(user_abbr, target_sid, ping_coaches=True)
+            else:
+                examples = "`BOS`, `CHI`, `DET`, `MTL`, `NYR`, `TOR`" if is_orig6 else "`VHV`, `TEG`, `PRO`, `PIT`, `TBP`, `WDY`"
+                await message.channel.send(
+                    f"🏒 **Season {s_id} ({get_league_code(s_id)})** — Type any 3-letter team code (e.g. {examples}) "
+                    f"to check that team's remaining games & ping opponents, or type **`BRACKET`** / **`STANDINGS`**!"
+                )
             return
 
         # 4. 3-Letter Team Abbreviation (e.g. TEG, DHG, PIT, SVF, PRO, BOS, MTL, etc.) -> Ping coaches + Remaining opponents logo strip + count
@@ -5516,16 +6100,31 @@ def post_boxscore_png_from_web(payload_data: Dict[str, Any]) -> None:
                             send_multipart_png(msg_url, auth_hdr, standings_bytes, "standings_leaders.png")
                         print(f"Posted boxscore.png + bracket/standings to #{target_ch['name']}")
                         return
+
+            # Fallback to the league's primary boxscores channel (#boxscores for Original 6, #2013-boxscores for The W)
+            fallback_ch_id = "1459581630581838045" if is_orig6 else "1537489581077692646"
+            msg_url = f"https://discord.com/api/v10/channels/{fallback_ch_id}/messages"
+            auth_hdr = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+            if send_multipart_png(msg_url, auth_hdr, png_bytes, "boxscore.png"):
+                if bracket_bytes:
+                    send_multipart_png(msg_url, auth_hdr, bracket_bytes, "playoff_bracket.png")
+                if standings_bytes:
+                    send_multipart_png(msg_url, auth_hdr, standings_bytes, "standings_leaders.png")
+                print(f"Posted boxscore.png + bracket/standings to fallback channel {fallback_ch_id}")
+                return
         except Exception as e:
             print(f"Bot channel post note: {e}")
 
-    if DISCORD_BOXSCORE_WEBHOOK_URL:
-        send_multipart_png(f"{DISCORD_BOXSCORE_WEBHOOK_URL}?wait=true", {}, png_bytes, "boxscore.png")
-        if bracket_bytes:
-            send_multipart_png(f"{DISCORD_BOXSCORE_WEBHOOK_URL}?wait=true", {}, bracket_bytes, "playoff_bracket.png")
-        if standings_bytes:
-            send_multipart_png(f"{DISCORD_BOXSCORE_WEBHOOK_URL}?wait=true", {}, standings_bytes, "standings_leaders.png")
-        print("Posted boxscore.png + bracket/standings via webhook fallback")
+
+def keep_windows_awake() -> None:
+    """Prevents Windows from entering idle sleep/standby while the 24/7 bot is running
+    (ES_CONTINUOUS | ES_SYSTEM_REQUIRED = 0x80000001). Allows display to turn off normally."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)
+        except Exception:
+            pass
 
 
 def main():
@@ -5533,8 +6132,13 @@ def main():
     parser.add_argument(
         "--backfill-hours",
         type=float,
-        default=0.5,
-        help="On startup, scan the last N hours of channel history for any un-ingested save states (0 to disable, default: 0.5 = 30 mins)",
+        default=96.0,
+        help="On startup, scan the last N hours of channel history for any un-ingested save states (0 to disable, default: 96.0 = 4 days)",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run a single catch-up scan across save-state channels and exit cleanly (ideal for 30-min cron / GitHub Actions)",
     )
     parser.add_argument(
         "--channel-ids",
@@ -5577,12 +6181,25 @@ def main():
     intents.messages = True
     intents.reactions = True
 
+    if args.once:
+        bot = NHL95SaveStateBot(
+            backfill_hours=args.backfill_hours,
+            allowed_channel_ids=channel_ids,
+            run_once=True,
+            intents=intents,
+        )
+        bot.run(DISCORD_BOT_TOKEN, reconnect=False)
+        return
+
     import time
+    keep_windows_awake()
     while True:
         try:
+            keep_windows_awake()
             bot = NHL95SaveStateBot(
                 backfill_hours=args.backfill_hours,
                 allowed_channel_ids=channel_ids,
+                run_once=False,
                 intents=intents,
             )
             bot.run(DISCORD_BOT_TOKEN, reconnect=True)
