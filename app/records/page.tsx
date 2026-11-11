@@ -247,6 +247,8 @@ const SUMMARY_METRICS = [
 // TEAM RECORD BOOK DEFINITIONS
 // ==========================================
 
+type TeamRecordGroup = 'standings' | 'offense' | 'defense' | 'special' | 'pergame' | 'misc';
+
 type TeamRecordDef = {
   id: string;
   label: string;
@@ -254,57 +256,144 @@ type TeamRecordDef = {
   key: string;
   dir: 'desc' | 'asc';
   kind: 'int' | 'diff' | 'pct' | 'avg';
+  group: TeamRecordGroup;
   fullOnly?: boolean;
   minGp?: number;
+  homeOnly?: boolean;
 };
 
 type TeamRecordCard = {
   id: string;
   label: string;
   unit: string;
+  group: TeamRecordGroup;
   top: { rank: number; name: string; abbr: string; logo: string; valueText: string; scope: string }[];
 };
 
-type TeamSeasonRow = {
-  name: string; abbr: string; logo: string; sid: number; season: string;
-  gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number;
-  gd: number; ptsPct: number; gfpg: number; gapg: number; full: boolean;
+type TeamScope = 'single' | 'game' | 'franchise';
+
+const TEAM_GROUP_LABELS: Record<TeamRecordGroup, string> = {
+  standings: 'Standings',
+  offense: 'Offense',
+  defense: 'Defense & Goaltending',
+  special: 'Special Teams',
+  pergame: 'Per Game',
+  misc: 'Streaks & Style'
 };
 
-type TeamFranchiseRow = {
-  name: string; abbr: string; logo: string; seasons: number; firstSeason: string; lastSeason: string;
-  gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number; gd: number; ptsPct: number;
-};
+// Compact field aliases pulled from league_gamestats JSON (keeps the payload small)
+const TEAM_GAME_SELECT = [
+  'game_id', 'league_id', 'home_team_id', 'away_team_id', 'home_score', 'away_score',
+  'hs:home_stats->>home_shots', 'as:away_stats->>away_shots',
+  'hpg:home_stats->>home_pp_goals', 'apg:away_stats->>away_pp_goals',
+  'hpo:home_stats->>home_pp_opps', 'apo:away_stats->>away_pp_opps',
+  'hsh:home_stats->>home_sh_goals', 'ash:away_stats->>away_sh_goals',
+  'hck:home_stats->>home_bodychecks', 'ack:away_stats->>away_bodychecks',
+  'hfo:home_stats->>home_faceoff_won', 'afo:away_stats->>away_faceoff_won',
+  'hbg:home_stats->>home_breakaway_goals', 'abg:away_stats->>away_breakaway_goals',
+  'hog:home_stats->>home_onetimer_goals', 'aog:away_stats->>away_onetimer_goals',
+  'hpa:home_stats->>home_pass_attempts', 'apa:away_stats->>away_pass_attempts',
+  'hpc:home_stats->>home_pass_completions', 'apc:away_stats->>away_pass_completions'
+].join(',');
 
 const TEAM_SINGLE_SEASON_DEFS: TeamRecordDef[] = [
-  { id: 'ss_pts', label: 'Most Points', unit: 'PTS', key: 'pts', dir: 'desc', kind: 'int' },
-  { id: 'ss_w', label: 'Most Wins', unit: 'W', key: 'w', dir: 'desc', kind: 'int' },
-  { id: 'ss_pct', label: 'Best Points %', unit: 'PTS%', key: 'ptsPct', dir: 'desc', kind: 'pct', fullOnly: true },
-  { id: 'ss_gf', label: 'Most Goals For', unit: 'GF', key: 'gf', dir: 'desc', kind: 'int' },
-  { id: 'ss_gd', label: 'Best Goal Differential', unit: 'GD', key: 'gd', dir: 'desc', kind: 'diff' },
-  { id: 'ss_ga', label: 'Fewest Goals Against', unit: 'GA', key: 'ga', dir: 'asc', kind: 'int', fullOnly: true },
-  { id: 'ss_gfpg', label: 'Most Goals Per Game', unit: 'GF/G', key: 'gfpg', dir: 'desc', kind: 'avg', fullOnly: true },
-  { id: 'ss_gapg', label: 'Fewest Goals Against Per Game', unit: 'GA/G', key: 'gapg', dir: 'asc', kind: 'avg', fullOnly: true },
-  { id: 'ss_l', label: 'Most Losses', unit: 'L', key: 'l', dir: 'desc', kind: 'int' },
-  { id: 'ss_fewpts', label: 'Fewest Points', unit: 'PTS', key: 'pts', dir: 'asc', kind: 'int', fullOnly: true },
-  { id: 'ss_fewgf', label: 'Fewest Goals For', unit: 'GF', key: 'gf', dir: 'asc', kind: 'int', fullOnly: true },
-  { id: 'ss_mostga', label: 'Most Goals Against', unit: 'GA', key: 'ga', dir: 'desc', kind: 'int' },
-  { id: 'ss_worstgd', label: 'Worst Goal Differential', unit: 'GD', key: 'gd', dir: 'asc', kind: 'diff', fullOnly: true },
-  { id: 'ss_t', label: 'Most Ties', unit: 'T', key: 't', dir: 'desc', kind: 'int' },
-  { id: 'ss_otl', label: 'Most OT Losses', unit: 'OTL', key: 'otl', dir: 'desc', kind: 'int' }
+  // Standings
+  { id: 'ss_pts', label: 'Most Points', unit: 'PTS', key: 'pts', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'ss_w', label: 'Most Wins', unit: 'W', key: 'w', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'ss_pct', label: 'Best Points %', unit: 'PTS%', key: 'ptsPct', dir: 'desc', kind: 'pct', group: 'standings', fullOnly: true },
+  { id: 'ss_homew', label: 'Most Home Wins', unit: 'W', key: 'homeW', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'ss_roadw', label: 'Most Road Wins', unit: 'W', key: 'awayW', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'ss_l', label: 'Most Losses', unit: 'L', key: 'l', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'ss_fewpts', label: 'Fewest Points', unit: 'PTS', key: 'pts', dir: 'asc', kind: 'int', group: 'standings', fullOnly: true },
+  { id: 'ss_t', label: 'Most Ties', unit: 'T', key: 't', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'ss_otl', label: 'Most OT Losses', unit: 'OTL', key: 'otl', dir: 'desc', kind: 'int', group: 'standings' },
+  // Offense
+  { id: 'ss_gf', label: 'Most Goals For', unit: 'GF', key: 'gf', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'ss_sf', label: 'Most Shots For', unit: 'SOG', key: 'sf', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'ss_shpct', label: 'Best Shooting %', unit: 'SH%', key: 'shPct', dir: 'desc', kind: 'pct', group: 'offense', fullOnly: true },
+  { id: 'ss_gd', label: 'Best Goal Differential', unit: 'GD', key: 'gd', dir: 'desc', kind: 'diff', group: 'offense' },
+  { id: 'ss_brk', label: 'Most Breakaway Goals', unit: 'BRK G', key: 'brkG', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'ss_1x', label: 'Most One-Timer Goals', unit: '1X G', key: 'oneG', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'ss_fewgf', label: 'Fewest Goals For', unit: 'GF', key: 'gf', dir: 'asc', kind: 'int', group: 'offense', fullOnly: true },
+  // Defense
+  { id: 'ss_ga', label: 'Fewest Goals Against', unit: 'GA', key: 'ga', dir: 'asc', kind: 'int', group: 'defense', fullOnly: true },
+  { id: 'ss_so', label: 'Most Shutouts', unit: 'SO', key: 'shutouts', dir: 'desc', kind: 'int', group: 'defense' },
+  { id: 'ss_svpct', label: 'Best Save %', unit: 'SV%', key: 'svPct', dir: 'desc', kind: 'pct', group: 'defense', fullOnly: true },
+  { id: 'ss_fewsa', label: 'Fewest Shots Against', unit: 'SA', key: 'sa', dir: 'asc', kind: 'int', group: 'defense', fullOnly: true },
+  { id: 'ss_mostga', label: 'Most Goals Against', unit: 'GA', key: 'ga', dir: 'desc', kind: 'int', group: 'defense' },
+  { id: 'ss_worstgd', label: 'Worst Goal Differential', unit: 'GD', key: 'gd', dir: 'asc', kind: 'diff', group: 'defense', fullOnly: true },
+  // Special teams
+  { id: 'ss_ppg', label: 'Most Power Play Goals', unit: 'PPG', key: 'ppG', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'ss_pppct', label: 'Best Power Play %', unit: 'PP%', key: 'ppPct', dir: 'desc', kind: 'pct', group: 'special', fullOnly: true },
+  { id: 'ss_pkpct', label: 'Best Penalty Kill %', unit: 'PK%', key: 'pkPct', dir: 'desc', kind: 'pct', group: 'special', fullOnly: true },
+  { id: 'ss_shg', label: 'Most Shorthanded Goals', unit: 'SHG', key: 'shG', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'ss_ppopp', label: 'Most Power Play Chances', unit: 'PPO', key: 'ppOpp', dir: 'desc', kind: 'int', group: 'special' },
+  // Per game
+  { id: 'ss_ptspg', label: 'Most Points Per Game', unit: 'PTS/G', key: 'ptsPg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_gfpg', label: 'Most Goals Per Game', unit: 'GF/G', key: 'gfpg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_gapg', label: 'Fewest Goals Against Per Game', unit: 'GA/G', key: 'gapg', dir: 'asc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_sfpg', label: 'Most Shots Per Game', unit: 'SOG/G', key: 'sfpg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_sapg', label: 'Fewest Shots Against Per Game', unit: 'SA/G', key: 'sapg', dir: 'asc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_sdpg', label: 'Best Shot Differential Per Game', unit: 'SD/G', key: 'sdpg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_chkpg', label: 'Most Checks Per Game', unit: 'CHK/G', key: 'chkpg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_ppgpg', label: 'Most PP Goals Per Game', unit: 'PPG/G', key: 'ppgpg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  { id: 'ss_gdpg', label: 'Best Goal Differential Per Game', unit: 'GD/G', key: 'gdpg', dir: 'desc', kind: 'avg', group: 'pergame', fullOnly: true },
+  // Streaks & style
+  { id: 'ss_wstreak', label: 'Longest Win Streak', unit: 'GAMES', key: 'winStreak', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'ss_unbeaten', label: 'Longest Point Streak', unit: 'GAMES', key: 'pointStreak', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'ss_lstreak', label: 'Longest Losing Streak', unit: 'GAMES', key: 'loseStreak', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'ss_chk', label: 'Most Body Checks', unit: 'CHK', key: 'chk', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'ss_fopct', label: 'Best Faceoff %', unit: 'FO%', key: 'foPct', dir: 'desc', kind: 'pct', group: 'misc', fullOnly: true },
+  { id: 'ss_passpct', label: 'Best Pass Completion %', unit: 'PASS%', key: 'passPct', dir: 'desc', kind: 'pct', group: 'misc', fullOnly: true },
+  { id: 'ss_blowouts', label: 'Most Wins by 4+ Goals', unit: 'W', key: 'blowouts', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'ss_onegoal', label: 'Most One-Goal Wins', unit: 'W', key: 'oneGoalW', dir: 'desc', kind: 'int', group: 'misc' }
+];
+
+const TEAM_SINGLE_GAME_DEFS: TeamRecordDef[] = [
+  { id: 'sg_gf', label: 'Most Goals in a Game', unit: 'G', key: 'gf', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'sg_margin', label: 'Largest Margin of Victory', unit: 'GOALS', key: 'margin', dir: 'desc', kind: 'diff', group: 'offense' },
+  { id: 'sg_combined', label: 'Most Combined Goals (Both Teams)', unit: 'G', key: 'combined', dir: 'desc', kind: 'int', group: 'offense', homeOnly: true },
+  { id: 'sg_sf', label: 'Most Shots in a Game', unit: 'SOG', key: 'sf', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'sg_brk', label: 'Most Breakaway Goals in a Game', unit: 'BRK G', key: 'brkG', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'sg_1x', label: 'Most One-Timer Goals in a Game', unit: '1X G', key: 'oneG', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'sg_sa', label: 'Fewest Shots Allowed in a Game', unit: 'SA', key: 'sa', dir: 'asc', kind: 'int', group: 'defense' },
+  { id: 'sg_saves', label: 'Most Saves in a Game', unit: 'SV', key: 'saves', dir: 'desc', kind: 'int', group: 'defense' },
+  { id: 'sg_shotsw', label: 'Most Shots Faced in a Win', unit: 'SA', key: 'saInWin', dir: 'desc', kind: 'int', group: 'defense' },
+  { id: 'sg_ppg', label: 'Most Power Play Goals in a Game', unit: 'PPG', key: 'ppG', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'sg_shg', label: 'Most Shorthanded Goals in a Game', unit: 'SHG', key: 'shG', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'sg_ppo', label: 'Most Power Play Chances in a Game', unit: 'PPO', key: 'ppOpp', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'sg_chk', label: 'Most Body Checks in a Game', unit: 'CHK', key: 'chk', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'sg_fo', label: 'Most Faceoffs Won in a Game', unit: 'FOW', key: 'fow', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'sg_pass', label: 'Most Completed Passes in a Game', unit: 'PASS', key: 'passC', dir: 'desc', kind: 'int', group: 'misc' }
 ];
 
 const TEAM_FRANCHISE_DEFS: TeamRecordDef[] = [
-  { id: 'fr_w', label: 'Most All-Time Wins', unit: 'W', key: 'w', dir: 'desc', kind: 'int' },
-  { id: 'fr_pts', label: 'Most All-Time Points', unit: 'PTS', key: 'pts', dir: 'desc', kind: 'int' },
-  { id: 'fr_pct', label: 'Best All-Time Points %', unit: 'PTS%', key: 'ptsPct', dir: 'desc', kind: 'pct', minGp: 100 },
-  { id: 'fr_gf', label: 'Most All-Time Goals For', unit: 'GF', key: 'gf', dir: 'desc', kind: 'int' },
-  { id: 'fr_gd', label: 'Best All-Time Goal Differential', unit: 'GD', key: 'gd', dir: 'desc', kind: 'diff' },
-  { id: 'fr_seasons', label: 'Most Seasons Played', unit: 'SEASONS', key: 'seasons', dir: 'desc', kind: 'int' },
-  { id: 'fr_gp', label: 'Most Games Played', unit: 'GP', key: 'gp', dir: 'desc', kind: 'int' },
-  { id: 'fr_l', label: 'Most All-Time Losses', unit: 'L', key: 'l', dir: 'desc', kind: 'int' },
-  { id: 'fr_ga', label: 'Most All-Time Goals Against', unit: 'GA', key: 'ga', dir: 'desc', kind: 'int' }
+  { id: 'fr_w', label: 'Most All-Time Wins', unit: 'W', key: 'w', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'fr_pts', label: 'Most All-Time Points', unit: 'PTS', key: 'pts', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'fr_pct', label: 'Best All-Time Points %', unit: 'PTS%', key: 'ptsPct', dir: 'desc', kind: 'pct', group: 'standings', minGp: 100 },
+  { id: 'fr_seasons', label: 'Most Seasons Played', unit: 'SEASONS', key: 'seasons', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'fr_gp', label: 'Most Games Played', unit: 'GP', key: 'gp', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'fr_l', label: 'Most All-Time Losses', unit: 'L', key: 'l', dir: 'desc', kind: 'int', group: 'standings' },
+  { id: 'fr_gf', label: 'Most All-Time Goals For', unit: 'GF', key: 'gf', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'fr_sf', label: 'Most All-Time Shots', unit: 'SOG', key: 'sf', dir: 'desc', kind: 'int', group: 'offense' },
+  { id: 'fr_gd', label: 'Best All-Time Goal Differential', unit: 'GD', key: 'gd', dir: 'desc', kind: 'diff', group: 'offense' },
+  { id: 'fr_so', label: 'Most All-Time Shutouts', unit: 'SO', key: 'shutouts', dir: 'desc', kind: 'int', group: 'defense' },
+  { id: 'fr_ga', label: 'Most All-Time Goals Against', unit: 'GA', key: 'ga', dir: 'desc', kind: 'int', group: 'defense' },
+  { id: 'fr_svpct', label: 'Best All-Time Save %', unit: 'SV%', key: 'svPct', dir: 'desc', kind: 'pct', group: 'defense', minGp: 100 },
+  { id: 'fr_ppg', label: 'Most All-Time PP Goals', unit: 'PPG', key: 'ppG', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'fr_pppct', label: 'Best All-Time Power Play %', unit: 'PP%', key: 'ppPct', dir: 'desc', kind: 'pct', group: 'special', minGp: 100 },
+  { id: 'fr_pkpct', label: 'Best All-Time Penalty Kill %', unit: 'PK%', key: 'pkPct', dir: 'desc', kind: 'pct', group: 'special', minGp: 100 },
+  { id: 'fr_shg', label: 'Most All-Time Shorthanded Goals', unit: 'SHG', key: 'shG', dir: 'desc', kind: 'int', group: 'special' },
+  { id: 'fr_ptspg', label: 'Most Points Per Game (All-Time)', unit: 'PTS/G', key: 'ptsPg', dir: 'desc', kind: 'avg', group: 'pergame', minGp: 100 },
+  { id: 'fr_gfpg', label: 'Most Goals Per Game (All-Time)', unit: 'GF/G', key: 'gfpg', dir: 'desc', kind: 'avg', group: 'pergame', minGp: 100 },
+  { id: 'fr_gapg', label: 'Fewest Goals Against Per Game (All-Time)', unit: 'GA/G', key: 'gapg', dir: 'asc', kind: 'avg', group: 'pergame', minGp: 100 },
+  { id: 'fr_sfpg', label: 'Most Shots Per Game (All-Time)', unit: 'SOG/G', key: 'sfpg', dir: 'desc', kind: 'avg', group: 'pergame', minGp: 100 },
+  { id: 'fr_chkpg', label: 'Most Checks Per Game (All-Time)', unit: 'CHK/G', key: 'chkpg', dir: 'desc', kind: 'avg', group: 'pergame', minGp: 100 },
+  { id: 'fr_chk', label: 'Most All-Time Body Checks', unit: 'CHK', key: 'chk', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'fr_brk', label: 'Most All-Time Breakaway Goals', unit: 'BRK G', key: 'brkG', dir: 'desc', kind: 'int', group: 'misc' },
+  { id: 'fr_1x', label: 'Most All-Time One-Timer Goals', unit: '1X G', key: 'oneG', dir: 'desc', kind: 'int', group: 'misc' }
 ];
+
 
 export default function RecordsPage() {
   const [selectedLeague, setSelectedLeague] = useState<string>('W');
@@ -314,14 +403,17 @@ export default function RecordsPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [summaryList, setSummaryList] = useState<any[]>([]);
   const [teamRecordWatch, setTeamRecordWatch] = useState<any[]>([]);
-  const [teamRecords, setTeamRecords] = useState<{ single: TeamRecordCard[]; franchise: TeamRecordCard[] }>({ single: [], franchise: [] });
-  const [teamRecordScope, setTeamRecordScope] = useState<'single' | 'franchise'>('single');
+  const [teamRecords, setTeamRecords] = useState<Record<TeamScope, TeamRecordCard[]>>({ single: [], game: [], franchise: [] });
+  const [teamRecordScope, setTeamRecordScope] = useState<TeamScope>('single');
+  const [teamRecordGroup, setTeamRecordGroup] = useState<TeamRecordGroup | 'all'>('all');
+  const [teamGamesLoaded, setTeamGamesLoaded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [masterEnriched, setMasterEnriched] = useState<boolean>(false);
 
   const archiveCacheRef = useRef<{
     loaded: boolean;
     masterLoaded: boolean;
+    teamGameRows: any[];
     masterLoadingPromise: Promise<void> | null;
     apiRows: any[];
     masterRows: any[];
@@ -543,6 +635,7 @@ export default function RecordsPage() {
         masterLoadingPromise: null as Promise<void> | null,
         apiRows,
         masterRows: [] as any[],
+        teamGameRows: [] as any[],
         teamsData: teamsRes?.data || [],
         leaguesData: leaguesRes?.data || [],
         coachesData: coachesRes?.data || [],
@@ -589,6 +682,18 @@ export default function RecordsPage() {
         } catch {
           cacheObj.masterLoaded = true;
         }
+      })();
+
+      // Background fetch of every regular-season boxscore's team stats (shots, PP, checks, faceoffs...)
+      // for the Team Records section: single-game records, per-game rates, streaks & special teams.
+      (async () => {
+        try {
+          const rows = await fetchAllPaginated('league_gamestats', TEAM_GAME_SELECT, 4, 40000, (q) => q.order('game_id', { ascending: true }));
+          cacheObj.teamGameRows = rows;
+        } catch {
+          cacheObj.teamGameRows = [];
+        }
+        setTeamGamesLoaded(true);
       })();
 
       return cacheObj;
@@ -1369,71 +1474,191 @@ export default function RecordsPage() {
           setTeamRecordWatch([]);
         }
 
-        // G. Team Record Book (single-season + franchise all-time) from league_standings
+        // G. Team Record Book (single season, single game, franchise) from league_standings + league_gamestats
         try {
           const teamsLookup = new Map<number, any>();
           (archive.teamsData || []).forEach((t: any) => teamsLookup.set(Number(t.team_id), t));
+          const teamMeta = (tid: number, lt?: any) => {
+            const tm = teamsLookup.get(tid);
+            return {
+              name: String(lt?.team_name || tm?.team_name || `Team ${tid}`).trim(),
+              abbr: String(lt?.abbreviation || tm?.abbreviation || '').trim().toUpperCase(),
+              logo: String(lt?.logo_url || tm?.logo_url || '').trim()
+            };
+          };
+          const num = (v: any) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+          };
+          const ratio = (a: number, b: number, minDen = 1) => (b >= minDen ? a / b : NaN);
 
+          // --- 1. Game-level aggregates per team-season + single-game rows ---
+          type GameAgg = {
+            gp: number; gf: number; ga: number; sf: number; sa: number; ppG: number; ppOpp: number; oppPpG: number; oppPpOpp: number;
+            shG: number; chk: number; fow: number; foTotal: number; brkG: number; oneG: number; passA: number; passC: number;
+            shutouts: number; homeW: number; awayW: number; blowouts: number; oneGoalW: number;
+            winStreak: number; pointStreak: number; loseStreak: number;
+            curW: number; curP: number; curL: number;
+          };
+          const newAgg = (): GameAgg => ({
+            gp: 0, gf: 0, ga: 0, sf: 0, sa: 0, ppG: 0, ppOpp: 0, oppPpG: 0, oppPpOpp: 0, shG: 0, chk: 0, fow: 0, foTotal: 0,
+            brkG: 0, oneG: 0, passA: 0, passC: 0, shutouts: 0, homeW: 0, awayW: 0, blowouts: 0, oneGoalW: 0,
+            winStreak: 0, pointStreak: 0, loseStreak: 0, curW: 0, curP: 0, curL: 0
+          });
+          const gameAgg = new Map<string, GameAgg>();
+          const gameRows: any[] = [];
+          const gamesInScope = (archive.teamGameRows || [])
+            .filter((g: any) => {
+              const sid = num(g.league_id);
+              const h = num(g.home_team_id);
+              const a = num(g.away_team_id);
+              return sid > 0 && h > 0 && a > 0 && h !== a && matchesSelectedLeague(sid);
+            })
+            .sort((x: any, y: any) => num(x.game_id) - num(y.game_id));
+
+          for (const g of gamesInScope) {
+            const sid = num(g.league_id);
+            const season = getSeasonBadgeLocal(sid);
+            const sides = [
+              { tid: num(g.home_team_id), oid: num(g.away_team_id), isHome: true, gf: num(g.home_score), ga: num(g.away_score), sf: num(g.hs), sa: num(g.as), ppG: num(g.hpg), ppOpp: num(g.hpo), oppPpG: num(g.apg), oppPpOpp: num(g.apo), shG: num(g.hsh), chk: num(g.hck), fow: num(g.hfo), ofow: num(g.afo), brkG: num(g.hbg), oneG: num(g.hog), passA: num(g.hpa), passC: num(g.hpc) },
+              { tid: num(g.away_team_id), oid: num(g.home_team_id), isHome: false, gf: num(g.away_score), ga: num(g.home_score), sf: num(g.as), sa: num(g.hs), ppG: num(g.apg), ppOpp: num(g.apo), oppPpG: num(g.hpg), oppPpOpp: num(g.hpo), shG: num(g.ash), chk: num(g.ack), fow: num(g.afo), ofow: num(g.hfo), brkG: num(g.abg), oneG: num(g.aog), passA: num(g.apa), passC: num(g.apc) }
+            ];
+            for (const s of sides) {
+              const key = `${sid}_${s.tid}`;
+              const ag = gameAgg.get(key) || newAgg();
+              const won = s.gf > s.ga;
+              const lost = s.gf < s.ga;
+              ag.gp += 1; ag.gf += s.gf; ag.ga += s.ga; ag.sf += s.sf; ag.sa += s.sa;
+              ag.ppG += s.ppG; ag.ppOpp += s.ppOpp; ag.oppPpG += s.oppPpG; ag.oppPpOpp += s.oppPpOpp;
+              ag.shG += s.shG; ag.chk += s.chk; ag.fow += s.fow; ag.foTotal += s.fow + s.ofow;
+              ag.brkG += s.brkG; ag.oneG += s.oneG; ag.passA += s.passA; ag.passC += s.passC;
+              if (s.ga === 0) ag.shutouts += 1;
+              if (won && s.isHome) ag.homeW += 1;
+              if (won && !s.isHome) ag.awayW += 1;
+              if (won && s.gf - s.ga >= 4) ag.blowouts += 1;
+              if (won && s.gf - s.ga === 1) ag.oneGoalW += 1;
+              // Streaks (game_id order). A "point" = any result that isn't a regulation-style loss by score.
+              ag.curW = won ? ag.curW + 1 : 0;
+              ag.curL = lost ? ag.curL + 1 : 0;
+              ag.curP = !lost ? ag.curP + 1 : 0;
+              ag.winStreak = Math.max(ag.winStreak, ag.curW);
+              ag.loseStreak = Math.max(ag.loseStreak, ag.curL);
+              ag.pointStreak = Math.max(ag.pointStreak, ag.curP);
+              gameAgg.set(key, ag);
+
+              const me = teamMeta(s.tid);
+              const opp = teamMeta(s.oid);
+              const oppTag = opp.abbr || opp.name;
+              gameRows.push({
+                ...me,
+                isHome: s.isHome,
+                gf: s.gf,
+                sf: s.sf,
+                sa: s.sf > 0 || s.sa > 0 ? s.sa : NaN,
+                saves: s.sa > 0 ? s.sa - s.ga : NaN,
+                saInWin: won ? s.sa : NaN,
+                margin: won ? s.gf - s.ga : NaN,
+                combined: s.gf + s.ga,
+                ppG: s.ppG,
+                shG: s.shG,
+                ppOpp: s.ppOpp,
+                chk: s.chk,
+                fow: s.fow,
+                brkG: s.brkG,
+                oneG: s.oneG,
+                passC: s.passC,
+                scope: s.isHome
+                  ? `${season} • ${oppTag} ${s.ga} @ ${me.abbr || me.name} ${s.gf}`
+                  : `${season} • ${me.abbr || me.name} ${s.gf} @ ${oppTag} ${s.ga}`
+              });
+            }
+          }
+
+          // --- 2. Single-season rows (standings base + game aggregates) ---
           const scopedRows = (archive.standingsData || []).filter((r: any) => {
             const sid = Number(r.season_id || 0);
             return sid > 0 && Number(r.gp || 0) > 0 && matchesSelectedLeague(sid);
           });
-
           const seasonMaxGp = new Map<number, number>();
           scopedRows.forEach((r: any) => {
             const sid = Number(r.season_id);
             seasonMaxGp.set(sid, Math.max(seasonMaxGp.get(sid) || 0, Number(r.gp || 0)));
           });
 
-          const seasonRows: TeamSeasonRow[] = scopedRows.map((r: any) => {
+          const seasonRows = scopedRows.map((r: any) => {
             const tid = Number(r.team_id || 0);
             const lt = Array.isArray(r.league_teams) ? r.league_teams[0] : r.league_teams;
-            const tm = teamsLookup.get(tid);
             const sid = Number(r.season_id);
-            const gp = Number(r.gp || 0);
-            const w = Number(r.w || 0);
-            const l = Number(r.l || 0);
-            const t = Number(r.t || 0);
-            const otl = Number(r.otl || 0);
-            const pts = r.pts != null ? Number(r.pts) : w * 2 + t + otl;
-            const gf = Number(r.gf || 0);
-            const ga = Number(r.ga || 0);
+            const gp = num(r.gp), w = num(r.w), l = num(r.l), t = num(r.t), otl = num(r.otl);
+            const pts = r.pts != null ? num(r.pts) : w * 2 + t + otl;
+            const gf = num(r.gf), ga = num(r.ga);
             const maxGp = seasonMaxGp.get(sid) || 0;
+            const ag = gameAgg.get(`${sid}_${tid}`);
+            const agOk = !!ag && ag.gp >= 10;
+            const g = ag || newAgg();
+            const hasShots = agOk && g.sf > 0;
             return {
-              name: String(lt?.team_name || tm?.team_name || `Team ${tid}`).trim(),
-              abbr: String(lt?.abbreviation || tm?.abbreviation || '').trim().toUpperCase(),
-              logo: String(lt?.logo_url || tm?.logo_url || '').trim(),
-              sid,
+              ...teamMeta(tid, lt),
+              tid, sid,
               season: getSeasonBadgeLocal(sid),
               gp, w, l, t, otl, pts, gf, ga,
               gd: gf - ga,
               ptsPct: gp > 0 ? pts / (gp * 2) : 0,
-              gfpg: gp > 0 ? gf / gp : 0,
-              gapg: gp > 0 ? ga / gp : 0,
-              // "Fewest/lowest" records only count (near-)complete seasons so a partial season can't hold them
-              full: maxGp >= 20 && gp >= 0.9 * maxGp
+              ptsPg: ratio(pts, gp),
+              gfpg: ratio(gf, gp),
+              gapg: ratio(ga, gp),
+              gdpg: ratio(gf - ga, gp),
+              full: maxGp >= 20 && gp >= 0.9 * maxGp,
+              // game-derived (NaN when no game data so the card skips the team)
+              sf: hasShots ? g.sf : NaN,
+              sa: hasShots ? g.sa : NaN,
+              sfpg: hasShots ? g.sf / g.gp : NaN,
+              sapg: hasShots ? g.sa / g.gp : NaN,
+              sdpg: hasShots ? (g.sf - g.sa) / g.gp : NaN,
+              shPct: hasShots ? ratio(g.gf, g.sf, 50) : NaN,
+              svPct: hasShots ? ratio(g.sa - g.ga, g.sa, 50) : NaN,
+              ppG: agOk ? g.ppG : NaN,
+              ppOpp: agOk ? g.ppOpp : NaN,
+              ppPct: agOk ? ratio(g.ppG, g.ppOpp, 20) : NaN,
+              pkPct: agOk ? 1 - ratio(g.oppPpG, g.oppPpOpp, 20) : NaN,
+              ppgpg: agOk ? g.ppG / g.gp : NaN,
+              shG: agOk ? g.shG : NaN,
+              shutouts: agOk ? g.shutouts : NaN,
+              chk: agOk ? g.chk : NaN,
+              chkpg: agOk ? g.chk / g.gp : NaN,
+              foPct: agOk ? ratio(g.fow, g.foTotal, 100) : NaN,
+              passPct: agOk ? ratio(g.passC, g.passA, 100) : NaN,
+              brkG: agOk ? g.brkG : NaN,
+              oneG: agOk ? g.oneG : NaN,
+              homeW: agOk ? g.homeW : NaN,
+              awayW: agOk ? g.awayW : NaN,
+              blowouts: agOk ? g.blowouts : NaN,
+              oneGoalW: agOk ? g.oneGoalW : NaN,
+              winStreak: agOk ? g.winStreak : NaN,
+              pointStreak: agOk ? g.pointStreak : NaN,
+              loseStreak: agOk ? g.loseStreak : NaN
             };
           });
 
           const fmt = (v: number, kind: TeamRecordDef['kind']) => {
             if (kind === 'pct') return v >= 1 ? '1.000' : v.toFixed(3).replace(/^0/, '');
             if (kind === 'avg') return v.toFixed(2);
-            if (kind === 'diff') return v > 0 ? `+${v}` : String(v);
+            if (kind === 'diff') return v > 0 ? `+${Number.isInteger(v) ? v : v.toFixed(2)}` : String(v);
             return String(v);
           };
 
-          const buildCards = <T extends { name: string; abbr: string; logo: string }>(
+          const buildCards = (
             defs: TeamRecordDef[],
-            source: T[],
-            scopeOf: (row: T) => string,
-            eligible: (row: T, def: TeamRecordDef) => boolean
+            source: any[],
+            scopeOf: (row: any) => string,
+            eligible: (row: any, def: TeamRecordDef) => boolean
           ): TeamRecordCard[] =>
             defs.map((def) => {
               const ranked = source
-                .filter((row) => eligible(row, def) && Number.isFinite(Number((row as any)[def.key])))
+                .filter((row) => eligible(row, def) && Number.isFinite(Number(row[def.key])))
                 .sort((a, b) => {
-                  const av = Number((a as any)[def.key]);
-                  const bv = Number((b as any)[def.key]);
+                  const av = Number(a[def.key]);
+                  const bv = Number(b[def.key]);
                   return def.dir === 'asc' ? av - bv : bv - av;
                 })
                 .slice(0, 5);
@@ -1441,12 +1666,13 @@ export default function RecordsPage() {
                 id: def.id,
                 label: def.label,
                 unit: def.unit,
+                group: def.group,
                 top: ranked.map((row, idx) => ({
                   rank: idx + 1,
                   name: row.name,
                   abbr: row.abbr,
                   logo: row.logo,
-                  valueText: fmt(Number((row as any)[def.key]), def.kind),
+                  valueText: fmt(Number(row[def.key]), def.kind),
                   scope: scopeOf(row)
                 }))
               };
@@ -1459,50 +1685,73 @@ export default function RecordsPage() {
             (row, def) => (def.fullOnly ? row.full : row.gp >= 10)
           );
 
-          // Franchise all-time: group every season by team abbreviation (franchise identity)
-          const franchiseMap = new Map<string, TeamFranchiseRow>();
+          const gameCards = buildCards(
+            TEAM_SINGLE_GAME_DEFS,
+            gameRows,
+            (row) => row.scope,
+            (row, def) => (def.homeOnly ? row.isHome : true)
+          );
+
+          // --- 3. Franchise all-time: group every season by team abbreviation ---
+          const franchiseMap = new Map<string, any>();
           [...seasonRows]
             .sort((a, b) => a.sid - b.sid)
             .forEach((row) => {
               const key = row.abbr || row.name.toUpperCase();
               const fr = franchiseMap.get(key) || {
-                name: row.name,
-                abbr: row.abbr,
-                logo: row.logo,
-                seasons: 0,
-                firstSeason: row.season,
-                lastSeason: row.season,
-                gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0, gd: 0, ptsPct: 0
+                name: row.name, abbr: row.abbr, logo: row.logo, seasons: 0, firstSeason: row.season, lastSeason: row.season,
+                gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0,
+                gGp: 0, gGf: 0, sf: 0, sa: 0, gGa: 0, ppG: 0, ppOpp: 0, oppPpG: 0, oppPpOpp: 0, shG: 0, shutouts: 0, chk: 0, brkG: 0, oneG: 0
               };
               fr.seasons += 1;
-              fr.gp += row.gp;
-              fr.w += row.w;
-              fr.l += row.l;
-              fr.t += row.t;
-              fr.otl += row.otl;
-              fr.pts += row.pts;
-              fr.gf += row.gf;
-              fr.ga += row.ga;
-              fr.gd = fr.gf - fr.ga;
-              fr.ptsPct = fr.gp > 0 ? fr.pts / (fr.gp * 2) : 0;
-              // latest season wins for display name/logo
+              fr.gp += row.gp; fr.w += row.w; fr.l += row.l; fr.t += row.t; fr.otl += row.otl;
+              fr.pts += row.pts; fr.gf += row.gf; fr.ga += row.ga;
+              const ag = gameAgg.get(`${row.sid}_${row.tid}`);
+              if (ag) {
+                fr.gGp += ag.gp; fr.gGf += ag.gf; fr.gGa += ag.ga; fr.sf += ag.sf; fr.sa += ag.sa;
+                fr.ppG += ag.ppG; fr.ppOpp += ag.ppOpp; fr.oppPpG += ag.oppPpG; fr.oppPpOpp += ag.oppPpOpp;
+                fr.shG += ag.shG; fr.shutouts += ag.shutouts; fr.chk += ag.chk; fr.brkG += ag.brkG; fr.oneG += ag.oneG;
+              }
               fr.name = row.name || fr.name;
               if (row.logo) fr.logo = row.logo;
               fr.lastSeason = row.season;
               franchiseMap.set(key, fr);
             });
 
+          const hasGameData = gameAgg.size > 0;
+          const franchiseRows = Array.from(franchiseMap.values()).map((fr) => ({
+            ...fr,
+            gd: fr.gf - fr.ga,
+            ptsPct: fr.gp > 0 ? fr.pts / (fr.gp * 2) : 0,
+            ptsPg: ratio(fr.pts, fr.gp),
+            gfpg: ratio(fr.gf, fr.gp),
+            gapg: ratio(fr.ga, fr.gp),
+            sf: hasGameData && fr.sf > 0 ? fr.sf : NaN,
+            sfpg: fr.sf > 0 ? ratio(fr.sf, fr.gGp) : NaN,
+            chkpg: fr.chk > 0 ? ratio(fr.chk, fr.gGp) : NaN,
+            svPct: fr.sa > 0 ? ratio(fr.sa - fr.gGa, fr.sa, 200) : NaN,
+            ppPct: ratio(fr.ppG, fr.ppOpp, 50),
+            pkPct: 1 - ratio(fr.oppPpG, fr.oppPpOpp, 50),
+            ppG: hasGameData ? fr.ppG : NaN,
+            shG: hasGameData ? fr.shG : NaN,
+            shutouts: hasGameData ? fr.shutouts : NaN,
+            chk: hasGameData && fr.chk > 0 ? fr.chk : NaN,
+            brkG: hasGameData ? fr.brkG : NaN,
+            oneG: hasGameData ? fr.oneG : NaN
+          }));
+
           const franchiseCards = buildCards(
             TEAM_FRANCHISE_DEFS,
-            Array.from(franchiseMap.values()),
+            franchiseRows,
             (fr) =>
               `${fr.seasons} ${fr.seasons === 1 ? 'Season' : 'Seasons'} (${fr.firstSeason === fr.lastSeason ? fr.firstSeason : `${fr.firstSeason} - ${fr.lastSeason}`})`,
             (fr, def) => (def.minGp ? fr.gp >= def.minGp : true)
           );
 
-          setTeamRecords({ single: singleCards, franchise: franchiseCards });
-        } catch {
-          setTeamRecords({ single: [], franchise: [] });
+          setTeamRecords({ single: singleCards, game: gameCards, franchise: franchiseCards });
+        } catch (teamErr) {
+          console.error('Team records error:', teamErr);
+          setTeamRecords({ single: [], game: [], franchise: [] });
         }
 
       } catch (err) {
@@ -1518,7 +1767,7 @@ export default function RecordsPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedLeague, specificRecord, masterEnriched]);
+  }, [selectedLeague, specificRecord, masterEnriched, teamGamesLoaded]);
 
   // Current active sub-category definition
   const currentCategoryDef = useMemo(() => {
@@ -1971,11 +2220,11 @@ export default function RecordsPage() {
       </section>
 
       {/* ==================================================== */}
-      {/* 5. TEAM RECORD BOOK: SINGLE SEASON & FRANCHISE       */}
+      {/* 5. TEAM RECORD BOOK: SEASON, GAME & FRANCHISE        */}
       {/* ==================================================== */}
       <section id="team-records" className="mb-10 scroll-mt-4">
         <div className="bg-white border-2 border-black shadow-sm p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-3 mb-4 gap-3">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b-2 border-black pb-3 mb-3 gap-3">
             <div>
               <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight flex items-center gap-2">
                 {activeLeagueObj.logoUrl && (
@@ -1985,19 +2234,25 @@ export default function RecordsPage() {
               </h2>
               <p className="text-xs font-bold uppercase italic text-gray-600 mt-0.5">
                 {teamRecordScope === 'single'
-                  ? 'Best & worst single-season club marks from the official standings (fewest/lowest marks count full seasons only).'
-                  : 'All-time franchise totals combined across every season the club has played.'}
+                  ? 'Best & worst single-season club marks (fewest/lowest & rate marks count full seasons only).'
+                  : teamRecordScope === 'game'
+                  ? 'Best single-game club performances across every recorded regular-season boxscore.'
+                  : 'All-time franchise totals & per-game rates combined across every season the club has played.'}
               </p>
             </div>
             <div className="flex items-center border-2 border-black shrink-0">
               {([
                 { id: 'single', label: 'Single Season' },
+                { id: 'game', label: 'Single Game' },
                 { id: 'franchise', label: 'Franchise All-Time' }
               ] as const).map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setTeamRecordScope(opt.id)}
+                  onClick={() => {
+                    setTeamRecordScope(opt.id);
+                    setTeamRecordGroup('all');
+                  }}
                   className={`px-3 py-1.5 text-xs font-black uppercase cursor-pointer transition ${
                     teamRecordScope === opt.id ? 'bg-black text-yellow-400' : 'bg-[#faf8f5] text-black hover:bg-gray-100'
                   }`}
@@ -2008,64 +2263,96 @@ export default function RecordsPage() {
             </div>
           </div>
 
-          {loading ? (
-            <div className="py-10 text-center text-xs font-bold uppercase italic text-neutral-500 animate-pulse">
-              Retrieving team record archives...
-            </div>
-          ) : (teamRecordScope === 'single' ? teamRecords.single : teamRecords.franchise).every((c) => c.top.length === 0) ? (
-            <div className="py-8 text-center text-xs font-bold uppercase italic text-neutral-500">
-              No team standings recorded for {leagueName}.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
-              {(teamRecordScope === 'single' ? teamRecords.single : teamRecords.franchise)
-                .filter((card) => card.top.length > 0)
-                .map((card) => {
-                  const leader = card.top[0];
-                  return (
-                    <div key={card.id} className="border-2 border-black bg-[#faf8f5] flex flex-col">
-                      <div className="bg-black text-white px-3 py-1.5 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-black uppercase tracking-wide truncate">{card.label}</span>
-                        <span className="text-[9px] font-mono font-black uppercase text-yellow-400 shrink-0">{card.unit}</span>
-                      </div>
-                      <div className="flex items-center gap-3 px-3 py-2.5 bg-yellow-100 border-b border-black/20">
-                        {leader.logo ? (
-                          <img src={leader.logo} alt={leader.abbr} className="w-9 h-9 object-contain shrink-0" />
-                        ) : (
-                          <span className="w-9 h-9 bg-black text-yellow-400 text-[10px] font-mono font-black flex items-center justify-center shrink-0">
-                            {leader.abbr || '—'}
-                          </span>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <div className="font-black uppercase text-sm leading-tight truncate">{leader.name}</div>
-                          <div className="text-[10px] font-mono text-gray-700 truncate">{leader.scope}</div>
-                        </div>
-                        <div className="text-2xl font-mono font-black text-red-700 shrink-0">{leader.valueText}</div>
-                      </div>
-                      <ol className="divide-y divide-black/10 text-xs">
-                        {card.top.slice(1).map((row) => (
-                          <li key={row.rank} className="flex items-center gap-2 px-3 py-1.5">
-                            <span className="w-5 font-mono font-bold text-gray-500">#{row.rank}</span>
-                            {row.logo ? (
-                              <img src={row.logo} alt={row.abbr} className="w-4 h-4 object-contain shrink-0" />
+          {(() => {
+            const cards = teamRecords[teamRecordScope].filter((c) => c.top.length > 0);
+            const groupsPresent = (Object.keys(TEAM_GROUP_LABELS) as TeamRecordGroup[]).filter((g) => cards.some((c) => c.group === g));
+            const visible = teamRecordGroup === 'all' ? cards : cards.filter((c) => c.group === teamRecordGroup);
+            const needsGameData = teamRecordScope === 'game' && !teamGamesLoaded;
+            return (
+              <>
+                {groupsPresent.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                    <span className="text-[10px] font-black uppercase text-gray-600 mr-1">Show:</span>
+                    {(['all', ...groupsPresent] as const).map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setTeamRecordGroup(g)}
+                        className={`px-2.5 py-1 text-[11px] font-black uppercase border border-black rounded cursor-pointer transition ${
+                          teamRecordGroup === g ? 'bg-black text-white' : 'bg-[#faf8f5] text-black hover:bg-gray-100'
+                        }`}
+                      >
+                        {g === 'all' ? `All (${cards.length})` : TEAM_GROUP_LABELS[g]}
+                      </button>
+                    ))}
+                    {!teamGamesLoaded && (
+                      <span className="text-[10px] font-mono italic text-gray-500 ml-2 animate-pulse">
+                        Loading boxscore stats (shots, PP, checks, streaks)…
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {loading || needsGameData ? (
+                  <div className="py-10 text-center text-xs font-bold uppercase italic text-neutral-500 animate-pulse">
+                    {needsGameData ? 'Crunching every recorded boxscore for single-game records...' : 'Retrieving team record archives...'}
+                  </div>
+                ) : visible.length === 0 ? (
+                  <div className="py-8 text-center text-xs font-bold uppercase italic text-neutral-500">
+                    No team records available for {leagueName}.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
+                    {visible.map((card) => {
+                      const leader = card.top[0];
+                      return (
+                        <div key={card.id} className="border-2 border-black bg-[#faf8f5] flex flex-col">
+                          <div className="bg-black text-white px-3 py-1.5 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-black uppercase tracking-wide truncate">{card.label}</span>
+                            <span className="text-[9px] font-mono font-black uppercase text-yellow-400 shrink-0">{card.unit}</span>
+                          </div>
+                          <div className="flex items-center gap-3 px-3 py-2 bg-yellow-100 border-b border-black/20">
+                            {leader.logo ? (
+                              <img src={leader.logo} alt={leader.abbr} className="w-9 h-9 object-contain shrink-0" />
                             ) : (
-                              <span className="w-4 h-4 shrink-0" />
+                              <span className="w-9 h-9 bg-black text-yellow-400 text-[10px] font-mono font-black flex items-center justify-center shrink-0">
+                                {leader.abbr || '—'}
+                              </span>
                             )}
-                            <span className="font-bold uppercase truncate flex-1 min-w-0">
-                              {row.name}
-                              <span className="ml-1.5 text-[9px] font-mono font-normal text-gray-500">{row.scope}</span>
-                            </span>
-                            <span className="font-mono font-black shrink-0">{row.valueText}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  );
-                })}
-            </div>
-          )}
+                            <div className="min-w-0 flex-1">
+                              <div className="font-black uppercase text-sm leading-tight truncate">{leader.name}</div>
+                              <div className="text-[10px] font-mono text-gray-700 truncate">{leader.scope}</div>
+                            </div>
+                            <div className="text-2xl font-mono font-black text-red-700 shrink-0">{leader.valueText}</div>
+                          </div>
+                          <ol className="divide-y divide-black/10 text-xs">
+                            {card.top.slice(1).map((row) => (
+                              <li key={row.rank} className="flex items-center gap-2 px-3 py-1">
+                                <span className="w-5 font-mono font-bold text-gray-500">#{row.rank}</span>
+                                {row.logo ? (
+                                  <img src={row.logo} alt={row.abbr} className="w-4 h-4 object-contain shrink-0" />
+                                ) : (
+                                  <span className="w-4 h-4 shrink-0" />
+                                )}
+                                <span className="font-bold uppercase truncate flex-1 min-w-0" title={row.scope}>
+                                  {row.abbr || row.name}
+                                  <span className="ml-1.5 text-[9px] font-mono font-normal text-gray-500">{row.scope}</span>
+                                </span>
+                                <span className="font-mono font-black shrink-0">{row.valueText}</span>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </section>
+
 
       {/* Footer Return Link */}
       <div className="pt-4 border-t-2 border-black flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-bold uppercase text-gray-600">
