@@ -17,42 +17,6 @@ const FALLBACK_TICKER_ITEMS: string[] = [
   'MARCUSVICKEBC ON THE TRADE BLOCK: WILL TRADE KAR 1ST ROUND FOR OVECHKIN & ITA 1ST FOR CROSBY',
 ];
 
-function formatBriefingToTickerItems(briefingData: any): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  const sections = briefingData?.sections || [];
-
-  for (const sec of sections) {
-    const chName = String(sec?.channel || 'discord').toUpperCase();
-    for (const m of sec?.messages || []) {
-      const author = String(m?.author || 'COACH').toUpperCase();
-      const raw = String(m?.text || '').trim();
-      if (!raw) continue;
-
-      let item = '';
-      const gifMatch = raw.match(/klipy\.com\/gifs\/([a-zA-Z0-9_-]+)/i);
-      if (gifMatch) {
-        const slug = gifMatch[1].replace(/-\d+$/, '').replace(/[-_]+/g, ' ').toUpperCase();
-        item = `${author} SHARES ${slug} GIF, SECRET CODE FOR CHAOS`;
-      } else if (/^https?:\/\//i.test(raw)) {
-        const dom = raw.replace(/^https?:\/\/(?:www\.)?/i, '').split('/')[0].toUpperCase();
-        item = `${author} PROMOTES ${dom} IN #${chName}, SCOUTS INVESTIGATING`;
-      } else {
-        const clean = raw.replace(/\s+/g, ' ').slice(0, 74).replace(/[,;:.!?]+$/, '').toUpperCase();
-        if (clean.length > 5) {
-          item = `${author} SUGGESTS ${clean}, GENIUS`;
-        }
-      }
-
-      if (item && !seen.has(item)) {
-        seen.add(item);
-        out.push(item);
-      }
-    }
-  }
-  return out;
-}
-
 export default function Nhl95Ticker({ className = '' }: { className?: string }) {
   const [items, setItems] = useState<string[]>(FALLBACK_TICKER_ITEMS);
   const [clockText, setClockText] = useState<string>('');
@@ -96,18 +60,6 @@ export default function Nhl95Ticker({ className = '' }: { className?: string }) 
         }
       } catch {}
 
-      try {
-        const bRes = await fetch(`/daily_briefing.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (bRes.ok) {
-          const bData = await bRes.json();
-          const parsed = formatBriefingToTickerItems(bData).filter(
-            (txt) => !PREVIOUS_SEASON_FILTER.test(String(txt || ''))
-          );
-          if (mounted && parsed.length > 0) {
-            setItems(parsed.slice(0, 20));
-          }
-        }
-      } catch {}
     };
 
     loadTicker();

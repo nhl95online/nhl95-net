@@ -72,147 +72,7 @@ const getTrophyUrl = (seasonId: number) => {
   return null;
 };
 
-const DEFAULT_BRIEFING = {
-  updated_at: "Today • Late Edition",
-  headline: "GAELICGOPHER CLAIMS TO HATE CHINESE BUFFET VLOGGER (CONFESSES TO BINGING EVERY EPISODE)",
-  subheadline: "Unholy Blindly Confirms Sabres Identity; Segathon Floods the Tape Room With High-Stakes Twitch Reels",
-  quote_of_the_day: {
-    quote: "I can't view it, but yes that's me.",
-    author: "Unholy",
-    context: "Confirming archival Sabres footage through pure aura"
-  },
-  bulletin: {
-    title: "COMMISSIONER'S DESK: SEASON 40 PUCK DROP",
-    text: "All team managers are instructed to confirm their active rosters and check emulator netplay configs. Rulebook updates regarding manual goalies and crease violations are now in full effect.",
-    author: "League HQ",
-    date: "Today"
-  },
-  nhl_wire: [
-    {
-      title: "NHL - The Home of the Puck",
-      link: "https://www.nhl.com",
-      date: "Today"
-    },
-    {
-      title: "The Competing Website",
-      link: "https://wn95-online.vercel.app/",
-      date: "Today"
-    },
-    {
-      title: "The Other Sega Hockey Game",
-      link: "https://nhl94.com/",
-      date: "Today"
-    }
-  ],
-  events: [
-    {
-      date: "LIVE NOW",
-      time: "",
-      title: "W18 Exhibition Series: Segathon vs Unholy",
-      description: "Genesis Netplay showdown streaming live in #highlights.",
-      url: "https://www.twitch.tv/segathonsow",
-      is_live: true,
-      interested: 8
-    },
-    {
-      date: "June 28",
-      time: "8:00 PM",
-      title: "Trade Deadline",
-      description: "Rosters lock for playoffs. Final buzzer on all blockbuster trades.",
-      is_live: false,
-      interested: 14
-    },
-    {
-      date: "July 01",
-      time: "7:00 PM",
-      title: "Draft Lottery",
-      description: "Ping pong balls decide franchise future.",
-      is_live: false,
-      interested: 18
-    },
-    {
-      date: "July 05",
-      time: "12:00 PM",
-      title: "Free Agency Opens",
-      description: "High-stakes contract negotiations begin on the wire.",
-      is_live: false,
-      interested: 12
-    }
-  ],
-  sections: [
-    {
-      channel: "cooking-with-puss",
-      badge: "CULINARY CONTROVERSY",
-      title: "Late Night Buffet Rants",
-      commentary: "At 2:43 AM, GaelicGopher called out an anonymous Chinese buffet influencer as 'horrible' before immediately admitting to hate-watching the entire filmography.",
-      messages: [
-        {
-          time: "02:43",
-          author: "GaelicGopher",
-          text: "@segathon FYI, that Chinese buffet loser....he's horrible (and I've somehow watched every single episode)"
-        }
-      ]
-    },
-    {
-      channel: "knightsvision",
-      badge: "HOT SCOOP",
-      title: "Sabres Classics Identification Incident",
-      commentary: "Segathon uncovered mystery vintage tape. Unholy confirmed it was 100% him on the ice without even loading the link.",
-      messages: [
-        {
-          time: "16:04",
-          author: "segathon",
-          text: "is this you @Unholy (https://x.com/SabresClassics/...)"
-        },
-        {
-          time: "16:32",
-          author: "Unholy",
-          text: "I can't view it, but yes that's me."
-        }
-      ]
-    },
-    {
-      channel: "highlights",
-      badge: "TAPE ROOM",
-      title: "Segathon Drops Triple Twitch Bombshell",
-      commentary: "Three high-octane clips dropped in rapid succession featuring textbook manual goalie saves and cross-crease snipes.",
-      clips: [
-        {
-          name: "HilariousHumbleCake",
-          url: "https://www.twitch.tv/segathonsow/clip/HilariousHumbleCakeOptimizePrime-jXgK-FCJEkSEPWRN"
-        },
-        {
-          name: "ProtectiveTangibleLlama",
-          url: "https://www.twitch.tv/segathonsow/clip/ProtectiveTangibleLlamaDoubleRainbow-SheU_4EQkkT-SvHC"
-        },
-        {
-          name: "CrepuscularAltruisticSandwich",
-          url: "https://www.twitch.tv/segathonsow/clip/CrepuscularAltruisticSandwichAMPEnergyCherry-qp00z_PkiDpFAEEZ"
-        }
-      ],
-      messages: [
-        {
-          time: "13:15 - 13:23",
-          author: "segathon",
-          text: "Posted 3 Twitch highlight reels"
-        }
-      ]
-    },
-    {
-      channel: "crib-notes-with-pinot-and-gummies",
-      badge: "LATE NIGHT INTEL",
-      title: "The Monday Night Detour",
-      commentary: "Under the influence of premium pinot and gummies, GaelicGopher declared 'Monday night de tour'. Scouts are analyzing the playbook.",
-      messages: [
-        {
-          time: "02:14",
-          author: "GaelicGopher",
-          text: "Monday night de tour"
-        }
-      ]
-    }
-  ]
-};
+const DEFAULT_BRIEFING: { events: any[] } = { events: [] };
 
 interface RecentGameItem {
   game_id: number | string;
@@ -340,7 +200,6 @@ export default function HomePage() {
   const [poStatLeaders, setPoStatLeaders] = useState<{ skaters: any[]; goalies: any[] }>({ skaters: [], goalies: [] });
   const [statsPhase, setStatsPhase] = useState<'REG' | 'PLAYOFFS'>('REG');
   const [leaderTab, setLeaderTab] = useState<'PTS' | 'G' | 'A' | 'GAA' | 'SV%' | 'W'>('PTS');
-  const [showAudioLogs, setShowAudioLogs] = useState<boolean>(false);
 
   // Expandable Boxscore Drawer State
   const [expandedGameKey, setExpandedGameKey] = useState<string | null>(null);
@@ -373,16 +232,6 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    fetch(`/daily_briefing.json?t=${Date.now()}`, { cache: 'no-store' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Not found');
-        return res.json();
-      })
-      .then((data) => setBriefing((prev: any) => ({ ...data, _liveEventsLoaded: prev?._liveEventsLoaded, events: prev?._liveEventsLoaded ? prev.events : (data?.events || []).filter((e: any) => e?.is_live || !e?.start_time || new Date(e.start_time).getTime() >= Date.now() - 12 * 3600 * 1000) })))
-      .catch(() => {
-        console.log("Using cached Gazette briefing");
-      });
-
     const loadLiveEvents = () => {
       fetch(`/api/discord-events?t=${Date.now()}`, { cache: 'no-store' })
         .then((res) => (res.ok ? res.json() : null))
@@ -2413,17 +2262,6 @@ export default function HomePage() {
     return p.points;
   };
 
-  // All Twitch clips from briefing
-  const allTapeRoomClips = useMemo(() => {
-    const clips: { name: string; url: string; channel: string }[] = [];
-    (briefing?.sections || []).forEach((sec: any) => {
-      (sec.clips || []).forEach((c: any) => {
-        clips.push({ name: c.name, url: c.url, channel: sec.channel });
-      });
-    });
-    return clips;
-  }, [briefing]);
-
   return (
     <div className="w-full min-h-screen bg-[#f4f1ea] text-black font-serif p-1 sm:p-3 md:p-4">
       {/* TOP SCORE TICKER (REPLACING NHL95 GAZETTE MASTHEAD — LAST 20 GAMES) */}
@@ -2727,70 +2565,6 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* Real-World NHL Current News Wire Bar (only shown when live/updated articles exist, not static placeholders) */}
-      {(() => {
-        const STATIC_TITLES = new Set([
-          'NHL Offseason: Trade Buzz Intensifies as Training Camps Near',
-          'Scouting Reports: Top Prospects Gear Up for Rookie Showcase',
-          'Free Agency Rewind: Big Moves That Shifted Division Balance',
-          'NHL - The Home of the Puck',
-          'The Competing Website',
-          'The Other Sega Hockey Game'
-        ]);
-        const liveWire = (briefing?.nhl_wire || []).filter(
-          (story: any) =>
-            story?.title &&
-            story?.link &&
-            story.link !== 'https://www.nhl.com' &&
-            !STATIC_TITLES.has(String(story.title).trim())
-        );
-        if (liveWire.length === 0) return null;
-        return (
-          <div className="border-y-2 border-black py-1.5 px-3 mb-6 bg-neutral-100 flex items-center gap-3 overflow-hidden text-xs">
-            <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
-              NHL.com Updates
-            </span>
-            <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap no-scrollbar text-neutral-800">
-              {liveWire.map((story: any, sIdx: number) => (
-                <a
-                  key={sIdx}
-                  href={story.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-bold hover:text-blue-800 hover:underline flex items-center gap-1.5"
-                >
-                  <span>•</span>
-                  <span>{story.title}</span>
-                  <span className="text-[10px] text-neutral-500 font-normal">({story.date})</span>
-                </a>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-      {false && (
-        <div className="border-y-2 border-black py-1.5 px-3 mb-6 bg-neutral-100 flex items-center gap-3 overflow-hidden text-xs">
-          <span className="bg-black text-white font-mono uppercase font-black px-1.5 py-0.5 text-[10px] tracking-wider shrink-0">
-            NHL.com Updates
-          </span>
-          <div className="flex items-center gap-6 overflow-x-auto whitespace-nowrap no-scrollbar text-neutral-800">
-            {briefing.nhl_wire.map((story: any, sIdx: number) => (
-              <a
-                key={sIdx}
-                href={story.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-bold hover:text-blue-800 hover:underline flex items-center gap-1.5"
-              >
-                <span>•</span>
-                <span>{story.title}</span>
-                <span className="text-[10px] text-neutral-500 font-normal">({story.date})</span>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-12 gap-4 sm:gap-5 lg:gap-6 xl:gap-8 items-start">
         <section className="col-span-12 md:col-span-5 lg:col-span-3 xl:col-span-2 order-3 md:order-2 lg:order-1 bg-black text-white border-2 border-black p-3.5 space-y-4 sm:space-y-6">
           {/* 1. Live Now Section (if any live events) */}
@@ -2876,27 +2650,6 @@ export default function HomePage() {
               )}
             </div>
           </div>
-
-          {/* 3. League Special Bulletin / Announcements */}
-          {briefing?.bulletin && (
-            <div className="border border-amber-500/40 bg-neutral-900 p-3 shadow-xs">
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-1 mb-1.5">
-                <span className="text-[9px] font-black uppercase font-mono tracking-wider text-amber-400">
-                  SPECIAL BULLETIN
-                </span>
-                <span className="text-[9px] font-mono text-neutral-400">{briefing.bulletin.date}</span>
-              </div>
-              <h3 className="font-bold text-xs leading-snug text-white mb-1">
-                {briefing.bulletin.title}
-              </h3>
-              <p className="text-[11px] text-neutral-300 leading-relaxed font-serif">
-                {briefing.bulletin.text}
-              </p>
-              <div className="text-[9px] font-mono text-right text-neutral-400 mt-1.5">
-                — {briefing.bulletin.author}
-              </div>
-            </div>
-          )}
 
           {/* 4. Weekly League Trends & Historic Record Watch */}
           <div className="border-t border-neutral-800 pt-3">
@@ -3357,113 +3110,6 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* SECTION 4: COMPACT DISCORD GAZETTE HIGHLIGHTS & TAPE ROOM */}
-          {briefing && (
-            <section className="border-2 border-black bg-white/70 p-3.5 shadow-[3px_3px_0px_#000] space-y-3">
-              <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase">
-                    LOCKER ROOM WIRE
-                  </span>
-                  <h2 className="font-black uppercase tracking-tight text-sm sm:text-base">
-                    Daily Discord Gazette Highlights
-                  </h2>
-                </div>
-                <span className="text-[9px] font-mono uppercase text-neutral-500">
-                  {briefing.updated_at || 'LIVE WIRE'}
-                </span>
-              </div>
-
-              {/* Compact Headline + Quote */}
-              <div className="border-b border-neutral-300 pb-2.5">
-                <h3 className="text-lg sm:text-xl font-black uppercase leading-tight tracking-tight">
-                  {briefing.headline}
-                </h3>
-                {briefing.subheadline && (
-                  <p className="text-xs italic text-neutral-700 mt-0.5">{briefing.subheadline}</p>
-                )}
-              </div>
-
-              {briefing.quote_of_the_day && (
-                <div className="bg-amber-50/80 border-l-4 border-black p-2.5">
-                  <div className="text-[9px] font-mono font-black uppercase tracking-widest text-neutral-500">
-                    ★ Quote of the Day
-                  </div>
-                  <blockquote className="text-xs sm:text-sm font-bold italic mt-0.5">
-                    "{briefing.quote_of_the_day.quote}"
-                  </blockquote>
-                  <div className="text-[10px] text-right font-semibold text-neutral-700 mt-0.5">
-                    — {briefing.quote_of_the_day.author}{' '}
-                    <span className="font-normal italic text-neutral-500">({briefing.quote_of_the_day.context})</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Tape Room Clips Strip */}
-              {allTapeRoomClips.length > 0 && (
-                <div className="p-2.5 bg-purple-50 border border-purple-300">
-                  <div className="text-[10px] font-mono font-black uppercase text-purple-950 mb-1.5 flex items-center gap-1.5">
-                    <span>📼</span> Tape Room Highlight Reels:
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allTapeRoomClips.map((clip, idx) => (
-                      <a
-                        key={idx}
-                        href={clip.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] font-mono font-bold bg-purple-700 hover:bg-purple-900 text-white px-2 py-1 transition-colors flex items-center gap-1"
-                      >
-                        <span>▶</span> {clip.name}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Compact 2-Column Dispatches Grid */}
-              {briefing.sections && briefing.sections.length > 0 && (
-                <div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {briefing.sections.map((sec: any, idx: number) => (
-                      <div key={idx} className="border border-neutral-300 bg-[#faf8f3] p-2.5 flex flex-col justify-between">
-                        <div>
-                          <div className="flex items-center justify-between gap-1 mb-1">
-                            <span className="text-[8px] font-mono font-black uppercase bg-black text-white px-1.5 py-0.5">
-                              {sec.badge}
-                            </span>
-                            <span className="text-[9px] font-mono text-neutral-500">#{sec.channel}</span>
-                          </div>
-                          <h4 className="font-bold text-xs text-neutral-900 leading-snug mb-1">{sec.title}</h4>
-                          <p className="text-[11px] text-neutral-700 leading-snug">{sec.commentary}</p>
-                        </div>
-
-                        {showAudioLogs && sec.messages && sec.messages.length > 0 && (
-                          <div className="bg-neutral-100 border-t border-neutral-200 pt-1.5 mt-2 space-y-1 font-mono text-[10px] text-neutral-700 max-h-32 overflow-y-auto">
-                            {sec.messages.map((m: any, mIdx: number) => (
-                              <div key={mIdx} className="leading-tight">
-                                <span className="text-neutral-400">[{m.time}]</span>{' '}
-                                <span className="font-bold text-black">{m.author}:</span>{' '}
-                                <span className="italic">{m.text}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowAudioLogs(!showAudioLogs)}
-                    className="mt-2.5 w-full py-1 border border-black bg-[#f4f1ea] hover:bg-neutral-200 text-[10px] font-mono font-bold uppercase cursor-pointer"
-                  >
-                    {showAudioLogs ? '▲ Hide Raw Discord Audio Logs' : '▼ Expand Intercepted Discord Audio Logs'}
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
         </main>
 
         <aside className="col-span-12 md:col-span-7 lg:col-span-3 xl:col-span-3 order-2 md:order-3 lg:order-3 bg-black text-white border-2 border-black p-3.5">
