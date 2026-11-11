@@ -243,6 +243,69 @@ const SUMMARY_METRICS = [
   { id: 'total_games', label: 'Most Games Played', unit: 'GP', group: 'games' }
 ];
 
+// ==========================================
+// TEAM RECORD BOOK DEFINITIONS
+// ==========================================
+
+type TeamRecordDef = {
+  id: string;
+  label: string;
+  unit: string;
+  key: string;
+  dir: 'desc' | 'asc';
+  kind: 'int' | 'diff' | 'pct' | 'avg';
+  fullOnly?: boolean;
+  minGp?: number;
+};
+
+type TeamRecordCard = {
+  id: string;
+  label: string;
+  unit: string;
+  top: { rank: number; name: string; abbr: string; logo: string; valueText: string; scope: string }[];
+};
+
+type TeamSeasonRow = {
+  name: string; abbr: string; logo: string; sid: number; season: string;
+  gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number;
+  gd: number; ptsPct: number; gfpg: number; gapg: number; full: boolean;
+};
+
+type TeamFranchiseRow = {
+  name: string; abbr: string; logo: string; seasons: number; firstSeason: string; lastSeason: string;
+  gp: number; w: number; l: number; t: number; otl: number; pts: number; gf: number; ga: number; gd: number; ptsPct: number;
+};
+
+const TEAM_SINGLE_SEASON_DEFS: TeamRecordDef[] = [
+  { id: 'ss_pts', label: 'Most Points', unit: 'PTS', key: 'pts', dir: 'desc', kind: 'int' },
+  { id: 'ss_w', label: 'Most Wins', unit: 'W', key: 'w', dir: 'desc', kind: 'int' },
+  { id: 'ss_pct', label: 'Best Points %', unit: 'PTS%', key: 'ptsPct', dir: 'desc', kind: 'pct', fullOnly: true },
+  { id: 'ss_gf', label: 'Most Goals For', unit: 'GF', key: 'gf', dir: 'desc', kind: 'int' },
+  { id: 'ss_gd', label: 'Best Goal Differential', unit: 'GD', key: 'gd', dir: 'desc', kind: 'diff' },
+  { id: 'ss_ga', label: 'Fewest Goals Against', unit: 'GA', key: 'ga', dir: 'asc', kind: 'int', fullOnly: true },
+  { id: 'ss_gfpg', label: 'Most Goals Per Game', unit: 'GF/G', key: 'gfpg', dir: 'desc', kind: 'avg', fullOnly: true },
+  { id: 'ss_gapg', label: 'Fewest Goals Against Per Game', unit: 'GA/G', key: 'gapg', dir: 'asc', kind: 'avg', fullOnly: true },
+  { id: 'ss_l', label: 'Most Losses', unit: 'L', key: 'l', dir: 'desc', kind: 'int' },
+  { id: 'ss_fewpts', label: 'Fewest Points', unit: 'PTS', key: 'pts', dir: 'asc', kind: 'int', fullOnly: true },
+  { id: 'ss_fewgf', label: 'Fewest Goals For', unit: 'GF', key: 'gf', dir: 'asc', kind: 'int', fullOnly: true },
+  { id: 'ss_mostga', label: 'Most Goals Against', unit: 'GA', key: 'ga', dir: 'desc', kind: 'int' },
+  { id: 'ss_worstgd', label: 'Worst Goal Differential', unit: 'GD', key: 'gd', dir: 'asc', kind: 'diff', fullOnly: true },
+  { id: 'ss_t', label: 'Most Ties', unit: 'T', key: 't', dir: 'desc', kind: 'int' },
+  { id: 'ss_otl', label: 'Most OT Losses', unit: 'OTL', key: 'otl', dir: 'desc', kind: 'int' }
+];
+
+const TEAM_FRANCHISE_DEFS: TeamRecordDef[] = [
+  { id: 'fr_w', label: 'Most All-Time Wins', unit: 'W', key: 'w', dir: 'desc', kind: 'int' },
+  { id: 'fr_pts', label: 'Most All-Time Points', unit: 'PTS', key: 'pts', dir: 'desc', kind: 'int' },
+  { id: 'fr_pct', label: 'Best All-Time Points %', unit: 'PTS%', key: 'ptsPct', dir: 'desc', kind: 'pct', minGp: 100 },
+  { id: 'fr_gf', label: 'Most All-Time Goals For', unit: 'GF', key: 'gf', dir: 'desc', kind: 'int' },
+  { id: 'fr_gd', label: 'Best All-Time Goal Differential', unit: 'GD', key: 'gd', dir: 'desc', kind: 'diff' },
+  { id: 'fr_seasons', label: 'Most Seasons Played', unit: 'SEASONS', key: 'seasons', dir: 'desc', kind: 'int' },
+  { id: 'fr_gp', label: 'Most Games Played', unit: 'GP', key: 'gp', dir: 'desc', kind: 'int' },
+  { id: 'fr_l', label: 'Most All-Time Losses', unit: 'L', key: 'l', dir: 'desc', kind: 'int' },
+  { id: 'fr_ga', label: 'Most All-Time Goals Against', unit: 'GA', key: 'ga', dir: 'desc', kind: 'int' }
+];
+
 export default function RecordsPage() {
   const [selectedLeague, setSelectedLeague] = useState<string>('W');
   const [recordType, setRecordType] = useState<string>('points');
@@ -251,6 +314,8 @@ export default function RecordsPage() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [summaryList, setSummaryList] = useState<any[]>([]);
   const [teamRecordWatch, setTeamRecordWatch] = useState<any[]>([]);
+  const [teamRecords, setTeamRecords] = useState<{ single: TeamRecordCard[]; franchise: TeamRecordCard[] }>({ single: [], franchise: [] });
+  const [teamRecordScope, setTeamRecordScope] = useState<'single' | 'franchise'>('single');
   const [loading, setLoading] = useState<boolean>(true);
   const [masterEnriched, setMasterEnriched] = useState<boolean>(false);
 
@@ -1304,6 +1369,142 @@ export default function RecordsPage() {
           setTeamRecordWatch([]);
         }
 
+        // G. Team Record Book (single-season + franchise all-time) from league_standings
+        try {
+          const teamsLookup = new Map<number, any>();
+          (archive.teamsData || []).forEach((t: any) => teamsLookup.set(Number(t.team_id), t));
+
+          const scopedRows = (archive.standingsData || []).filter((r: any) => {
+            const sid = Number(r.season_id || 0);
+            return sid > 0 && Number(r.gp || 0) > 0 && matchesSelectedLeague(sid);
+          });
+
+          const seasonMaxGp = new Map<number, number>();
+          scopedRows.forEach((r: any) => {
+            const sid = Number(r.season_id);
+            seasonMaxGp.set(sid, Math.max(seasonMaxGp.get(sid) || 0, Number(r.gp || 0)));
+          });
+
+          const seasonRows: TeamSeasonRow[] = scopedRows.map((r: any) => {
+            const tid = Number(r.team_id || 0);
+            const lt = Array.isArray(r.league_teams) ? r.league_teams[0] : r.league_teams;
+            const tm = teamsLookup.get(tid);
+            const sid = Number(r.season_id);
+            const gp = Number(r.gp || 0);
+            const w = Number(r.w || 0);
+            const l = Number(r.l || 0);
+            const t = Number(r.t || 0);
+            const otl = Number(r.otl || 0);
+            const pts = r.pts != null ? Number(r.pts) : w * 2 + t + otl;
+            const gf = Number(r.gf || 0);
+            const ga = Number(r.ga || 0);
+            const maxGp = seasonMaxGp.get(sid) || 0;
+            return {
+              name: String(lt?.team_name || tm?.team_name || `Team ${tid}`).trim(),
+              abbr: String(lt?.abbreviation || tm?.abbreviation || '').trim().toUpperCase(),
+              logo: String(lt?.logo_url || tm?.logo_url || '').trim(),
+              sid,
+              season: getSeasonBadgeLocal(sid),
+              gp, w, l, t, otl, pts, gf, ga,
+              gd: gf - ga,
+              ptsPct: gp > 0 ? pts / (gp * 2) : 0,
+              gfpg: gp > 0 ? gf / gp : 0,
+              gapg: gp > 0 ? ga / gp : 0,
+              // "Fewest/lowest" records only count (near-)complete seasons so a partial season can't hold them
+              full: maxGp >= 20 && gp >= 0.9 * maxGp
+            };
+          });
+
+          const fmt = (v: number, kind: TeamRecordDef['kind']) => {
+            if (kind === 'pct') return v >= 1 ? '1.000' : v.toFixed(3).replace(/^0/, '');
+            if (kind === 'avg') return v.toFixed(2);
+            if (kind === 'diff') return v > 0 ? `+${v}` : String(v);
+            return String(v);
+          };
+
+          const buildCards = <T extends { name: string; abbr: string; logo: string }>(
+            defs: TeamRecordDef[],
+            source: T[],
+            scopeOf: (row: T) => string,
+            eligible: (row: T, def: TeamRecordDef) => boolean
+          ): TeamRecordCard[] =>
+            defs.map((def) => {
+              const ranked = source
+                .filter((row) => eligible(row, def) && Number.isFinite(Number((row as any)[def.key])))
+                .sort((a, b) => {
+                  const av = Number((a as any)[def.key]);
+                  const bv = Number((b as any)[def.key]);
+                  return def.dir === 'asc' ? av - bv : bv - av;
+                })
+                .slice(0, 5);
+              return {
+                id: def.id,
+                label: def.label,
+                unit: def.unit,
+                top: ranked.map((row, idx) => ({
+                  rank: idx + 1,
+                  name: row.name,
+                  abbr: row.abbr,
+                  logo: row.logo,
+                  valueText: fmt(Number((row as any)[def.key]), def.kind),
+                  scope: scopeOf(row)
+                }))
+              };
+            });
+
+          const singleCards = buildCards(
+            TEAM_SINGLE_SEASON_DEFS,
+            seasonRows,
+            (row) => `${row.season} • ${row.w}-${row.l}-${row.t}${row.otl ? `-${row.otl}` : ''}`,
+            (row, def) => (def.fullOnly ? row.full : row.gp >= 10)
+          );
+
+          // Franchise all-time: group every season by team abbreviation (franchise identity)
+          const franchiseMap = new Map<string, TeamFranchiseRow>();
+          [...seasonRows]
+            .sort((a, b) => a.sid - b.sid)
+            .forEach((row) => {
+              const key = row.abbr || row.name.toUpperCase();
+              const fr = franchiseMap.get(key) || {
+                name: row.name,
+                abbr: row.abbr,
+                logo: row.logo,
+                seasons: 0,
+                firstSeason: row.season,
+                lastSeason: row.season,
+                gp: 0, w: 0, l: 0, t: 0, otl: 0, pts: 0, gf: 0, ga: 0, gd: 0, ptsPct: 0
+              };
+              fr.seasons += 1;
+              fr.gp += row.gp;
+              fr.w += row.w;
+              fr.l += row.l;
+              fr.t += row.t;
+              fr.otl += row.otl;
+              fr.pts += row.pts;
+              fr.gf += row.gf;
+              fr.ga += row.ga;
+              fr.gd = fr.gf - fr.ga;
+              fr.ptsPct = fr.gp > 0 ? fr.pts / (fr.gp * 2) : 0;
+              // latest season wins for display name/logo
+              fr.name = row.name || fr.name;
+              if (row.logo) fr.logo = row.logo;
+              fr.lastSeason = row.season;
+              franchiseMap.set(key, fr);
+            });
+
+          const franchiseCards = buildCards(
+            TEAM_FRANCHISE_DEFS,
+            Array.from(franchiseMap.values()),
+            (fr) =>
+              `${fr.seasons} ${fr.seasons === 1 ? 'Season' : 'Seasons'} (${fr.firstSeason === fr.lastSeason ? fr.firstSeason : `${fr.firstSeason} - ${fr.lastSeason}`})`,
+            (fr, def) => (def.minGp ? fr.gp >= def.minGp : true)
+          );
+
+          setTeamRecords({ single: singleCards, franchise: franchiseCards });
+        } catch {
+          setTeamRecords({ single: [], franchise: [] });
+        }
+
       } catch (err) {
         console.error("Error loading records:", err);
       } finally {
@@ -1356,7 +1557,10 @@ export default function RecordsPage() {
               </span>
             </div>
             <p className="text-xs font-bold uppercase italic text-gray-700 mt-1">
-              Official Historical Gazette Record Archive & All-Time Top 10 Leaderboards
+              Official Historical Gazette Record Archive & All-Time Top 10 Leaderboards{' '}
+              <a href="#team-records" className="not-italic ml-1 bg-black text-yellow-400 px-2 py-0.5 border border-black hover:bg-neutral-800">
+                Team Records ↓
+              </a>
             </p>
           </div>
 
@@ -1763,6 +1967,103 @@ export default function RecordsPage() {
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* ==================================================== */}
+      {/* 5. TEAM RECORD BOOK: SINGLE SEASON & FRANCHISE       */}
+      {/* ==================================================== */}
+      <section id="team-records" className="mb-10 scroll-mt-4">
+        <div className="bg-white border-2 border-black shadow-sm p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-black pb-3 mb-4 gap-3">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight flex items-center gap-2">
+                {activeLeagueObj.logoUrl && (
+                  <img src={activeLeagueObj.logoUrl} alt={activeLeagueObj.name} className="h-6 w-auto object-contain" />
+                )}
+                <span>Team Records ({leagueName})</span>
+              </h2>
+              <p className="text-xs font-bold uppercase italic text-gray-600 mt-0.5">
+                {teamRecordScope === 'single'
+                  ? 'Best & worst single-season club marks from the official standings (fewest/lowest marks count full seasons only).'
+                  : 'All-time franchise totals combined across every season the club has played.'}
+              </p>
+            </div>
+            <div className="flex items-center border-2 border-black shrink-0">
+              {([
+                { id: 'single', label: 'Single Season' },
+                { id: 'franchise', label: 'Franchise All-Time' }
+              ] as const).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setTeamRecordScope(opt.id)}
+                  className={`px-3 py-1.5 text-xs font-black uppercase cursor-pointer transition ${
+                    teamRecordScope === opt.id ? 'bg-black text-yellow-400' : 'bg-[#faf8f5] text-black hover:bg-gray-100'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="py-10 text-center text-xs font-bold uppercase italic text-neutral-500 animate-pulse">
+              Retrieving team record archives...
+            </div>
+          ) : (teamRecordScope === 'single' ? teamRecords.single : teamRecords.franchise).every((c) => c.top.length === 0) ? (
+            <div className="py-8 text-center text-xs font-bold uppercase italic text-neutral-500">
+              No team standings recorded for {leagueName}.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
+              {(teamRecordScope === 'single' ? teamRecords.single : teamRecords.franchise)
+                .filter((card) => card.top.length > 0)
+                .map((card) => {
+                  const leader = card.top[0];
+                  return (
+                    <div key={card.id} className="border-2 border-black bg-[#faf8f5] flex flex-col">
+                      <div className="bg-black text-white px-3 py-1.5 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-black uppercase tracking-wide truncate">{card.label}</span>
+                        <span className="text-[9px] font-mono font-black uppercase text-yellow-400 shrink-0">{card.unit}</span>
+                      </div>
+                      <div className="flex items-center gap-3 px-3 py-2.5 bg-yellow-100 border-b border-black/20">
+                        {leader.logo ? (
+                          <img src={leader.logo} alt={leader.abbr} className="w-9 h-9 object-contain shrink-0" />
+                        ) : (
+                          <span className="w-9 h-9 bg-black text-yellow-400 text-[10px] font-mono font-black flex items-center justify-center shrink-0">
+                            {leader.abbr || '—'}
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-black uppercase text-sm leading-tight truncate">{leader.name}</div>
+                          <div className="text-[10px] font-mono text-gray-700 truncate">{leader.scope}</div>
+                        </div>
+                        <div className="text-2xl font-mono font-black text-red-700 shrink-0">{leader.valueText}</div>
+                      </div>
+                      <ol className="divide-y divide-black/10 text-xs">
+                        {card.top.slice(1).map((row) => (
+                          <li key={row.rank} className="flex items-center gap-2 px-3 py-1.5">
+                            <span className="w-5 font-mono font-bold text-gray-500">#{row.rank}</span>
+                            {row.logo ? (
+                              <img src={row.logo} alt={row.abbr} className="w-4 h-4 object-contain shrink-0" />
+                            ) : (
+                              <span className="w-4 h-4 shrink-0" />
+                            )}
+                            <span className="font-bold uppercase truncate flex-1 min-w-0">
+                              {row.name}
+                              <span className="ml-1.5 text-[9px] font-mono font-normal text-gray-500">{row.scope}</span>
+                            </span>
+                            <span className="font-mono font-black shrink-0">{row.valueText}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
         </div>
       </section>
 
