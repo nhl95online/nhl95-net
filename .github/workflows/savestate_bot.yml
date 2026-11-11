@@ -46,7 +46,11 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install discord.py Pillow
-          sudo apt-get install -y -qq fonts-dejavu-core > /dev/null || true
+          # Verdana/Arial (same fonts as the Windows PC) so boxscore, standings, bracket & opponent graphics look identical
+          echo "ttf-mscorefonts-installer msttcorefonts/accept-mscorefonts-eula select true" | sudo debconf-set-selections
+          sudo apt-get update -qq > /dev/null || true
+          timeout 240 sudo apt-get install -y -qq ttf-mscorefonts-installer fonts-dejavu-core fonts-liberation > /dev/null || true
+          ls /usr/share/fonts/truetype/msttcorefonts/ 2>/dev/null | head -n 20 || echo "msttcorefonts unavailable — using DejaVu/Liberation fallbacks"
 
       # Persist coach mute settings (FUCK OFF / GAME ON) and MODE PLAYOFFS/SEASON triggers between runs
       - name: Restore Bot State

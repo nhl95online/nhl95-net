@@ -252,6 +252,28 @@ def resolve_season_id_from_year(year: int) -> int:
     return 40
 
 
+_LINUX_FONT_FALLBACKS: Dict[str, List[str]] = {
+    "verdana.ttf": ["msttcorefonts/verdana.ttf", "dejavu/DejaVuSans.ttf"],
+    "verdanab.ttf": ["msttcorefonts/verdanab.ttf", "dejavu/DejaVuSans-Bold.ttf"],
+    "tahoma.ttf": ["msttcorefonts/verdana.ttf", "dejavu/DejaVuSans.ttf"],
+    "tahomabd.ttf": ["msttcorefonts/verdanab.ttf", "dejavu/DejaVuSans-Bold.ttf"],
+    "arial.ttf": ["msttcorefonts/arial.ttf", "liberation/LiberationSans-Regular.ttf", "dejavu/DejaVuSans.ttf"],
+    "arialbd.ttf": ["msttcorefonts/arialbd.ttf", "liberation/LiberationSans-Bold.ttf", "dejavu/DejaVuSans-Bold.ttf"],
+}
+
+
+def find_font_file(name: str) -> Optional[str]:
+    """Finds a Windows font file, falling back to Linux equivalents (GitHub Actions host)."""
+    win_path = os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts", name)
+    if os.path.isfile(win_path):
+        return win_path
+    for rel in _LINUX_FONT_FALLBACKS.get(name.lower(), []):
+        lin_path = os.path.join("/usr/share/fonts/truetype", rel)
+        if os.path.isfile(lin_path):
+            return lin_path
+    return None
+
+
 def format_time(seconds: int) -> str:
     m = int(seconds) // 60
     s = int(seconds) % 60
@@ -1129,6 +1151,8 @@ def render_retro_boxscore_png(
                 "C:/Windows/Fonts/verdanab.ttf",
                 "C:/Windows/Fonts/tahomabd.ttf",
                 "C:/Windows/Fonts/arialbd.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/verdanab.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/arialbd.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             ]
             if bold
@@ -1136,6 +1160,8 @@ def render_retro_boxscore_png(
                 "C:/Windows/Fonts/verdana.ttf",
                 "C:/Windows/Fonts/tahoma.ttf",
                 "C:/Windows/Fonts/arial.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/arial.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             ]
         )
@@ -1709,8 +1735,8 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
 
     def get_font(names: List[str], size: int):
         for n in names:
-            p = os.path.join(font_dir, n)
-            if os.path.isfile(p):
+            p = find_font_file(n)
+            if p:
                 try:
                     return ImageFont.truetype(p, size)
                 except Exception:
@@ -2459,6 +2485,8 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
                 "C:/Windows/Fonts/verdanab.ttf",
                 "C:/Windows/Fonts/tahomabd.ttf",
                 "C:/Windows/Fonts/arialbd.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/verdanab.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/arialbd.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
             ]
             if bold
@@ -2466,6 +2494,8 @@ def render_playoff_bracket_png(season_id: int) -> Optional[bytes]:
                 "C:/Windows/Fonts/verdana.ttf",
                 "C:/Windows/Fonts/tahoma.ttf",
                 "C:/Windows/Fonts/arial.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/verdana.ttf",
+                "/usr/share/fonts/truetype/msttcorefonts/arial.ttf",
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
             ]
         )
@@ -5181,8 +5211,8 @@ def render_remaining_opponents_png(opp_counts: List[Tuple[str, int]]) -> Optiona
     font_dir = os.path.join(os.environ.get("WINDIR", "C:\\Windows"), "Fonts")
     f_num = ImageFont.load_default()
     for fname in ("verdanab.ttf", "arialbd.ttf", "tahomabd.ttf"):
-        fpath = os.path.join(font_dir, fname)
-        if os.path.isfile(fpath):
+        fpath = find_font_file(fname)
+        if fpath:
             try:
                 f_num = ImageFont.truetype(fpath, 16)
                 break
