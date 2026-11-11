@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 import CoachProfileView, { LEAGUE_LOGOS } from '@/components/CoachProfileView';
+import { useTeamColors, readableTextOn, tintHex } from '@/lib/teamColors';
 
 // ==========================================
 // 1. LEAGUE CONSTANTS & ROSTERS CONFIG
@@ -203,6 +204,13 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const [coachId, setCoachId] = useState<number | null>(null);
   const [arenaName, setArenaName] = useState<string>('TBD');
   const [currentStanding, setCurrentStanding] = useState<any>(null);
+
+  // Team theme colors (Supabase `team_colors`, edited in the Supabase Table Editor)
+  const teamColors = useTeamColors(team?.abbreviation);
+  const themePrimary = teamColors?.primary_color || '#111111';
+  const themeSecondary = teamColors?.secondary_color || '#f59e0b';
+  const themeText = teamColors?.text_color || readableTextOn(themePrimary);
+  const themeSecondaryText = readableTextOn(themeSecondary);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'roster' | 'futures' | 'coach' | 'schedule'>(
@@ -1016,25 +1024,44 @@ function TeamPageContent({ teamId }: { teamId: string }) {
   const currentSeasonBadge = formatSeasonBadge(selectedSeason || '', currentSeasonName);
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-black font-serif p-3 sm:p-5">
-      {/* 1. Compact Header Banner with Grouped Coach Franchises */}
-      <header className="border-b-4 border-black pb-4 mb-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+    <div
+      className="min-h-screen text-black font-serif p-3 sm:p-5"
+      style={{
+        backgroundColor: teamColors ? tintHex(themePrimary, 0.9) : '#f4f1ea',
+        ['--team-primary' as any]: themePrimary,
+        ['--team-secondary' as any]: themeSecondary,
+      }}
+    >
+      {/* 1. Compact Header Banner with Grouped Coach Franchises (themed with team colors) */}
+      <header className="border-b-4 pb-4 mb-4" style={{ borderColor: themeSecondary }}>
+        <div
+          className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-3 sm:p-4 border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)]"
+          style={{
+            background: `linear-gradient(135deg, ${themePrimary} 0%, ${themePrimary} 62%, ${themeSecondary} 62%, ${themeSecondary} 68%, ${themePrimary} 68%)`,
+            color: themeText,
+          }}
+        >
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-2 border-black p-1.5 flex items-center justify-center rounded shadow-xs shrink-0">
+            <div
+              className="w-16 h-16 sm:w-20 sm:h-20 bg-white border-4 p-1.5 flex items-center justify-center rounded shadow-xs shrink-0"
+              style={{ borderColor: themeSecondary }}
+            >
               <img src={team.logo_url} alt={team.team_name} className="max-h-full max-w-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter">{team.team_name}</h1>
-                <span className="bg-black text-white px-2 py-0.5 text-xs font-mono font-bold uppercase">
+                <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter" style={{ color: themeText }}>{team.team_name}</h1>
+                <span
+                  className="px-2 py-0.5 text-xs font-mono font-bold uppercase border border-black"
+                  style={{ backgroundColor: themeSecondary, color: themeSecondaryText }}
+                >
                   {currentSeasonBadge}
                 </span>
                 <span className="bg-white text-black border border-black px-2 py-0.5 text-xs font-mono font-bold uppercase">
                   Arena: {arenaName}
                 </span>
               </div>
-              <p className="text-xs font-bold uppercase italic mt-0.5 text-gray-700">
+              <p className="text-xs font-bold uppercase italic mt-0.5 opacity-80" style={{ color: themeText }}>
                 Official Team Roster, Multi-Year League Rosters &amp; Unified Coach Profile ({coachName})
               </p>
             </div>
@@ -1058,7 +1085,10 @@ function TeamPageContent({ teamId }: { teamId: string }) {
         </div>
 
         {/* Coach Profile Summary & Grouped Controlled Franchises (Not Broken Down by Season) */}
-        <div className="mt-3 bg-[#fdfaf5] border-2 border-black p-2.5 sm:p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] font-sans space-y-2.5">
+        <div
+          className="mt-3 bg-[#fdfaf5] border-2 border-black border-l-8 p-2.5 sm:p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] font-sans space-y-2.5"
+          style={{ borderLeftColor: themePrimary }}
+        >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/15 pb-2">
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase">
               <span className="bg-black text-amber-400 font-mono text-[10px] font-black px-2 py-0.5">
@@ -1150,6 +1180,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
       <nav className="flex flex-wrap gap-2 border-b-2 border-black pb-2 mb-4">
         <button
           onClick={() => setActiveTab('coach')}
+          style={activeTab === 'coach' && teamColors ? { backgroundColor: themePrimary, color: themeText } : undefined}
           className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
             activeTab === 'coach'
               ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
@@ -1160,6 +1191,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
         </button>
         <button
           onClick={() => setActiveTab('roster')}
+          style={activeTab === 'roster' && teamColors ? { backgroundColor: themePrimary, color: themeText } : undefined}
           className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
             activeTab === 'roster'
               ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
@@ -1170,6 +1202,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
         </button>
         <button
           onClick={() => setActiveTab('futures')}
+          style={activeTab === 'futures' && teamColors ? { backgroundColor: themePrimary, color: themeText } : undefined}
           className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
             activeTab === 'futures'
               ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'
@@ -1180,6 +1213,7 @@ function TeamPageContent({ teamId }: { teamId: string }) {
         </button>
         <button
           onClick={() => setActiveTab('schedule')}
+          style={activeTab === 'schedule' && teamColors ? { backgroundColor: themePrimary, color: themeText } : undefined}
           className={`px-4 py-2 text-xs font-black uppercase transition border-2 border-black cursor-pointer ${
             activeTab === 'schedule'
               ? 'bg-black text-white shadow-[2px_2px_0px_rgba(0,0,0,1)]'

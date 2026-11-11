@@ -35,6 +35,7 @@ import {
   generate3ShadeJerseyRamp,
   generate4ShadePantsRamp,
 } from '@/lib/nose_sprites';
+import { fetchAllTeamColors, normalizeHex, readableTextOn, type TeamColors } from '@/lib/teamColors';
 
 type JerseySlotKey =
   | 'helmet'
@@ -142,7 +143,31 @@ const TEAM_DEFAULT_PALETTES: Record<string, { home: JerseyPalette; away: JerseyP
   },
 };
 
-function generateDefaultPaletteForTeam(abbr: string, name: string): { home: JerseyPalette; away: JerseyPalette } {
+function generateDefaultPaletteForTeam(
+  abbr: string,
+  name: string,
+  dbColors?: TeamColors | null
+): { home: JerseyPalette; away: JerseyPalette } {
+  // 1. Colors managed in Supabase `team_colors` (jersey_home / jersey_away, or primary/secondary) win
+  if (dbColors) {
+    const curated = TEAM_DEFAULT_PALETTES[(abbr || '').trim().toUpperCase()];
+    const base = curated
+      ? JSON.parse(JSON.stringify(curated))
+      : buildPaletteFromColors(dbColors.primary_color, dbColors.secondary_color);
+    const merge = (fallback: JerseyPalette, override?: Partial<JerseyPalette> | null): JerseyPalette => {
+      const out = { ...fallback };
+      if (override && typeof override === 'object') {
+        (Object.keys(out) as JerseySlotKey[]).forEach((k) => {
+          out[k] = normalizeHex((override as any)[k], out[k]);
+        });
+      }
+      return out;
+    };
+    return {
+      home: merge(base.home, dbColors.jersey_home as Partial<JerseyPalette> | null),
+      away: merge(base.away, dbColors.jersey_away as Partial<JerseyPalette> | null),
+    };
+  }
   const key = (abbr || '').trim().toUpperCase();
   if (TEAM_DEFAULT_PALETTES[key]) {
     return JSON.parse(JSON.stringify(TEAM_DEFAULT_PALETTES[key]));
@@ -166,6 +191,10 @@ function generateDefaultPaletteForTeam(abbr: string, name: string): { home: Jers
     primary = '#6d28d9';
     secondary = '#f59e0b';
   }
+  return buildPaletteFromColors(primary, secondary);
+}
+
+function buildPaletteFromColors(primary: string, secondary: string): { home: JerseyPalette; away: JerseyPalette } {
   return {
     home: {
       helmet: primary,
@@ -189,7 +218,7 @@ function generateDefaultPaletteForTeam(abbr: string, name: string): { home: Jers
       socksMain: primary,
       socksStripe: secondary,
       gloves: '#111111',
-      numbers: '#ffffff',
+      numbers: readableTextOn(primary),
     },
   };
 }
@@ -537,10 +566,18 @@ export default function ModMyTeamPage() {
     [teams, selectedTeamId]
   );
 
+  // Team colors managed in Supabase `team_colors` (override hardcoded default jerseys)
+  const [dbTeamColors, setDbTeamColors] = useState<Map<string, TeamColors> | null>(null);
+  useEffect(() => {
+    fetchAllTeamColors().then(setDbTeamColors);
+  }, []);
+  const teamDbColors = (abbr?: string) =>
+    dbTeamColors?.get(String(abbr || '').trim().toUpperCase()) || null;
+
   // 2. When selected team changes: load default NOSE 16-swatch strip + palette AND populate Roster + Drafts + Trades
   useEffect(() => {
     if (!currentTeam) return;
-    const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name);
+    const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name, teamDbColors(currentTeam.abbreviation));
     setHomePalette(def.home);
     setAwayPalette(def.away);
     setVisitorStrip(
@@ -572,7 +609,7 @@ export default function ModMyTeamPage() {
     setSubmitBanner(null);
 
     loadTeamRosterWithDraftsAndTrades(currentTeam);
-  }, [currentTeam, selectedLeague]);
+  }, [currentTeam, selectedLeague, dbTeamColors]);
 
   const autoAssignLineupSlots = (players: Omit<ModRosterPlayer, 'slot'>[]): ModRosterPlayer[] => {
     const forwards = players.filter((p) => p.pos === 'F').sort((a, b) => b.ovr - a.ovr);
@@ -1005,7 +1042,7 @@ export default function ModMyTeamPage() {
 
   const handleResetSide = (side: 'home' | 'away') => {
     if (!currentTeam) return;
-    const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name);
+    const def = generateDefaultPaletteForTeam(currentTeam.abbreviation, currentTeam.team_name, teamDbColors(currentTeam.abbreviation));
     if (side === 'away') {
       const nextV = build16SwatchStripFromSimple({
         jerseyMain: def.away.jerseyMain,
