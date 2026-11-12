@@ -12,11 +12,15 @@ const SUPABASE_ROMS_PUBLIC_URL =
  */
 function extractRomFromZipOrRaw(
   buf: Buffer,
-  fallbackName: string
-): { buffer: Buffer; entryName: string } {
+  fallbackName: string,
+  keepZipArchive = false
+): { buffer: Buffer; entryName: string; isRawArchive?: boolean; inferredArchiveCore?: string } {
   // Check PK\x03\x04 magic
   if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b || buf[2] !== 0x03 || buf[3] !== 0x04) {
     return { buffer: buf, entryName: fallbackName };
+  }
+  if (keepZipArchive) {
+    return { buffer: buf, entryName: fallbackName, isRawArchive: true };
   }
 
   // Locate End of Central Directory (EOCD) signature 0x06054b50 from end of buffer
@@ -82,14 +86,24 @@ function extractRomFromZipOrRaw(
     throw new Error('ZIP archive contains no file entries');
   }
 
-  // Prefer known SEGA, SNES, NES, N64, or Atari ROM extensions; otherwise pick the largest uncompressed file
-  const romEntry =
-    entries.find(e =>
-      /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i.test(
-        e.name
-      )
-    ) ||
-    entries.sort((a, b) => b.uncompSize - a.uncompSize)[0];
+  // Prefer known single-file console ROM extensions; if none exist and it looks like DOS or MAME multi-file zip, keep ZIP intact
+  const consoleEntry = entries.find(e =>
+    /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i.test(
+      e.name
+    )
+  );
+  if (!consoleEntry) {
+    const hasDosFiles = entries.some(e => /\.(exe|com|bat|conf|dosz|img|ima|vhd)$/i.test(e.name));
+    if (hasDosFiles || entries.length > 1) {
+      return {
+        buffer: buf,
+        entryName: fallbackName,
+        isRawArchive: true,
+        inferredArchiveCore: hasDosFiles ? 'dosbox_pure' : 'mame2003_plus'
+      };
+    }
+  }
+  const romEntry = consoleEntry || entries.sort((a, b) => b.uncompSize - a.uncompSize)[0];
 
   const lh = romEntry.lhOffset;
   if (lh + 30 > buf.length) {
@@ -140,6 +154,12 @@ export async function GET(
   try {
     const { fileName } = await context.params;
     const bucketFile = req.nextUrl.searchParams.get('bucketFile') || fileName;
+    const bucketDetected = detectEmulatorCoreFromFileName(bucketFile);
+    const keepZip =
+      req.nextUrl.searchParams.get('keepZip') === '1' ||
+      bucketDetected.core === 'mame2003_plus' ||
+      bucketDetected.core === 'fbneo' ||
+      bucketDetected.core === 'dosbox_pure';
 
     const targetUrl = `${SUPABASE_ROMS_PUBLIC_URL}/${encodeURIComponent(bucketFile)}`;
     const upstream = await fetch(targetUrl);
@@ -152,32 +172,35 @@ export async function GET(
     }
 
     const rawBuffer = Buffer.from(await upstream.arrayBuffer());
-    const extracted = extractRomFromZipOrRaw(rawBuffer, bucketFile);
+    const extracted = extractRomFromZipOrRaw(rawBuffer, bucketFile, keepZip);
     let romBuffer = extracted.buffer;
     let entryName = extracted.entryName;
-    // Genesis .smd dumps are interleaved — convert to plain .bin so the emulator boots them
-    if (looksLikeSmd(romBuffer, entryName)) {
+    if (!extracted.isRawArchive && looksLikeSmd(romBuffer, entryName)) {
       romBuffer = deinterleaveSmd(romBuffer);
       entryName = entryName.replace(/\.smd$/i, '.bin');
     }
     const extMatch = entryName.match(
-      /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i
+      /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i
     );
     const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
-    const cleanRomName =
-      bucketFile.replace(
-        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i,
-        ''
-      ) + ext;
+    const cleanRomName = extracted.isRawArchive
+      ? bucketFile
+      : bucketFile.replace(
+          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i,
+          ''
+        ) + ext;
 
     const fromEntry = detectEmulatorCoreFromFileName(entryName);
-    const detectedCore =
-      fromEntry.core !== 'segaMD' ? fromEntry.core : detectEmulatorCoreFromFileName(bucketFile).core;
+    const detectedCore = extracted.inferredArchiveCore
+      ? extracted.inferredArchiveCore
+      : fromEntry.core !== 'segaMD'
+      ? fromEntry.core
+      : bucketDetected.core;
 
     return new NextResponse(new Uint8Array(romBuffer), {
       status: 200,
       headers: {
-        'Content-Type': 'application/octet-stream',
+        'Content-Type': extracted.isRawArchive ? 'application/zip' : 'application/octet-stream',
         'Content-Length': String(romBuffer.length),
         'Content-Disposition': `inline; filename="${cleanRomName}"`,
         'X-Emulator-Core': detectedCore,

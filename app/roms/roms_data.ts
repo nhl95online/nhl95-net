@@ -37,8 +37,11 @@ export type EmulatorCoreId =
   | 'atari5200'
   | 'atari7800'
   | 'lynx'
-  | 'jaguar';
-export type ConsoleSystemId = 'SEGA' | 'SNES' | 'NES' | 'N64' | 'ATARI';
+  | 'jaguar'
+  | 'mame2003_plus'
+  | 'fbneo'
+  | 'dosbox_pure';
+export type ConsoleSystemId = 'SEGA' | 'SNES' | 'NES' | 'N64' | 'ATARI' | 'ARCADE' | 'PC';
 
 export interface LeagueRom {
   id: string;
@@ -2053,6 +2056,34 @@ export function detectEmulatorCoreFromFileName(fileName: string): {
   }
   if (/\.(j64|jag)$/i.test(lower) || lower.includes('(jaguar)')) {
     return { core: 'jaguar', consoleSystem: 'ATARI' };
+  }
+  if (
+    /\.(dosz|exe|com|bat|img|ima|vhd|conf)$/i.test(lower) ||
+    lower.includes('_dos') ||
+    lower.includes('(dos)') ||
+    lower.includes('(pc)') ||
+    lower.includes('(ms-dos)') ||
+    lower.includes('dosbox')
+  ) {
+    return { core: 'dosbox_pure', consoleSystem: 'PC' };
+  }
+  if (
+    lower.includes('_fbneo') ||
+    lower.includes('(fbneo)') ||
+    lower.includes('(cps1)') ||
+    lower.includes('(cps2)') ||
+    lower.includes('(cps3)') ||
+    lower.includes('(neogeo)')
+  ) {
+    return { core: 'fbneo', consoleSystem: 'ARCADE' };
+  }
+  if (
+    /\.chd$/i.test(lower) ||
+    lower.includes('_mame') ||
+    lower.includes('(mame)') ||
+    lower.includes('(arcade)')
+  ) {
+    return { core: 'mame2003_plus', consoleSystem: 'ARCADE' };
   }
   if (/\.sms$/i.test(lower)) {
     return { core: 'segaMS', consoleSystem: 'SEGA' };

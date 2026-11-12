@@ -131,7 +131,7 @@ function classifyRomGenre(text: string, catalogCategory?: string, baseName?: str
   return 'Other';
 }
 
-const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i;
+const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i;
 
 // Box-art / title card for a ROM, pulled from the public Supabase "rom-images" bucket
 // (named after the ROM file, e.g. W16.zip -> W16.png). Tries .png, .jpg, .jpeg, .webp; hides itself if none exist.
@@ -315,19 +315,23 @@ async function detectCoreFromLocalFileAsync(file: File): Promise<{
   innerFileName?: string;
 }> {
   const fromName = detectEmulatorCoreFromFileName(file.name);
-  if (!file.name.toLowerCase().endsWith('.zip')) {
+  if (!file.name.toLowerCase().endsWith('.zip') || fromName.core !== 'segaMD') {
     return fromName;
   }
 
   try {
     const buf = new Uint8Array(await file.arrayBuffer());
     if (buf.length >= 30 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04) {
-      // Read first local file header filename (or scan central directory)
+      // Read first local file header filename
       const fnLen = buf[26] | (buf[27] << 8);
       if (30 + fnLen <= buf.length) {
         const entryName = new TextDecoder().decode(buf.subarray(30, 30 + fnLen));
         const detected = detectEmulatorCoreFromFileName(entryName);
-        return { ...detected, innerFileName: entryName };
+        if (detected.core !== 'segaMD' || /\.(bin|md|gen|smd)$/i.test(entryName)) {
+          return { ...detected, innerFileName: entryName };
+        }
+        // Multiple files or unknown chip files inside a .zip -> likely MAME arcade romset unless DOS files
+        return { core: 'mame2003_plus', consoleSystem: 'ARCADE', innerFileName: entryName };
       }
     }
   } catch {
@@ -1799,8 +1803,14 @@ function ArenaContent() {
     const matchedFile = findMatchingBucketFile(selectedRom, bucketFiles);
     if (matchedFile) {
       const cleanBase = matchedFile.replace(ROM_EXT_RE, '');
+      const isArchiveCore =
+        selectedRom.emulatorCore === 'mame2003_plus' ||
+        selectedRom.emulatorCore === 'fbneo' ||
+        selectedRom.emulatorCore === 'dosbox_pure';
+      const streamExt = isArchiveCore && /\.zip$/i.test(matchedFile) ? '.zip' : '.bin';
+      const keepZipQuery = isArchiveCore ? '&keepZip=1' : '';
       setResolvedRomUrl(
-        `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(matchedFile)}`
+        `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}${streamExt}?bucketFile=${encodeURIComponent(matchedFile)}${keepZipQuery}`
       );
       setResolvedRomFileName(matchedFile);
       setFallbackNotice(null);
@@ -2667,6 +2677,8 @@ function ArenaContent() {
     if (activeEmulatorCore === 'snes') return 'SNES';
     if (activeEmulatorCore === 'nes') return 'NES';
     if (activeEmulatorCore === 'n64') return 'N64';
+    if (activeEmulatorCore === 'dosbox_pure') return 'PC';
+    if (activeEmulatorCore === 'mame2003_plus' || activeEmulatorCore === 'fbneo') return 'ARCADE';
     if (
       activeEmulatorCore === 'atari2600' ||
       activeEmulatorCore === 'atari5200' ||
@@ -2684,6 +2696,9 @@ function ArenaContent() {
     if (activeEmulatorCore === 'snes') return 'SUPER NINTENDO (SNES)';
     if (activeEmulatorCore === 'nes') return 'NINTENDO (NES 8-BIT)';
     if (activeEmulatorCore === 'n64') return 'NINTENDO 64 (N64)';
+    if (activeEmulatorCore === 'dosbox_pure') return 'MS-DOS / PC (DOSBOX)';
+    if (activeEmulatorCore === 'mame2003_plus') return 'MAME 2003-PLUS (ARCADE)';
+    if (activeEmulatorCore === 'fbneo') return 'FINALBURN NEO (ARCADE)';
     if (activeEmulatorCore === 'atari2600') return 'ATARI 2600';
     if (activeEmulatorCore === 'atari5200') return 'ATARI 5200';
     if (activeEmulatorCore === 'atari7800') return 'ATARI 7800';
@@ -2725,11 +2740,11 @@ function ArenaContent() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-16">
-      {/* Hidden File Inputs (Supports SEGA, SNES, NES, Atari, N64, and .zip) */}
+      {/* Hidden File Inputs (Supports SEGA, SNES, NES, Atari, N64, MAME, DOS/PC, and .zip) */}
       <input
         ref={localRomInputRef}
         type="file"
-        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.unif,.sms,.gg,.32x,.z64,.n64,.v64,.a26,.a52,.a78,.lnx,.j64,.jag,.zip,.7z"
+        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.unif,.sms,.gg,.32x,.z64,.n64,.v64,.a26,.a52,.a78,.lnx,.j64,.jag,.dosz,.exe,.com,.bat,.img,.ima,.vhd,.iso,.cue,.chd,.conf,.zip,.7z"
         onChange={handleLocalRomUpload}
         className="hidden"
       />
@@ -3447,6 +3462,10 @@ function ArenaContent() {
                         ? 'bg-emerald-600 text-white'
                         : activeConsoleSystem === 'ATARI'
                         ? 'bg-orange-600 text-white'
+                        : activeConsoleSystem === 'ARCADE'
+                        ? 'bg-cyan-600 text-white'
+                        : activeConsoleSystem === 'PC'
+                        ? 'bg-indigo-600 text-white'
                         : 'bg-amber-500 text-black'
                     }`}
                   >
@@ -3456,7 +3475,7 @@ function ArenaContent() {
                     value={customCoreOverride}
                     onChange={e => setCustomCoreOverride(e.target.value as any)}
                     aria-label="Console Emulator Core"
-                    title="Auto-detects console core by file extension, or manually select NES, SNES, Atari, SEGA, or N64 core"
+                    title="Auto-detects console core by file extension, or manually select NES, SNES, Atari, SEGA, N64, MAME, or DOS/PC core"
                     className="bg-neutral-800 border border-neutral-600 text-slate-200 text-[10px] font-mono uppercase px-2 py-0.5 rounded-xs cursor-pointer"
                   >
                     <option value="auto">Core: Auto-Detect ({activeEmulatorCore})</option>
@@ -3472,6 +3491,9 @@ function ArenaContent() {
                     <option value="atari7800">Core: Atari 7800</option>
                     <option value="lynx">Core: Atari Lynx</option>
                     <option value="jaguar">Core: Atari Jaguar</option>
+                    <option value="mame2003_plus">Core: MAME 2003-Plus (Arcade)</option>
+                    <option value="fbneo">Core: FinalBurn Neo (Arcade)</option>
+                    <option value="dosbox_pure">Core: DOSBox-Pure (MS-DOS / PC)</option>
                   </select>
                   <span className="text-slate-300 text-[11px] truncate max-w-[200px] sm:max-w-xs">
                     {localRomRawFile?.name || resolvedRomFileName || activeRomTitle}

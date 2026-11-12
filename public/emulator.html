@@ -291,6 +291,34 @@
         if (/\.(j64|jag)$/i.test(lower) || lower.indexOf("(jaguar)") !== -1) {
           return "jaguar";
         }
+        if (
+          /\.(dosz|exe|com|bat|img|ima|vhd|conf)$/i.test(lower) ||
+          lower.indexOf("_dos") !== -1 ||
+          lower.indexOf("(dos)") !== -1 ||
+          lower.indexOf("(pc)") !== -1 ||
+          lower.indexOf("(ms-dos)") !== -1 ||
+          lower.indexOf("dosbox") !== -1
+        ) {
+          return "dosbox_pure";
+        }
+        if (
+          lower.indexOf("_fbneo") !== -1 ||
+          lower.indexOf("(fbneo)") !== -1 ||
+          lower.indexOf("(cps1)") !== -1 ||
+          lower.indexOf("(cps2)") !== -1 ||
+          lower.indexOf("(cps3)") !== -1 ||
+          lower.indexOf("(neogeo)") !== -1
+        ) {
+          return "fbneo";
+        }
+        if (
+          /\.chd$/i.test(lower) ||
+          lower.indexOf("_mame") !== -1 ||
+          lower.indexOf("(mame)") !== -1 ||
+          lower.indexOf("(arcade)") !== -1
+        ) {
+          return "mame2003_plus";
+        }
         if (/\.sms$/i.test(lower)) return "segaMS";
         if (/\.gg$/i.test(lower)) return "segaGG";
         if (/\.32x$/i.test(lower)) return "sega32x";
@@ -945,8 +973,8 @@
       window.EJS_startOnLoaded = autoStart;
 
       // Clear EJS_defaultControls so EmulatorJS's built-in gamepad/keyboard handler never overrides Coach Controller Settings
-      // (Keep EmulatorJS default controls for N64 so analog stick, C-buttons, and Z-trigger work out of the box)
-      if (resolvedCore !== "n64") {
+      // (Keep EmulatorJS default controls for N64 and DOSBox-Pure so analog stick / full PC keyboard & mouse work out of the box)
+      if (resolvedCore !== "n64" && resolvedCore !== "dosbox_pure") {
         window.EJS_defaultControls = {
           0: {},
           1: {},
@@ -1332,7 +1360,7 @@
       });
 
       function neutralizeBuiltInEjsInput() {
-        if (resolvedCore === "n64") return;
+        if (resolvedCore === "n64" || resolvedCore === "dosbox_pure") return;
         try {
           var ejs = window.EJS_emulator;
           if (!ejs) return;
