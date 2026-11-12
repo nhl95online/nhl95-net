@@ -3333,30 +3333,6 @@ function ArenaContent() {
                 ) : (
                   /* PRE-GAME SELECTION SCREEN (NHL '95 + SEGA / SNES / NES SOLO ARCADE) */
                   <div className="w-full h-full bg-gradient-to-b from-[#0b1320] via-[#060a10] to-black text-white p-4 sm:p-6 flex flex-col justify-between overflow-y-auto gap-3">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 gap-2 flex-wrap">
-                      <div>
-                        <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-black">
-                          DARKSIDE OF 95 • MULTI-CONSOLE SOLO &amp; ONLINE ARENA
-                        </div>
-                        <div className="text-base sm:text-xl font-black font-serif uppercase tracking-tight text-white">
-                          Play NHL &apos;95 or Solo SEGA, SNES &amp; NES Games
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="border border-amber-400/60 bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold uppercase px-2.5 py-1 rounded-xs shrink-0">
-                          {activeConsoleLabel}
-                        </span>
-                        <button
-                          onClick={() => localRomInputRef.current?.click()}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-black uppercase px-2.5 py-1 rounded-xs cursor-pointer flex items-center gap-1 shrink-0 shadow-xs"
-                          title="Load any .bin, .md, .gen, .sfc, .smc, .nes, .sms, .gg, or .zip ROM from your computer"
-                        >
-                          <FolderOpen className="w-3 h-3" />
-                          <span>Load Any ROM (.SFC / .NES / .BIN / .ZIP)</span>
-                        </button>
-                      </div>
-                    </div>
-
                     {/* Selected ROM Cover Art (from rom-images bucket) */}
                     {!localRomObjectUrl && (
                       <div className="flex-1 flex items-center justify-center min-h-0">
