@@ -131,6 +131,37 @@ function classifyRomGenre(text: string, catalogCategory?: string, baseName?: str
   return 'Other';
 }
 
+const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i;
+
+// Stable catalog id for a cloud bucket file that isn't in the hand-written catalog (e.g. "Theme Park.zip")
+function bucketSyntheticId(fileName: string): string {
+  return 'bucket-' + fileName.replace(ROM_EXT_RE, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Builds a playable catalog entry for any bucket file the catalog doesn't know about
+function buildBucketOnlyRomItem(fileName: string): ArenaRomItem {
+  const base = fileName.replace(ROM_EXT_RE, '');
+  const detected = detectEmulatorCoreFromFileName(fileName);
+  const isLeagueFile = /^[WOQVG]\d{2}p?$/i.test(base);
+  const isHistoryFile = /^(19|20)\d{2}$/.test(base);
+  const isHockey = isLeagueFile || isHistoryFile;
+  return {
+    id: bucketSyntheticId(fileName),
+    title: isLeagueFile ? `${base.toUpperCase()} — League ROM` : base,
+    subtitle: `${detected.consoleSystem} • Cloud Vault`,
+    category: isLeagueFile ? 'league' : isHistoryFile ? 'nhl-history' : 'misc',
+    categoryBadge: isLeagueFile ? base.toUpperCase() : detected.consoleSystem,
+    year: '',
+    description: `${base} — loaded straight from the cloud ROM vault.`,
+    imageCandidates: [],
+    fileCandidates: [fileName],
+    defaultSeasonConfigId: '40',
+    emulatorCore: detected.core,
+    consoleSystem: detected.consoleSystem,
+    isNhl95: isHockey
+  };
+}
+
 function buildArenaCatalog(): ArenaRomItem[] {
   const items: ArenaRomItem[] = [];
 
@@ -1102,7 +1133,7 @@ function ArenaContent() {
   const initialRomParam = searchParams.get('rom') || 'w16';
 
   const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
-  const catalog = useMemo(() => buildArenaCatalog(), []);
+  const baseCatalog = useMemo(() => buildArenaCatalog(), []);
 
   // Unique Peer Session ID for Supabase Realtime Lobby & P2P Matchmaking
   const [myPeerId] = useState<string>(() => {
@@ -1123,6 +1154,23 @@ function ArenaContent() {
     'W04.zip', 'W03.zip', 'W02.zip', 'W01.zip', '1909.zip'
   ]);
   const [isUploadingToBucket, setIsUploadingToBucket] = useState(false);
+
+  // Full catalog = hand-written catalog + every cloud bucket file it doesn't already cover,
+  // so non-league ROMs (Theme Park, Desert Strike, ...) are selectable and actually load.
+  const catalog = useMemo(() => {
+    const extras: ArenaRomItem[] = [];
+    bucketFiles.forEach(fileName => {
+      const base = fileName.replace(ROM_EXT_RE, '');
+      const covered = baseCatalog.some(
+        r =>
+          findMatchingBucketFile(r, [fileName]) !== null ||
+          r.id.toLowerCase() === base.toLowerCase() ||
+          (base === '1909' && r.id === 'nhl-1909-10')
+      );
+      if (!covered) extras.push(buildBucketOnlyRomItem(fileName));
+    });
+    return [...baseCatalog, ...extras];
+  }, [baseCatalog, bucketFiles]);
 
   const refreshBucketFiles = useCallback(async () => {
     try {
@@ -1184,7 +1232,7 @@ function ArenaContent() {
       return {
         fileName,
         base,
-        romId: matchedCatalog ? matchedCatalog.id : base.toLowerCase(),
+        romId: matchedCatalog ? matchedCatalog.id : bucketSyntheticId(fileName),
         title: matchedCatalog ? matchedCatalog.title : `${base.toUpperCase()} Cartridge`,
         subtitle: matchedCatalog ? matchedCatalog.subtitle : 'Supabase "roms" Bucket',
         description: matchedCatalog

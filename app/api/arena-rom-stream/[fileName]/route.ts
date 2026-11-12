@@ -105,6 +105,29 @@ function extractRomFromZipOrRaw(
   }
 }
 
+/**
+ * Converts an interleaved Super Magic Drive (.smd) Genesis dump into a plain .bin ROM.
+ * Layout: 512-byte header, then 16KB blocks where the first 8KB holds the odd bytes
+ * and the second 8KB holds the even bytes.
+ */
+function deinterleaveSmd(buf: Buffer): Buffer {
+  const body = buf.subarray(512);
+  const out = Buffer.alloc(body.length);
+  for (let blockStart = 0; blockStart + 16384 <= body.length; blockStart += 16384) {
+    for (let i = 0; i < 8192; i++) {
+      out[blockStart + i * 2 + 1] = body[blockStart + i];
+      out[blockStart + i * 2] = body[blockStart + 8192 + i];
+    }
+  }
+  return out;
+}
+
+function looksLikeSmd(buf: Buffer, entryName: string): boolean {
+  if (buf.length < 512 + 16384 || (buf.length - 512) % 16384 !== 0) return false;
+  // Standard SMD header magic (bytes 8-9 = 0xAA 0xBB) or an explicit .smd entry name
+  return (buf[8] === 0xaa && buf[9] === 0xbb) || /\.smd$/i.test(entryName);
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ fileName: string }> }
@@ -124,7 +147,14 @@ export async function GET(
     }
 
     const rawBuffer = Buffer.from(await upstream.arrayBuffer());
-    const { buffer: romBuffer, entryName } = extractRomFromZipOrRaw(rawBuffer, bucketFile);
+    const extracted = extractRomFromZipOrRaw(rawBuffer, bucketFile);
+    let romBuffer = extracted.buffer;
+    let entryName = extracted.entryName;
+    // Genesis .smd dumps are interleaved — convert to plain .bin so the emulator boots them
+    if (looksLikeSmd(romBuffer, entryName)) {
+      romBuffer = deinterleaveSmd(romBuffer);
+      entryName = entryName.replace(/\.smd$/i, '.bin');
+    }
     const extMatch = entryName.match(/\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i);
     const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
     const cleanRomName = bucketFile.replace(/\.(zip|bin|md|gen|smd|sfc|smc|nes|sms|gg|32x)$/i, '') + ext;
