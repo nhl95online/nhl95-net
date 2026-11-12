@@ -201,6 +201,57 @@ export default function HomePage() {
   const [statsPhase, setStatsPhase] = useState<'REG' | 'PLAYOFFS'>('REG');
   const [leaderTab, setLeaderTab] = useState<'PTS' | 'G' | 'A' | 'GAA' | 'SV%' | 'W'>('PTS');
 
+  // Seasons currently running (leagues.status = 'Active' AND at least one game recorded)
+  const [activeSeasons, setActiveSeasons] = useState<SeasonOption[]>([]);
+  const seasonOptionsRef = useRef<SeasonOption[]>(ALL_SEASONS);
+  const allSeasonOptions = useMemo(() => {
+    const extras = activeSeasons.filter((a) => !ALL_SEASONS.some((s) => s.id === a.id));
+    return [...extras, ...ALL_SEASONS].sort((a, b) => b.id - a.id);
+  }, [activeSeasons]);
+  useEffect(() => {
+    seasonOptionsRef.current = allSeasonOptions;
+  }, [allSeasonOptions]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data: leagueRows } = await supabase
+          .from('leagues')
+          .select('league_id, league_name, status')
+          .eq('status', 'Active');
+        const candidates = (leagueRows || []).filter((l: any) => Number(l.league_id) > 0);
+        const checked = await Promise.all(
+          candidates.map(async (l: any) => {
+            const id = Number(l.league_id);
+            const [reg, po] = await Promise.all([
+              supabase.from('league_gamestats').select('game_id', { count: 'exact', head: true }).eq('league_id', id),
+              supabase.from('league_playoff_gamestats').select('game_id', { count: 'exact', head: true }).eq('league_id', id),
+            ]);
+            const games = (reg.count || 0) + (po.count || 0);
+            if (games === 0) return null;
+            const known = ALL_SEASONS.find((s) => s.id === id);
+            const label = known?.label || String(l.league_name || `S${id}`).trim();
+            const letter = (label[0] || 'W').toUpperCase();
+            const league = (['W', 'O', 'V', 'G', 'Q'].includes(letter) ? letter : 'W') as SeasonOption['league'];
+            return { id, label, league } as SeasonOption;
+          })
+        );
+        if (alive) setActiveSeasons(checked.filter(Boolean).sort((a: any, b: any) => b.id - a.id) as SeasonOption[]);
+      } catch {
+        // keep defaults
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const switchToActiveSeason = (id: number) => {
+    setSelectedLeague('ALL');
+    setSelectedSeason(id);
+  };
+
   // Expandable Boxscore Drawer State
   const [expandedGameKey, setExpandedGameKey] = useState<string | null>(null);
   const [boxscoreDetails, setBoxscoreDetails] = useState<{
@@ -211,20 +262,20 @@ export default function HomePage() {
 
   // Filter seasons based on selected league
   const filteredSeasons = useMemo(() => {
-    if (selectedLeague === 'ALL') return ALL_SEASONS;
-    return ALL_SEASONS.filter((s) => s.league === selectedLeague);
-  }, [selectedLeague]);
+    if (selectedLeague === 'ALL') return allSeasonOptions;
+    return allSeasonOptions.filter((s) => s.league === selectedLeague);
+  }, [selectedLeague, allSeasonOptions]);
 
   const activeSeasonLabel = useMemo(() => {
-    return ALL_SEASONS.find((s) => s.id === selectedSeason)?.label || `S${selectedSeason}`;
-  }, [selectedSeason]);
+    return allSeasonOptions.find((s) => s.id === selectedSeason)?.label || `S${selectedSeason}`;
+  }, [selectedSeason, allSeasonOptions]);
 
   // Handle switching league filter buttons
   const handleLeagueChange = (league: string) => {
     setSelectedLeague(league);
     const available = league === 'ALL'
-      ? ALL_SEASONS
-      : ALL_SEASONS.filter((s) => s.league === league);
+      ? allSeasonOptions
+      : allSeasonOptions.filter((s) => s.league === league);
 
     if (available.length > 0 && !available.some((s) => s.id === selectedSeason)) {
       setSelectedSeason(available[0].id);
@@ -260,10 +311,11 @@ export default function HomePage() {
 
     async function loadStandingsAndHub() {
       const numericLeagueId = Number(selectedSeason) || 40;
-      const curSeasonOpt = ALL_SEASONS.find((s) => s.id === numericLeagueId) || { id: numericLeagueId, label: `S${numericLeagueId}`, league: 'W' as const };
+      const seasonOpts = seasonOptionsRef.current;
+      const curSeasonOpt = seasonOpts.find((s) => s.id === numericLeagueId) || { id: numericLeagueId, label: `S${numericLeagueId}`, league: 'W' as const };
       const prevSeasonOpt =
-        ALL_SEASONS.find((s) => s.league === curSeasonOpt.league && s.id < numericLeagueId) ||
-        ALL_SEASONS.find((s) => s.id < numericLeagueId) ||
+        seasonOpts.find((s) => s.league === curSeasonOpt.league && s.id < numericLeagueId) ||
+        seasonOpts.find((s) => s.id < numericLeagueId) ||
         { id: 38, label: 'W17', league: 'W' as const };
       const prevLeagueId = prevSeasonOpt.id;
       const prevSeasonLabel = prevSeasonOpt.label;
@@ -2718,6 +2770,174 @@ export default function HomePage() {
 
         {/* CENTER COLUMN: FULL LEAGUE HUB */}
         <main className="col-span-12 md:col-span-12 lg:col-span-6 xl:col-span-7 order-1 md:order-1 lg:order-2 space-y-5 sm:space-y-6 min-w-0">
+          {/* SECTION 3: LEAGUE STATISTICAL LEADERS SPOTLIGHT */}
+          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
+                  LEADERS
+                </span>
+                <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
+                  {activeSeasonLabel} Statistical Leaders
+                </h2>
+              </div>
+
+              {activeSeasons.length > 1 && (
+                <div className="flex items-center gap-1 font-mono text-[10px]" title="Switch between seasons that are currently running">
+                  <span className="font-black uppercase text-neutral-500 mr-0.5">League:</span>
+                  {activeSeasons.map((sea) => (
+                    <button
+                      key={sea.id}
+                      type="button"
+                      onClick={() => switchToActiveSeason(sea.id)}
+                      className={`px-2 py-0.5 font-black uppercase border border-black cursor-pointer ${
+                        selectedSeason === sea.id ? 'bg-amber-400 text-black' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
+                      }`}
+                    >
+                      {sea.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1 font-mono text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setStatsPhase('REG')}
+                  className={`px-2 py-0.5 font-bold uppercase border border-black cursor-pointer ${
+                    statsPhase === 'REG' ? 'bg-black text-white' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
+                  }`}
+                >
+                  REG SEASON
+                </button>
+                {poStatLeaders.skaters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setStatsPhase('PLAYOFFS')}
+                    className={`px-2 py-0.5 font-bold uppercase border border-black cursor-pointer ${
+                      statsPhase === 'PLAYOFFS' ? 'bg-amber-400 text-black font-black' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
+                    }`}
+                  >
+                    PLAYOFFS
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Category Sub-Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-neutral-200">
+              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                {([
+                  { id: 'PTS', label: 'POINTS' },
+                  { id: 'G', label: 'GOALS' },
+                  { id: 'A', label: 'ASSISTS' },
+                  { id: 'W', label: 'GOALIE WINS' },
+                  { id: 'GAA', label: 'GAA' },
+                  { id: 'SV%', label: 'SV%' }
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setLeaderTab(tab.id)}
+                    className={`px-2 py-0.5 font-bold uppercase border border-black transition-colors cursor-pointer ${
+                      leaderTab === tab.id ? 'bg-black text-white' : 'bg-white text-neutral-700 hover:bg-neutral-100'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              <a href="/stats" className="text-[10px] font-mono font-bold underline hover:text-blue-800">
+                Full Stats Hub →
+              </a>
+            </div>
+
+            {activeLeaderList.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
+                {/* #1 Leader Spotlight Card */}
+                <div className="sm:col-span-5 border border-black bg-[#faf8f3] p-3 flex flex-col justify-between items-center text-center">
+                  <div className="w-full flex items-center justify-between text-[9px] font-mono uppercase text-neutral-500 border-b border-neutral-200 pb-1 mb-2">
+                    <span className="font-black text-black">#1 {leaderTab} LEADER</span>
+                    <span>{activeLeaderList[0].gp} GP</span>
+                  </div>
+
+                  {activeLeaderList[0].logo_url ? (
+                    <img
+                      src={activeLeaderList[0].logo_url}
+                      alt={activeLeaderList[0].team_abbr}
+                      className="w-14 h-14 object-contain my-1"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 bg-neutral-200 border border-black flex items-center justify-center font-mono font-black text-sm my-1">
+                      {activeLeaderList[0].team_abbr || 'NHL'}
+                    </div>
+                  )}
+
+                  <div className="mt-1">
+                    <div className="font-black text-sm uppercase leading-tight text-black">
+                      {activeLeaderList[0].player_name}
+                    </div>
+                    <div className="text-[10px] font-mono font-bold text-neutral-500 uppercase">
+                      {activeLeaderList[0].team_name || activeLeaderList[0].team_abbr}
+                    </div>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-neutral-200 w-full">
+                    <div className="text-3xl font-black font-mono leading-none text-black">
+                      {formatLeaderValue(activeLeaderList[0])}
+                    </div>
+                    <div className="text-[9px] font-mono uppercase font-bold text-neutral-500 mt-0.5">
+                      {leaderTab === 'PTS'
+                        ? `${activeLeaderList[0].goals}G • ${activeLeaderList[0].assists}A`
+                        : leaderTab === 'GAA' || leaderTab === 'SV%' || leaderTab === 'W'
+                        ? `${activeLeaderList[0].wins}W • ${activeLeaderList[0].shutouts || 0} SO`
+                        : `${activeLeaderList[0].points} TOTAL PTS`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top 6 Table */}
+                <div className="sm:col-span-7 flex flex-col justify-between border border-neutral-300 bg-white p-2.5">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-black text-[10px] font-mono uppercase text-neutral-500">
+                        <th className="pb-1 text-left">RK</th>
+                        <th className="pb-1 text-left">PLAYER</th>
+                        <th className="pb-1 text-center">TM</th>
+                        <th className="pb-1 text-center">GP</th>
+                        <th className="pb-1 text-right">{leaderTab}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeLeaderList.map((p: any, idx: number) => (
+                        <tr key={idx} className={`border-b border-neutral-100 ${idx === 0 ? 'bg-amber-50/70 font-bold' : ''}`}>
+                          <td className="py-1.5 font-mono text-[11px] font-bold">{idx + 1}</td>
+                          <td className="py-1.5 truncate max-w-[140px] font-bold text-neutral-900">
+                            {p.player_name}
+                          </td>
+                          <td className="py-1.5 text-center">
+                            <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold">
+                              {p.logo_url && (
+                                <img src={p.logo_url} alt="" className="w-3.5 h-3.5 object-contain" />
+                              )}
+                              {p.team_abbr}
+                            </span>
+                          </td>
+                          <td className="py-1.5 text-center font-mono text-[11px] text-neutral-500">{p.gp}</td>
+                          <td className="py-1.5 text-right font-mono font-black text-sm">{formatLeaderValue(p)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs italic text-neutral-500">
+                No player statistics recorded yet for {activeSeasonLabel}.
+              </div>
+            )}
+          </section>
+
           {/* SECTION 2: TRENDS OF THE WEEK & RECORD BOOK WATCH (CENTER, WIDE GRID) */}
           <section className="bg-black text-white border-2 border-black p-3.5 sm:p-4 shadow-[3px_3px_0px_#000] space-y-5">
             {/* 4. Weekly League Trends & Historic Record Watch */}
@@ -2882,156 +3102,6 @@ export default function HomePage() {
                 </a>
               </div>
             </div>
-          </section>
-
-          {/* SECTION 3: LEAGUE STATISTICAL LEADERS SPOTLIGHT */}
-          <section className="border-2 border-black bg-white/80 p-3.5 shadow-[3px_3px_0px_#000]">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-black pb-2 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="bg-black text-white font-mono text-[10px] font-black px-1.5 py-0.5 uppercase tracking-wider">
-                  LEADERS
-                </span>
-                <h2 className="font-black uppercase tracking-tight text-base sm:text-lg leading-none">
-                  {activeSeasonLabel} Statistical Leaders
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-1 font-mono text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setStatsPhase('REG')}
-                  className={`px-2 py-0.5 font-bold uppercase border border-black cursor-pointer ${
-                    statsPhase === 'REG' ? 'bg-black text-white' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
-                  }`}
-                >
-                  REG SEASON
-                </button>
-                {poStatLeaders.skaters.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setStatsPhase('PLAYOFFS')}
-                    className={`px-2 py-0.5 font-bold uppercase border border-black cursor-pointer ${
-                      statsPhase === 'PLAYOFFS' ? 'bg-amber-400 text-black font-black' : 'bg-[#f4f1ea] text-black hover:bg-neutral-200'
-                    }`}
-                  >
-                    PLAYOFFS
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Category Sub-Tabs */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-neutral-200">
-              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
-                {([
-                  { id: 'PTS', label: 'POINTS' },
-                  { id: 'G', label: 'GOALS' },
-                  { id: 'A', label: 'ASSISTS' },
-                  { id: 'W', label: 'GOALIE WINS' },
-                  { id: 'GAA', label: 'GAA' },
-                  { id: 'SV%', label: 'SV%' }
-                ] as const).map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setLeaderTab(tab.id)}
-                    className={`px-2 py-0.5 font-bold uppercase border border-black transition-colors cursor-pointer ${
-                      leaderTab === tab.id ? 'bg-black text-white' : 'bg-white text-neutral-700 hover:bg-neutral-100'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <a href="/stats" className="text-[10px] font-mono font-bold underline hover:text-blue-800">
-                Full Stats Hub →
-              </a>
-            </div>
-
-            {activeLeaderList.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
-                {/* #1 Leader Spotlight Card */}
-                <div className="sm:col-span-5 border border-black bg-[#faf8f3] p-3 flex flex-col justify-between items-center text-center">
-                  <div className="w-full flex items-center justify-between text-[9px] font-mono uppercase text-neutral-500 border-b border-neutral-200 pb-1 mb-2">
-                    <span className="font-black text-black">#1 {leaderTab} LEADER</span>
-                    <span>{activeLeaderList[0].gp} GP</span>
-                  </div>
-
-                  {activeLeaderList[0].logo_url ? (
-                    <img
-                      src={activeLeaderList[0].logo_url}
-                      alt={activeLeaderList[0].team_abbr}
-                      className="w-14 h-14 object-contain my-1"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 bg-neutral-200 border border-black flex items-center justify-center font-mono font-black text-sm my-1">
-                      {activeLeaderList[0].team_abbr || 'NHL'}
-                    </div>
-                  )}
-
-                  <div className="mt-1">
-                    <div className="font-black text-sm uppercase leading-tight text-black">
-                      {activeLeaderList[0].player_name}
-                    </div>
-                    <div className="text-[10px] font-mono font-bold text-neutral-500 uppercase">
-                      {activeLeaderList[0].team_name || activeLeaderList[0].team_abbr}
-                    </div>
-                  </div>
-
-                  <div className="mt-2 pt-2 border-t border-neutral-200 w-full">
-                    <div className="text-3xl font-black font-mono leading-none text-black">
-                      {formatLeaderValue(activeLeaderList[0])}
-                    </div>
-                    <div className="text-[9px] font-mono uppercase font-bold text-neutral-500 mt-0.5">
-                      {leaderTab === 'PTS'
-                        ? `${activeLeaderList[0].goals}G • ${activeLeaderList[0].assists}A`
-                        : leaderTab === 'GAA' || leaderTab === 'SV%' || leaderTab === 'W'
-                        ? `${activeLeaderList[0].wins}W • ${activeLeaderList[0].shutouts || 0} SO`
-                        : `${activeLeaderList[0].points} TOTAL PTS`}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Top 6 Table */}
-                <div className="sm:col-span-7 flex flex-col justify-between border border-neutral-300 bg-white p-2.5">
-                  <table className="w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-black text-[10px] font-mono uppercase text-neutral-500">
-                        <th className="pb-1 text-left">RK</th>
-                        <th className="pb-1 text-left">PLAYER</th>
-                        <th className="pb-1 text-center">TM</th>
-                        <th className="pb-1 text-center">GP</th>
-                        <th className="pb-1 text-right">{leaderTab}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activeLeaderList.map((p: any, idx: number) => (
-                        <tr key={idx} className={`border-b border-neutral-100 ${idx === 0 ? 'bg-amber-50/70 font-bold' : ''}`}>
-                          <td className="py-1.5 font-mono text-[11px] font-bold">{idx + 1}</td>
-                          <td className="py-1.5 truncate max-w-[140px] font-bold text-neutral-900">
-                            {p.player_name}
-                          </td>
-                          <td className="py-1.5 text-center">
-                            <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold">
-                              {p.logo_url && (
-                                <img src={p.logo_url} alt="" className="w-3.5 h-3.5 object-contain" />
-                              )}
-                              {p.team_abbr}
-                            </span>
-                          </td>
-                          <td className="py-1.5 text-center font-mono text-[11px] text-neutral-500">{p.gp}</td>
-                          <td className="py-1.5 text-right font-mono font-black text-sm">{formatLeaderValue(p)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="py-6 text-center text-xs italic text-neutral-500">
-                No player statistics recorded yet for {activeSeasonLabel}.
-              </div>
-            )}
           </section>
 
         </main>
