@@ -17,7 +17,12 @@ export async function GET() {
 
     const files = (data || [])
       .map(item => item.name)
-      .filter(name => name && !name.startsWith('.') && /\.(zip|bin|md|gen|smd)$/i.test(name));
+      .filter(
+        name =>
+          name &&
+          !name.startsWith('.') &&
+          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i.test(name)
+      );
 
     return NextResponse.json({ files });
   } catch (err: any) {

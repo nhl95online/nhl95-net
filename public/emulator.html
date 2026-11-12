@@ -261,6 +261,25 @@
       var guestSlot = parseInt(params.get("slot") || "1", 10); // 1 = P2, 2 = P3, 3 = P4
       if (isNaN(guestSlot) || guestSlot < 1 || guestSlot > 3) guestSlot = 1;
       var fourPlayer = params.get("fourPlayer") !== "0";
+      var requestedCore = params.get("core") || "";
+      var isNhl95Flag = params.get("nhl95") !== "0";
+
+      function detectCoreFromName(nameStr, explicitCore) {
+        if (explicitCore && explicitCore !== "auto") return explicitCore;
+        var lower = String(nameStr || "").toLowerCase();
+        if (/\.(sfc|smc|fig|swc)$/i.test(lower) || lower.indexOf("_snes") !== -1 || lower.indexOf("(snes)") !== -1) {
+          return "snes";
+        }
+        if (/\.(nes|fds|unf)$/i.test(lower) || lower.indexOf("_nes") !== -1 || lower.indexOf("(nes)") !== -1) {
+          return "nes";
+        }
+        if (/\.sms$/i.test(lower)) return "segaMS";
+        if (/\.gg$/i.test(lower)) return "segaGG";
+        if (/\.32x$/i.test(lower)) return "sega32x";
+        return "segaMD";
+      }
+
+      var resolvedCore = detectCoreFromName(title || romUrl, requestedCore);
 
       var rtcConfig = {
         iceServers: [
@@ -483,6 +502,11 @@
           if (btns[gp.y] && btns[gp.y].pressed) b[9] = 1;
           if (btns[gp.x] && btns[gp.x].pressed) b[10] = 1;
           if (btns[gp.z] && btns[gp.z].pressed) b[11] = 1;
+        }
+
+        // For 2-button NES games, map both A (b[1], Z key) and C (b[8], C key) to LibRetro Joypad A (b[8]) so Z+X or X+C both work!
+        if (resolvedCore === "nes" && b[1]) {
+          b[8] = 1;
         }
 
         var mask = 0;
@@ -851,13 +875,18 @@
       }
 
       // ======================================================================
-      // SOLO OR HOST MODE (RUNS GENESIS PLUS GX EMULATOR AT 60FPS NTSC)
+      // SOLO OR HOST MODE (RUNS SEGA GENESIS, SNES, OR NES EMULATOR AT 60FPS)
       // ======================================================================
       try {
         if (window.parent && window.parent.__NHL95_LOCAL_FILE) {
           var localFile = window.parent.__NHL95_LOCAL_FILE;
           romUrl = URL.createObjectURL(localFile);
           title = localFile.name || title;
+        }
+        if (window.parent && window.parent.__NHL95_DETECTED_CORE && (!requestedCore || requestedCore === "auto")) {
+          resolvedCore = window.parent.__NHL95_DETECTED_CORE;
+        } else {
+          resolvedCore = detectCoreFromName(title || romUrl, requestedCore);
         }
       } catch (e) {
         console.warn("Could not read parent file:", e);
@@ -869,10 +898,16 @@
         return;
       }
 
+      var isNhl95Game = isNhl95Flag && resolvedCore === "segaMD";
+      if (!isNhl95Game) {
+        aiCpuConfig.enabled = false;
+        aiCpuConfig.botPort2Takeover = false;
+      }
+
       var autoStart = params.get("autoStart") === "1";
 
       window.EJS_player = "#game";
-      window.EJS_core = "segaMD";
+      window.EJS_core = resolvedCore;
       window.EJS_gameName = title;
       window.EJS_gameUrl = romUrl;
       window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
@@ -888,20 +923,23 @@
         3: {}
       };
 
-      // Force 60Hz NTSC-U and zero frameskip so every ROM runs at a locked 60 FPS instead of 50Hz PAL
-      window.EJS_defaultOptions = Object.assign(
-        {
-          "genesis_plus_gx_region_detect": "ntsc-u",
-          "genesis_plus_gx_frameskip": "disabled",
-          "genesis_plus_gx_vscroll": "per-pixel"
-        },
-        fourPlayer
-          ? {
-              "genesis_plus_gx_input_system": "4 way play",
-              "4 way play": "enabled"
-            }
-          : {}
-      );
+      // Force 60Hz NTSC-U and zero frameskip on Sega Genesis so every ROM runs at a locked 60 FPS
+      window.EJS_defaultOptions =
+        resolvedCore === "segaMD"
+          ? Object.assign(
+              {
+                "genesis_plus_gx_region_detect": "ntsc-u",
+                "genesis_plus_gx_frameskip": "disabled",
+                "genesis_plus_gx_vscroll": "per-pixel"
+              },
+              fourPlayer && isNhl95Game
+                ? {
+                    "genesis_plus_gx_input_system": "4 way play",
+                    "4 way play": "enabled"
+                  }
+                : {}
+            )
+          : {};
 
       var prevPlayerMasks = [0, 0, 0, 0];
       var remoteSlotActiveUntil = [0, 0, 0, 0];
@@ -1428,17 +1466,17 @@
         try {
           neutralizeBuiltInEjsInput();
           var ejs = window.EJS_emulator;
-          if (ejs && ejs.gameManager && ejs.gameManager.setVariable) {
+          if (resolvedCore === "segaMD" && ejs && ejs.gameManager && ejs.gameManager.setVariable) {
             try {
               ejs.gameManager.setVariable("genesis_plus_gx_region_detect", "ntsc-u");
               ejs.gameManager.setVariable("genesis_plus_gx_frameskip", "disabled");
-              if (fourPlayer) {
+              if (fourPlayer && isNhl95Game) {
                 ejs.gameManager.setVariable("genesis_plus_gx_input_system", "4 way play");
                 ejs.gameManager.setVariable("4 way play", "enabled");
               }
             } catch (e) {}
           }
-          window.parent.postMessage({ type: "NHL95_EJS_STARTED" }, "*");
+          window.parent.postMessage({ type: "NHL95_EJS_STARTED", core: resolvedCore }, "*");
           requestAnimationFrame(pollAllFourPlayerControls);
           if (role === "host" && roomId) {
             setTimeout(function () {
@@ -1446,6 +1484,8 @@
             }, 500);
           }
         } catch (e) {}
+
+        if (!isNhl95Game) return;
 
         setInterval(function () {
           try {

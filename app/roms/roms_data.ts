@@ -25,6 +25,9 @@ export function getRomDownloadUrl(fileName: string, customUrl?: string): string 
   return `${SUPABASE_ROMS_URL}/${encodeURIComponent(fileName)}?download`;
 }
 
+export type EmulatorCoreId = 'segaMD' | 'snes' | 'nes' | 'segaMS' | 'segaGG' | 'sega32x';
+export type ConsoleSystemId = 'SEGA' | 'SNES' | 'NES';
+
 export interface LeagueRom {
   id: string;
   league: string;
@@ -45,6 +48,68 @@ export interface LeagueRom {
   downloadUrl?: string;
   badge?: string;
   isActive?: boolean;
+}
+
+export interface HistoricalNhlRom {
+  id: string;
+  year: number;
+  seasonLabel: string;
+  era: string;
+  eraLabel: string;
+  champion?: string;
+  runnerUp?: string;
+  notableTeams?: string[];
+  features: string;
+  modder?: string;
+  fileName: string;
+  fileSize: string;
+  imageUrl?: string;
+  downloadUrl?: string;
+}
+
+export interface MiscRom {
+  id: string;
+  title: string;
+  category: string;
+  platform: string;
+  fileName: string;
+  fileSize: string;
+  releaseYear: string;
+  author: string;
+  description: string;
+  imageUrl?: string;
+  coverImage?: string;
+  downloadUrl?: string;
+  tags: string[];
+  emulatorCore?: EmulatorCoreId;
+  consoleSystem?: ConsoleSystemId;
+}
+
+export interface UtilityPack {
+  id: string;
+  title: string;
+  category: string;
+  fileName: string;
+  fileSize: string;
+  imageUrl?: string;
+  downloadUrl?: string;
+  desc: string;
+}
+
+export interface RetroConsoleRom {
+  id: string;
+  title: string;
+  consoleSystem: ConsoleSystemId;
+  emulatorCore: EmulatorCoreId;
+  platformLabel: string;
+  genre: string;
+  releaseYear: string;
+  fileName: string;
+  fileCandidates: string[];
+  description: string;
+  tags: string[];
+  imageUrl?: string;
+  downloadUrl?: string;
 }
 
 // ============================================================================
@@ -1619,3 +1684,354 @@ export const UTILITY_PACKS_DATA: UtilityPack[] = [
     desc: 'Windows utility for modifying player attributes, lines, jersey colors, center ice graphics, and team rosters on any Genesis NHL95 binary ROM.'
   }
 ];
+
+// ============================================================================
+// 5. SOLO RETRO CONSOLE ARCADE CATALOG (SEGA GENESIS, SNES, NES)
+// Supports Solo Play in the Arena Emulator across SEGA, SNES, and NES cores!
+// ============================================================================
+export const SOLO_RETRO_CONSOLE_ROMS: RetroConsoleRom[] = [
+  // --- SEGA GENESIS / MEGA DRIVE (segaMD) ---
+  {
+    id: 'sega-nhl94',
+    title: "NHL '94 (SEGA Genesis)",
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Hockey / Sports',
+    releaseYear: '1993',
+    fileName: 'NHL94.bin',
+    fileCandidates: ['NHL94.zip', 'NHL94.bin', 'NHL94.md', 'NHL 94.zip', 'NHL 94.bin'],
+    description: 'The legendary 16-bit EA Sports hockey classic that introduced one-timers, manual goalie control, and shattering glass.',
+    tags: ['SEGA', 'Hockey', 'EA Sports', '16-Bit']
+  },
+  {
+    id: 'sega-nhl96',
+    title: "NHL '96 (SEGA Genesis)",
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Hockey / Sports',
+    releaseYear: '1995',
+    fileName: 'NHL96.bin',
+    fileCandidates: ['NHL96.zip', 'NHL96.bin', 'NHL96.md', 'NHL 96.zip', 'NHL 96.bin'],
+    description: 'Brought back full bench-clearing fights, spin-o-rama dekes, and fast 16-bit Genesis season & playoff modes.',
+    tags: ['SEGA', 'Hockey', 'Fighting', 'EA Sports']
+  },
+  {
+    id: 'sega-mutant-league-hockey',
+    title: 'Mutant League Hockey (SEGA Genesis)',
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Arcade Hockey',
+    releaseYear: '1994',
+    fileName: 'Mutant_League_Hockey.bin',
+    fileCandidates: ['Mutant_League_Hockey.zip', 'Mutant_League_Hockey.bin', 'Mutant League Hockey.zip', 'MutantLeagueHockey.bin'],
+    description: 'Built on the EA hockey engine with Skeletons, Trolls, Robots, landmines on the ice, chainsaws, and bribing the referee!',
+    tags: ['SEGA', 'Mutant League', 'Hockey', 'Arcade']
+  },
+  {
+    id: 'sega-nba-jam-te',
+    title: 'NBA Jam: Tournament Edition (SEGA Genesis)',
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Basketball / Arcade',
+    releaseYear: '1994',
+    fileName: 'NBA_Jam_TE.bin',
+    fileCandidates: ['NBA_Jam_TE.zip', 'NBA_Jam_TE.bin', 'NBA Jam TE.zip', 'NBAJamTE.bin'],
+    description: '2-on-2 high-flying arcade hoops featuring "He\'s on Fire!", backboard-shattering dunks, hot spots, and secret characters.',
+    tags: ['SEGA', 'Basketball', 'NBA Jam', 'Arcade']
+  },
+  {
+    id: 'sega-madden-95',
+    title: "Madden NFL '95 (SEGA Genesis)",
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Football / Sports',
+    releaseYear: '1994',
+    fileName: 'Madden95.bin',
+    fileCandidates: ['Madden95.zip', 'Madden95.bin', 'Madden 95.zip', 'Madden_NFL_95.bin'],
+    description: 'Golden-era 16-bit EA Sports football featuring pass windows without pop-up boxes, full NFL rosters, and hard-hitting defense.',
+    tags: ['SEGA', 'Football', 'Madden', 'EA Sports']
+  },
+  {
+    id: 'sega-streets-of-rage-2',
+    title: 'Streets of Rage 2 (SEGA Genesis)',
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Beat-Em-Up / Action',
+    releaseYear: '1992',
+    fileName: 'Streets_of_Rage_2.bin',
+    fileCandidates: ['Streets_of_Rage_2.zip', 'Streets_of_Rage_2.bin', 'Streets of Rage 2.zip', 'SOR2.bin'],
+    description: 'Axel, Blaze, Max, and Skate take back the city to Yuzo Koshiro\'s legendary 16-bit FM synth soundtrack.',
+    tags: ['SEGA', 'Beat-Em-Up', 'Streets of Rage', 'Action']
+  },
+  {
+    id: 'sega-sonic-2',
+    title: 'Sonic the Hedgehog 2 (SEGA Genesis)',
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Platformer',
+    releaseYear: '1992',
+    fileName: 'Sonic2.bin',
+    fileCandidates: ['Sonic2.zip', 'Sonic2.bin', 'Sonic_the_Hedgehog_2.zip', 'Sonic 2.zip'],
+    description: 'Blast processing platforming at 60 FPS featuring Sonic & Tails, Spin Dash, Emerald Hill, Chemical Plant, and Casino Night Zone.',
+    tags: ['SEGA', 'Sonic', 'Platformer', '16-Bit']
+  },
+  {
+    id: 'sega-mk2',
+    title: 'Mortal Kombat II (SEGA Genesis)',
+    consoleSystem: 'SEGA',
+    emulatorCore: 'segaMD',
+    platformLabel: 'SEGA Genesis 16-Bit',
+    genre: 'Fighting / Arcade',
+    releaseYear: '1994',
+    fileName: 'Mortal_Kombat_2.bin',
+    fileCandidates: ['Mortal_Kombat_2.zip', 'Mortal_Kombat_2.bin', 'MK2.zip', 'MK2.bin'],
+    description: '6-button Genesis arcade fighter featuring Sub-Zero, Scorpion, Liu Kang, Raiden, and Outworld arenas.',
+    tags: ['SEGA', 'Fighting', 'Mortal Kombat', '6-Button']
+  },
+
+  // --- SUPER NINTENDO / SNES (snes) ---
+  {
+    id: 'snes-nhl94',
+    title: "NHL '94 (Super Nintendo / SNES)",
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Hockey / Sports',
+    releaseYear: '1993',
+    fileName: 'NHL94.sfc',
+    fileCandidates: ['NHL94_SNES.zip', 'NHL94.sfc', 'NHL94.smc', 'NHL 94 (SNES).zip'],
+    description: 'The Super Nintendo edition of EA Sports NHL \'94 with Mode 7 presentation, organ music, and 4-button SNES passing & one-timers.',
+    tags: ['SNES', 'Hockey', 'NHL 94', '16-Bit']
+  },
+  {
+    id: 'snes-nhl95',
+    title: "NHL '95 (Super Nintendo / SNES)",
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Hockey / Sports',
+    releaseYear: '1994',
+    fileName: 'NHL95.sfc',
+    fileCandidates: ['NHL95_SNES.zip', 'NHL95.sfc', 'NHL95.smc', 'NHL 95 (SNES).zip'],
+    description: 'The Super Nintendo counterpart to Genesis NHL \'95 featuring full season mode, player trades, and fast SNES ice physics.',
+    tags: ['SNES', 'Hockey', 'NHL 95', '16-Bit']
+  },
+  {
+    id: 'snes-ken-griffey-jr',
+    title: 'Ken Griffey Jr. Presents Major League Baseball (SNES)',
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Baseball / Sports',
+    releaseYear: '1994',
+    fileName: 'Ken_Griffey_Jr_MLB.sfc',
+    fileCandidates: ['Ken_Griffey_Jr_MLB.zip', 'Ken_Griffey_Jr_MLB.sfc', 'Ken_Griffey_Jr_MLB.smc', 'Ken Griffey Jr.zip'],
+    description: 'Fast-paced 16-bit arcade baseball classic with iconic organ walk-up themes, diving catches, and home run derbies.',
+    tags: ['SNES', 'Baseball', 'Ken Griffey Jr', 'Sports']
+  },
+  {
+    id: 'snes-nba-jam-te',
+    title: 'NBA Jam: Tournament Edition (SNES)',
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Basketball / Arcade',
+    releaseYear: '1995',
+    fileName: 'NBA_Jam_TE.sfc',
+    fileCandidates: ['NBA_Jam_TE_SNES.zip', 'NBA_Jam_TE.sfc', 'NBA_Jam_TE.smc'],
+    description: 'Super Nintendo edition of NBA Jam TE with crisp SNES audio, turbo dunks, and 2-on-2 arcade action.',
+    tags: ['SNES', 'Basketball', 'NBA Jam', 'Arcade']
+  },
+  {
+    id: 'snes-super-mario-world',
+    title: 'Super Mario World (SNES)',
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Platformer',
+    releaseYear: '1991',
+    fileName: 'Super_Mario_World.sfc',
+    fileCandidates: ['Super_Mario_World.zip', 'Super_Mario_World.sfc', 'Super_Mario_World.smc', 'Super Mario World.zip'],
+    description: 'Explore Dinosaur Land with Mario and Yoshi across 96 exits, Cape Feather flight, and Bowser\'s Castle.',
+    tags: ['SNES', 'Mario', 'Yoshi', 'Platformer']
+  },
+  {
+    id: 'snes-super-mario-kart',
+    title: 'Super Mario Kart (SNES)',
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Racing / Arcade',
+    releaseYear: '1992',
+    fileName: 'Super_Mario_Kart.sfc',
+    fileCandidates: ['Super_Mario_Kart.zip', 'Super_Mario_Kart.sfc', 'Super_Mario_Kart.smc', 'Super Mario Kart.zip'],
+    description: 'Mode 7 kart racing across Mushroom, Flower, Star, and Special Cups with Red Shells, Rainbow Road, and Battle Mode.',
+    tags: ['SNES', 'Mario Kart', 'Racing', 'Mode 7']
+  },
+  {
+    id: 'snes-street-fighter-2-turbo',
+    title: 'Street Fighter II Turbo: Hyper Fighting (SNES)',
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Fighting / Arcade',
+    releaseYear: '1993',
+    fileName: 'Street_Fighter_2_Turbo.sfc',
+    fileCandidates: ['Street_Fighter_2_Turbo.zip', 'Street_Fighter_2_Turbo.sfc', 'Street_Fighter_2_Turbo.smc', 'SF2Turbo.sfc'],
+    description: 'High-speed Turbo championship fighting on the SNES with 12 playable World Warriors.',
+    tags: ['SNES', 'Street Fighter', 'Fighting', 'Capcom']
+  },
+  {
+    id: 'snes-super-punch-out',
+    title: 'Super Punch-Out!! (SNES)',
+    consoleSystem: 'SNES',
+    emulatorCore: 'snes',
+    platformLabel: 'Super Nintendo (SNES)',
+    genre: 'Boxing / Sports',
+    releaseYear: '1994',
+    fileName: 'Super_Punch_Out.sfc',
+    fileCandidates: ['Super_Punch_Out.zip', 'Super_Punch_Out.sfc', 'Super_Punch_Out.smc', 'Super Punch-Out.zip'],
+    description: 'Step into the ring against Gabby Jay, Bear Hugger, Bald Bull, Super Macho Man, and Nick & Rick Bruiser!',
+    tags: ['SNES', 'Boxing', 'Punch-Out', 'Sports']
+  },
+
+  // --- NINTENDO ENTERTAINMENT SYSTEM / NES (nes) ---
+  {
+    id: 'nes-blades-of-steel',
+    title: 'Blades of Steel (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Hockey / Sports',
+    releaseYear: '1988',
+    fileName: 'Blades_of_Steel.nes',
+    fileCandidates: ['Blades_of_Steel.zip', 'Blades_of_Steel.nes', 'Blades of Steel.zip', 'BladesOfSteel.nes'],
+    description: 'Konami\'s legendary 8-bit hockey classic featuring digitized "Blades of Steel!" voice samples, one-on-one fistfights, and intermission Gradius mini-games.',
+    tags: ['NES', 'Hockey', 'Blades of Steel', '8-Bit']
+  },
+  {
+    id: 'nes-ice-hockey',
+    title: 'Ice Hockey (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Hockey / Sports',
+    releaseYear: '1988',
+    fileName: 'Ice_Hockey.nes',
+    fileCandidates: ['Ice_Hockey.zip', 'Ice_Hockey.nes', 'Ice Hockey.zip', 'IceHockey.nes'],
+    description: 'Build your custom 4-skater lineup choosing between fast Skinny skaters, all-around Medium skaters, and hard-checking Heavy slap-shooters!',
+    tags: ['NES', 'Hockey', 'Nintendo', '8-Bit']
+  },
+  {
+    id: 'nes-tecmo-super-bowl',
+    title: 'Tecmo Super Bowl (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Football / Sports',
+    releaseYear: '1991',
+    fileName: 'Tecmo_Super_Bowl.nes',
+    fileCandidates: ['Tecmo_Super_Bowl.zip', 'Tecmo_Super_Bowl.nes', 'Tecmo Super Bowl.zip', 'TecmoSuperBowl.nes'],
+    description: 'Unstoppable Bo Jackson runs, cinematic touchdown cutscenes, full NFL season tracking, and 8-bit football perfection.',
+    tags: ['NES', 'Football', 'Tecmo Super Bowl', 'Bo Jackson']
+  },
+  {
+    id: 'nes-punch-out',
+    title: "Mike Tyson's Punch-Out!! (NES)",
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Boxing / Sports',
+    releaseYear: '1987',
+    fileName: 'Punch_Out.nes',
+    fileCandidates: ['Punch_Out.zip', 'Punch_Out.nes', 'Mike_Tysons_Punch_Out.nes', 'Punch-Out.zip'],
+    description: 'Guide Little Mac and Doc Louis through Glass Joe, King Hippo, Piston Honda, Soda Popinski, and the Dream Fight.',
+    tags: ['NES', 'Boxing', 'Punch-Out', '8-Bit']
+  },
+  {
+    id: 'nes-rbi-baseball',
+    title: 'R.B.I. Baseball (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Baseball / Sports',
+    releaseYear: '1988',
+    fileName: 'RBI_Baseball.nes',
+    fileCandidates: ['RBI_Baseball.zip', 'RBI_Baseball.nes', 'RBI Baseball.zip', 'RBIBaseball.nes'],
+    description: 'Tengen\'s classic 8-bit baseball featuring real MLBPA players, monster home runs, and timeless 8-bit ballpark music.',
+    tags: ['NES', 'Baseball', 'RBI Baseball', '8-Bit']
+  },
+  {
+    id: 'nes-super-mario-bros-3',
+    title: 'Super Mario Bros. 3 (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Platformer',
+    releaseYear: '1990',
+    fileName: 'Super_Mario_Bros_3.nes',
+    fileCandidates: ['Super_Mario_Bros_3.zip', 'Super_Mario_Bros_3.nes', 'Super Mario Bros 3.zip', 'SMB3.nes'],
+    description: 'Eight worlds of 8-bit platforming mastery with the Super Leaf, Tanooki Suit, Frog Suit, Warp Whistles, and Airships.',
+    tags: ['NES', 'Mario', 'Platformer', '8-Bit']
+  },
+  {
+    id: 'nes-contra',
+    title: 'Contra (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Action / Run-and-Gun',
+    releaseYear: '1988',
+    fileName: 'Contra.nes',
+    fileCandidates: ['Contra.zip', 'Contra.nes'],
+    description: 'Up, Up, Down, Down, Left, Right, Left, Right, B, A, Start! Grab the Spread Gun and battle Red Falcon across 8 stages.',
+    tags: ['NES', 'Contra', 'Konami', 'Action']
+  },
+  {
+    id: 'nes-double-dragon-2',
+    title: 'Double Dragon II: The Revenge (NES)',
+    consoleSystem: 'NES',
+    emulatorCore: 'nes',
+    platformLabel: 'Nintendo (NES 8-Bit)',
+    genre: 'Beat-Em-Up / Action',
+    releaseYear: '1990',
+    fileName: 'Double_Dragon_2.nes',
+    fileCandidates: ['Double_Dragon_2.zip', 'Double_Dragon_2.nes', 'Double Dragon 2.zip'],
+    description: 'Billy and Jimmy Lee unleash hurricane kicks and uppercuts in the definitive 8-bit NES arcade brawler.',
+    tags: ['NES', 'Double Dragon', 'Beat-Em-Up', '8-Bit']
+  }
+];
+
+/**
+ * Infers the EmulatorJS core ('segaMD', 'snes', 'nes', 'segaMS', 'segaGG', 'sega32x')
+ * and Console System ('SEGA', 'SNES', 'NES') from a ROM filename.
+ */
+export function detectEmulatorCoreFromFileName(fileName: string): {
+  core: EmulatorCoreId;
+  consoleSystem: ConsoleSystemId;
+} {
+  const lower = (fileName || '').toLowerCase().trim();
+  if (/\.(sfc|smc|fig|swc)$/i.test(lower) || lower.includes('_snes') || lower.includes('(snes)')) {
+    return { core: 'snes', consoleSystem: 'SNES' };
+  }
+  if (/\.(nes|fds|unf)$/i.test(lower) || lower.includes('_nes') || lower.includes('(nes)')) {
+    return { core: 'nes', consoleSystem: 'NES' };
+  }
+  if (/\.sms$/i.test(lower)) {
+    return { core: 'segaMS', consoleSystem: 'SEGA' };
+  }
+  if (/\.gg$/i.test(lower)) {
+    return { core: 'segaGG', consoleSystem: 'SEGA' };
+  }
+  if (/\.32x$/i.test(lower)) {
+    return { core: 'sega32x', consoleSystem: 'SEGA' };
+  }
+  return { core: 'segaMD', consoleSystem: 'SEGA' };
+}

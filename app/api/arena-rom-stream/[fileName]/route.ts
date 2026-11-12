@@ -6,13 +6,16 @@ const SUPABASE_ROMS_PUBLIC_URL =
   '/storage/v1/object/public/roms';
 
 /**
- * Extracts the ROM binary (.bin, .md, .gen, .smd, or largest entry) from a ZIP buffer
+ * Extracts the ROM binary (.bin, .md, .gen, .smd, .sfc, .smc, .nes, .sms, .gg, or largest entry) from a ZIP buffer
  * using Node's built-in zlib.inflateRawSync. If the buffer is not a ZIP, returns it as-is.
  */
-function extractRomFromZipOrRaw(buf: Buffer): Buffer {
+function extractRomFromZipOrRaw(
+  buf: Buffer,
+  fallbackName: string
+): { buffer: Buffer; entryName: string } {
   // Check PK\x03\x04 magic
   if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b || buf[2] !== 0x03 || buf[3] !== 0x04) {
-    return buf;
+    return { buffer: buf, entryName: fallbackName };
   }
 
   // Locate End of Central Directory (EOCD) signature 0x06054b50 from end of buffer
@@ -78,9 +81,9 @@ function extractRomFromZipOrRaw(buf: Buffer): Buffer {
     throw new Error('ZIP archive contains no file entries');
   }
 
-  // Prefer .bin / .md / .gen / .smd file; otherwise pick the largest uncompressed file
+  // Prefer known SEGA, SNES, or NES ROM extensions; otherwise pick the largest uncompressed file
   const romEntry =
-    entries.find(e => /\.(bin|md|gen|smd)$/i.test(e.name)) ||
+    entries.find(e => /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i.test(e.name)) ||
     entries.sort((a, b) => b.uncompSize - a.uncompSize)[0];
 
   const lh = romEntry.lhOffset;
@@ -94,9 +97,9 @@ function extractRomFromZipOrRaw(buf: Buffer): Buffer {
   const compressedSlice = buf.subarray(dataStart, dataStart + romEntry.compSize);
 
   if (romEntry.method === 0) {
-    return compressedSlice;
+    return { buffer: compressedSlice, entryName: romEntry.name };
   } else if (romEntry.method === 8) {
-    return zlib.inflateRawSync(compressedSlice);
+    return { buffer: zlib.inflateRawSync(compressedSlice), entryName: romEntry.name };
   } else {
     throw new Error(`Unsupported ZIP compression method: ${romEntry.method}`);
   }
@@ -121,8 +124,17 @@ export async function GET(
     }
 
     const rawBuffer = Buffer.from(await upstream.arrayBuffer());
-    const romBuffer = extractRomFromZipOrRaw(rawBuffer);
-    const cleanRomName = bucketFile.replace(/\.zip$/i, '') + '.bin';
+    const { buffer: romBuffer, entryName } = extractRomFromZipOrRaw(rawBuffer, bucketFile);
+    const extMatch = entryName.match(/\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i);
+    const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
+    const cleanRomName = bucketFile.replace(/\.(zip|bin|md|gen|smd|sfc|smc|nes|sms|gg|32x)$/i, '') + ext;
+
+    let detectedCore = 'segaMD';
+    if (/\.(sfc|smc|fig|swc)$/i.test(ext)) detectedCore = 'snes';
+    else if (/\.(nes|fds|unf)$/i.test(ext)) detectedCore = 'nes';
+    else if (/\.sms$/i.test(ext)) detectedCore = 'segaMS';
+    else if (/\.gg$/i.test(ext)) detectedCore = 'segaGG';
+    else if (/\.32x$/i.test(ext)) detectedCore = 'sega32x';
 
     return new NextResponse(new Uint8Array(romBuffer), {
       status: 200,
@@ -130,6 +142,7 @@ export async function GET(
         'Content-Type': 'application/octet-stream',
         'Content-Length': String(romBuffer.length),
         'Content-Disposition': `inline; filename="${cleanRomName}"`,
+        'X-Emulator-Core': detectedCore,
         'Cache-Control': 'public, max-age=3600'
       }
     });

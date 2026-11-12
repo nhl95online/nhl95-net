@@ -31,7 +31,11 @@ import {
   OFFICIAL_LEAGUE_ROMS,
   HISTORICAL_NHL_ROMS,
   MISC_ROMS,
-  SUPABASE_ROMS_URL
+  SOLO_RETRO_CONSOLE_ROMS,
+  SUPABASE_ROMS_URL,
+  EmulatorCoreId,
+  ConsoleSystemId,
+  detectEmulatorCoreFromFileName
 } from '@/app/roms/roms_data';
 import { useCoachAuth } from '@/lib/coach-auth';
 import { supabase } from '@/lib/supabase';
@@ -45,13 +49,13 @@ import { parseSaveStateBuffer } from '@/lib/parsers/savestate';
 import RetroBoxscore from '@/components/RetroBoxscore';
 
 // ============================================================================
-// UNIFIED ARENA ROM ITEM TYPE
+// UNIFIED ARENA ROM ITEM TYPE (NHL '95 + SEGA / SNES / NES SOLO RETRO ARCADE)
 // ============================================================================
 export interface ArenaRomItem {
   id: string;
   title: string;
   subtitle: string;
-  category: 'league' | 'nhl-history' | 'misc';
+  category: 'league' | 'nhl-history' | 'misc' | 'sega-solo' | 'snes-solo' | 'nes-solo';
   categoryBadge: string;
   year: number | string;
   leagueCode?: string;
@@ -62,6 +66,9 @@ export interface ArenaRomItem {
   customDownloadUrl?: string;
   isActive?: boolean;
   defaultSeasonConfigId?: string;
+  emulatorCore: EmulatorCoreId;
+  consoleSystem: ConsoleSystemId;
+  isNhl95: boolean;
 }
 
 // Live Presence Player in the Locker Room Lobby
@@ -102,6 +109,26 @@ export interface LobbyChatMessage {
   text: string;
   toPeerId?: string;
   timestamp: string;
+}
+
+// ============================================================================
+// ROM GENRE CATEGORIES (used by the game picker + ROM Vault dropdown)
+// ============================================================================
+const ROM_GENRES = ['League', 'NHL History', 'Sports', 'Action', 'Fighting', 'Racing', 'Platformer', 'Strategy & Sim', 'Other'] as const;
+type RomGenre = (typeof ROM_GENRES)[number];
+
+function classifyRomGenre(text: string, catalogCategory?: string, baseName?: string): RomGenre {
+  const base = String(baseName || '').trim();
+  if (catalogCategory === 'league' || /^[WOQVG]\d{2}p?$/i.test(base)) return 'League';
+  if (catalogCategory === 'nhl-history' || /^(19|20)\d{2}$/.test(base)) return 'NHL History';
+  const t = String(text || '').toLowerCase();
+  if (/fight|kombat|street fighter|punch-?out|tekken|brawl/.test(t)) return 'Fighting';
+  if (/racing|kart|rally|road rash|outrun|f1\b/.test(t)) return 'Racing';
+  if (/platform|mario|sonic|kirby|mega ?man|castlevania|ghouls/.test(t)) return 'Platformer';
+  if (/hockey|baseball|football|basketball|boxing|\bnba\b|\bnfl\b|\bnhl\b|madden|sports|golf|soccer|tennis|bowl|jam\b|tecmo|blades of steel/.test(t)) return 'Sports';
+  if (/action|run-and-gun|beat-?em|strike|contra|zombie|dragon|rage|shoot|shmup|commando|gunstar|ninja|turtles/.test(t)) return 'Action';
+  if (/theme park|simulat|\bsim\b|strategy|tycoon|puzzle|tetris|civilization|lemmings|populous/.test(t)) return 'Strategy & Sim';
+  return 'Other';
 }
 
 function buildArenaCatalog(): ArenaRomItem[] {
@@ -146,7 +173,10 @@ function buildArenaCatalog(): ArenaRomItem[] {
       ],
       customDownloadUrl: rom.downloadUrl,
       isActive: rom.isActive,
-      defaultSeasonConfigId
+      defaultSeasonConfigId,
+      emulatorCore: 'segaMD',
+      consoleSystem: 'SEGA',
+      isNhl95: true
     });
   }
 
@@ -164,13 +194,17 @@ function buildArenaCatalog(): ArenaRomItem[] {
       imageCandidates: [rom.imageUrl || `${rom.year}.png`, `${rom.year}.png`],
       fileCandidates: [`${rom.year}.zip`, `${rom.year}.bin`, rom.fileName],
       customDownloadUrl: rom.downloadUrl,
-      defaultSeasonConfigId: '40'
+      defaultSeasonConfigId: '40',
+      emulatorCore: 'segaMD',
+      consoleSystem: 'SEGA',
+      isNhl95: true
     });
   }
 
   // 3. Misc & Crossover ROMs
   for (const rom of MISC_ROMS) {
     const cleanTitle = rom.title.replace(/[:\/\\?*|<">]/g, '').trim();
+    const detected = detectEmulatorCoreFromFileName(rom.fileName);
     items.push({
       id: rom.id,
       title: rom.title,
@@ -183,11 +217,72 @@ function buildArenaCatalog(): ArenaRomItem[] {
       imageCandidates: [rom.imageUrl || rom.coverImage || ''],
       fileCandidates: [`${cleanTitle}.zip`, `${cleanTitle}.bin`, rom.fileName],
       customDownloadUrl: rom.downloadUrl,
-      defaultSeasonConfigId: '40'
+      defaultSeasonConfigId: '40',
+      emulatorCore: rom.emulatorCore || detected.core,
+      consoleSystem: rom.consoleSystem || detected.consoleSystem,
+      isNhl95: (rom.emulatorCore || detected.core) === 'segaMD'
+    });
+  }
+
+  // 4. Solo Retro Console Arcade ROMs (SEGA Genesis, SNES, NES)
+  for (const rom of SOLO_RETRO_CONSOLE_ROMS) {
+    const cat =
+      rom.consoleSystem === 'SNES'
+        ? 'snes-solo'
+        : rom.consoleSystem === 'NES'
+        ? 'nes-solo'
+        : 'sega-solo';
+    items.push({
+      id: rom.id,
+      title: rom.title,
+      subtitle: `${rom.platformLabel} • ${rom.genre} (${rom.releaseYear})`,
+      category: cat,
+      categoryBadge: `${rom.consoleSystem} SOLO`,
+      year: rom.releaseYear,
+      rulesSummary: `${rom.platformLabel} • ${rom.tags.join(' • ')}`,
+      description: rom.description,
+      imageCandidates: rom.imageUrl ? [rom.imageUrl] : [],
+      fileCandidates: [...rom.fileCandidates, rom.fileName],
+      customDownloadUrl: rom.downloadUrl,
+      defaultSeasonConfigId: '40',
+      emulatorCore: rom.emulatorCore,
+      consoleSystem: rom.consoleSystem,
+      isNhl95: false
     });
   }
 
   return items;
+}
+
+/**
+ * Inspects a local ROM File (including peeking inside .zip archives) to detect
+ * whether it is a SNES (.sfc/.smc), NES (.nes/.fds), or SEGA (.bin/.md/.gen/.smd/.sms/.gg/.32x) ROM.
+ */
+async function detectCoreFromLocalFileAsync(file: File): Promise<{
+  core: EmulatorCoreId;
+  consoleSystem: ConsoleSystemId;
+  innerFileName?: string;
+}> {
+  const fromName = detectEmulatorCoreFromFileName(file.name);
+  if (!file.name.toLowerCase().endsWith('.zip')) {
+    return fromName;
+  }
+
+  try {
+    const buf = new Uint8Array(await file.arrayBuffer());
+    if (buf.length >= 30 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04) {
+      // Read first local file header filename (or scan central directory)
+      const fnLen = buf[26] | (buf[27] << 8);
+      if (30 + fnLen <= buf.length) {
+        const entryName = new TextDecoder().decode(buf.subarray(30, 30 + fnLen));
+        const detected = detectEmulatorCoreFromFileName(entryName);
+        return { ...detected, innerFileName: entryName };
+      }
+    }
+  } catch {
+    // fallback to outer filename
+  }
+  return fromName;
 }
 
 const W_LEAGUE_COACH_MAP: Record<string, { coach_id: number; coach_name: string; city: string }> = {
@@ -258,7 +353,10 @@ function findMatchingBucketFile(rom: ArenaRomItem, bucketFiles: string[]): strin
   }
   const prefix = rom.id.toLowerCase();
   for (const f of bucketFiles) {
-    if (f.toLowerCase().startsWith(prefix) && /\.(zip|bin|md|gen|smd)$/i.test(f)) {
+    if (
+      f.toLowerCase().startsWith(prefix) &&
+      /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i.test(f)
+    ) {
       return f;
     }
   }
@@ -1066,10 +1164,10 @@ function ArenaContent() {
     [catalog, selectedRomId]
   );
 
-  // Build exact list of ROMs as they are in the Supabase "roms" bucket (`1909.zip`, `W01.zip`..`W16.zip`, etc.)
+  // Build exact list of ROMs as they are in the Supabase "roms" bucket (`1909.zip`, `W01.zip`..`W16.zip`, plus any SEGA/SNES/NES files)
   const bucketRomItems = useMemo(() => {
     return bucketFiles.map(fileName => {
-      const base = fileName.replace(/\.(zip|bin|md|gen|smd)$/i, '');
+      const base = fileName.replace(/\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i, '');
       const matchedCatalog =
         catalog.find(r => {
           const m = findMatchingBucketFile(r, [fileName]);
@@ -1081,6 +1179,8 @@ function ArenaContent() {
             (base === '1909' && r.id === 'nhl-1909-10')
         );
 
+      const detected = detectEmulatorCoreFromFileName(fileName);
+
       return {
         fileName,
         base,
@@ -1090,13 +1190,45 @@ function ArenaContent() {
         description: matchedCatalog
           ? matchedCatalog.description
           : `Official ${fileName} archive from the Supabase "roms" bucket.`,
-        badge: fileName
+        badge: fileName,
+        consoleSystem: matchedCatalog ? matchedCatalog.consoleSystem : detected.consoleSystem,
+        emulatorCore: matchedCatalog ? matchedCatalog.emulatorCore : detected.core,
+        genre: classifyRomGenre(
+          `${matchedCatalog ? `${matchedCatalog.title} ${matchedCatalog.subtitle} ${matchedCatalog.categoryBadge}` : ''} ${base}`,
+          matchedCatalog?.category,
+          base
+        )
       };
     });
   }, [bucketFiles, catalog]);
 
+  // Game picker: category dropdown + game dropdown (replaces the long file-button strip)
+  const [romGenre, setRomGenre] = useState<RomGenre | 'all'>('League');
+  const [romVaultMenuOpen, setRomVaultMenuOpen] = useState(false);
+  const genreCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    bucketRomItems.forEach(item => counts.set(item.genre, (counts.get(item.genre) || 0) + 1));
+    return counts;
+  }, [bucketRomItems]);
+  const pickerItems = useMemo(
+    () =>
+      bucketRomItems
+        .filter(item => romGenre === 'all' || item.genre === romGenre)
+        .sort((a, b) => {
+          if (a.genre === 'League' && b.genre === 'League') return b.base.localeCompare(a.base, undefined, { numeric: true });
+          return a.title.localeCompare(b.title);
+        }),
+    [bucketRomItems, romGenre]
+  );
+
   // Arena Sub-navigation Tab ('ice' | 'lobby' | 'records' | 'vault' | 'controller' | 'boxscore')
   const [activeArenaTab, setActiveArenaTab] = useState<'ice' | 'lobby' | 'records' | 'vault' | 'controller' | 'boxscore'>('ice');
+
+  // Pre-Game Console Selector ('nhl95-cloud' | 'SEGA' | 'SNES' | 'NES')
+  const [pregameConsoleFilter, setPregameConsoleFilter] = useState<'nhl95-cloud' | 'SEGA' | 'SNES' | 'NES'>('nhl95-cloud');
+  const [customCoreOverride, setCustomCoreOverride] = useState<'auto' | EmulatorCoreId>('auto');
+  const [localDetectedCore, setLocalDetectedCore] = useState<EmulatorCoreId | null>(null);
+  const [localDetectedSystem, setLocalDetectedSystem] = useState<ConsoleSystemId | null>(null);
 
   // Adaptive AI CPU & All-Time Arena Records State
   const [arenaRecordsData, setArenaRecordsData] = useState<{
@@ -1176,7 +1308,9 @@ function ArenaContent() {
   const pendingStateResolversRef = useRef<Array<(bytes: Uint8Array | null) => void>>([]);
 
   // Vault Browser filters — default to 'cloud' so the user sees the exact files in the "roms" bucket first
-  const [vaultCategory, setVaultCategory] = useState<'all' | 'cloud' | 'league' | 'nhl-history' | 'misc'>('cloud');
+  const [vaultCategory, setVaultCategory] = useState<
+    'all' | 'cloud' | 'league' | 'nhl-history' | 'sega-solo' | 'snes-solo' | 'nes-solo' | 'misc'
+  >('cloud');
   const [vaultSearch, setVaultSearch] = useState<string>('');
 
   // Controller & Keyboard Live State + 4-Player Gamepad Slots + Coach Saved Controller Profile
@@ -1585,7 +1719,7 @@ function ArenaContent() {
     [myPeerId, selectedRom.id, netplayRole, netplayOpponentName, myDisplayName, refreshArenaRecords]
   );
 
-  // Resolve the selected ROM against the Supabase `roms` bucket and stream extracted .bin via /api/arena-rom-stream
+  // Resolve the selected ROM against the Supabase `roms` bucket and stream extracted ROM via /api/arena-rom-stream
   useEffect(() => {
     if (!selectedRom) return;
     setEmulatorRunning(false);
@@ -1599,15 +1733,29 @@ function ArenaContent() {
 
     const matchedFile = findMatchingBucketFile(selectedRom, bucketFiles);
     if (matchedFile) {
-      const cleanBase = matchedFile.replace(/\.(zip|bin|md|gen|smd)$/i, '');
+      const cleanBase = matchedFile.replace(
+        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i,
+        ''
+      );
       setResolvedRomUrl(
         `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(matchedFile)}`
       );
       setResolvedRomFileName(matchedFile);
       setFallbackNotice(null);
+    } else if (!selectedRom.isNhl95) {
+      // Non-NHL95 Solo Retro Console game (SEGA / SNES / NES) not yet in cloud bucket:
+      // Do NOT fall back to W16.zip (which would launch NHL 95 instead of the SNES/NES/SEGA game!).
+      setResolvedRomUrl(null);
+      setResolvedRomFileName(selectedRom.fileCandidates[0] || `${selectedRom.id}`);
+      setFallbackNotice(
+        `Solo Console Game Selected: "${selectedRom.title}" (${selectedRom.consoleSystem}). Click "Load Local ${selectedRom.consoleSystem} ROM (.SFC / .NES / .BIN / .ZIP)" to play your local cartridge file (and optionally save it to the Cloud "roms" bucket).`
+      );
     } else {
       const fallbackFile = bucketFiles.find(f => f.toUpperCase() === 'W16.ZIP') || bucketFiles[0] || 'W16.zip';
-      const cleanBase = fallbackFile.replace(/\.(zip|bin|md|gen|smd)$/i, '');
+      const cleanBase = fallbackFile.replace(
+        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i,
+        ''
+      );
       setResolvedRomUrl(
         `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(fallbackFile)}`
       );
@@ -2338,20 +2486,27 @@ function ArenaContent() {
     }
   }, [selectedSeasonConfigId, capturedStateBytes, capturedFileName]);
 
-  const handleLocalRomUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalRomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (localRomObjectUrl) URL.revokeObjectURL(localRomObjectUrl);
+
+    const detected = await detectCoreFromLocalFileAsync(file);
     if (typeof window !== 'undefined') {
       (window as any).__NHL95_LOCAL_FILE = file;
+      (window as any).__NHL95_DETECTED_CORE = detected.core;
     }
+
     const objUrl = URL.createObjectURL(file);
+    setLocalDetectedCore(detected.core);
+    setLocalDetectedSystem(detected.consoleSystem);
     setLocalRomRawFile(file);
     setLocalRomObjectUrl(objUrl);
     setLocalRomTitle(file.name);
     setResolvedRomFileName(file.name);
     setFallbackNotice(null);
     setEmulatorRunning(false);
+    setNetplayRole('solo');
     setHasLaunchedGame(true);
     setActiveArenaTab('ice');
     e.target.value = '';
@@ -2362,8 +2517,15 @@ function ArenaContent() {
     if (!localRomRawFile) return;
     setIsUploadingToBucket(true);
     try {
-      const ext = localRomRawFile.name.endsWith('.zip') ? '.zip' : '.bin';
-      const targetName = `${selectedRom.id.toUpperCase()}${ext}`;
+      const extMatch = localRomRawFile.name.match(
+        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i
+      );
+      const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
+      const defaultTargetName =
+        selectedRom && !selectedRom.isNhl95
+          ? selectedRom.fileCandidates[0] || localRomRawFile.name
+          : `${selectedRom.id.toUpperCase()}${ext}`;
+      const targetName = defaultTargetName;
       const formData = new FormData();
       formData.append('file', localRomRawFile);
       formData.append('targetName', targetName);
@@ -2375,7 +2537,7 @@ function ArenaContent() {
       const data = await res.json();
       if (data.success) {
         await refreshBucketFiles();
-        alert(`Uploaded ${targetName} to the cloud "roms" bucket! Every coach can now play ${selectedRom.id.toUpperCase()} online.`);
+        alert(`Uploaded ${targetName} to the cloud "roms" bucket! You can now launch ${targetName} anytime from the Cloud Bucket.`);
       } else {
         alert(`Could not upload to roms bucket: ${data.error}`);
       }
@@ -2402,6 +2564,9 @@ function ArenaContent() {
         vaultCategory === 'all' ||
         (vaultCategory === 'cloud' && inCloud) ||
         item.category === vaultCategory;
+      const matchesGenre =
+        romGenre === 'all' ||
+        classifyRomGenre(`${item.title} ${item.subtitle} ${item.categoryBadge}`, item.category, item.id) === romGenre;
       const q = vaultSearch.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -2409,10 +2574,11 @@ function ArenaContent() {
         item.title.toLowerCase().includes(q) ||
         item.subtitle.toLowerCase().includes(q) ||
         item.description.toLowerCase().includes(q) ||
+        item.consoleSystem.toLowerCase().includes(q) ||
         String(item.year).includes(q);
-      return matchesCat && matchesSearch;
+      return matchesCat && matchesGenre && matchesSearch;
     });
-  }, [catalog, bucketFiles, vaultCategory, vaultSearch]);
+  }, [catalog, bucketFiles, vaultCategory, vaultSearch, romGenre]);
 
   // Featured ROMs that are ready in the Cloud `roms` bucket right now
   const cloudReadyFeaturedRoms = useMemo(() => {
@@ -2434,19 +2600,63 @@ function ArenaContent() {
   const activeRomUrl = localRomObjectUrl || resolvedRomUrl;
   const activeRomTitle = localRomTitle || selectedRom.title;
 
+  const activeEmulatorCore = useMemo<EmulatorCoreId>(() => {
+    if (customCoreOverride !== 'auto') return customCoreOverride;
+    if (localRomObjectUrl && localDetectedCore) return localDetectedCore;
+    return selectedRom.emulatorCore || 'segaMD';
+  }, [customCoreOverride, localRomObjectUrl, localDetectedCore, selectedRom.emulatorCore]);
+
+  const activeConsoleSystem = useMemo<ConsoleSystemId>(() => {
+    if (activeEmulatorCore === 'snes') return 'SNES';
+    if (activeEmulatorCore === 'nes') return 'NES';
+    if (localRomObjectUrl && localDetectedSystem) return localDetectedSystem;
+    return selectedRom.consoleSystem || 'SEGA';
+  }, [activeEmulatorCore, localRomObjectUrl, localDetectedSystem, selectedRom.consoleSystem]);
+
+  const activeConsoleLabel = useMemo(() => {
+    if (activeEmulatorCore === 'snes') return 'SUPER NINTENDO (SNES)';
+    if (activeEmulatorCore === 'nes') return 'NINTENDO (NES 8-BIT)';
+    if (activeEmulatorCore === 'segaMS') return 'SEGA MASTER SYSTEM';
+    if (activeEmulatorCore === 'segaGG') return 'SEGA GAME GEAR';
+    if (activeEmulatorCore === 'sega32x') return 'SEGA 32X';
+    return 'SEGA GENESIS';
+  }, [activeEmulatorCore]);
+
+  const isCurrentGameNhl95 = useMemo(() => {
+    if (activeEmulatorCore !== 'segaMD') return false;
+    if (localRomObjectUrl) {
+      const lower = (localRomTitle || '').toLowerCase();
+      return lower.includes('nhl95') || lower.includes('nhl 95') || /^w\d+/i.test(lower) || /^q\d+/i.test(lower);
+    }
+    return selectedRom.isNhl95;
+  }, [activeEmulatorCore, localRomObjectUrl, localRomTitle, selectedRom.isNhl95]);
+
   const emulatorIframeSrc = useMemo(() => {
     if (!activeRomUrl || !hasLaunchedGame) return null;
     const fileLabel = localRomTitle || resolvedRomFileName || `${selectedRom.id.toUpperCase()}.zip`;
-    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}&role=${netplayRole}&roomId=${encodeURIComponent(netplayRoomId)}&slot=${netplaySlot}&guestId=${encodeURIComponent(myPeerId)}&fourPlayer=${fourPlayerMode ? '1' : '0'}&autoStart=1`;
-  }, [activeRomUrl, hasLaunchedGame, localRomTitle, resolvedRomFileName, selectedRom.id, netplayRole, netplayRoomId, netplaySlot, myPeerId, fourPlayerMode]);
+    return `/emulator.html?romUrl=${encodeURIComponent(activeRomUrl)}&title=${encodeURIComponent(fileLabel)}&core=${encodeURIComponent(activeEmulatorCore)}&nhl95=${isCurrentGameNhl95 ? '1' : '0'}&role=${netplayRole}&roomId=${encodeURIComponent(netplayRoomId)}&slot=${netplaySlot}&guestId=${encodeURIComponent(myPeerId)}&fourPlayer=${fourPlayerMode && isCurrentGameNhl95 ? '1' : '0'}&autoStart=1`;
+  }, [
+    activeRomUrl,
+    hasLaunchedGame,
+    localRomTitle,
+    resolvedRomFileName,
+    selectedRom.id,
+    activeEmulatorCore,
+    isCurrentGameNhl95,
+    netplayRole,
+    netplayRoomId,
+    netplaySlot,
+    myPeerId,
+    fourPlayerMode
+  ]);
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-16">
-      {/* Hidden File Inputs */}
+      {/* Hidden File Inputs (Supports SEGA .bin/.md/.gen/.smd/.sms/.gg/.32x, SNES .sfc/.smc, NES .nes/.fds, and .zip) */}
       <input
         ref={localRomInputRef}
         type="file"
-        accept=".bin,.md,.gen,.smd,.zip,.7z"
+        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.sms,.gg,.32x,.zip,.7z"
         onChange={handleLocalRomUpload}
         className="hidden"
       />
@@ -2598,10 +2808,51 @@ function ArenaContent() {
                 label: '🏆 Records & AI Brain',
                 badge: arenaRecordsData?.aiModel ? `AI GEN ${arenaRecordsData.aiModel.generation}` : 'ALL-TIME'
               },
-              { id: 'vault', label: `📚 ROM Vault (${bucketFiles.length} Cloud)` },
+              { id: 'vault', label: `📚 ROM Vault${romGenre !== 'all' && activeArenaTab === 'vault' ? `: ${romGenre}` : ''} ▾` },
               { id: 'controller', label: '🕹️ Controller Setup & Test', badge: gamepadInfo ? 'PAD READY' : undefined },
               { id: 'boxscore', label: '📊 1-Click Boxscore Lab', badge: parsedGame ? 'PARSED' : undefined }
-            ].map(tab => (
+            ].map(tab => tab.id === 'vault' ? (
+              <div key={tab.id} className="relative">
+                <button
+                  onClick={() => setRomVaultMenuOpen(o => !o)}
+                  className={`px-3 py-1.5 font-bold uppercase text-xs transition cursor-pointer flex items-center gap-1.5 rounded-xs ${
+                    activeArenaTab === 'vault'
+                      ? 'bg-black text-white border-b-2 border-amber-500 shadow-2xs'
+                      : 'text-slate-700 hover:bg-black/5'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                </button>
+                {romVaultMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setRomVaultMenuOpen(false)} />
+                    <div className="absolute left-0 top-full mt-1 z-50 w-56 bg-white border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] py-1">
+                      {(['all', ...ROM_GENRES] as const).map(g => {
+                        const count = g === 'all' ? bucketRomItems.length : genreCounts.get(g) || 0;
+                        if (g !== 'all' && count === 0) return null;
+                        return (
+                          <button
+                            key={g}
+                            onClick={() => {
+                              setRomGenre(g);
+                              setVaultCategory('cloud');
+                              setActiveArenaTab('vault');
+                              setRomVaultMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-xs font-bold uppercase cursor-pointer ${
+                              romGenre === g && activeArenaTab === 'vault' ? 'bg-black text-amber-400' : 'hover:bg-amber-50 text-black'
+                            }`}
+                          >
+                            <span>{g === 'all' ? 'All Games' : g}</span>
+                            <span className="font-mono text-[10px] opacity-70">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
               <button
                 key={tab.id}
                 onClick={() => setActiveArenaTab(tab.id as any)}
@@ -2778,45 +3029,61 @@ function ArenaContent() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LEFT / CENTER COLUMN (8 cols on lg) */}
         <div className="lg:col-span-8 space-y-5">
-          {/* CLOUD-READY "ROMS" BUCKET CARTRIDGES STRIP (ALL FILES IN SUPABASE "roms" BUCKET) */}
-          <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)]">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2.5 text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-              <span>SELECT A ROM FROM SUPABASE &ldquo;ROMS&rdquo; BUCKET ({bucketRomItems.length} FILES)</span>
-              <button
-                onClick={() => setActiveArenaTab('vault')}
-                className="text-amber-700 hover:underline cursor-pointer font-bold"
+          {/* GAME PICKER: CATEGORY + GAME DROPDOWNS */}
+          <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-end gap-3">
+            <label className="flex flex-col gap-1 text-[10px] font-mono font-black uppercase text-slate-500 sm:w-48 shrink-0">
+              Category
+              <select
+                value={romGenre}
+                onChange={e => setRomGenre(e.target.value as RomGenre | 'all')}
+                className="border-2 border-black bg-[#faf8f5] px-2 py-1.5 text-xs font-black uppercase text-black cursor-pointer"
               >
-                Open Full Vault ({bucketFiles.length} in Bucket) &rarr;
-              </button>
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {bucketRomItems.map(item => {
-                const isSelected = item.romId === selectedRom.id && !localRomObjectUrl;
-                return (
-                  <button
-                    key={item.fileName}
-                    onClick={() => {
-                      if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                      setLocalRomObjectUrl(null);
-                      setLocalRomTitle(null);
-                      setSelectedRomId(item.romId);
-                      setHasLaunchedGame(false);
-                      setEmulatorRunning(false);
-                      setActiveArenaTab('ice');
-                    }}
-                    title={`${item.fileName} — ${item.title}`}
-                    className={`px-2.5 py-1.5 border transition cursor-pointer rounded-xs flex items-center gap-1.5 font-mono text-xs font-black ${
-                      isSelected
-                        ? 'bg-black text-white border-black ring-2 ring-amber-500'
-                        : 'bg-[#faf8f5] hover:bg-amber-50 text-black border-slate-300 hover:border-black'
-                    }`}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isSelected && hasLaunchedGame ? 'bg-emerald-400 animate-ping' : 'bg-emerald-500'}`} />
-                    <span>{item.fileName}</span>
-                  </button>
-                );
-              })}
-            </div>
+                <option value="all">All Games ({bucketRomItems.length})</option>
+                {ROM_GENRES.filter(g => (genreCounts.get(g) || 0) > 0).map(g => (
+                  <option key={g} value={g}>
+                    {g} ({genreCounts.get(g)})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10px] font-mono font-black uppercase text-slate-500 flex-1 min-w-0">
+              Game
+              <select
+                value={localRomObjectUrl ? '' : selectedRom.id}
+                onChange={e => {
+                  const item = pickerItems.find(i => i.romId === e.target.value);
+                  if (!item) return;
+                  if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                  setLocalRomObjectUrl(null);
+                  setLocalRomTitle(null);
+                  setSelectedRomId(item.romId);
+                  setHasLaunchedGame(false);
+                  setEmulatorRunning(false);
+                  setActiveArenaTab('ice');
+                }}
+                className="border-2 border-black bg-[#faf8f5] px-2 py-1.5 text-xs font-bold text-black cursor-pointer w-full"
+              >
+                {(localRomObjectUrl || !pickerItems.some(i => i.romId === selectedRom.id)) && (
+                  <option value={localRomObjectUrl ? '' : selectedRom.id}>
+                    {localRomObjectUrl ? `Local file: ${localRomTitle || 'ROM'}` : `${selectedRom.title} (current)`}
+                  </option>
+                )}
+                {pickerItems.map(item => (
+                  <option key={item.fileName} value={item.romId}>
+                    {item.genre === 'League' ? `${item.base.toUpperCase()} — ${item.title.replace(/^\S+\s+—\s+/, '')}` : item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              onClick={() => {
+                setVaultCategory('cloud');
+                setActiveArenaTab('vault');
+              }}
+              className="text-[11px] font-mono font-black uppercase border-2 border-black px-3 py-1.5 bg-black text-amber-400 hover:bg-neutral-800 cursor-pointer shrink-0"
+            >
+              Browse Vault &rarr;
+            </button>
           </div>
 
           {/* NETPLAY BANNER IF IN 1v1 OR 2v2 ROOM */}
@@ -2878,7 +3145,7 @@ function ArenaContent() {
                 onClick={() => localRomInputRef.current?.click()}
                 className="px-2.5 py-1 bg-black text-white font-mono text-[10px] font-bold uppercase rounded-xs cursor-pointer shrink-0"
               >
-                Load Local .BIN/.ZIP
+                Load Local SEGA / SNES / NES File
               </button>
             </div>
           )}
@@ -2886,8 +3153,13 @@ function ArenaContent() {
           {/* OPTION TO UPLOAD LOCAL ROM TO CLOUD BUCKET */}
           {localRomRawFile && (
             <div className="bg-emerald-950 border-2 border-emerald-500 text-white p-3 text-xs flex items-center justify-between flex-wrap gap-2">
-              <div className="font-mono">
-                Playing local file: <strong className="text-amber-300">{localRomRawFile.name}</strong>
+              <div className="font-mono flex items-center gap-2 flex-wrap">
+                <span>
+                  Playing local file: <strong className="text-amber-300">{localRomRawFile.name}</strong>
+                </span>
+                <span className="bg-black/60 border border-emerald-400/50 text-emerald-300 px-2 py-0.5 rounded-xs text-[10px] font-black uppercase">
+                  {activeConsoleLabel} ({activeEmulatorCore})
+                </span>
               </div>
               <button
                 onClick={handleSaveLocalRomToCloudBucket}
@@ -2895,28 +3167,42 @@ function ArenaContent() {
                 className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1"
               >
                 <CloudUpload className="w-3.5 h-3.5" />
-                <span>{isUploadingToBucket ? 'Uploading to roms bucket...' : `Save to Cloud "roms" Bucket as ${selectedRom.id.toUpperCase()}`}</span>
+                <span>
+                  {isUploadingToBucket
+                    ? 'Uploading to roms bucket...'
+                    : `Save to Cloud "roms" Bucket`}
+                </span>
               </button>
             </div>
           )}
 
           {/* PREGAME / LIVE SCOREBOARD JUMBOTRON */}
           <div className="bg-neutral-950 border-2 border-black text-white p-3 sm:p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <div className="flex items-center justify-between text-[10px] font-mono uppercase text-slate-400 mb-2 px-1">
+            <div className="flex items-center justify-between text-[10px] font-mono uppercase text-slate-400 mb-2 px-1 flex-wrap gap-1">
               <span className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${emulatorRunning ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
                 <strong className="text-white">95 TV ARENA FEED</strong> — {emulatorRunning ? 'MATCH IN PROGRESS' : 'READY WHEN YOUR GAME STARTS'}
               </span>
-              <span className="text-amber-400 font-bold">BUCKET FILE: {resolvedRomFileName || 'W16.ZIP'}</span>
+              <span className="text-amber-400 font-bold">
+                SYSTEM: {activeConsoleLabel} • FILE: {localRomRawFile?.name || resolvedRomFileName || 'READY TO LOAD'}
+              </span>
             </div>
 
             <div className="grid grid-cols-12 border-2 border-neutral-700 bg-black p-2.5 sm:p-3 items-center gap-2">
               <div className="col-span-4 sm:col-span-5 flex items-center gap-2.5 border-r border-neutral-800 pr-2">
-                <div className="w-8 h-8 rounded bg-amber-500/10 border border-amber-500/40 flex items-center justify-center font-mono text-xs font-black text-amber-400 shrink-0">
-                  {resolvedRomFileName ? resolvedRomFileName.replace(/\.(zip|bin)$/i, '').slice(0, 4).toUpperCase() : 'W16'}
+                <div className="w-8 h-8 rounded bg-amber-500/10 border border-amber-500/40 flex items-center justify-center font-mono text-[10px] font-black text-amber-400 shrink-0">
+                  {activeConsoleSystem === 'SNES'
+                    ? 'SNES'
+                    : activeConsoleSystem === 'NES'
+                    ? 'NES'
+                    : resolvedRomFileName
+                    ? resolvedRomFileName.replace(/\.(zip|bin|md|gen|smd|sfc|smc|nes)$/i, '').slice(0, 4).toUpperCase()
+                    : 'SEGA'}
                 </div>
                 <div className="truncate">
-                  <div className="text-[9px] font-mono uppercase text-slate-400">ACTIVE CARTRIDGE</div>
+                  <div className="text-[9px] font-mono uppercase text-slate-400">
+                    ACTIVE CARTRIDGE ({activeConsoleSystem})
+                  </div>
                   <div className="text-xs sm:text-sm font-black uppercase font-mono text-white truncate">
                     {localRomTitle || resolvedRomFileName || activeRomTitle}
                   </div>
@@ -2925,10 +3211,14 @@ function ArenaContent() {
 
               <div className="col-span-4 sm:col-span-2 text-center">
                 <div className="text-[8px] font-mono uppercase tracking-widest text-amber-400">
-                  {netplayRole === 'solo' ? 'SOLO / CPU' : '2P ONLINE'}
+                  {netplayRole === 'solo' ? `SOLO • ${activeConsoleSystem}` : '2P ONLINE'}
                 </div>
                 <div className="text-xs sm:text-sm font-black font-mono uppercase text-emerald-400">
-                  {liveTelemetry ? `${liveTelemetry.homeScore} - ${liveTelemetry.awayScore}` : emulatorRunning ? 'ON ICE' : 'PREGAME'}
+                  {liveTelemetry && isCurrentGameNhl95
+                    ? `${liveTelemetry.homeScore} - ${liveTelemetry.awayScore}`
+                    : emulatorRunning
+                    ? 'PLAYING'
+                    : 'PREGAME'}
                 </div>
               </div>
 
@@ -2960,101 +3250,269 @@ function ArenaContent() {
                     key={emulatorIframeSrc}
                     src={emulatorIframeSrc}
                     onLoad={() => pushControllerConfigToIframe(controllerConfig)}
-                    title={`NHL 95 Emulator - ${activeRomTitle}`}
+                    title={`Retro Emulator (${activeConsoleLabel}) - ${activeRomTitle}`}
                     className="w-full h-full border-0"
                     allow="autoplay; fullscreen; gamepad"
                     allowFullScreen
                   />
                 ) : (
-                  /* PRE-GAME SELECTION SCREEN (NO AUTO-START) */
-                  <div className="w-full h-full bg-gradient-to-b from-[#0b1320] via-[#060a10] to-black text-white p-5 sm:p-8 flex flex-col justify-between overflow-y-auto">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2">
+                  /* PRE-GAME SELECTION SCREEN (NHL '95 + SEGA / SNES / NES SOLO ARCADE) */
+                  <div className="w-full h-full bg-gradient-to-b from-[#0b1320] via-[#060a10] to-black text-white p-4 sm:p-6 flex flex-col justify-between overflow-y-auto gap-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 gap-2 flex-wrap">
                       <div>
                         <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400 font-black">
-                          DARKSIDE OF 95 • THE CLASSIC COLLECTION
+                          DARKSIDE OF 95 • MULTI-CONSOLE SOLO &amp; ONLINE ARENA
                         </div>
-                        <div className="text-lg sm:text-2xl font-black font-serif uppercase tracking-tight text-white">
-                          Select Your ROM Cartridge &amp; How to Play
+                        <div className="text-base sm:text-xl font-black font-serif uppercase tracking-tight text-white">
+                          Play NHL &apos;95 or Solo SEGA, SNES &amp; NES Games
                         </div>
                       </div>
-                      <span className="border border-slate-600 text-slate-300 font-mono text-[10px] uppercase px-2.5 py-1 rounded-xs shrink-0">
-                        SEGA GENESIS
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="border border-amber-400/60 bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold uppercase px-2.5 py-1 rounded-xs shrink-0">
+                          {activeConsoleLabel}
+                        </span>
+                        <button
+                          onClick={() => localRomInputRef.current?.click()}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-black uppercase px-2.5 py-1 rounded-xs cursor-pointer flex items-center gap-1 shrink-0 shadow-xs"
+                          title="Load any .bin, .md, .gen, .sfc, .smc, .nes, .sms, .gg, or .zip ROM from your computer"
+                        >
+                          <FolderOpen className="w-3 h-3" />
+                          <span>Load Any ROM (.SFC / .NES / .BIN / .ZIP)</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Bucket ROM Selector Grid Inside the Screen */}
-                    <div className="my-4">
-                      <div className="text-[11px] font-mono uppercase text-slate-400 font-bold mb-2 flex items-center justify-between">
-                        <span>1. Choose a ROM from your &ldquo;roms&rdquo; Bucket ({bucketRomItems.length} Available):</span>
-                        <span className="text-amber-400">Selected: {localRomTitle || resolvedRomFileName || 'W16.zip'}</span>
-                      </div>
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-44 overflow-y-auto pr-1">
-                        {bucketRomItems.map(item => {
-                          const active = item.romId === selectedRom.id && !localRomObjectUrl;
+                    {/* Console System Mode Switcher */}
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
+                        {[
+                          {
+                            id: 'nhl95-cloud',
+                            label: `🏒 NHL '95 Cloud Bucket (${bucketRomItems.length})`,
+                            badgeClass: 'bg-amber-500 text-black border-amber-300'
+                          },
+                          {
+                            id: 'SEGA',
+                            label: '🟦 SEGA Genesis Solo',
+                            badgeClass: 'bg-blue-600 text-white border-blue-400'
+                          },
+                          {
+                            id: 'SNES',
+                            label: '🟪 Super Nintendo (SNES) Solo',
+                            badgeClass: 'bg-purple-600 text-white border-purple-400'
+                          },
+                          {
+                            id: 'NES',
+                            label: '🟥 Nintendo (NES) Solo',
+                            badgeClass: 'bg-red-600 text-white border-red-400'
+                          }
+                        ].map(sysTab => {
+                          const isActiveTab = pregameConsoleFilter === sysTab.id;
                           return (
                             <button
-                              key={item.fileName}
+                              key={sysTab.id}
                               onClick={() => {
-                                if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                                setLocalRomObjectUrl(null);
-                                setLocalRomTitle(null);
-                                setSelectedRomId(item.romId);
+                                setPregameConsoleFilter(sysTab.id as any);
+                                if (sysTab.id === 'nhl95-cloud') {
+                                  const firstNhl = catalog.find(c => c.isNhl95);
+                                  if (firstNhl && !selectedRom.isNhl95) setSelectedRomId(firstNhl.id);
+                                } else {
+                                  const firstForConsole = catalog.find(
+                                    c => c.consoleSystem === sysTab.id && !c.isNhl95
+                                  );
+                                  if (firstForConsole) setSelectedRomId(firstForConsole.id);
+                                }
                               }}
-                              className={`p-2 rounded-xs border text-left font-mono transition cursor-pointer ${
-                                active
-                                  ? 'bg-amber-500 text-black border-amber-300 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
-                                  : 'bg-slate-900/90 hover:bg-slate-800 text-white border-slate-700'
+                              className={`px-3 py-1.5 rounded-xs border font-mono text-[10px] sm:text-[11px] font-black uppercase cursor-pointer transition ${
+                                isActiveTab
+                                  ? `${sysTab.badgeClass} shadow-[0_0_12px_rgba(245,158,11,0.3)]`
+                                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-700'
                               }`}
                             >
-                              <div className="text-xs font-black truncate">{item.fileName}</div>
-                              <div className={`text-[9px] truncate ${active ? 'text-black/80 font-bold' : 'text-slate-400'}`}>
-                                {item.base === '1909' ? '1909 NHA' : `Season ${item.base.toUpperCase()}`}
-                              </div>
+                              {sysTab.label}
                             </button>
                           );
                         })}
                       </div>
+
+                      {/* ROM Selector Grid Inside the Screen */}
+                      {pregameConsoleFilter === 'nhl95-cloud' ? (
+                        <div>
+                          <div className="text-[11px] font-mono uppercase text-slate-400 font-bold mb-1.5 flex items-center justify-between flex-wrap gap-1">
+                            <span>1. Choose a ROM from your &ldquo;roms&rdquo; Bucket ({bucketRomItems.length} Available):</span>
+                            <span className="text-amber-400">Selected: {localRomTitle || resolvedRomFileName || 'W16.zip'}</span>
+                          </div>
+                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-40 overflow-y-auto pr-1">
+                            {bucketRomItems.map(item => {
+                              const active = item.romId === selectedRom.id && !localRomObjectUrl;
+                              return (
+                                <button
+                                  key={item.fileName}
+                                  onClick={() => {
+                                    if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                                    setLocalRomObjectUrl(null);
+                                    setLocalRomTitle(null);
+                                    setLocalRomRawFile(null);
+                                    setSelectedRomId(item.romId);
+                                  }}
+                                  className={`p-2 rounded-xs border text-left font-mono transition cursor-pointer ${
+                                    active
+                                      ? 'bg-amber-500 text-black border-amber-300 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
+                                      : 'bg-slate-900/90 hover:bg-slate-800 text-white border-slate-700'
+                                  }`}
+                                >
+                                  <div className="text-xs font-black truncate">{item.fileName}</div>
+                                  <div className={`text-[9px] truncate ${active ? 'text-black/80 font-bold' : 'text-slate-400'}`}>
+                                    {item.consoleSystem !== 'SEGA'
+                                      ? `${item.consoleSystem} Solo`
+                                      : item.base === '1909'
+                                      ? '1909 NHA'
+                                      : `Season ${item.base.toUpperCase()}`}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-[11px] font-mono uppercase text-slate-300 font-bold mb-1.5 flex items-center justify-between flex-wrap gap-1">
+                            <span>
+                              {pregameConsoleFilter === 'SEGA'
+                                ? '🟦 SEGA Genesis / Mega Drive Solo Classics (Or Load Any .BIN / .MD / .GEN / .ZIP):'
+                                : pregameConsoleFilter === 'SNES'
+                                ? '🟪 Super Nintendo (SNES) Solo Classics (Or Load Any .SFC / .SMC / .ZIP):'
+                                : '🟥 Nintendo (NES) Solo Classics (Or Load Any .NES / .FDS / .ZIP):'}
+                            </span>
+                            <button
+                              onClick={() => localRomInputRef.current?.click()}
+                              className="text-emerald-400 hover:text-emerald-300 underline cursor-pointer text-[10px] font-black uppercase"
+                            >
+                              + Browse Computer for {pregameConsoleFilter} ROM
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
+                            {catalog
+                              .filter(c => c.consoleSystem === pregameConsoleFilter && !c.isNhl95)
+                              .map(item => {
+                                const active = item.id === selectedRom.id && !localRomObjectUrl;
+                                const cloudMatch = findMatchingBucketFile(item, bucketFiles);
+                                return (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => {
+                                      if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                                      setLocalRomObjectUrl(null);
+                                      setLocalRomTitle(null);
+                                      setLocalRomRawFile(null);
+                                      setSelectedRomId(item.id);
+                                    }}
+                                    className={`p-2 rounded-xs border text-left font-mono transition cursor-pointer ${
+                                      active
+                                        ? 'bg-amber-500 text-black border-amber-300 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
+                                        : 'bg-slate-900/90 hover:bg-slate-800 text-white border-slate-700'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                                      <span className={`text-[9px] font-black uppercase px-1 rounded-xs ${active ? 'bg-black text-amber-400' : 'bg-slate-800 text-cyan-300'}`}>
+                                        {item.consoleSystem}
+                                      </span>
+                                      <span className={`text-[8px] font-bold ${cloudMatch ? (active ? 'text-black' : 'text-emerald-400') : (active ? 'text-black/75' : 'text-slate-400')}`}>
+                                        {cloudMatch ? `● ${cloudMatch}` : 'Local / Upload'}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] font-black truncate">{item.title}</div>
+                                    <div className={`text-[9px] truncate ${active ? 'text-black/80 font-bold' : 'text-slate-400'}`}>
+                                      {item.subtitle}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Selected ROM Summary & Launch Buttons */}
-                    <div className="bg-slate-900/90 border border-slate-700 p-4 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="bg-slate-900/90 border border-slate-700 p-3.5 sm:p-4 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <div className="text-[10px] font-mono uppercase text-emerald-400 font-bold">
-                          READY ON DECK • {localRomTitle || resolvedRomFileName}
+                        <div className="text-[10px] font-mono uppercase text-emerald-400 font-bold flex items-center gap-2 flex-wrap">
+                          <span>
+                            READY ON DECK • {activeConsoleLabel}
+                          </span>
+                          <span className="text-amber-300">
+                            {localRomRawFile
+                              ? `LOCAL FILE: ${localRomRawFile.name}`
+                              : resolvedRomFileName
+                              ? `CLOUD BUCKET: ${resolvedRomFileName}`
+                              : 'LOAD LOCAL ROM OR UPLOAD TO BUCKET'}
+                          </span>
                         </div>
                         <div className="text-base sm:text-lg font-black font-serif uppercase text-white">
                           {activeRomTitle}
                         </div>
                         <div className="text-xs text-slate-400 font-mono">
-                          {selectedRom.subtitle}
+                          {localRomRawFile
+                            ? `Ready to play solo on ${activeConsoleLabel} (${activeEmulatorCore})`
+                            : selectedRom.subtitle}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {activeRomUrl ? (
+                          <button
+                            onClick={() => {
+                              setNetplayRole('solo');
+                              setHasLaunchedGame(true);
+                            }}
+                            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                          >
+                            <Play className="w-4 h-4 fill-black" />
+                            <span>
+                              {isCurrentGameNhl95
+                                ? 'Start Solo vs CPU'
+                                : `Start Solo (${activeConsoleSystem})`}
+                            </span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => localRomInputRef.current?.click()}
+                            className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                          >
+                            <FolderOpen className="w-4 h-4" />
+                            <span>
+                              Load {activeConsoleSystem} ROM File (.SFC / .NES / .BIN / .ZIP)
+                            </span>
+                          </button>
+                        )}
+
                         <button
-                          onClick={() => {
-                            setNetplayRole('solo');
-                            setHasLaunchedGame(true);
-                          }}
-                          className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                          onClick={() => localRomInputRef.current?.click()}
+                          className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-mono text-xs font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1.5 transition"
+                          title="Choose any SEGA, SNES, or NES ROM file from your device"
                         >
-                          <Play className="w-4 h-4 fill-black" />
-                          <span>Start Solo vs CPU</span>
+                          <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Browse Local File</span>
                         </button>
-                        <button
-                          onClick={() => handleHostOpenRoom(false)}
-                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
-                        >
-                          <Users className="w-4 h-4" />
-                          <span>Host 1v1 (2P)</span>
-                        </button>
-                        <button
-                          onClick={() => handleHostOpenRoom(true)}
-                          className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
-                        >
-                          <Users className="w-4 h-4" />
-                          <span>Host 2v2 (4P)</span>
-                        </button>
+
+                        {isCurrentGameNhl95 && (
+                          <>
+                            <button
+                              onClick={() => handleHostOpenRoom(false)}
+                              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                            >
+                              <Users className="w-4 h-4" />
+                              <span>Host 1v1 (2P)</span>
+                            </button>
+                            <button
+                              onClick={() => handleHostOpenRoom(true)}
+                              className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-black uppercase rounded-xs cursor-pointer flex items-center gap-1.5 shadow-md transition"
+                            >
+                              <Users className="w-4 h-4" />
+                              <span>Host 2v2 (4P)</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3063,15 +3521,46 @@ function ArenaContent() {
 
               <div className="bg-neutral-900 border-t-2 border-black px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-white">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="bg-amber-500 text-black font-black px-2 py-0.5 text-[10px] uppercase rounded-xs">
-                    SEGA GENESIS
+                  <span
+                    className={`font-black px-2 py-0.5 text-[10px] uppercase rounded-xs ${
+                      activeConsoleSystem === 'SNES'
+                        ? 'bg-purple-500 text-white'
+                        : activeConsoleSystem === 'NES'
+                        ? 'bg-red-500 text-white'
+                        : 'bg-amber-500 text-black'
+                    }`}
+                  >
+                    {activeConsoleLabel}
                   </span>
-                  <span className="text-slate-300 text-[11px] truncate max-w-[240px] sm:max-w-xs">
-                    {resolvedRomFileName || activeRomTitle}
+                  <select
+                    value={customCoreOverride}
+                    onChange={e => setCustomCoreOverride(e.target.value as any)}
+                    aria-label="Console Emulator Core"
+                    title="Auto-detects console core by file extension, or manually select SEGA, SNES, or NES core"
+                    className="bg-neutral-800 border border-neutral-600 text-slate-200 text-[10px] font-mono uppercase px-2 py-0.5 rounded-xs cursor-pointer"
+                  >
+                    <option value="auto">Core: Auto-Detect ({activeEmulatorCore})</option>
+                    <option value="segaMD">Core: SEGA Genesis / Mega Drive</option>
+                    <option value="snes">Core: Super Nintendo (SNES)</option>
+                    <option value="nes">Core: Nintendo (NES)</option>
+                    <option value="segaMS">Core: SEGA Master System</option>
+                    <option value="segaGG">Core: SEGA Game Gear</option>
+                    <option value="sega32x">Core: SEGA 32X</option>
+                  </select>
+                  <span className="text-slate-300 text-[11px] truncate max-w-[200px] sm:max-w-xs">
+                    {localRomRawFile?.name || resolvedRomFileName || activeRomTitle}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => localRomInputRef.current?.click()}
+                    className="bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1"
+                    title="Play any local SEGA, SNES, or NES ROM file"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>Load ROM (.SFC/.NES/.BIN)</span>
+                  </button>
                   {hasLaunchedGame && (
                     <button
                       onClick={() => {
@@ -3834,10 +4323,10 @@ function ArenaContent() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-black pb-3 mb-4">
                 <div>
                   <h2 className="text-lg sm:text-xl font-black uppercase font-serif">
-                    NHL &apos;95 ROM Vault ({bucketFiles.length} Ready in Cloud &ldquo;roms&rdquo; Bucket)
+                    Multi-Console ROM Vault ({bucketFiles.length} Ready in Cloud &ldquo;roms&rdquo; Bucket)
                   </h2>
                   <p className="text-xs text-slate-600">
-                    ROMs marked with <span className="text-emerald-700 font-bold">● IN CLOUD BUCKET</span> stream directly from your Supabase <code className="font-mono">roms</code> bucket.
+                    Play NHL &apos;95 ROMs or Solo <strong className="text-black">SEGA Genesis</strong>, <strong className="text-black">Super Nintendo (SNES)</strong>, and <strong className="text-black">Nintendo (NES)</strong> ROMs from your Cloud <code className="font-mono">roms</code> bucket or any local file (<code className="font-mono">.sfc</code>, <code className="font-mono">.smc</code>, <code className="font-mono">.nes</code>, <code className="font-mono">.bin</code>, <code className="font-mono">.md</code>, <code className="font-mono">.zip</code>).
                   </p>
                 </div>
                 <button
@@ -3845,7 +4334,7 @@ function ArenaContent() {
                   className="bg-black hover:bg-amber-600 text-white font-mono text-xs font-bold uppercase px-3 py-2 rounded-xs cursor-pointer flex items-center gap-1.5 shrink-0 self-start"
                 >
                   <FolderOpen className="w-3.5 h-3.5" />
-                  <span>Play Local .BIN/.ZIP</span>
+                  <span>Play Local SEGA / SNES / NES (.SFC, .NES, .BIN, .ZIP)</span>
                 </button>
               </div>
 
@@ -3854,6 +4343,9 @@ function ArenaContent() {
                   {[
                     { id: 'cloud', label: `🟢 In Cloud "roms" Bucket (${bucketFiles.length})` },
                     { id: 'all', label: `All Catalog (${catalog.length})` },
+                    { id: 'sega-solo', label: `🟦 SEGA Genesis Solo (${SOLO_RETRO_CONSOLE_ROMS.filter(r => r.consoleSystem === 'SEGA').length})` },
+                    { id: 'snes-solo', label: `🟪 SNES Solo (${SOLO_RETRO_CONSOLE_ROMS.filter(r => r.consoleSystem === 'SNES').length})` },
+                    { id: 'nes-solo', label: `🟥 NES Solo (${SOLO_RETRO_CONSOLE_ROMS.filter(r => r.consoleSystem === 'NES').length})` },
                     { id: 'league', label: `Official Leagues (${OFFICIAL_LEAGUE_ROMS.length})` },
                     { id: 'nhl-history', label: `NHL History (${HISTORICAL_NHL_ROMS.length})` },
                     { id: 'misc', label: `Arcade & Misc (${MISC_ROMS.length})` }
@@ -3878,7 +4370,7 @@ function ArenaContent() {
                     type="text"
                     value={vaultSearch}
                     onChange={e => setVaultSearch(e.target.value)}
-                    placeholder="Search W16, W01, 1909..."
+                    placeholder="Search SNES, NES, SEGA, W16..."
                     className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-black rounded-xs font-sans focus:outline-none"
                   />
                 </div>
@@ -3899,7 +4391,15 @@ function ArenaContent() {
                     >
                       <div>
                         <div className="flex items-center justify-between gap-1 mb-1.5">
-                          <span className="bg-black text-white font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded-xs">
+                          <span
+                            className={`font-mono text-[9px] font-black uppercase px-1.5 py-0.5 rounded-xs ${
+                              item.consoleSystem === 'SNES'
+                                ? 'bg-purple-700 text-white'
+                                : item.consoleSystem === 'NES'
+                                ? 'bg-red-700 text-white'
+                                : 'bg-black text-white'
+                            }`}
+                          >
                             {item.categoryBadge}
                           </span>
                           {cloudFile ? (
@@ -3907,8 +4407,8 @@ function ArenaContent() {
                               ● {cloudFile}
                             </span>
                           ) : (
-                            <span className="font-mono text-[9px] text-slate-400">
-                              Local File
+                            <span className="font-mono text-[9px] text-slate-500">
+                              Local {item.consoleSystem} File
                             </span>
                           )}
                         </div>
@@ -3920,24 +4420,57 @@ function ArenaContent() {
                         </p>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                          setLocalRomObjectUrl(null);
-                          setLocalRomTitle(null);
-                          setSelectedRomId(item.id);
-                          setHasLaunchedGame(true);
-                          setActiveArenaTab('ice');
-                        }}
-                        className={`w-full py-1.5 font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1 transition ${
-                          isCurrent && hasLaunchedGame
-                            ? 'bg-emerald-700 text-white'
-                            : 'bg-black hover:bg-amber-500 hover:text-black text-white'
-                        }`}
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>{isCurrent && hasLaunchedGame ? 'Currently on Ice' : 'Play This ROM on Ice'}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                            setLocalRomObjectUrl(null);
+                            setLocalRomTitle(null);
+                            setLocalRomRawFile(null);
+                            setSelectedRomId(item.id);
+                            if (item.isNhl95) {
+                              setPregameConsoleFilter('nhl95-cloud');
+                            } else {
+                              setPregameConsoleFilter(item.consoleSystem as any);
+                            }
+                            if (cloudFile || item.isNhl95) {
+                              setNetplayRole('solo');
+                              setHasLaunchedGame(true);
+                            } else {
+                              setHasLaunchedGame(false);
+                            }
+                            setActiveArenaTab('ice');
+                          }}
+                          className={`flex-1 py-1.5 font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1 transition ${
+                            isCurrent && hasLaunchedGame
+                              ? 'bg-emerald-700 text-white'
+                              : 'bg-black hover:bg-amber-500 hover:text-black text-white'
+                          }`}
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>
+                            {isCurrent && hasLaunchedGame
+                              ? 'Currently Playing'
+                              : cloudFile || item.isNhl95
+                              ? `Play Solo (${item.consoleSystem})`
+                              : `Select ${item.consoleSystem} Slot`}
+                          </span>
+                        </button>
+                        {!cloudFile && !item.isNhl95 && (
+                          <button
+                            onClick={() => {
+                              setSelectedRomId(item.id);
+                              setPregameConsoleFilter(item.consoleSystem as any);
+                              localRomInputRef.current?.click();
+                            }}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shrink-0"
+                            title={`Load local ${item.consoleSystem} ROM file from your device`}
+                          >
+                            <FolderOpen className="w-3 h-3" />
+                            <span>Load File</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
