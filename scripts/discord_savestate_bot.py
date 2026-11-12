@@ -75,6 +75,44 @@ DISCORD_WATCH_CHANNELS_ENV = os.getenv("DISCORD_SAVESTATE_CHANNELS", "")
 PARTNER_INGEST_URL = os.getenv("PARTNER_INGEST_URL", "")
 PARTNER_WEBHOOK_SECRET = os.getenv("PARTNER_WEBHOOK_SECRET", "")
 
+# --- HEARTBEAT (public status file so you can see if the bot is alive & what it last did) ---
+# https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/roms/bot-status/heartbeat-github.json
+BOT_HOST_LABEL = "github" if os.getenv("GITHUB_ACTIONS") else "local"
+_HEARTBEAT: Dict[str, Any] = {
+    "host": BOT_HOST_LABEL,
+    "run_id": os.getenv("GITHUB_RUN_ID"),
+    "run_number": os.getenv("GITHUB_RUN_NUMBER"),
+    "started_at": datetime.now(timezone.utc).isoformat(),
+    "status": "starting",
+    "crash_count": 0,
+    "processed_count": 0,
+}
+
+
+def write_heartbeat(**fields: Any) -> None:
+    """Best-effort upload of the bot's live status to Supabase Storage (never raises)."""
+    try:
+        _HEARTBEAT.update(fields)
+        _HEARTBEAT["updated_at"] = datetime.now(timezone.utc).isoformat()
+        key = SUPABASE_KEY
+        if not key:
+            return
+        req = urllib.request.Request(
+            f"{SUPABASE_URL}/storage/v1/object/roms/bot-status/heartbeat-{BOT_HOST_LABEL}.json",
+            data=json.dumps(_HEARTBEAT, default=str).encode("utf-8"),
+            method="POST",
+            headers={
+                "apikey": key,
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "x-upsert": "true",
+                "Cache-Control": "no-cache",
+            },
+        )
+        urllib.request.urlopen(req, timeout=10).read()
+    except Exception:
+        pass
+
 # --- CONSTANTS & MAPS (Matching lib/seasons/index.ts & lib/parsers/savestate.ts) ---
 
 GOAL_TYPE_DICT: Dict[int, Tuple[str, str]] = {
@@ -5504,6 +5542,19 @@ class NHL95SaveStateBot(discord.Client):
                     )
                     if result.get("gameId"):
                         batch_game_ids.add(int(result["gameId"]))
+                    if result.get("success"):
+                        write_heartbeat(
+                            processed_count=int(_HEARTBEAT.get("processed_count") or 0) + 1,
+                            last_processed={
+                                "file": att.filename,
+                                "channel": channel_name,
+                                "game_id": result.get("gameId"),
+                                "result": result.get("gameResults"),
+                                "at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                    elif not result.get("alreadyPlayed"):
+                        write_heartbeat(last_error=f"{att.filename}: {str(result.get('error'))[:300]}", last_error_at=datetime.now(timezone.utc).isoformat())
 
                     try:
                         await message.remove_reaction("⏳", self.user)
@@ -5638,6 +5689,22 @@ class NHL95SaveStateBot(discord.Client):
             print("📡 Listening for .state / .sav drops across all accessible save-state channels")
         print("=" * 68)
 
+        try:
+            watched = [
+                f"#{c.name}" for g in self.guilds for c in g.text_channels
+                if self.is_channel_allowed(c) and "save" in (c.name or "").lower() and "test" not in (c.name or "").lower()
+            ]
+        except Exception:
+            watched = []
+        await asyncio.to_thread(
+            write_heartbeat,
+            status="online",
+            bot_user=str(self.user),
+            connected_at=datetime.now(timezone.utc).isoformat(),
+            guilds=len(self.guilds),
+            watched_channels=watched,
+        )
+
         deadline = getattr(self, "max_runtime_deadline", 0.0)
         if deadline and not getattr(self, "_deadline_task_started", False):
             self._deadline_task_started = True
@@ -5687,9 +5754,13 @@ class NHL95SaveStateBot(discord.Client):
         """Continuously polls save-state and season-games channels every 15 seconds (and across a 72h+ rolling window)
         so that even if a Discord gateway event is missed during a reconnect, attachment upload, or PC sleep,
         any unprocessed save state set or season-games command is processed immediately."""
+        hb_tick = 0
         while not self.is_closed():
             keep_windows_awake()
             await asyncio.sleep(15)
+            hb_tick += 1
+            if hb_tick % 8 == 0:  # every ~2 minutes
+                await asyncio.to_thread(write_heartbeat, status="online", last_scan_at=datetime.now(timezone.utc).isoformat())
             try:
                 discord_now = await asyncio.to_thread(self.get_discord_utc_now)
                 lookback_h = max(self.backfill_hours, 72.0)
@@ -6242,8 +6313,11 @@ def main():
     import time
     if args.max_runtime_minutes > 0:
         deadline = time.time() + args.max_runtime_minutes * 60.0
+        consecutive_fast_crashes = 0
         while time.time() < deadline - 30:
+            attempt_started = time.time()
             try:
+                write_heartbeat(status="connecting")
                 bot = NHL95SaveStateBot(
                     backfill_hours=args.backfill_hours,
                     allowed_channel_ids=channel_ids,
@@ -6252,11 +6326,27 @@ def main():
                 )
                 bot.max_runtime_deadline = deadline
                 bot.run(DISCORD_BOT_TOKEN, reconnect=True)
+                consecutive_fast_crashes = 0
             except KeyboardInterrupt:
                 break
             except Exception as crash_err:
-                print(f"⚠️ Bot disconnected or encountered error ({crash_err}), restarting in 5s...")
-                time.sleep(5)
+                import traceback
+                traceback.print_exc()
+                lived = time.time() - attempt_started
+                consecutive_fast_crashes = consecutive_fast_crashes + 1 if lived < 120 else 0
+                write_heartbeat(
+                    status="crashed",
+                    crash_count=int(_HEARTBEAT.get("crash_count") or 0) + 1,
+                    last_error=f"{type(crash_err).__name__}: {str(crash_err)[:500]}",
+                    last_error_at=datetime.now(timezone.utc).isoformat(),
+                )
+                print(f"⚠️ Bot disconnected or encountered error ({type(crash_err).__name__}: {crash_err}), restarting...")
+                # Fail the GitHub run loudly (red X) instead of silently crash-looping for hours
+                if consecutive_fast_crashes >= 8:
+                    print("❌ Bot keeps failing to start — exiting with error so the GitHub run is marked failed.")
+                    sys.exit(1)
+                time.sleep(min(60, 5 * consecutive_fast_crashes + 5))
+        write_heartbeat(status="shift_ended")
         print("✅ Runtime window finished. Exiting cleanly.")
         return
 

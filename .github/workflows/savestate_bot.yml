@@ -2,18 +2,25 @@ name: Discord Save State Bot (24/7 on GitHub)
 
 # Every run shows the same title in the Actions list (instead of the commit message),
 # so it's clear each run is just the next shift of the same always-on bot.
-run-name: "🏒 Discord Save State Bot — Live Shift (${{ github.event_name == 'schedule' && 'auto handoff' || github.event_name == 'push' && 'new code' || 'manual start' }})"
+run-name: "🏒 Discord Save State Bot — Live Shift (${{ github.event_name == 'schedule' && 'backup start' || github.event_name == 'push' && 'new code' || (github.event_name == 'workflow_dispatch' && inputs.restart == 'false') && 'handoff' || 'manual start' }})"
 
-# Runs the full NHL95 Discord bot live on GitHub Actions — no local PC needed.
-# Each run stays connected to Discord for ~5h45m (live save-state ingestion, boxscores,
-# standings/bracket posts, partner webhook sync and channel commands), then exits cleanly.
-# The schedule keeps one run queued at all times so the next run takes over immediately.
-# Every run also does a 96h catch-up scan on startup, so nothing dropped in a gap is missed.
+# Runs the full NHL95 Discord bot LIVE on GitHub Actions — no local PC needed.
+# While a shift is running the bot is connected to Discord and processes every save state
+# the moment it is dropped (Discord pushes the message to the bot instantly; a 15s re-scan backs it up).
+# GitHub caps a job at 6h, so each shift runs ~5h40m and then STARTS ITS OWN SUCCESSOR
+# (handoff gap ≈ 40s). The cron below is only a backup in case a handoff ever fails.
+# Every shift also re-scans the last 96h on startup, so nothing dropped during a handoff is missed.
+# Live status: https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/roms/bot-status/heartbeat-github.json
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
+    inputs:
+      restart:
+        description: 'Replace the running shift right away (true) or queue behind it (false)'
+        required: false
+        default: 'true'
   push:
     branches: [main]
     paths:
@@ -21,14 +28,16 @@ on:
       - 'lib/seasons/**'
       - '.github/workflows/savestate_bot.yml'
 
-# Only one bot online at a time. Scheduled runs queue behind the live one;
-# a code push or manual run replaces the live one so new code takes effect right away.
+# Only one bot online at a time (two would double-post every reply).
+# Scheduled backups and automatic handoffs queue behind the live shift;
+# a code push or a manual "Run workflow" replaces the live shift so new code takes effect right away.
 concurrency:
   group: discord-savestate-bot
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  cancel-in-progress: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.restart != 'false') }}
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   bot:
@@ -56,6 +65,38 @@ jobs:
           timeout 240 sudo apt-get install -y -qq ttf-mscorefonts-installer fonts-dejavu-core fonts-liberation > /dev/null || true
           ls /usr/share/fonts/truetype/msttcorefonts/ 2>/dev/null | head -n 20 || echo "msttcorefonts unavailable — using DejaVu/Liberation fallbacks"
 
+      # Fails the run with a clear red X if the Discord token / Supabase key secrets are wrong or Discord blocks the runner
+      - name: Check Discord & Supabase Access
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$DISCORD_BOT_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::Missing DISCORD_BOT_TOKEN or SUPABASE_SERVICE_ROLE_KEY repository secret."
+            exit 1
+          fi
+          TOKEN=$(printf '%s' "$DISCORD_BOT_TOKEN" | tr -d '"'"'"' \r\n')
+          code=$(curl -s -o /tmp/me.json -w '%{http_code}' -H "Authorization: Bot $TOKEN" https://discord.com/api/v10/users/@me)
+          echo "Discord API status: $code"
+          python -c "import json;d=json.load(open('/tmp/me.json'));print('Bot user:', d.get('username'), d.get('id'))" 2>/dev/null || head -c 300 /tmp/me.json
+          if [ "$code" != "200" ]; then
+            echo "::error::Discord rejected the bot token from GitHub (HTTP $code). Re-paste DISCORD_BOT_TOKEN secret (no quotes/spaces)."
+            exit 1
+          fi
+          scode=$(curl -s -o /dev/null -w '%{http_code}' -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" "https://prdfunbzqsvqlyiwmuqp.supabase.co/rest/v1/leagues?select=league_id&limit=1")
+          echo "Supabase API status: $scode"
+          if [ "$scode" != "200" ]; then
+            echo "::error::Supabase rejected SUPABASE_SERVICE_ROLE_KEY (HTTP $scode)."
+            exit 1
+          fi
+
+      # Queue the NEXT shift right away: it waits (concurrency) and starts the instant this one ends,
+      # so there is never a long gap between shifts even if GitHub's cron is delayed.
+      - name: Queue Next Shift
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run savestate_bot.yml --ref main -f restart=false || echo "::warning::Could not queue next shift (cron backup will cover it)"
+
       # Persist coach mute settings (FUCK OFF / GAME ON) and MODE PLAYOFFS/SEASON triggers between runs
       - name: Restore Bot State
         uses: actions/cache/restore@v4
@@ -67,7 +108,7 @@ jobs:
           restore-keys: |
             bot-state-
 
-      - name: Run Bot Live (~5h45m)
+      - name: Run Bot Live (~5h40m)
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co' }}
@@ -78,11 +119,8 @@ jobs:
           PARTNER_WEBHOOK_SECRET: ${{ secrets.PARTNER_WEBHOOK_SECRET }}
           PYTHONUNBUFFERED: '1'
         run: |
-          if [ -z "$DISCORD_BOT_TOKEN" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
-            echo "::error::Missing DISCORD_BOT_TOKEN or SUPABASE_SERVICE_ROLE_KEY repository secret."
-            exit 1
-          fi
-          python scripts/discord_savestate_bot.py --max-runtime-minutes 340 --backfill-hours 96
+          export DISCORD_BOT_TOKEN=$(printf '%s' "$DISCORD_BOT_TOKEN" | tr -d '"'"'"' \r\n')
+          python scripts/discord_savestate_bot.py --max-runtime-minutes 335 --backfill-hours 96
 
       - name: Save Bot State
         if: always()
