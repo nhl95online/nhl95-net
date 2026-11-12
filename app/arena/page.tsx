@@ -131,7 +131,7 @@ function classifyRomGenre(text: string, catalogCategory?: string, baseName?: str
   return 'Other';
 }
 
-const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i;
+const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i;
 
 // Box-art / title card for a ROM, pulled from the public Supabase "rom-images" bucket
 // (named after the ROM file, e.g. W16.zip -> W16.png). Tries .png, .jpg, .jpeg, .webp; hides itself if none exist.
@@ -404,10 +404,7 @@ function findMatchingBucketFile(rom: ArenaRomItem, bucketFiles: string[]): strin
   }
   const prefix = rom.id.toLowerCase();
   for (const f of bucketFiles) {
-    if (
-      f.toLowerCase().startsWith(prefix) &&
-      /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i.test(f)
-    ) {
+    if (f.toLowerCase().startsWith(prefix) && ROM_EXT_RE.test(f)) {
       return f;
     }
   }
@@ -1232,10 +1229,10 @@ function ArenaContent() {
     [catalog, selectedRomId]
   );
 
-  // Build exact list of ROMs as they are in the Supabase "roms" bucket (`1909.zip`, `W01.zip`..`W16.zip`, plus any SEGA/SNES/NES files)
+  // Build exact list of ROMs as they are in the Supabase "roms" bucket
   const bucketRomItems = useMemo(() => {
     return bucketFiles.map(fileName => {
-      const base = fileName.replace(/\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i, '');
+      const base = fileName.replace(ROM_EXT_RE, '');
       const matchedCatalog =
         catalog.find(r => {
           const m = findMatchingBucketFile(r, [fileName]);
@@ -1801,29 +1798,23 @@ function ArenaContent() {
 
     const matchedFile = findMatchingBucketFile(selectedRom, bucketFiles);
     if (matchedFile) {
-      const cleanBase = matchedFile.replace(
-        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i,
-        ''
-      );
+      const cleanBase = matchedFile.replace(ROM_EXT_RE, '');
       setResolvedRomUrl(
         `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(matchedFile)}`
       );
       setResolvedRomFileName(matchedFile);
       setFallbackNotice(null);
     } else if (!selectedRom.isNhl95) {
-      // Non-NHL95 Solo Retro Console game (SEGA / SNES / NES) not yet in cloud bucket:
-      // Do NOT fall back to W16.zip (which would launch NHL 95 instead of the SNES/NES/SEGA game!).
+      // Non-NHL95 Solo Retro Console game (SEGA / SNES / NES / Atari / N64) not yet in cloud bucket:
+      // Do NOT fall back to W16.zip (which would launch NHL 95 instead of the selected console game!).
       setResolvedRomUrl(null);
       setResolvedRomFileName(selectedRom.fileCandidates[0] || `${selectedRom.id}`);
       setFallbackNotice(
-        `Solo Console Game Selected: "${selectedRom.title}" (${selectedRom.consoleSystem}). Click "Load Local ${selectedRom.consoleSystem} ROM (.SFC / .NES / .BIN / .ZIP)" to play your local cartridge file (and optionally save it to the Cloud "roms" bucket).`
+        `Solo Console Game Selected: "${selectedRom.title}" (${selectedRom.consoleSystem}). Click "Load Local ROM" to play your local cartridge file (and optionally save it to the Cloud "roms" bucket).`
       );
     } else {
       const fallbackFile = bucketFiles.find(f => f.toUpperCase() === 'W16.ZIP') || bucketFiles[0] || 'W16.zip';
-      const cleanBase = fallbackFile.replace(
-        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i,
-        ''
-      );
+      const cleanBase = fallbackFile.replace(ROM_EXT_RE, '');
       setResolvedRomUrl(
         `/api/arena-rom-stream/${encodeURIComponent(cleanBase)}.bin?bucketFile=${encodeURIComponent(fallbackFile)}`
       );
@@ -2585,9 +2576,7 @@ function ArenaContent() {
     if (!localRomRawFile) return;
     setIsUploadingToBucket(true);
     try {
-      const extMatch = localRomRawFile.name.match(
-        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i
-      );
+      const extMatch = localRomRawFile.name.match(ROM_EXT_RE);
       const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
       const defaultTargetName =
         selectedRom && !selectedRom.isNhl95
@@ -2677,6 +2666,16 @@ function ArenaContent() {
   const activeConsoleSystem = useMemo<ConsoleSystemId>(() => {
     if (activeEmulatorCore === 'snes') return 'SNES';
     if (activeEmulatorCore === 'nes') return 'NES';
+    if (activeEmulatorCore === 'n64') return 'N64';
+    if (
+      activeEmulatorCore === 'atari2600' ||
+      activeEmulatorCore === 'atari5200' ||
+      activeEmulatorCore === 'atari7800' ||
+      activeEmulatorCore === 'lynx' ||
+      activeEmulatorCore === 'jaguar'
+    ) {
+      return 'ATARI';
+    }
     if (localRomObjectUrl && localDetectedSystem) return localDetectedSystem;
     return selectedRom.consoleSystem || 'SEGA';
   }, [activeEmulatorCore, localRomObjectUrl, localDetectedSystem, selectedRom.consoleSystem]);
@@ -2684,6 +2683,12 @@ function ArenaContent() {
   const activeConsoleLabel = useMemo(() => {
     if (activeEmulatorCore === 'snes') return 'SUPER NINTENDO (SNES)';
     if (activeEmulatorCore === 'nes') return 'NINTENDO (NES 8-BIT)';
+    if (activeEmulatorCore === 'n64') return 'NINTENDO 64 (N64)';
+    if (activeEmulatorCore === 'atari2600') return 'ATARI 2600';
+    if (activeEmulatorCore === 'atari5200') return 'ATARI 5200';
+    if (activeEmulatorCore === 'atari7800') return 'ATARI 7800';
+    if (activeEmulatorCore === 'lynx') return 'ATARI LYNX';
+    if (activeEmulatorCore === 'jaguar') return 'ATARI JAGUAR';
     if (activeEmulatorCore === 'segaMS') return 'SEGA MASTER SYSTEM';
     if (activeEmulatorCore === 'segaGG') return 'SEGA GAME GEAR';
     if (activeEmulatorCore === 'sega32x') return 'SEGA 32X';
@@ -2720,11 +2725,11 @@ function ArenaContent() {
 
   return (
     <div className="min-h-screen bg-[#f4f1ea] text-black font-sans pb-16">
-      {/* Hidden File Inputs (Supports SEGA .bin/.md/.gen/.smd/.sms/.gg/.32x, SNES .sfc/.smc, NES .nes/.fds, and .zip) */}
+      {/* Hidden File Inputs (Supports SEGA, SNES, NES, Atari, N64, and .zip) */}
       <input
         ref={localRomInputRef}
         type="file"
-        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.sms,.gg,.32x,.zip,.7z"
+        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.unif,.sms,.gg,.32x,.z64,.n64,.v64,.a26,.a52,.a78,.lnx,.j64,.jag,.zip,.7z"
         onChange={handleLocalRomUpload}
         className="hidden"
       />
@@ -3438,6 +3443,10 @@ function ArenaContent() {
                         ? 'bg-purple-500 text-white'
                         : activeConsoleSystem === 'NES'
                         ? 'bg-red-500 text-white'
+                        : activeConsoleSystem === 'N64'
+                        ? 'bg-emerald-600 text-white'
+                        : activeConsoleSystem === 'ATARI'
+                        ? 'bg-orange-600 text-white'
                         : 'bg-amber-500 text-black'
                     }`}
                   >
@@ -3447,16 +3456,22 @@ function ArenaContent() {
                     value={customCoreOverride}
                     onChange={e => setCustomCoreOverride(e.target.value as any)}
                     aria-label="Console Emulator Core"
-                    title="Auto-detects console core by file extension, or manually select SEGA, SNES, or NES core"
+                    title="Auto-detects console core by file extension, or manually select NES, SNES, Atari, SEGA, or N64 core"
                     className="bg-neutral-800 border border-neutral-600 text-slate-200 text-[10px] font-mono uppercase px-2 py-0.5 rounded-xs cursor-pointer"
                   >
                     <option value="auto">Core: Auto-Detect ({activeEmulatorCore})</option>
                     <option value="segaMD">Core: SEGA Genesis / Mega Drive</option>
-                    <option value="snes">Core: Super Nintendo (SNES)</option>
-                    <option value="nes">Core: Nintendo (NES)</option>
                     <option value="segaMS">Core: SEGA Master System</option>
                     <option value="segaGG">Core: SEGA Game Gear</option>
                     <option value="sega32x">Core: SEGA 32X</option>
+                    <option value="snes">Core: Super Nintendo (SNES)</option>
+                    <option value="nes">Core: Nintendo (NES)</option>
+                    <option value="n64">Core: Nintendo 64 (N64)</option>
+                    <option value="atari2600">Core: Atari 2600</option>
+                    <option value="atari5200">Core: Atari 5200</option>
+                    <option value="atari7800">Core: Atari 7800</option>
+                    <option value="lynx">Core: Atari Lynx</option>
+                    <option value="jaguar">Core: Atari Jaguar</option>
                   </select>
                   <span className="text-slate-300 text-[11px] truncate max-w-[200px] sm:max-w-xs">
                     {localRomRawFile?.name || resolvedRomFileName || activeRomTitle}
@@ -3467,10 +3482,10 @@ function ArenaContent() {
                   <button
                     onClick={() => localRomInputRef.current?.click()}
                     className="bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1"
-                    title="Play any local SEGA, SNES, or NES ROM file"
+                    title="Play any local NES, SNES, Atari, SEGA, or N64 ROM file"
                   >
                     <FolderOpen className="w-3.5 h-3.5" />
-                    <span>Load ROM (.SFC/.NES/.BIN)</span>
+                    <span>Load Local ROM</span>
                   </button>
                   {hasLaunchedGame && (
                     <button

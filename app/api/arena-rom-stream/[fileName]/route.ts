@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import zlib from 'zlib';
+import { detectEmulatorCoreFromFileName } from '@/app/roms/roms_data';
 
 const SUPABASE_ROMS_PUBLIC_URL =
   (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co') +
@@ -81,9 +82,13 @@ function extractRomFromZipOrRaw(
     throw new Error('ZIP archive contains no file entries');
   }
 
-  // Prefer known SEGA, SNES, or NES ROM extensions; otherwise pick the largest uncompressed file
+  // Prefer known SEGA, SNES, NES, N64, or Atari ROM extensions; otherwise pick the largest uncompressed file
   const romEntry =
-    entries.find(e => /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i.test(e.name)) ||
+    entries.find(e =>
+      /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i.test(
+        e.name
+      )
+    ) ||
     entries.sort((a, b) => b.uncompSize - a.uncompSize)[0];
 
   const lh = romEntry.lhOffset;
@@ -155,16 +160,19 @@ export async function GET(
       romBuffer = deinterleaveSmd(romBuffer);
       entryName = entryName.replace(/\.smd$/i, '.bin');
     }
-    const extMatch = entryName.match(/\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i);
+    const extMatch = entryName.match(
+      /\.(bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i
+    );
     const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
-    const cleanRomName = bucketFile.replace(/\.(zip|bin|md|gen|smd|sfc|smc|nes|sms|gg|32x)$/i, '') + ext;
+    const cleanRomName =
+      bucketFile.replace(
+        /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i,
+        ''
+      ) + ext;
 
-    let detectedCore = 'segaMD';
-    if (/\.(sfc|smc|fig|swc)$/i.test(ext)) detectedCore = 'snes';
-    else if (/\.(nes|fds|unf)$/i.test(ext)) detectedCore = 'nes';
-    else if (/\.sms$/i.test(ext)) detectedCore = 'segaMS';
-    else if (/\.gg$/i.test(ext)) detectedCore = 'segaGG';
-    else if (/\.32x$/i.test(ext)) detectedCore = 'sega32x';
+    const fromEntry = detectEmulatorCoreFromFileName(entryName);
+    const detectedCore =
+      fromEntry.core !== 'segaMD' ? fromEntry.core : detectEmulatorCoreFromFileName(bucketFile).core;
 
     return new NextResponse(new Uint8Array(romBuffer), {
       status: 200,

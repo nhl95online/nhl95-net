@@ -21,7 +21,7 @@ export async function GET() {
         name =>
           name &&
           !name.startsWith('.') &&
-          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i.test(name)
+          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag)$/i.test(name)
       );
 
     return NextResponse.json({ files });

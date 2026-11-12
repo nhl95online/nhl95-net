@@ -270,8 +270,26 @@
         if (/\.(sfc|smc|fig|swc)$/i.test(lower) || lower.indexOf("_snes") !== -1 || lower.indexOf("(snes)") !== -1) {
           return "snes";
         }
-        if (/\.(nes|fds|unf)$/i.test(lower) || lower.indexOf("_nes") !== -1 || lower.indexOf("(nes)") !== -1) {
+        if (/\.(nes|fds|unf|unif)$/i.test(lower) || lower.indexOf("_nes") !== -1 || lower.indexOf("(nes)") !== -1) {
           return "nes";
+        }
+        if (/\.(z64|n64|v64)$/i.test(lower) || lower.indexOf("_n64") !== -1 || lower.indexOf("(n64)") !== -1) {
+          return "n64";
+        }
+        if (/\.a26$/i.test(lower) || lower.indexOf("(2600)") !== -1 || lower.indexOf("atari2600") !== -1 || lower.indexOf("atari 2600") !== -1 || lower.indexOf("(atari)") !== -1) {
+          return "atari2600";
+        }
+        if (/\.a52$/i.test(lower) || lower.indexOf("(5200)") !== -1 || lower.indexOf("atari5200") !== -1 || lower.indexOf("atari 5200") !== -1) {
+          return "atari5200";
+        }
+        if (/\.a78$/i.test(lower) || lower.indexOf("(7800)") !== -1 || lower.indexOf("atari7800") !== -1 || lower.indexOf("atari 7800") !== -1) {
+          return "atari7800";
+        }
+        if (/\.lnx$/i.test(lower) || lower.indexOf("(lynx)") !== -1) {
+          return "lynx";
+        }
+        if (/\.(j64|jag)$/i.test(lower) || lower.indexOf("(jaguar)") !== -1) {
+          return "jaguar";
         }
         if (/\.sms$/i.test(lower)) return "segaMS";
         if (/\.gg$/i.test(lower)) return "segaGG";
@@ -504,9 +522,20 @@
           if (btns[gp.z] && btns[gp.z].pressed) b[11] = 1;
         }
 
-        // For 2-button NES games, map both A (b[1], Z key) and C (b[8], C key) to LibRetro Joypad A (b[8]) so Z+X or X+C both work!
-        if (resolvedCore === "nes" && b[1]) {
+        // For 2-button / 1-button games (NES, Master System, Game Gear, Atari 2600/7800/Lynx), map A (b[1], Z key) -> Joypad A (b[8]), and for Atari 2600 also mirror to Fire (b[0])
+        if (
+          (resolvedCore === "nes" ||
+            resolvedCore === "segaMS" ||
+            resolvedCore === "segaGG" ||
+            resolvedCore === "atari2600" ||
+            resolvedCore === "atari7800" ||
+            resolvedCore === "lynx") &&
+          b[1]
+        ) {
           b[8] = 1;
+        }
+        if (resolvedCore === "atari2600" && (b[1] || b[8])) {
+          b[0] = 1;
         }
 
         var mask = 0;
@@ -916,12 +945,15 @@
       window.EJS_startOnLoaded = autoStart;
 
       // Clear EJS_defaultControls so EmulatorJS's built-in gamepad/keyboard handler never overrides Coach Controller Settings
-      window.EJS_defaultControls = {
-        0: {},
-        1: {},
-        2: {},
-        3: {}
-      };
+      // (Keep EmulatorJS default controls for N64 so analog stick, C-buttons, and Z-trigger work out of the box)
+      if (resolvedCore !== "n64") {
+        window.EJS_defaultControls = {
+          0: {},
+          1: {},
+          2: {},
+          3: {}
+        };
+      }
 
       // Force 60Hz NTSC-U and zero frameskip on Sega Genesis so every ROM runs at a locked 60 FPS
       window.EJS_defaultOptions =
@@ -1300,6 +1332,7 @@
       });
 
       function neutralizeBuiltInEjsInput() {
+        if (resolvedCore === "n64") return;
         try {
           var ejs = window.EJS_emulator;
           if (!ejs) return;

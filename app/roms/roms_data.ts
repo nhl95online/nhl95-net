@@ -25,8 +25,20 @@ export function getRomDownloadUrl(fileName: string, customUrl?: string): string 
   return `${SUPABASE_ROMS_URL}/${encodeURIComponent(fileName)}?download`;
 }
 
-export type EmulatorCoreId = 'segaMD' | 'snes' | 'nes' | 'segaMS' | 'segaGG' | 'sega32x';
-export type ConsoleSystemId = 'SEGA' | 'SNES' | 'NES';
+export type EmulatorCoreId =
+  | 'segaMD'
+  | 'snes'
+  | 'nes'
+  | 'segaMS'
+  | 'segaGG'
+  | 'sega32x'
+  | 'n64'
+  | 'atari2600'
+  | 'atari5200'
+  | 'atari7800'
+  | 'lynx'
+  | 'jaguar';
+export type ConsoleSystemId = 'SEGA' | 'SNES' | 'NES' | 'N64' | 'ATARI';
 
 export interface LeagueRom {
   id: string;
@@ -2021,8 +2033,26 @@ export function detectEmulatorCoreFromFileName(fileName: string): {
   if (/\.(sfc|smc|fig|swc)$/i.test(lower) || lower.includes('_snes') || lower.includes('(snes)')) {
     return { core: 'snes', consoleSystem: 'SNES' };
   }
-  if (/\.(nes|fds|unf)$/i.test(lower) || lower.includes('_nes') || lower.includes('(nes)')) {
+  if (/\.(nes|fds|unf|unif)$/i.test(lower) || lower.includes('_nes') || lower.includes('(nes)')) {
     return { core: 'nes', consoleSystem: 'NES' };
+  }
+  if (/\.(z64|n64|v64)$/i.test(lower) || lower.includes('_n64') || lower.includes('(n64)')) {
+    return { core: 'n64', consoleSystem: 'N64' };
+  }
+  if (/\.a26$/i.test(lower) || lower.includes('(2600)') || lower.includes('atari2600') || lower.includes('atari 2600') || lower.includes('(atari)')) {
+    return { core: 'atari2600', consoleSystem: 'ATARI' };
+  }
+  if (/\.a52$/i.test(lower) || lower.includes('(5200)') || lower.includes('atari5200') || lower.includes('atari 5200')) {
+    return { core: 'atari5200', consoleSystem: 'ATARI' };
+  }
+  if (/\.a78$/i.test(lower) || lower.includes('(7800)') || lower.includes('atari7800') || lower.includes('atari 7800')) {
+    return { core: 'atari7800', consoleSystem: 'ATARI' };
+  }
+  if (/\.lnx$/i.test(lower) || lower.includes('(lynx)')) {
+    return { core: 'lynx', consoleSystem: 'ATARI' };
+  }
+  if (/\.(j64|jag)$/i.test(lower) || lower.includes('(jaguar)')) {
+    return { core: 'jaguar', consoleSystem: 'ATARI' };
   }
   if (/\.sms$/i.test(lower)) {
     return { core: 'segaMS', consoleSystem: 'SEGA' };
