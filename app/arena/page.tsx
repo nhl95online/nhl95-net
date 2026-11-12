@@ -133,6 +133,26 @@ function classifyRomGenre(text: string, catalogCategory?: string, baseName?: str
 
 const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|sms|gg|32x)$/i;
 
+// Box-art / title card for a ROM, pulled from the public Supabase "rom-images" bucket
+// (named after the ROM file, e.g. W16.zip -> W16.png). Tries .png, .jpg, .jpeg, .webp; hides itself if none exist.
+const ROM_IMAGES_BASE = 'https://prdfunbzqsvqlyiwmuqp.supabase.co/storage/v1/object/public/rom-images/';
+function RomCoverImage({ base, alt, className }: { base: string | null | undefined; alt?: string; className?: string }) {
+  const exts = ['png', 'jpg', 'jpeg', 'webp', 'PNG', 'JPG'];
+  const [idx, setIdx] = useState(0);
+  useEffect(() => setIdx(0), [base]);
+  const cleanBase = String(base || '').replace(ROM_EXT_RE, '').trim();
+  if (!cleanBase || idx >= exts.length) return null;
+  return (
+    <img
+      key={`${cleanBase}-${idx}`}
+      src={`${ROM_IMAGES_BASE}${encodeURIComponent(cleanBase)}.${exts[idx]}`}
+      alt={alt || cleanBase}
+      onError={() => setIdx(i => i + 1)}
+      className={className}
+    />
+  );
+}
+
 // Stable catalog id for a cloud bucket file that isn't in the hand-written catalog (e.g. "Theme Park.zip")
 function bucketSyntheticId(fileName: string): string {
   return 'bucket-' + fileName.replace(ROM_EXT_RE, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -3079,6 +3099,13 @@ function ArenaContent() {
         <div className="lg:col-span-8 space-y-5">
           {/* GAME PICKER: CATEGORY + GAME DROPDOWNS */}
           <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-end gap-3">
+            {!localRomObjectUrl && (
+              <RomCoverImage
+                base={resolvedRomFileName || selectedRom.id}
+                alt={selectedRom.title}
+                className="w-24 h-16 sm:w-28 sm:h-[4.5rem] object-cover border-2 border-black shrink-0 bg-black"
+              />
+            )}
             <label className="flex flex-col gap-1 text-[10px] font-mono font-black uppercase text-slate-500 sm:w-48 shrink-0">
               Category
               <select
@@ -3330,156 +3357,16 @@ function ArenaContent() {
                       </div>
                     </div>
 
-                    {/* Console System Mode Switcher */}
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
-                        {[
-                          {
-                            id: 'nhl95-cloud',
-                            label: `🏒 NHL '95 Cloud Bucket (${bucketRomItems.length})`,
-                            badgeClass: 'bg-amber-500 text-black border-amber-300'
-                          },
-                          {
-                            id: 'SEGA',
-                            label: '🟦 SEGA Genesis Solo',
-                            badgeClass: 'bg-blue-600 text-white border-blue-400'
-                          },
-                          {
-                            id: 'SNES',
-                            label: '🟪 Super Nintendo (SNES) Solo',
-                            badgeClass: 'bg-purple-600 text-white border-purple-400'
-                          },
-                          {
-                            id: 'NES',
-                            label: '🟥 Nintendo (NES) Solo',
-                            badgeClass: 'bg-red-600 text-white border-red-400'
-                          }
-                        ].map(sysTab => {
-                          const isActiveTab = pregameConsoleFilter === sysTab.id;
-                          return (
-                            <button
-                              key={sysTab.id}
-                              onClick={() => {
-                                setPregameConsoleFilter(sysTab.id as any);
-                                if (sysTab.id === 'nhl95-cloud') {
-                                  const firstNhl = catalog.find(c => c.isNhl95);
-                                  if (firstNhl && !selectedRom.isNhl95) setSelectedRomId(firstNhl.id);
-                                } else {
-                                  const firstForConsole = catalog.find(
-                                    c => c.consoleSystem === sysTab.id && !c.isNhl95
-                                  );
-                                  if (firstForConsole) setSelectedRomId(firstForConsole.id);
-                                }
-                              }}
-                              className={`px-3 py-1.5 rounded-xs border font-mono text-[10px] sm:text-[11px] font-black uppercase cursor-pointer transition ${
-                                isActiveTab
-                                  ? `${sysTab.badgeClass} shadow-[0_0_12px_rgba(245,158,11,0.3)]`
-                                  : 'bg-slate-900/90 hover:bg-slate-800 text-slate-300 border-slate-700'
-                              }`}
-                            >
-                              {sysTab.label}
-                            </button>
-                          );
-                        })}
+                    {/* Selected ROM Cover Art (from rom-images bucket) */}
+                    {!localRomObjectUrl && (
+                      <div className="flex-1 flex items-center justify-center min-h-0">
+                        <RomCoverImage
+                          base={resolvedRomFileName || selectedRom.id}
+                          alt={selectedRom.title}
+                          className="max-h-full max-w-full object-contain border-2 border-slate-700 shadow-[0_0_24px_rgba(245,158,11,0.15)]"
+                        />
                       </div>
-
-                      {/* ROM Selector Grid Inside the Screen */}
-                      {pregameConsoleFilter === 'nhl95-cloud' ? (
-                        <div>
-                          <div className="text-[11px] font-mono uppercase text-slate-400 font-bold mb-1.5 flex items-center justify-between flex-wrap gap-1">
-                            <span>1. Choose a ROM from your &ldquo;roms&rdquo; Bucket ({bucketRomItems.length} Available):</span>
-                            <span className="text-amber-400">Selected: {localRomTitle || resolvedRomFileName || 'W16.zip'}</span>
-                          </div>
-                          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 max-h-40 overflow-y-auto pr-1">
-                            {bucketRomItems.map(item => {
-                              const active = item.romId === selectedRom.id && !localRomObjectUrl;
-                              return (
-                                <button
-                                  key={item.fileName}
-                                  onClick={() => {
-                                    if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                                    setLocalRomObjectUrl(null);
-                                    setLocalRomTitle(null);
-                                    setLocalRomRawFile(null);
-                                    setSelectedRomId(item.romId);
-                                  }}
-                                  className={`p-2 rounded-xs border text-left font-mono transition cursor-pointer ${
-                                    active
-                                      ? 'bg-amber-500 text-black border-amber-300 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
-                                      : 'bg-slate-900/90 hover:bg-slate-800 text-white border-slate-700'
-                                  }`}
-                                >
-                                  <div className="text-xs font-black truncate">{item.fileName}</div>
-                                  <div className={`text-[9px] truncate ${active ? 'text-black/80 font-bold' : 'text-slate-400'}`}>
-                                    {item.consoleSystem !== 'SEGA'
-                                      ? `${item.consoleSystem} Solo`
-                                      : item.base === '1909'
-                                      ? '1909 NHA'
-                                      : `Season ${item.base.toUpperCase()}`}
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <div className="text-[11px] font-mono uppercase text-slate-300 font-bold mb-1.5 flex items-center justify-between flex-wrap gap-1">
-                            <span>
-                              {pregameConsoleFilter === 'SEGA'
-                                ? '🟦 SEGA Genesis / Mega Drive Solo Classics (Or Load Any .BIN / .MD / .GEN / .ZIP):'
-                                : pregameConsoleFilter === 'SNES'
-                                ? '🟪 Super Nintendo (SNES) Solo Classics (Or Load Any .SFC / .SMC / .ZIP):'
-                                : '🟥 Nintendo (NES) Solo Classics (Or Load Any .NES / .FDS / .ZIP):'}
-                            </span>
-                            <button
-                              onClick={() => localRomInputRef.current?.click()}
-                              className="text-emerald-400 hover:text-emerald-300 underline cursor-pointer text-[10px] font-black uppercase"
-                            >
-                              + Browse Computer for {pregameConsoleFilter} ROM
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
-                            {catalog
-                              .filter(c => c.consoleSystem === pregameConsoleFilter && !c.isNhl95)
-                              .map(item => {
-                                const active = item.id === selectedRom.id && !localRomObjectUrl;
-                                const cloudMatch = findMatchingBucketFile(item, bucketFiles);
-                                return (
-                                  <button
-                                    key={item.id}
-                                    onClick={() => {
-                                      if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                                      setLocalRomObjectUrl(null);
-                                      setLocalRomTitle(null);
-                                      setLocalRomRawFile(null);
-                                      setSelectedRomId(item.id);
-                                    }}
-                                    className={`p-2 rounded-xs border text-left font-mono transition cursor-pointer ${
-                                      active
-                                        ? 'bg-amber-500 text-black border-amber-300 font-black shadow-[0_0_12px_rgba(245,158,11,0.4)]'
-                                        : 'bg-slate-900/90 hover:bg-slate-800 text-white border-slate-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                                      <span className={`text-[9px] font-black uppercase px-1 rounded-xs ${active ? 'bg-black text-amber-400' : 'bg-slate-800 text-cyan-300'}`}>
-                                        {item.consoleSystem}
-                                      </span>
-                                      <span className={`text-[8px] font-bold ${cloudMatch ? (active ? 'text-black' : 'text-emerald-400') : (active ? 'text-black/75' : 'text-slate-400')}`}>
-                                        {cloudMatch ? `● ${cloudMatch}` : 'Local / Upload'}
-                                      </span>
-                                    </div>
-                                    <div className="text-[11px] font-black truncate">{item.title}</div>
-                                    <div className={`text-[9px] truncate ${active ? 'text-black/80 font-bold' : 'text-slate-400'}`}>
-                                      {item.subtitle}
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    )}
 
                     {/* Selected ROM Summary & Launch Buttons */}
                     <div className="bg-slate-900/90 border border-slate-700 p-3.5 sm:p-4 rounded-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
