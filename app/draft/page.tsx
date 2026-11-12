@@ -637,6 +637,16 @@ export default function DraftPage() {
   const [prospectPos, setProspectPos] = useState<string>('ALL');
   const [prospectStatus, setProspectStatus] = useState<'ALL' | 'AVAILABLE' | 'DRAFTED'>('ALL');
   const [prospectTypeFilter, setProspectTypeFilter] = useState<'ALL' | 'ROOKIE' | 'FREE_AGENT'>('ALL');
+  // Expandable career rows for prospects (future seasons from league_player_database, loaded on demand)
+  type ProspectCareerSeason = {
+    year: number;
+    ovr: number;
+    weightLbs: string | number;
+    hand: string;
+    attrs: Array<{ short: string; label: string; level: number; raw?: number }>;
+  };
+  const [expandedProspectIds, setExpandedProspectIds] = useState<Set<string>>(new Set());
+  const [prospectCareerById, setProspectCareerById] = useState<Record<string, ProspectCareerSeason[] | 'loading'>>({});
   const [topAvailSortCol, setTopAvailSortCol] = useState<string>('OVR');
   const [topAvailSortDir, setTopAvailSortDir] = useState<'desc' | 'asc'>('desc');
   const handleToggleTopAvailSort = (col: string) => {
@@ -3519,6 +3529,115 @@ export default function DraftPage() {
   };
 
   // Send a prospect from the Prospects tab into the selection desk
+  // Reset cached prospect careers when the draft class changes
+  useEffect(() => {
+    setExpandedProspectIds(new Set());
+    setProspectCareerById({});
+  }, [rookieClassYear]);
+
+  const loadProspectCareer = async (player: DatabasePlayer) => {
+    const id = String(player.player_id);
+    setProspectCareerById(prev => ({ ...prev, [id]: 'loading' }));
+    try {
+      const norm = (v: string) =>
+        String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const target = norm(player.player_name);
+      const parts = String(player.player_name || '').replace(/[^a-zA-Z\s-]/g, ' ').trim().split(/\s+/);
+      const last = parts[parts.length - 1] || player.player_name;
+      const firstInitial = norm(parts[0] || '').charAt(0);
+      const lastNorm = norm(last);
+      const { data } = await supabase
+        .from('league_player_database')
+        .select('player_name, pos, ratings, player_info')
+        .ilike('player_name', `%${last}%`)
+        .limit(1000);
+      const startYear = Number(rookieClassYear) || 0;
+      const rows = (data || []) as any[];
+      const exact = rows.filter(r => norm(r.player_name) === target);
+      // Fallback for spelling differences between years (e.g. Evgeny / Evgeni): same last name + first initial
+      const pool = exact.length > 0
+        ? exact
+        : rows.filter(r => {
+            const n = norm(r.player_name);
+            return n.endsWith(lastNorm) && n.charAt(0) === firstInitial;
+          });
+      const byYear = new Map<number, ProspectCareerSeason>();
+      pool.forEach(row => {
+        const info = parseRatingJsonObj(row.player_info);
+        const yr = Number(info?.source_year || 0);
+        if (!yr || yr <= startYear) return;
+        const parsed = extractDraftPlayerRatings(row.ratings, row.player_info, player.pos || row.pos || 'F', parsePlayerOvr(row.ratings));
+        const entry: ProspectCareerSeason = {
+          year: yr,
+          ovr: parsed.ovr,
+          weightLbs: parsed.weightLbs,
+          hand: parsed.hand,
+          attrs: parsed.attrs
+        };
+        const existing = byYear.get(yr);
+        if (!existing || entry.ovr >= existing.ovr) byYear.set(yr, entry);
+      });
+      setProspectCareerById(prev => ({ ...prev, [id]: Array.from(byYear.values()).sort((a, b) => a.year - b.year) }));
+    } catch {
+      setProspectCareerById(prev => ({ ...prev, [id]: [] }));
+    }
+  };
+
+  const toggleProspectCareer = (player: DatabasePlayer) => {
+    const id = String(player.player_id);
+    setExpandedProspectIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    if (!prospectCareerById[id]) loadProspectCareer(player);
+  };
+
+  const exportProspectsCsv = () => {
+    const list = sortDraftProspectList(prospectRows);
+    const isGoalieView = prospectPos === 'G';
+    const attrCols = isGoalieView
+      ? ['AGI', 'SPD', 'OFA', 'DFA', 'PKC', 'STR', 'STL', 'GVR', 'GVL']
+      : ['AGI', 'SPD', 'OFA', 'DFA', 'SHP', 'SHA', 'STH', 'PAS', 'CHK', 'AGR'];
+    const esc = (v: unknown) => {
+      const str = String(v ?? '');
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const header = ['Rank', 'Player', 'Type', 'Pos', isGoalieView ? 'Glove' : 'Shoots', 'Weight', 'OVR', ...attrCols, 'Orig NHL Team', 'Status'];
+    const lines = [header.join(',')];
+    list.forEach((pl, idx) => {
+      const r = extractDraftPlayerRatings(pl.ratings, pl.player_info, pl.pos, pl.ovr);
+      const byShort = new Map(r.attrs.map(a => [a.short, a.level]));
+      const pickedBy = draftedPlayerMap.get(String(pl.player_id));
+      lines.push(
+        [
+          idx + 1,
+          pl.player_name,
+          pl.isFreeAgent ? 'Free Agent' : 'Rookie',
+          pl.pos,
+          r.hand,
+          r.weightLbs,
+          pl.ovr ?? r.ovr ?? '',
+          ...attrCols.map(c => byShort.get(c) ?? ''),
+          pl.orig_nhl_team || pl.team_default || '',
+          pickedBy ? `Drafted Rd ${pickedBy.rd} #${pickedBy.pk} (${pickedBy.team})` : 'Available'
+        ]
+          .map(esc)
+          .join(',')
+      );
+    });
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `draft_prospects_${rookieClassYear}_${prospectTypeFilter.toLowerCase()}_${prospectPos.toLowerCase()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const selectProspectForPick = (player: DatabasePlayer) => {
     setCoachSelectedPlayer(player);
     setCoachSearch(player.player_name);
@@ -5727,7 +5846,25 @@ export default function DraftPage() {
                   ))}
                 </div>
 
-                <div className="relative flex-1 lg:max-w-xs">
+                <div className="flex items-center gap-2 flex-1 lg:max-w-md">
+                  {expandedProspectIds.size > 0 && (
+                    <button
+                      onClick={() => setExpandedProspectIds(new Set())}
+                      className="px-2.5 py-1 text-xs font-black uppercase border-2 border-black bg-white hover:bg-neutral-100 cursor-pointer shrink-0"
+                      title="Collapse all expanded careers"
+                    >
+                      Collapse All
+                    </button>
+                  )}
+                  <button
+                    onClick={exportProspectsCsv}
+                    disabled={prospectRows.length === 0}
+                    className="px-2.5 py-1 text-xs font-black uppercase border-2 border-black bg-amber-300 hover:bg-amber-200 cursor-pointer shrink-0 disabled:opacity-50 flex items-center gap-1"
+                    title="Download the filtered prospect list as CSV"
+                  >
+                    ⬇ Export CSV
+                  </button>
+                <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-neutral-400" />
                   <input
                     placeholder="SEARCH ROOKIES OR FREE AGENTS..."
@@ -5735,6 +5872,7 @@ export default function DraftPage() {
                     onChange={(e) => setProspectSearch(e.target.value)}
                     className="bg-white text-black pl-8 pr-3 py-1 text-xs font-bold uppercase w-full focus:outline-none border-2 border-black font-sans"
                   />
+                </div>
                 </div>
               </div>
 
@@ -5842,10 +5980,24 @@ export default function DraftPage() {
                         const canSelect = !pickedBy && coachMayPickNow && !draftLockStatus.isLocked && !!nextEmptyPickSlot.teamId;
                         const pRatings = extractDraftPlayerRatings(p.ratings, p.player_info, p.pos, p.ovr);
                         const ovrHm = getDraftOvrBadgeStyle(p.ovr ?? pRatings.ovr);
+                        const careerKey = String(p.player_id);
+                        const isCareerOpen = expandedProspectIds.has(careerKey);
+                        const careerData = prospectCareerById[careerKey];
+                        const baseOvr = Number(p.ovr ?? pRatings.ovr ?? 0);
+                        const attrColCount = prospectPos === 'G' ? 9 : 10;
                         return (
-                          <tr key={p.player_id} className={pickedBy ? 'opacity-60 bg-neutral-50' : 'hover:bg-yellow-50'}>
+                          <React.Fragment key={p.player_id}>
+                          <tr className={pickedBy ? 'opacity-60 bg-neutral-50' : isCareerOpen ? 'bg-yellow-50' : 'hover:bg-yellow-50'}>
                             <td className="py-1.5 px-2 text-center text-slate-500">{i + 1}</td>
                             <td className="py-1.5 px-3 font-bold uppercase text-black font-sans">
+                              <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => toggleProspectCareer(p)}
+                                className="w-5 h-5 shrink-0 border border-black/60 bg-white hover:bg-amber-100 text-[10px] font-black flex items-center justify-center cursor-pointer"
+                                title={isCareerOpen ? 'Hide future career' : 'Show future career ratings'}
+                              >
+                                {isCareerOpen ? '▾' : '▸'}
+                              </button>
                               <Link
                                 href={`/players?q=${encodeURIComponent(p.player_name)}&id=${encodeURIComponent(String(p.player_id))}`}
                                 className="hover:underline flex items-center gap-1.5"
@@ -5858,6 +6010,15 @@ export default function DraftPage() {
                                 <span>{p.player_name}</span>
                                 <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
                               </Link>
+                              {Array.isArray(careerData) && (
+                                <span
+                                  className="text-[8.5px] font-mono font-bold uppercase text-slate-600 bg-neutral-100 px-1 py-0 border border-neutral-300 shrink-0"
+                                  title={careerData.length > 0 ? `Plays thru ${careerData[careerData.length - 1].year}` : 'No future seasons found'}
+                                >
+                                  {careerData.length > 0 ? `+${careerData.length} yr${careerData.length === 1 ? '' : 's'}` : 'Final yr'}
+                                </span>
+                              )}
+                              </div>
                             </td>
                             <td className="py-1.5 px-2 text-center">
                               <span
@@ -5940,6 +6101,73 @@ export default function DraftPage() {
                               </div>
                             </td>
                           </tr>
+                          {isCareerOpen && careerData === 'loading' && (
+                            <tr className="bg-[#f8f5ec]">
+                              <td colSpan={8 + attrColCount} className="py-1.5 pl-12 text-[10px] font-mono italic text-slate-500">
+                                Loading future career ratings…
+                              </td>
+                            </tr>
+                          )}
+                          {isCareerOpen && Array.isArray(careerData) && careerData.length === 0 && (
+                            <tr className="bg-[#f8f5ec]">
+                              <td colSpan={8 + attrColCount} className="py-1.5 pl-12 text-[10px] font-mono italic text-slate-500">
+                                No future seasons found for {p.player_name} after {rookieClassYear}.
+                              </td>
+                            </tr>
+                          )}
+                          {isCareerOpen && Array.isArray(careerData) && careerData.map((sRow, sIdx) => {
+                            const diff = (sRow.ovr || 0) - baseOvr;
+                            const isLast = sIdx === careerData.length - 1;
+                            const sOvrHm = getDraftOvrBadgeStyle(sRow.ovr);
+                            return (
+                              <tr key={`${careerKey}-yr-${sRow.year}`} className="bg-[#f8f5ec] hover:bg-yellow-50/70 text-[11px]">
+                                <td className="py-1 px-2" />
+                                <td className="py-1 pl-10 pr-2 font-mono text-[10px] text-slate-600">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-700">↳ {sRow.year} (+{sIdx + 1} yr)</span>
+                                    {isLast && (
+                                      <span className="bg-amber-200 text-black px-1 py-0 border border-black/40 text-[8px] font-black uppercase">Final</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-1 px-2" />
+                                <td className="py-1 px-1.5 text-center text-[10px] font-bold text-slate-500">{p.pos}</td>
+                                <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">{sRow.hand}</td>
+                                <td className="py-1 px-1.5 text-center text-[10px] text-slate-500">{sRow.weightLbs}</td>
+                                <td className="py-1 px-1.5 text-center">
+                                  <div className="inline-flex items-center gap-1">
+                                    <span
+                                      style={{ backgroundColor: sOvrHm.bg, color: sOvrHm.text, borderColor: sOvrHm.border }}
+                                      className="font-black px-1.5 py-0 text-[10px] border"
+                                    >
+                                      {sRow.ovr || '-'}
+                                    </span>
+                                    {diff !== 0 && baseOvr > 0 && (
+                                      <span className={`text-[8.5px] font-black ${diff > 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                        {diff > 0 ? `+${diff}` : diff}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                {sRow.attrs.slice(0, attrColCount).map(attr => {
+                                  const hm = getDraftHeatmapBadgeStyle(attr.level);
+                                  return (
+                                    <td key={`${careerKey}-${sRow.year}-${attr.short}`} className="py-1 px-1 text-center">
+                                      <span
+                                        style={{ backgroundColor: hm.bg, color: hm.text, borderColor: hm.border }}
+                                        className="inline-block w-6 py-0 text-center font-black text-[10px] border opacity-90"
+                                        title={`${sRow.year} ${attr.label}: ${attr.level}/6`}
+                                      >
+                                        {attr.level || '-'}
+                                      </span>
+                                    </td>
+                                  );
+                                })}
+                                <td className="py-1 px-3" />
+                              </tr>
+                            );
+                          })}
+                          </React.Fragment>
                         );
                       })
                     )}
