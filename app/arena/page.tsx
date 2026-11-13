@@ -140,7 +140,7 @@ function RomCoverImage({ base, alt, className }: { base: string | null | undefin
   const exts = ['png', 'jpg', 'jpeg', 'webp', 'PNG', 'JPG'];
   const [idx, setIdx] = useState(0);
   useEffect(() => setIdx(0), [base]);
-  const cleanBase = String(base || '').replace(ROM_EXT_RE, '').trim();
+  const cleanBase = String(base || '').split('/').pop()?.replace(ROM_EXT_RE, '').trim() || '';
   if (!cleanBase || idx >= exts.length) return null;
   return (
     <img
@@ -1266,12 +1266,24 @@ function ArenaContent() {
           `${matchedCatalog ? `${matchedCatalog.title} ${matchedCatalog.subtitle} ${matchedCatalog.categoryBadge}` : ''} ${base}`,
           matchedCatalog?.category,
           base
-        )
+        ),
+        consoleFolder: (() => {
+          const g = classifyRomGenre(
+            `${matchedCatalog ? `${matchedCatalog.title} ${matchedCatalog.subtitle} ${matchedCatalog.categoryBadge}` : ''} ${base}`,
+            matchedCatalog?.category,
+            base
+          );
+          if (g === 'League' || fileName.toLowerCase().startsWith('league/')) return 'LEAGUE' as const;
+          return matchedCatalog ? matchedCatalog.consoleSystem : detected.consoleSystem;
+        })()
       };
     });
   }, [bucketFiles, catalog]);
 
-  // Game picker: category dropdown + game dropdown (replaces the long file-button strip)
+  // Console folder buttons + rich boxart game dropdown
+  type ConsoleFolderTab = 'ALL' | 'LEAGUE' | ConsoleSystemId;
+  const [selectedConsoleFolder, setSelectedConsoleFolder] = useState<ConsoleFolderTab>('LEAGUE');
+  const [boxartDropdownOpen, setBoxartDropdownOpen] = useState(false);
   const [romGenre, setRomGenre] = useState<RomGenre | 'all'>('League');
   const [romVaultMenuOpen, setRomVaultMenuOpen] = useState(false);
   const genreCounts = useMemo(() => {
@@ -1279,15 +1291,27 @@ function ArenaContent() {
     bucketRomItems.forEach(item => counts.set(item.genre, (counts.get(item.genre) || 0) + 1));
     return counts;
   }, [bucketRomItems]);
+  const consoleFolderCounts = useMemo(() => {
+    const counts = new Map<ConsoleFolderTab, number>();
+    counts.set('ALL', bucketRomItems.length);
+    bucketRomItems.forEach(item => {
+      counts.set(item.consoleFolder, (counts.get(item.consoleFolder) || 0) + 1);
+    });
+    return counts;
+  }, [bucketRomItems]);
   const pickerItems = useMemo(
     () =>
       bucketRomItems
-        .filter(item => romGenre === 'all' || item.genre === romGenre)
+        .filter(item =>
+          selectedConsoleFolder === 'ALL' ? true : item.consoleFolder === selectedConsoleFolder
+        )
         .sort((a, b) => {
-          if (a.genre === 'League' && b.genre === 'League') return b.base.localeCompare(a.base, undefined, { numeric: true });
+          if (a.consoleFolder === 'LEAGUE' && b.consoleFolder === 'LEAGUE') {
+            return b.base.localeCompare(a.base, undefined, { numeric: true });
+          }
           return a.title.localeCompare(b.title);
         }),
-    [bucketRomItems, romGenre]
+    [bucketRomItems, selectedConsoleFolder]
   );
 
   // Arena Sub-navigation Tab ('ice' | 'lobby' | 'records' | 'vault' | 'controller' | 'boxscore')
@@ -3120,68 +3144,186 @@ function ArenaContent() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* LEFT / CENTER COLUMN (8 cols on lg) */}
         <div className="lg:col-span-8 space-y-5">
-          {/* GAME PICKER: CATEGORY + GAME DROPDOWNS */}
-          <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row sm:items-end gap-3">
-            {!localRomObjectUrl && (
-              <RomCoverImage
-                base={resolvedRomFileName || selectedRom.id}
-                alt={selectedRom.title}
-                className="w-24 h-16 sm:w-28 sm:h-[4.5rem] object-cover border-2 border-black shrink-0 bg-black"
-              />
-            )}
-            <label className="flex flex-col gap-1 text-[10px] font-mono font-black uppercase text-slate-500 sm:w-48 shrink-0">
-              Category
-              <select
-                value={romGenre}
-                onChange={e => setRomGenre(e.target.value as RomGenre | 'all')}
-                className="border-2 border-black bg-[#faf8f5] px-2 py-1.5 text-xs font-black uppercase text-black cursor-pointer"
-              >
-                <option value="all">All Games ({bucketRomItems.length})</option>
-                {ROM_GENRES.filter(g => (genreCounts.get(g) || 0) > 0).map(g => (
-                  <option key={g} value={g}>
-                    {g} ({genreCounts.get(g)})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-[10px] font-mono font-black uppercase text-slate-500 flex-1 min-w-0">
-              Game
-              <select
-                value={localRomObjectUrl ? '' : selectedRom.id}
-                onChange={e => {
-                  const item = pickerItems.find(i => i.romId === e.target.value);
-                  if (!item) return;
-                  if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                  setLocalRomObjectUrl(null);
-                  setLocalRomTitle(null);
-                  setSelectedRomId(item.romId);
-                  setHasLaunchedGame(false);
-                  setEmulatorRunning(false);
-                  setActiveArenaTab('ice');
+          {/* CONSOLE LOGO FOLDER BUTTONS + BOXART GAME DROPDOWN */}
+          <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] space-y-3">
+            {/* Console Logo Folder Strip */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(
+                [
+                  { id: 'LEAGUE', label: "NHL '95", bg: 'bg-amber-400 text-black border-black', icon: (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                      <ellipse cx="12" cy="14" rx="9" ry="4" />
+                      <path d="M3 10v4c0 2.2 4 4 9 4s9-1.8 9-4v-4c0 2.2-4 4-9 4s-9-1.8-9-4z" opacity="0.7" />
+                      <ellipse cx="12" cy="10" rx="9" ry="4" />
+                    </svg>
+                  )},
+                  { id: 'SEGA', label: 'SEGA', bg: 'bg-blue-700 text-white border-blue-950', icon: (
+                    <svg viewBox="0 0 64 22" className="h-3.5 w-auto shrink-0" fill="currentColor">
+                      <text x="2" y="18" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="19" letterSpacing="-1">SEGA</text>
+                    </svg>
+                  )},
+                  { id: 'NES', label: 'NES', bg: 'bg-red-600 text-white border-red-950', icon: (
+                    <svg viewBox="0 0 46 22" className="h-3.5 w-auto shrink-0" fill="currentColor">
+                      <rect x="1" y="2" width="44" height="18" rx="3" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                      <text x="6" y="16" fontFamily="monospace" fontWeight="900" fontSize="14">NES</text>
+                    </svg>
+                  )},
+                  { id: 'SNES', label: 'SNES', bg: 'bg-purple-700 text-white border-purple-950', icon: (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
+                      <circle cx="12" cy="5" r="3" fill="#3b82f6" />
+                      <circle cx="19" cy="12" r="3" fill="#ef4444" />
+                      <circle cx="12" cy="19" r="3" fill="#eab308" />
+                      <circle cx="5" cy="12" r="3" fill="#22c55e" />
+                    </svg>
+                  )},
+                  { id: 'N64', label: 'N64', bg: 'bg-emerald-700 text-white border-emerald-950', icon: (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                      <path d="M4 4h4l4 8V4h4v16h-4l-4-8v8H4V4z" />
+                    </svg>
+                  )},
+                  { id: 'ATARI', label: 'ATARI', bg: 'bg-orange-600 text-white border-orange-950', icon: (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                      <rect x="10.5" y="3" width="3" height="18" />
+                      <path d="M9 3c0 8-3 13-7 15v3c5-2 9-8 9-18H9zM15 3c0 8 3 13 7 15v3c-5-2-9-8-9-18h2z" />
+                    </svg>
+                  )},
+                  { id: 'ARCADE', label: 'MAME', bg: 'bg-cyan-600 text-white border-cyan-950', icon: (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                      <path d="M5 3h14l-1 6H6L5 3zm1 7h12v4H6v-4zm-1 5h14v6H5v-6z" />
+                    </svg>
+                  )},
+                  { id: 'PC', label: 'PC / DOS', bg: 'bg-indigo-700 text-white border-indigo-950', icon: (
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                      <rect x="3" y="3" width="18" height="13" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.2" />
+                      <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="2.2" />
+                    </svg>
+                  )},
+                  { id: 'ALL', label: 'ALL', bg: 'bg-neutral-900 text-white border-black', icon: null }
+                ] as const
+              ).map(btn => {
+                const count = consoleFolderCounts.get(btn.id) || 0;
+                const isActive = selectedConsoleFolder === btn.id;
+                return (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedConsoleFolder(btn.id);
+                      setBoxartDropdownOpen(true);
+                    }}
+                    className={`px-2.5 py-1.5 border-2 font-mono font-black text-[11px] uppercase flex items-center gap-1.5 cursor-pointer transition ${
+                      isActive
+                        ? `${btn.bg} shadow-[2px_2px_0px_rgba(0,0,0,1)] -translate-y-0.5`
+                        : 'bg-[#faf8f5] text-black border-black/40 hover:border-black hover:bg-neutral-100'
+                    }`}
+                    title={`Show ${btn.label} games (${count} in bucket)`}
+                  >
+                    {btn.icon}
+                    {btn.id !== 'SEGA' && btn.id !== 'NES' && <span>{btn.label}</span>}
+                    <span className={`text-[9px] px-1 rounded ${isActive ? 'bg-black/25' : 'bg-black/10'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => {
+                  setVaultCategory('cloud');
+                  setActiveArenaTab('vault');
                 }}
-                className="border-2 border-black bg-[#faf8f5] px-2 py-1.5 text-xs font-bold text-black cursor-pointer w-full"
+                className="ml-auto text-[11px] font-mono font-black uppercase border-2 border-black px-2.5 py-1.5 bg-black text-amber-400 hover:bg-neutral-800 cursor-pointer shrink-0"
               >
-                {(localRomObjectUrl || !pickerItems.some(i => i.romId === selectedRom.id)) && (
-                  <option value={localRomObjectUrl ? '' : selectedRom.id}>
-                    {localRomObjectUrl ? `Local file: ${localRomTitle || 'ROM'}` : `${selectedRom.title} (current)`}
-                  </option>
-                )}
-                {pickerItems.map(item => (
-                  <option key={item.fileName} value={item.romId}>
-                    {item.genre === 'League' ? `${item.base.toUpperCase()} — ${item.title.replace(/^\S+\s+—\s+/, '')}` : item.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              onClick={() => {
-                setVaultCategory('cloud');
-                setActiveArenaTab('vault');
-              }}
-              className="text-[11px] font-mono font-black uppercase border-2 border-black px-3 py-1.5 bg-black text-amber-400 hover:bg-neutral-800 cursor-pointer shrink-0"
-            >
-              Browse Vault &rarr;
-            </button>
+                Browse Vault &rarr;
+              </button>
+            </div>
+
+            {/* Selected Game Bar + Boxart Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setBoxartDropdownOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-3 border-2 border-black bg-[#faf8f5] hover:bg-amber-50/60 p-2 text-left cursor-pointer transition"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {!localRomObjectUrl && (
+                    <RomCoverImage
+                      base={resolvedRomFileName || selectedRom.id}
+                      alt={selectedRom.title}
+                      className="w-16 h-11 object-cover border border-black shrink-0 bg-black"
+                    />
+                  )}
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-mono font-black uppercase text-slate-500">
+                      {selectedConsoleFolder === 'ALL' ? 'ALL SYSTEMS' : `${selectedConsoleFolder} FOLDER`} • CLICK TO PICK GAME ({pickerItems.length})
+                    </div>
+                    <div className="text-xs sm:text-sm font-black text-black truncate">
+                      {localRomObjectUrl ? `Local File: ${localRomTitle || 'ROM'}` : selectedRom.title}
+                    </div>
+                  </div>
+                </div>
+                <span className="font-mono font-black text-xs px-2 py-1 border border-black bg-white shrink-0">
+                  {boxartDropdownOpen ? 'CLOSE ▲' : 'GAMES ▼'}
+                </span>
+              </button>
+
+              {boxartDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-neutral-950 border-2 border-black shadow-2xl max-h-96 overflow-y-auto divide-y divide-neutral-800">
+                  {pickerItems.length === 0 ? (
+                    <div className="p-4 text-center text-xs font-mono text-slate-400">
+                      No ROMs found in the <span className="text-amber-400 font-bold">{selectedConsoleFolder.toLowerCase()}/</span> folder yet.
+                      Upload ROMs to <code className="text-slate-200">roms/{selectedConsoleFolder.toLowerCase()}/</code> or click &ldquo;Load Local ROM&rdquo;.
+                    </div>
+                  ) : (
+                    pickerItems.map(item => {
+                      const isSelected = !localRomObjectUrl && item.romId === selectedRom.id;
+                      const displayTitle =
+                        item.genre === 'League'
+                          ? `${item.base.split('/').pop()?.toUpperCase()} — ${item.title.replace(/^\S+\s+—\s+/, '')}`
+                          : item.title;
+                      return (
+                        <button
+                          key={item.fileName}
+                          type="button"
+                          onClick={() => {
+                            if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                            setLocalRomObjectUrl(null);
+                            setLocalRomTitle(null);
+                            setCustomCoreOverride('auto');
+                            setSelectedRomId(item.romId);
+                            setHasLaunchedGame(false);
+                            setEmulatorRunning(false);
+                            setBoxartDropdownOpen(false);
+                            setActiveArenaTab('ice');
+                          }}
+                          className={`w-full flex items-center gap-3 p-2.5 text-left cursor-pointer transition ${
+                            isSelected ? 'bg-amber-500/20 border-l-4 border-l-amber-400' : 'hover:bg-neutral-900'
+                          }`}
+                        >
+                          <div className="w-16 h-11 bg-neutral-900 border border-neutral-700 shrink-0 overflow-hidden flex items-center justify-center">
+                            <RomCoverImage
+                              base={item.fileName}
+                              alt={displayTitle}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-black text-white truncate">{displayTitle}</div>
+                            <div className="text-[10px] font-mono text-slate-400 truncate">
+                              {item.consoleSystem} • {item.fileName}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <span className="text-[10px] font-mono font-black uppercase bg-amber-400 text-black px-2 py-0.5 rounded-xs shrink-0">
+                              ACTIVE
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* NETPLAY BANNER IF IN 1v1 OR 2v2 ROOM */}

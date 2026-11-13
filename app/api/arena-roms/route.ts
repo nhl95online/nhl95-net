@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://prdfunbzqsvqlyiwmuqp.supabase.co';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+const ROM_FILE_RE =
+  /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i;
+
+const KNOWN_CONSOLE_FOLDERS = ['league', 'sega', 'nes', 'snes', 'n64', 'atari', 'mame', 'arcade', 'pc', 'dos'];
+
 export async function GET() {
   try {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -12,21 +17,47 @@ export async function GET() {
       .list('', { limit: 500, sortBy: { column: 'name', order: 'asc' } });
 
     if (error) {
-      return NextResponse.json({ files: [], error: error.message }, { status: 200 });
+      return NextResponse.json({ files: [], folders: [], error: error.message }, { status: 200 });
     }
 
-    const files = (data || [])
-      .map(item => item.name)
-      .filter(
-        name =>
-          name &&
-          !name.startsWith('.') &&
-          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i.test(name)
-      );
+    const rootItems = data || [];
+    const files: string[] = [];
+    const folderSet = new Set<string>(KNOWN_CONSOLE_FOLDERS);
 
-    return NextResponse.json({ files });
+    for (const item of rootItems) {
+      const name = item.name;
+      if (!name || name.startsWith('.')) continue;
+      const isFolder = item.id === null || item.metadata === null;
+      if (isFolder && !ROM_FILE_RE.test(name)) {
+        folderSet.add(name);
+      } else if (ROM_FILE_RE.test(name)) {
+        files.push(name);
+      }
+    }
+
+    const discoveredFolders: string[] = [];
+    await Promise.all(
+      Array.from(folderSet).map(async folder => {
+        const { data: subData } = await supabase.storage
+          .from('roms')
+          .list(folder, { limit: 500, sortBy: { column: 'name', order: 'asc' } });
+        if (!subData || subData.length === 0) return;
+        let hasFiles = false;
+        for (const sub of subData) {
+          if (!sub.name || sub.name.startsWith('.') || sub.id === null) continue;
+          if (ROM_FILE_RE.test(sub.name)) {
+            files.push(`${folder}/${sub.name}`);
+            hasFiles = true;
+          }
+        }
+        if (hasFiles) discoveredFolders.push(folder);
+      })
+    );
+
+    files.sort((a, b) => a.localeCompare(b));
+    return NextResponse.json({ files, folders: discoveredFolders.sort() });
   } catch (err: any) {
-    return NextResponse.json({ files: [], error: err?.message || 'Failed to list roms bucket' }, { status: 200 });
+    return NextResponse.json({ files: [], folders: [], error: err?.message || 'Failed to list roms bucket' }, { status: 200 });
   }
 }
 

@@ -162,7 +162,12 @@ export async function GET(
       bucketDetected.core === 'fbneo' ||
       bucketDetected.core === 'dosbox_pure';
 
-    const targetUrl = `${SUPABASE_ROMS_PUBLIC_URL}/${encodeURIComponent(bucketFile)}`;
+    const encodedPath = bucketFile
+      .split('/')
+      .filter(Boolean)
+      .map(seg => encodeURIComponent(seg))
+      .join('/');
+    const targetUrl = `${SUPABASE_ROMS_PUBLIC_URL}/${encodedPath}`;
     const upstream = await fetch(targetUrl);
 
     if (!upstream.ok) {
@@ -184,9 +189,10 @@ export async function GET(
       /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i
     );
     const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
+    const bucketBaseName = bucketFile.split('/').pop() || bucketFile;
     const cleanRomName = extracted.isRawArchive
-      ? bucketFile
-      : bucketFile.replace(
+      ? bucketBaseName
+      : bucketBaseName.replace(
           /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i,
           ''
         ) + ext;

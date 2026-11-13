@@ -2034,6 +2034,40 @@ export function detectEmulatorCoreFromFileName(fileName: string): {
   consoleSystem: ConsoleSystemId;
 } {
   const lower = (fileName || '').toLowerCase().trim();
+  const folder = lower.includes('/') ? lower.split('/')[0] : '';
+
+  // Folder-based detection takes priority when ROMs are organized in console folders in the bucket
+  if (folder === 'nes') {
+    return { core: 'nes', consoleSystem: 'NES' };
+  }
+  if (folder === 'snes') {
+    return { core: 'snes', consoleSystem: 'SNES' };
+  }
+  if (folder === 'n64') {
+    return { core: 'n64', consoleSystem: 'N64' };
+  }
+  if (folder === 'mame' || folder === 'arcade') {
+    if (lower.includes('_fbneo') || lower.includes('(fbneo)')) {
+      return { core: 'fbneo', consoleSystem: 'ARCADE' };
+    }
+    return { core: 'jsmame', consoleSystem: 'ARCADE' };
+  }
+  if (folder === 'pc' || folder === 'dos') {
+    return { core: 'dosbox_pure', consoleSystem: 'PC' };
+  }
+  if (folder === 'atari') {
+    if (/\.a52$/i.test(lower) || lower.includes('(5200)')) return { core: 'atari5200', consoleSystem: 'ATARI' };
+    if (/\.a78$/i.test(lower) || lower.includes('(7800)')) return { core: 'atari7800', consoleSystem: 'ATARI' };
+    if (/\.lnx$/i.test(lower) || lower.includes('(lynx)')) return { core: 'lynx', consoleSystem: 'ATARI' };
+    if (/\.(j64|jag)$/i.test(lower) || lower.includes('(jaguar)')) return { core: 'jaguar', consoleSystem: 'ATARI' };
+    return { core: 'atari2600', consoleSystem: 'ATARI' };
+  }
+  if (folder === 'sega' || folder === 'league') {
+    if (/\.sms$/i.test(lower)) return { core: 'segaMS', consoleSystem: 'SEGA' };
+    if (/\.gg$/i.test(lower)) return { core: 'segaGG', consoleSystem: 'SEGA' };
+    if (/\.32x$/i.test(lower)) return { core: 'sega32x', consoleSystem: 'SEGA' };
+    return { core: 'segaMD', consoleSystem: 'SEGA' };
+  }
   if (/\.(sfc|smc|fig|swc)$/i.test(lower) || lower.includes('_snes') || lower.includes('(snes)')) {
     return { core: 'snes', consoleSystem: 'SNES' };
   }
