@@ -93,13 +93,13 @@ function extractRomFromZipOrRaw(
     )
   );
   if (!consoleEntry) {
-    const hasDosFiles = entries.some(e => /\.(exe|com|bat|conf|dosz|img|ima|vhd)$/i.test(e.name));
+    const hasDosFiles = entries.some(e => /\.(jsdos|exe|com|bat|conf|dosz|img|ima|vhd)$/i.test(e.name));
     if (hasDosFiles || entries.length > 1) {
       return {
         buffer: buf,
         entryName: fallbackName,
         isRawArchive: true,
-        inferredArchiveCore: hasDosFiles ? 'dosbox_pure' : 'mame2003_plus'
+        inferredArchiveCore: hasDosFiles ? 'dosbox_pure' : 'jsmame'
       };
     }
   }
@@ -157,6 +157,7 @@ export async function GET(
     const bucketDetected = detectEmulatorCoreFromFileName(bucketFile);
     const keepZip =
       req.nextUrl.searchParams.get('keepZip') === '1' ||
+      bucketDetected.core === 'jsmame' ||
       bucketDetected.core === 'mame2003_plus' ||
       bucketDetected.core === 'fbneo' ||
       bucketDetected.core === 'dosbox_pure';
@@ -180,13 +181,13 @@ export async function GET(
       entryName = entryName.replace(/\.smd$/i, '.bin');
     }
     const extMatch = entryName.match(
-      /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i
+      /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i
     );
     const ext = extMatch ? extMatch[0].toLowerCase() : '.bin';
     const cleanRomName = extracted.isRawArchive
       ? bucketFile
       : bucketFile.replace(
-          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i,
+          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i,
           ''
         ) + ext;
 

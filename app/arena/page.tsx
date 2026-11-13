@@ -131,7 +131,7 @@ function classifyRomGenre(text: string, catalogCategory?: string, baseName?: str
   return 'Other';
 }
 
-const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i;
+const ROM_EXT_RE = /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i;
 
 // Box-art / title card for a ROM, pulled from the public Supabase "rom-images" bucket
 // (named after the ROM file, e.g. W16.zip -> W16.png). Tries .png, .jpg, .jpeg, .webp; hides itself if none exist.
@@ -331,7 +331,7 @@ async function detectCoreFromLocalFileAsync(file: File): Promise<{
           return { ...detected, innerFileName: entryName };
         }
         // Multiple files or unknown chip files inside a .zip -> likely MAME arcade romset unless DOS files
-        return { core: 'mame2003_plus', consoleSystem: 'ARCADE', innerFileName: entryName };
+        return { core: 'jsmame', consoleSystem: 'ARCADE', innerFileName: entryName };
       }
     }
   } catch {
@@ -1803,10 +1803,12 @@ function ArenaContent() {
     const matchedFile = findMatchingBucketFile(selectedRom, bucketFiles);
     if (matchedFile) {
       const cleanBase = matchedFile.replace(ROM_EXT_RE, '');
+      const effectiveCore = customCoreOverride !== 'auto' ? customCoreOverride : selectedRom.emulatorCore;
       const isArchiveCore =
-        selectedRom.emulatorCore === 'mame2003_plus' ||
-        selectedRom.emulatorCore === 'fbneo' ||
-        selectedRom.emulatorCore === 'dosbox_pure';
+        effectiveCore === 'jsmame' ||
+        effectiveCore === 'mame2003_plus' ||
+        effectiveCore === 'fbneo' ||
+        effectiveCore === 'dosbox_pure';
       const streamExt = isArchiveCore && /\.zip$/i.test(matchedFile) ? '.zip' : '.bin';
       const keepZipQuery = isArchiveCore ? '&keepZip=1' : '';
       setResolvedRomUrl(
@@ -1833,7 +1835,7 @@ function ArenaContent() {
         `Note: "${selectedRom.id.toUpperCase()}" isn't uploaded to the cloud "roms" bucket yet (selected fallback: ${fallbackFile}). Click "Load Local ROM" if you have ${selectedRom.id.toUpperCase()} on your computer.`
       );
     }
-  }, [selectedRom, bucketFiles]);
+  }, [selectedRom, bucketFiles, customCoreOverride]);
 
   // ==========================================================================
   // SUPABASE REALTIME LOCKER ROOM PRESENCE & MATCHMAKING CHANNEL
@@ -2678,7 +2680,7 @@ function ArenaContent() {
     if (activeEmulatorCore === 'nes') return 'NES';
     if (activeEmulatorCore === 'n64') return 'N64';
     if (activeEmulatorCore === 'dosbox_pure') return 'PC';
-    if (activeEmulatorCore === 'mame2003_plus' || activeEmulatorCore === 'fbneo') return 'ARCADE';
+    if (activeEmulatorCore === 'jsmame' || activeEmulatorCore === 'mame2003_plus' || activeEmulatorCore === 'fbneo') return 'ARCADE';
     if (
       activeEmulatorCore === 'atari2600' ||
       activeEmulatorCore === 'atari5200' ||
@@ -2696,7 +2698,8 @@ function ArenaContent() {
     if (activeEmulatorCore === 'snes') return 'SUPER NINTENDO (SNES)';
     if (activeEmulatorCore === 'nes') return 'NINTENDO (NES 8-BIT)';
     if (activeEmulatorCore === 'n64') return 'NINTENDO 64 (N64)';
-    if (activeEmulatorCore === 'dosbox_pure') return 'MS-DOS / PC (DOSBOX)';
+    if (activeEmulatorCore === 'dosbox_pure') return 'MS-DOS / PC (JS-DOS)';
+    if (activeEmulatorCore === 'jsmame') return 'MAME (JSMAME STANDALONE)';
     if (activeEmulatorCore === 'mame2003_plus') return 'MAME 2003-PLUS (ARCADE)';
     if (activeEmulatorCore === 'fbneo') return 'FINALBURN NEO (ARCADE)';
     if (activeEmulatorCore === 'atari2600') return 'ATARI 2600';
@@ -2744,7 +2747,7 @@ function ArenaContent() {
       <input
         ref={localRomInputRef}
         type="file"
-        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.unif,.sms,.gg,.32x,.z64,.n64,.v64,.a26,.a52,.a78,.lnx,.j64,.jag,.dosz,.exe,.com,.bat,.img,.ima,.vhd,.iso,.cue,.chd,.conf,.zip,.7z"
+        accept=".bin,.md,.gen,.smd,.sfc,.smc,.fig,.swc,.nes,.fds,.unf,.unif,.sms,.gg,.32x,.z64,.n64,.v64,.a26,.a52,.a78,.lnx,.j64,.jag,.jsdos,.dosz,.exe,.com,.bat,.img,.ima,.vhd,.iso,.cue,.chd,.conf,.zip,.7z"
         onChange={handleLocalRomUpload}
         className="hidden"
       />
@@ -3491,9 +3494,10 @@ function ArenaContent() {
                     <option value="atari7800">Core: Atari 7800</option>
                     <option value="lynx">Core: Atari Lynx</option>
                     <option value="jaguar">Core: Atari Jaguar</option>
-                    <option value="mame2003_plus">Core: MAME 2003-Plus (Arcade)</option>
+                    <option value="jsmame">Core: MAME Standalone (JSMAME)</option>
                     <option value="fbneo">Core: FinalBurn Neo (Arcade)</option>
-                    <option value="dosbox_pure">Core: DOSBox-Pure (MS-DOS / PC)</option>
+                    <option value="mame2003_plus">Core: MAME 2003-Plus (RetroArch)</option>
+                    <option value="dosbox_pure">Core: js-dos / DOSBox (MS-DOS / PC)</option>
                   </select>
                   <span className="text-slate-300 text-[11px] truncate max-w-[200px] sm:max-w-xs">
                     {localRomRawFile?.name || resolvedRomFileName || activeRomTitle}

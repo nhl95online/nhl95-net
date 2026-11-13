@@ -292,7 +292,7 @@
           return "jaguar";
         }
         if (
-          /\.(dosz|exe|com|bat|img|ima|vhd|conf)$/i.test(lower) ||
+          /\.(jsdos|dosz|exe|com|bat|img|ima|vhd|conf)$/i.test(lower) ||
           lower.indexOf("_dos") !== -1 ||
           lower.indexOf("(dos)") !== -1 ||
           lower.indexOf("(pc)") !== -1 ||
@@ -317,7 +317,7 @@
           lower.indexOf("(mame)") !== -1 ||
           lower.indexOf("(arcade)") !== -1
         ) {
-          return "mame2003_plus";
+          return "jsmame";
         }
         if (/\.sms$/i.test(lower)) return "segaMS";
         if (/\.gg$/i.test(lower)) return "segaGG";
@@ -963,6 +963,50 @@
 
       var autoStart = params.get("autoStart") === "1";
 
+      function loadExternalScript(src) {
+        return new Promise(function (resolve, reject) {
+          var s = document.createElement("script");
+          s.src = src;
+          s.onload = function () { resolve(); };
+          s.onerror = function () { reject(new Error("Failed to load " + src)); };
+          document.head.appendChild(s);
+        });
+      }
+
+      // ======================================================================
+      // STANDALONE MS-DOS / PC RUNNER (js-dos v8 — non-RetroArch)
+      // ======================================================================
+      if (resolvedCore === "dosbox_pure") {
+        var gameDiv = document.getElementById("game");
+        gameDiv.innerHTML =
+          '<div id="dos-container" style="width:100%;height:100%;background:#000;"></div>';
+        var dosCss = document.createElement("link");
+        dosCss.rel = "stylesheet";
+        dosCss.href = "https://v8.js-dos.com/latest/js-dos.css";
+        document.head.appendChild(dosCss);
+        loadExternalScript("https://v8.js-dos.com/latest/js-dos.js")
+          .then(function () {
+            if (typeof window.Dos !== "function") {
+              throw new Error("js-dos failed to initialize");
+            }
+            window.Dos(document.getElementById("dos-container"), {
+              url: romUrl,
+              autoStart: true
+            });
+          })
+          .catch(function (err) {
+            gameDiv.innerHTML =
+              '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#f87171;font-size:13px;padding:24px;text-align:center;">DOSBox (js-dos) error: ' +
+              String(err && err.message ? err.message : err) +
+              "</div>";
+          });
+        return;
+      }
+
+      // ======================================================================
+      // STANDALONE MAME RUNNER (The Emularity + JSMAME — non-RetroArch)
+      // ======================================================================
+      function bootEmulatorJs() {
       window.EJS_player = "#game";
       window.EJS_core = resolvedCore;
       window.EJS_gameName = title;
@@ -1700,6 +1744,65 @@
       var script = document.createElement("script");
       script.src = "https://cdn.emulatorjs.org/stable/data/loader.js";
       document.body.appendChild(script);
+      } // end bootEmulatorJs
+
+      if (resolvedCore === "jsmame") {
+        var gameDivMame = document.getElementById("game");
+        var rawBase = String(title || "arcade")
+          .replace(/\.zip$/i, "")
+          .replace(/\s*\((mame|arcade|fbneo|usa|world|rev\s*\w*)\)\s*/gi, "")
+          .trim()
+          .toLowerCase();
+        var driver = rawBase.replace(/[^a-z0-9_]/g, "") || "pacman";
+        var mameCoreUrl = "https://archive.org/cors/emularity_engine_jsmame/mess" + encodeURIComponent(driver) + ".js.gz";
+
+        gameDivMame.innerHTML =
+          '<div style="display:flex;flex-direction:column;width:100%;height:100%;background:#000;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#0f172a;border-bottom:1px solid #334155;font-size:11px;color:#cbd5e1;">' +
+              '<span><b>JSMAME (Standalone)</b> • Driver: <code>' + driver + '</code></span>' +
+              '<span>Coin: <b>5</b> • Start: <b>1</b> • Move: <b>Arrows</b> • Buttons: <b>Ctrl / Alt / Space</b></span>' +
+            '</div>' +
+            '<div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+              '<canvas id="jsmame-canvas" style="max-width:100%;max-height:100%;image-rendering:pixelated;"></canvas>' +
+            '</div>' +
+          '</div>';
+
+        fetch(mameCoreUrl, { method: "HEAD" })
+          .then(function (resp) {
+            if (!resp.ok) {
+              throw new Error("No standalone JSMAME driver for " + driver);
+            }
+            return Promise.all([
+              loadExternalScript("https://cdn.jsdelivr.net/npm/browserfs@1.4.3/dist/browserfs.min.js"),
+              loadExternalScript("https://cdn.jsdelivr.net/gh/db48x/emularity@master/loader.js")
+            ]);
+          })
+          .then(function () {
+            var canvasEl = document.getElementById("jsmame-canvas");
+            var emu = new window.Emulator(
+              canvasEl,
+              null,
+              new window.MAMELoader(
+                window.MAMELoader.driver(driver),
+                window.MAMELoader.nativeResolution(640, 480),
+                window.MAMELoader.scale(1),
+                window.MAMELoader.emulatorJS(mameCoreUrl),
+                window.MAMELoader.mountFile(driver + ".zip", window.MAMELoader.fetchFile("Game ROM", romUrl))
+              )
+            );
+            emu.start({ waitAfterDownloading: false });
+          })
+          .catch(function (err) {
+            console.warn("JSMAME fallback to FBNeo:", err);
+            gameDivMame.innerHTML = "";
+            resolvedCore = "fbneo";
+            window.EJS_core = "fbneo";
+            bootEmulatorJs();
+          });
+        return;
+      }
+
+      bootEmulatorJs();
     })();
   </script>
 </body>

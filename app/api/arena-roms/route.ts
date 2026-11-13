@@ -21,7 +21,7 @@ export async function GET() {
         name =>
           name &&
           !name.startsWith('.') &&
-          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i.test(name)
+          /\.(zip|bin|md|gen|smd|sfc|smc|fig|swc|nes|fds|unf|unif|sms|gg|32x|z64|n64|v64|a26|a52|a78|lnx|j64|jag|jsdos|dosz|exe|com|bat|img|ima|vhd|iso|cue|chd|conf)$/i.test(name)
       );
 
     return NextResponse.json({ files });

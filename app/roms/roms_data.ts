@@ -38,6 +38,7 @@ export type EmulatorCoreId =
   | 'atari7800'
   | 'lynx'
   | 'jaguar'
+  | 'jsmame'
   | 'mame2003_plus'
   | 'fbneo'
   | 'dosbox_pure';
@@ -2058,7 +2059,7 @@ export function detectEmulatorCoreFromFileName(fileName: string): {
     return { core: 'jaguar', consoleSystem: 'ATARI' };
   }
   if (
-    /\.(dosz|exe|com|bat|img|ima|vhd|conf)$/i.test(lower) ||
+    /\.(jsdos|dosz|exe|com|bat|img|ima|vhd|conf)$/i.test(lower) ||
     lower.includes('_dos') ||
     lower.includes('(dos)') ||
     lower.includes('(pc)') ||
@@ -2083,7 +2084,7 @@ export function detectEmulatorCoreFromFileName(fileName: string): {
     lower.includes('(mame)') ||
     lower.includes('(arcade)')
   ) {
-    return { core: 'mame2003_plus', consoleSystem: 'ARCADE' };
+    return { core: 'jsmame', consoleSystem: 'ARCADE' };
   }
   if (/\.sms$/i.test(lower)) {
     return { core: 'segaMS', consoleSystem: 'SEGA' };
