@@ -3107,6 +3107,51 @@ function ArenaContent() {
         </div>
       </div>
 
+      {/* COMPACT GLOWING 3 EASY STEPS BAR */}
+      <div className="mb-4 bg-neutral-950 border-2 border-amber-400 px-3 py-1.5 shadow-[0_0_14px_rgba(245,158,11,0.45)] flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono text-white">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 bg-amber-400 text-black font-black uppercase px-2 py-0.5 text-[10px] rounded-xs animate-pulse">
+            ⚡ 3 EASY STEPS
+          </span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setActiveArenaTab('lobby')}
+            className="px-2 py-0.5 bg-neutral-900 hover:bg-blue-700 border border-neutral-700 hover:border-blue-400 rounded-xs cursor-pointer transition flex items-center gap-1"
+          >
+            <span className="text-amber-400 font-black">1A.</span> Find Player
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              handleLeaveNetplayRoom();
+              setHasLaunchedGame(true);
+              setActiveArenaTab('ice');
+            }}
+            className="px-2 py-0.5 bg-neutral-900 hover:bg-emerald-700 border border-neutral-700 hover:border-emerald-400 rounded-xs cursor-pointer transition flex items-center gap-1"
+          >
+            <span className="text-amber-400 font-black">1B.</span> Play Solo
+          </button>
+          <span className="text-neutral-600">•</span>
+          <button
+            type="button"
+            onClick={() => setActiveArenaTab('controller')}
+            className="px-2 py-0.5 bg-neutral-900 hover:bg-cyan-700 border border-neutral-700 hover:border-cyan-400 rounded-xs cursor-pointer transition flex items-center gap-1"
+          >
+            <span className="text-amber-400 font-black">2.</span> Test Controller
+          </button>
+          <span className="text-neutral-600">•</span>
+          <button
+            type="button"
+            onClick={handleCaptureLiveBoxscore}
+            className="px-2 py-0.5 bg-neutral-900 hover:bg-amber-600 hover:text-black border border-neutral-700 hover:border-amber-300 rounded-xs cursor-pointer transition flex items-center gap-1"
+          >
+            <span className="text-amber-400 font-black">3.</span> Capture Boxscore
+          </button>
+        </div>
+      </div>
+
       {/* ===================================================================== */}
       {/* 3. MAIN 3-COLUMN ARENA LAYOUT (LEFT LIBRARY • CENTER SCREEN • RIGHT)  */}
       {/* ===================================================================== */}
@@ -4671,126 +4716,85 @@ function ArenaContent() {
         {/* RIGHT NARROW COLUMN (3 cols on lg) — COACH CARD & LOCKER ROOM       */}
         {/* =================================================================== */}
         <div className="col-span-12 lg:col-span-3 space-y-4 order-3">
-          {/* COACH PROFILE CARD */}
-          <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <div className="flex items-center gap-3.5 pb-3.5 border-b border-slate-200">
-              <div className="w-14 h-14 rounded-xs bg-black border-2 border-black flex items-center justify-center text-white font-serif font-black text-xl shrink-0 shadow-xs">
-                {myDisplayName.slice(0, 2).toUpperCase()}
+          {/* COACH PROFILE CARD (COMPACT) */}
+          <div className="bg-white border-2 border-black p-2.5 shadow-[3px_3px_0px_rgba(0,0,0,1)] space-y-2">
+            <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-9 h-9 rounded-xs bg-black flex items-center justify-center text-white font-serif font-black text-sm shrink-0">
+                  {myDisplayName.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-black font-serif uppercase truncate text-black leading-tight">
+                    {myDisplayName}
+                  </div>
+                  <div className="text-[10px] font-mono text-emerald-700 font-bold flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{isLoggedIn ? 'Verified Coach' : 'Visitor'}</span>
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold">
-                  {isLoggedIn ? 'VERIFIED LEAGUE COACH' : 'ARENA VISITOR'}
-                </div>
-                <div className="text-lg font-black font-serif uppercase truncate text-black">
-                  {myDisplayName}
-                </div>
-                <div className="text-xs font-mono text-emerald-700 font-bold flex items-center gap-1.5 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>{myLobbyStatus === 'available' ? 'Available to Play' : 'Away'}</span>
-                </div>
-              </div>
+              {!isLoggedIn ? (
+                <button
+                  onClick={() => openLoginModal('Sign in to represent your franchise in the NHL95 Online Arena')}
+                  className="py-1 px-2.5 bg-blue-700 hover:bg-blue-600 text-white font-mono text-[10px] font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1 shrink-0"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Sign In</span>
+                </button>
+              ) : (
+                <Link
+                  href="/managers"
+                  className="py-1 px-2.5 bg-blue-700 hover:bg-blue-600 text-white font-mono text-[10px] font-bold uppercase rounded-xs shrink-0"
+                >
+                  Profile
+                </Link>
+              )}
             </div>
 
-            {/* COACH RECORD SNAPSHOT & ALL-TIME HIGHLIGHTS */}
             {(() => {
               const myRec = (arenaRecordsData?.coachLeaderboard || []).find(
                 (c: any) => c.coachName.toLowerCase() === myDisplayName.toLowerCase()
               );
               return (
-                <div className="py-3 border-b border-slate-200 font-mono text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase text-slate-500 font-black flex items-center gap-1">
-                      <Trophy className="w-3.5 h-3.5 text-amber-600" />
-                      <span>COACH CAREER RECORD</span>
-                    </span>
-                    <button
-                      onClick={() => setActiveArenaTab('records')}
-                      className="text-[10px] text-blue-700 hover:underline font-bold cursor-pointer"
-                    >
-                      All-Time Records &rarr;
-                    </button>
-                  </div>
+                <div className="flex items-center justify-between text-[10px] font-mono bg-[#faf8f5] border border-slate-200 px-2 py-1 rounded-xs">
                   {myRec ? (
-                    <div className="grid grid-cols-4 gap-1.5 bg-[#faf8f5] border border-slate-200 p-2 rounded-xs text-center">
-                      <div>
-                        <div className="text-[9px] text-slate-500">W-L-T</div>
-                        <div className="font-black text-slate-900">
-                          {myRec.wins}-{myRec.losses}-{myRec.ties}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-slate-500">PTS</div>
-                        <div className="font-black text-blue-900">{myRec.points}</div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-slate-500">WIN%</div>
-                        <div className="font-black text-emerald-800">{myRec.winPct}%</div>
-                      </div>
-                      <div>
-                        <div className="text-[9px] text-slate-500">GOALS</div>
-                        <div className="font-black text-amber-800">{myRec.goalsFor}</div>
-                      </div>
-                    </div>
+                    <span>
+                      <strong>{myRec.wins}-{myRec.losses}-{myRec.ties}</strong> • <strong>{myRec.points}</strong> PTS • {myRec.winPct}%
+                    </span>
                   ) : (
-                    <div className="text-[11px] text-slate-500 bg-[#faf8f5] border border-slate-200 p-2 rounded-xs">
-                      Play a match on the ice or sign in to track your W-L-T, Points, Goals &amp; Fastest Goals!
-                    </div>
+                    <span className="text-slate-500">No career games yet</span>
                   )}
+                  <button
+                    onClick={() => setActiveArenaTab('records')}
+                    className="text-blue-700 hover:underline font-bold cursor-pointer shrink-0 ml-2"
+                  >
+                    Records &rarr;
+                  </button>
                 </div>
               );
             })()}
 
-            <div className="py-3 border-b border-slate-200 text-xs space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] uppercase text-slate-500 font-bold">
-                  ACTIVE INPUT DEVICE
-                </span>
-                <span className="font-mono text-[9px] uppercase bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded font-bold">
-                  {controllerConfig.presetName}
-                </span>
-              </div>
-              <div className="font-mono font-bold text-slate-800 truncate">
-                {gamepadInfo ? `🎮 ${gamepadInfo}` : '⌨️ Keyboard — No USB controller detected'}
-              </div>
+            <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+              <span className="truncate text-slate-700 font-bold">
+                {gamepadInfo ? `🎮 ${gamepadInfo}` : `⌨️ ${controllerConfig.presetName}`}
+              </span>
               {isLoggedIn && (
                 <button
                   onClick={handleSaveCoachControllerConfig}
                   disabled={isSavingControllerConfig}
-                  className="w-full mt-1 py-1.5 px-2.5 bg-amber-400 hover:bg-amber-300 text-black border border-black font-mono text-[10px] font-black uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 transition"
+                  className="py-1 px-2 bg-amber-400 hover:bg-amber-300 text-black border border-black text-[9px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1 shrink-0 transition"
+                  title={`Save Controller Settings (${myDisplayName})`}
                 >
-                  <CloudUpload className="w-3.5 h-3.5" />
-                  <span>
-                    {isSavingControllerConfig
-                      ? 'Saving Controller...'
-                      : `Save Controller Settings (${myDisplayName})`}
-                  </span>
+                  <CloudUpload className="w-3 h-3" />
+                  <span>{isSavingControllerConfig ? 'Saving...' : 'Save Pad'}</span>
                 </button>
               )}
-              {controllerSaveBanner && (
-                <div className="text-[10px] font-mono text-emerald-700 font-bold">
-                  ✓ {controllerSaveBanner.text}
-                </div>
-              )}
             </div>
-
-            <div className="pt-3 font-mono text-xs">
-              {!isLoggedIn ? (
-                <button
-                  onClick={() => openLoginModal('Sign in to represent your franchise in the NHL95 Online Arena')}
-                  className="w-full py-2 px-3 bg-blue-700 hover:bg-blue-600 text-white font-bold uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Coach Sign In</span>
-                </button>
-              ) : (
-                <Link
-                  href="/managers"
-                  className="w-full py-2 px-3 bg-blue-700 hover:bg-blue-600 text-white font-bold uppercase rounded-xs flex items-center justify-center gap-1.5 text-center"
-                >
-                  <span>Coach Profile</span>
-                </Link>
-              )}
-            </div>
+            {controllerSaveBanner && (
+              <div className="text-[9px] font-mono text-emerald-700 font-bold">
+                ✓ {controllerSaveBanner.text}
+              </div>
+            )}
           </div>
 
           {/* LIVE LOCKER ROOM CHAT & QUICK OPPONENT PICKER */}
@@ -4894,81 +4898,6 @@ function ArenaContent() {
                   <Send className="w-3 h-3" />
                 </button>
               </form>
-            </div>
-          </div>
-
-          {/* PRE-GAME: 3 EASY STEPS */}
-          <div className="bg-[#f8f4e8] border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <div className="text-[10px] font-mono font-black uppercase tracking-widest text-blue-800">
-              PRE-GAME GUIDE
-            </div>
-            <h3 className="text-xl font-black uppercase font-serif tracking-tight text-black mb-4">
-              3 Easy Steps
-            </h3>
-
-            <div className="mb-3">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-6 h-6 bg-blue-800 text-white font-mono text-xs font-black flex items-center justify-center rounded-xs">
-                  1
-                </span>
-                <span className="font-bold text-xs uppercase font-mono">Choose How to Play</span>
-              </div>
-              <div className="space-y-1.5 pl-8">
-                <button
-                  onClick={() => setActiveArenaTab('lobby')}
-                  className="w-full text-left p-2.5 bg-white hover:bg-amber-50 border border-slate-300 rounded-xs cursor-pointer transition block"
-                >
-                  <div className="font-bold text-xs text-black">Find a player</div>
-                  <div className="text-[11px] text-slate-500">Real coaches in the Locker Room Lobby</div>
-                </button>
-                <button
-                  onClick={() => {
-                    handleLeaveNetplayRoom();
-                    setHasLaunchedGame(true);
-                    setActiveArenaTab('ice');
-                  }}
-                  className="w-full text-left p-2.5 bg-white hover:bg-amber-50 border border-slate-300 rounded-xs cursor-pointer transition block"
-                >
-                  <div className="font-bold text-xs text-black">Play solo</div>
-                  <div className="text-[11px] text-slate-500">You vs the Genesis CPU</div>
-                </button>
-              </div>
-            </div>
-
-            <div className="mb-3">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-6 h-6 bg-blue-800 text-white font-mono text-xs font-black flex items-center justify-center rounded-xs">
-                  2
-                </span>
-                <span className="font-bold text-xs uppercase font-mono">Verify Your Controller</span>
-              </div>
-              <div className="pl-8">
-                <button
-                  onClick={() => setActiveArenaTab('controller')}
-                  className="w-full text-left p-2.5 bg-white hover:bg-amber-50 border border-slate-300 rounded-xs cursor-pointer transition block"
-                >
-                  <div className="font-bold text-xs text-black">Open Interactive Gamepad Tester</div>
-                  <div className="text-[11px] text-slate-500">Works with Xbox, PlayStation, 8BitDo &amp; USB pads</div>
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="w-6 h-6 bg-blue-800 text-white font-mono text-xs font-black flex items-center justify-center rounded-xs">
-                  3
-                </span>
-                <span className="font-bold text-xs uppercase font-mono">Capture Boxscore</span>
-              </div>
-              <div className="pl-8">
-                <button
-                  onClick={handleCaptureLiveBoxscore}
-                  className="w-full text-left p-2.5 bg-white hover:bg-emerald-50 border border-slate-300 rounded-xs cursor-pointer transition block"
-                >
-                  <div className="font-bold text-xs text-emerald-900">1-Click Live Boxscore Extraction</div>
-                  <div className="text-[11px] text-slate-500">Reads Genesis RAM into an official WN95HL Boxscore</div>
-                </button>
-              </div>
             </div>
           </div>
         </div>
