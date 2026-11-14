@@ -22,7 +22,12 @@ export function getRomImageUrl(imagePath?: string): string | undefined {
  */
 export function getRomDownloadUrl(fileName: string, customUrl?: string): string {
   if (customUrl && customUrl.trim()) return customUrl.trim();
-  return `${SUPABASE_ROMS_URL}/${encodeURIComponent(fileName)}?download`;
+  const encodedPath = fileName
+    .split('/')
+    .filter(Boolean)
+    .map(seg => encodeURIComponent(seg))
+    .join('/');
+  return `${SUPABASE_ROMS_URL}/${encodedPath}?download`;
 }
 
 export type EmulatorCoreId =

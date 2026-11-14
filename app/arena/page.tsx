@@ -33,6 +33,7 @@ import {
   MISC_ROMS,
   SOLO_RETRO_CONSOLE_ROMS,
   SUPABASE_ROMS_URL,
+  getRomDownloadUrl,
   EmulatorCoreId,
   ConsoleSystemId,
   detectEmulatorCoreFromFileName
@@ -3227,41 +3228,53 @@ function ArenaContent() {
                       ? `${item.base.split('/').pop()?.toUpperCase()} — ${item.title.replace(/^\S+\s+—\s+/, '')}`
                       : item.title;
                   return (
-                    <button
+                    <div
                       key={item.fileName}
-                      type="button"
-                      onClick={() => {
-                        if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                        setLocalRomObjectUrl(null);
-                        setLocalRomTitle(null);
-                        setCustomCoreOverride('auto');
-                        setSelectedRomId(item.romId);
-                        setHasLaunchedGame(false);
-                        setEmulatorRunning(false);
-                        setActiveArenaTab('ice');
-                      }}
-                      className={`w-full flex items-center gap-2.5 p-2 text-left cursor-pointer transition ${
+                      className={`w-full flex items-center gap-2 p-2 transition ${
                         isSelected
                           ? 'bg-amber-100 border-l-4 border-l-amber-500'
                           : 'hover:bg-slate-50'
                       }`}
                     >
-                      <div className="w-14 h-10 bg-neutral-900 border border-black/30 shrink-0 overflow-hidden flex items-center justify-center">
-                        <RomCoverImage
-                          base={item.fileName}
-                          alt={displayTitle}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-black text-black truncate leading-tight">
-                          {displayTitle}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                          setLocalRomObjectUrl(null);
+                          setLocalRomTitle(null);
+                          setCustomCoreOverride('auto');
+                          setSelectedRomId(item.romId);
+                          setHasLaunchedGame(false);
+                          setEmulatorRunning(false);
+                          setActiveArenaTab('ice');
+                        }}
+                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
+                      >
+                        <div className="w-14 h-10 bg-neutral-900 border border-black/30 shrink-0 overflow-hidden flex items-center justify-center">
+                          <RomCoverImage
+                            base={item.fileName}
+                            alt={displayTitle}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
-                        <div className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
-                          {item.consoleSystem} • {item.fileName.split('/').pop()}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-black text-black truncate leading-tight">
+                            {displayTitle}
+                          </div>
+                          <div className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
+                            {item.consoleSystem} • {item.fileName.split('/').pop()}
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      <a
+                        href={getRomDownloadUrl(item.fileName)}
+                        download={item.fileName.split('/').pop() || item.fileName}
+                        title={`Download ${item.fileName.split('/').pop()} for offline emulator use`}
+                        className="p-1.5 border border-black/25 hover:border-black hover:bg-amber-400 text-slate-700 hover:text-black rounded-xs shrink-0 transition"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   );
                 })
               )}
@@ -3546,6 +3559,17 @@ function ArenaContent() {
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                  {!localRomObjectUrl && resolvedRomFileName && (
+                    <a
+                      href={getRomDownloadUrl(resolvedRomFileName)}
+                      download={resolvedRomFileName.split('/').pop() || resolvedRomFileName}
+                      className="bg-amber-500 hover:bg-amber-400 text-black px-2.5 py-1 text-[11px] font-black uppercase rounded-xs cursor-pointer flex items-center gap-1"
+                      title={`Download ${resolvedRomFileName.split('/').pop()} to play outside the browser`}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download ROM</span>
+                    </a>
+                  )}
                   <button
                     onClick={() => localRomInputRef.current?.click()}
                     className="bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1 text-[11px] font-bold uppercase rounded-xs cursor-pointer flex items-center gap-1"
