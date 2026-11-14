@@ -1886,7 +1886,7 @@
 
       if (resolvedCore === "jsmame") {
         var gameDivMame = document.getElementById("game");
-        var rawBase = String(title || "arcade")
+        var rawBase = (String(title || "arcade").split("/").pop() || "arcade")
           .replace(/\.zip$/i, "")
           .replace(/\s*\((mame|arcade|fbneo|usa|world|rev\s*\w*)\)\s*/gi, "")
           .trim()

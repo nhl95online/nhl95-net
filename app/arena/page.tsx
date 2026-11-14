@@ -1283,7 +1283,7 @@ function ArenaContent() {
   // Console folder buttons + rich boxart game dropdown
   type ConsoleFolderTab = 'ALL' | 'LEAGUE' | ConsoleSystemId;
   const [selectedConsoleFolder, setSelectedConsoleFolder] = useState<ConsoleFolderTab>('LEAGUE');
-  const [boxartDropdownOpen, setBoxartDropdownOpen] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState('');
   const [romGenre, setRomGenre] = useState<RomGenre | 'all'>('League');
   const [romVaultMenuOpen, setRomVaultMenuOpen] = useState(false);
   const genreCounts = useMemo(() => {
@@ -1300,18 +1300,23 @@ function ArenaContent() {
     return counts;
   }, [bucketRomItems]);
   const pickerItems = useMemo(
-    () =>
-      bucketRomItems
+    () => {
+      const q = librarySearch.trim().toLowerCase();
+      return bucketRomItems
         .filter(item =>
           selectedConsoleFolder === 'ALL' ? true : item.consoleFolder === selectedConsoleFolder
+        )
+        .filter(item =>
+          !q || item.title.toLowerCase().includes(q) || item.fileName.toLowerCase().includes(q)
         )
         .sort((a, b) => {
           if (a.consoleFolder === 'LEAGUE' && b.consoleFolder === 'LEAGUE') {
             return b.base.localeCompare(a.base, undefined, { numeric: true });
           }
           return a.title.localeCompare(b.title);
-        }),
-    [bucketRomItems, selectedConsoleFolder]
+        });
+    },
+    [bucketRomItems, selectedConsoleFolder, librarySearch]
   );
 
   // Arena Sub-navigation Tab ('ice' | 'lobby' | 'records' | 'vault' | 'controller' | 'boxscore')
@@ -2886,14 +2891,6 @@ function ArenaContent() {
               <span>Host 2v2 (4P)</span>
             </button>
             <button
-              onClick={() => localRomInputRef.current?.click()}
-              className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 px-3 py-1.5 text-xs font-mono font-bold uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition"
-              title="Play a local .bin, .md, or .zip ROM file from your computer"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-              <span>Load Local ROM</span>
-            </button>
-            <button
               onClick={handleSendStateToDiscord}
               disabled={isSendingToDiscord}
               className="bg-[#5865F2] hover:bg-[#4752C4] text-white border border-indigo-300 px-3.5 py-1.5 text-xs font-mono font-black uppercase rounded-xs flex items-center gap-1.5 cursor-pointer transition shadow-xs"
@@ -2987,12 +2984,8 @@ function ArenaContent() {
             ))}
           </div>
 
-          <div className="hidden md:flex items-center gap-3 text-[11px] text-slate-600">
+          <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-600">
             <span>Bucket: <strong>roms ({bucketFiles.length} files)</strong></span>
-            <span>•</span>
-            <Link href="/roms" className="text-amber-800 hover:underline font-bold">
-              Full ROM Repository &rarr;
-            </Link>
           </div>
         </div>
       </div>
@@ -3003,55 +2996,29 @@ function ArenaContent() {
       <div className="mb-6 space-y-5">
         {/* GAMES IN PROGRESS PANEL (Just like King of 94 screenshot) */}
         <div className="bg-white border-2 border-black rounded-xs shadow-[3px_3px_0px_rgba(0,0,0,1)] overflow-hidden">
-          <div className="px-4 py-3 bg-[#f8fafc] border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
+          <div className="px-4 py-2 bg-[#f8fafc] border-b border-slate-200 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-sm sm:text-base font-black text-slate-900 font-sans">
+              <h2 className="text-xs sm:text-sm font-black text-slate-900 font-sans">
                 Games in progress
               </h2>
               <span className="bg-blue-100 text-blue-800 font-mono text-xs font-black px-2 py-0.5 rounded-full">
                 {gamesInProgress.length}
               </span>
-              <span className="text-[11px] text-slate-500 hidden sm:inline ml-2">
-                Live scores update about every 15–20 seconds.
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => handleHostOpenRoom(false)}
-                className="text-xs font-mono font-bold text-blue-700 hover:underline cursor-pointer flex items-center gap-1"
-              >
-                <span>+ Host 1v1 (2P)</span>
-              </button>
-              <button
-                onClick={() => handleHostOpenRoom(true)}
-                className="text-xs font-mono font-bold text-cyan-700 hover:underline cursor-pointer flex items-center gap-1"
-              >
-                <span>+ Host 2v2 (4P)</span>
-              </button>
+              {gamesInProgress.length === 0 ? (
+                <span className="text-[11px] text-slate-500 hidden sm:inline ml-2">
+                  No live matches right now — pick a game from the library or click Host 1v1 / 2v2 above.
+                </span>
+              ) : (
+                <span className="text-[11px] text-slate-500 hidden sm:inline ml-2">
+                  Live scores update about every 15–20 seconds.
+                </span>
+              )}
             </div>
           </div>
 
+          {gamesInProgress.length > 0 && (
           <div className="divide-y divide-slate-200">
-            {gamesInProgress.length === 0 ? (
-              <div className="px-4 py-4 text-xs text-slate-500 font-sans flex items-center justify-between flex-wrap gap-2">
-                <span>No live matches on the ice right now. Start a game below or host a 1v1 (2P) or 2v2 (4-Player) room!</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleHostOpenRoom(false)}
-                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-mono text-[11px] font-bold uppercase rounded cursor-pointer"
-                  >
-                    Open 1v1 Room
-                  </button>
-                  <button
-                    onClick={() => handleHostOpenRoom(true)}
-                    className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-[11px] font-bold uppercase rounded cursor-pointer"
-                  >
-                    Open 2v2 (4P) Room
-                  </button>
-                </div>
-              </div>
-            ) : (
-              gamesInProgress.map(g => {
+            {gamesInProgress.map(g => {
                 const isWaitingForP2 = g.role === 'host' && (!g.opponentName || g.opponentName.includes('Waiting'));
                 return (
                   <div key={g.peerId} className="px-4 py-3 flex items-center justify-between flex-wrap gap-4 hover:bg-slate-50">
@@ -3133,43 +3100,52 @@ function ArenaContent() {
                   </div>
                 );
               })
-            )}
+            }
           </div>
+          )}
         </div>
       </div>
 
       {/* ===================================================================== */}
-      {/* 3. MAIN TWO-COLUMN ARENA LAYOUT (JUMBOTRON LEFT + COACH CARD RIGHT)   */}
+      {/* 3. MAIN 3-COLUMN ARENA LAYOUT (LEFT LIBRARY • CENTER SCREEN • RIGHT)  */}
       {/* ===================================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* LEFT / CENTER COLUMN (8 cols on lg) */}
-        <div className="lg:col-span-8 space-y-5">
-          {/* CONSOLE LOGO FOLDER BUTTONS + BOXART GAME DROPDOWN */}
-          <div className="bg-white border-2 border-black p-3 shadow-[3px_3px_0px_rgba(0,0,0,1)] space-y-3">
-            {/* Console Logo Folder Strip */}
-            <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="grid grid-cols-12 gap-4 sm:gap-5 lg:gap-6 items-start">
+        {/* LEFT NARROW COLUMN (3 cols on lg) — GAME LIBRARY WITH CONSOLE LOGOS & BOXART */}
+        <aside className="col-span-12 lg:col-span-3 space-y-4 order-2 lg:order-1">
+          <div className="bg-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] overflow-hidden">
+            <div className="bg-black text-white px-3 py-2 flex items-center justify-between">
+              <span className="font-mono text-xs font-black uppercase tracking-wider text-amber-400">
+                🎮 Game Library
+              </span>
+              <span className="font-mono text-[10px] text-slate-300">
+                {pickerItems.length} shown
+              </span>
+            </div>
+
+            {/* Console Logo Folder Buttons */}
+            <div className="p-2.5 border-b border-black/15 bg-[#faf8f5] grid grid-cols-3 gap-1.5">
               {(
                 [
                   { id: 'LEAGUE', label: "NHL '95", bg: 'bg-amber-400 text-black border-black', icon: (
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor">
                       <ellipse cx="12" cy="14" rx="9" ry="4" />
                       <path d="M3 10v4c0 2.2 4 4 9 4s9-1.8 9-4v-4c0 2.2-4 4-9 4s-9-1.8-9-4z" opacity="0.7" />
                       <ellipse cx="12" cy="10" rx="9" ry="4" />
                     </svg>
                   )},
                   { id: 'SEGA', label: 'SEGA', bg: 'bg-blue-700 text-white border-blue-950', icon: (
-                    <svg viewBox="0 0 64 22" className="h-3.5 w-auto shrink-0" fill="currentColor">
+                    <svg viewBox="0 0 64 22" className="h-3 w-auto shrink-0" fill="currentColor">
                       <text x="2" y="18" fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="19" letterSpacing="-1">SEGA</text>
                     </svg>
                   )},
                   { id: 'NES', label: 'NES', bg: 'bg-red-600 text-white border-red-950', icon: (
-                    <svg viewBox="0 0 46 22" className="h-3.5 w-auto shrink-0" fill="currentColor">
+                    <svg viewBox="0 0 46 22" className="h-3 w-auto shrink-0" fill="currentColor">
                       <rect x="1" y="2" width="44" height="18" rx="3" fill="none" stroke="currentColor" strokeWidth="2.5" />
                       <text x="6" y="16" fontFamily="monospace" fontWeight="900" fontSize="14">NES</text>
                     </svg>
                   )},
                   { id: 'SNES', label: 'SNES', bg: 'bg-purple-700 text-white border-purple-950', icon: (
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0">
                       <circle cx="12" cy="5" r="3" fill="#3b82f6" />
                       <circle cx="19" cy="12" r="3" fill="#ef4444" />
                       <circle cx="12" cy="19" r="3" fill="#eab308" />
@@ -3177,23 +3153,23 @@ function ArenaContent() {
                     </svg>
                   )},
                   { id: 'N64', label: 'N64', bg: 'bg-emerald-700 text-white border-emerald-950', icon: (
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor">
                       <path d="M4 4h4l4 8V4h4v16h-4l-4-8v8H4V4z" />
                     </svg>
                   )},
                   { id: 'ATARI', label: 'ATARI', bg: 'bg-orange-600 text-white border-orange-950', icon: (
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor">
                       <rect x="10.5" y="3" width="3" height="18" />
                       <path d="M9 3c0 8-3 13-7 15v3c5-2 9-8 9-18H9zM15 3c0 8 3 13 7 15v3c-5-2-9-8-9-18h2z" />
                     </svg>
                   )},
                   { id: 'ARCADE', label: 'MAME', bg: 'bg-cyan-600 text-white border-cyan-950', icon: (
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor">
                       <path d="M5 3h14l-1 6H6L5 3zm1 7h12v4H6v-4zm-1 5h14v6H5v-6z" />
                     </svg>
                   )},
-                  { id: 'PC', label: 'PC / DOS', bg: 'bg-indigo-700 text-white border-indigo-950', icon: (
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="currentColor">
+                  { id: 'PC', label: 'PC', bg: 'bg-indigo-700 text-white border-indigo-950', icon: (
+                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="currentColor">
                       <rect x="3" y="3" width="18" height="13" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2.2" />
                       <path d="M8 20h8M12 16v4" stroke="currentColor" strokeWidth="2.2" />
                     </svg>
@@ -3207,124 +3183,106 @@ function ArenaContent() {
                   <button
                     key={btn.id}
                     type="button"
-                    onClick={() => {
-                      setSelectedConsoleFolder(btn.id);
-                      setBoxartDropdownOpen(true);
-                    }}
-                    className={`px-2.5 py-1.5 border-2 font-mono font-black text-[11px] uppercase flex items-center gap-1.5 cursor-pointer transition ${
+                    onClick={() => setSelectedConsoleFolder(btn.id)}
+                    className={`px-1.5 py-1.5 border font-mono font-black text-[10px] uppercase flex items-center justify-center gap-1 cursor-pointer transition ${
                       isActive
-                        ? `${btn.bg} shadow-[2px_2px_0px_rgba(0,0,0,1)] -translate-y-0.5`
-                        : 'bg-[#faf8f5] text-black border-black/40 hover:border-black hover:bg-neutral-100'
+                        ? `${btn.bg} shadow-[1px_1px_0px_rgba(0,0,0,1)]`
+                        : 'bg-white text-black border-black/30 hover:border-black hover:bg-neutral-100'
                     }`}
-                    title={`Show ${btn.label} games (${count} in bucket)`}
+                    title={`${btn.label} (${count} games)`}
                   >
                     {btn.icon}
-                    {btn.id !== 'SEGA' && btn.id !== 'NES' && <span>{btn.label}</span>}
+                    {btn.id !== 'SEGA' && btn.id !== 'NES' && <span className="truncate">{btn.label}</span>}
                     <span className={`text-[9px] px-1 rounded ${isActive ? 'bg-black/25' : 'bg-black/10'}`}>
                       {count}
                     </span>
                   </button>
                 );
               })}
-              <button
-                onClick={() => {
-                  setVaultCategory('cloud');
-                  setActiveArenaTab('vault');
-                }}
-                className="ml-auto text-[11px] font-mono font-black uppercase border-2 border-black px-2.5 py-1.5 bg-black text-amber-400 hover:bg-neutral-800 cursor-pointer shrink-0"
-              >
-                Browse Vault &rarr;
-              </button>
             </div>
 
-            {/* Selected Game Bar + Boxart Dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setBoxartDropdownOpen(o => !o)}
-                className="w-full flex items-center justify-between gap-3 border-2 border-black bg-[#faf8f5] hover:bg-amber-50/60 p-2 text-left cursor-pointer transition"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  {!localRomObjectUrl && (
-                    <RomCoverImage
-                      base={resolvedRomFileName || selectedRom.id}
-                      alt={selectedRom.title}
-                      className="w-16 h-11 object-cover border border-black shrink-0 bg-black"
-                    />
-                  )}
-                  <div className="min-w-0">
-                    <div className="text-[10px] font-mono font-black uppercase text-slate-500">
-                      {selectedConsoleFolder === 'ALL' ? 'ALL SYSTEMS' : `${selectedConsoleFolder} FOLDER`} • CLICK TO PICK GAME ({pickerItems.length})
-                    </div>
-                    <div className="text-xs sm:text-sm font-black text-black truncate">
-                      {localRomObjectUrl ? `Local File: ${localRomTitle || 'ROM'}` : selectedRom.title}
-                    </div>
-                  </div>
-                </div>
-                <span className="font-mono font-black text-xs px-2 py-1 border border-black bg-white shrink-0">
-                  {boxartDropdownOpen ? 'CLOSE ▲' : 'GAMES ▼'}
-                </span>
-              </button>
+            {/* Search Filter */}
+            <div className="p-2 border-b border-black/15">
+              <input
+                type="text"
+                value={librarySearch}
+                onChange={e => setLibrarySearch(e.target.value)}
+                placeholder={`Filter ${selectedConsoleFolder === 'ALL' ? 'all' : selectedConsoleFolder} games...`}
+                className="w-full border border-black/40 focus:border-black bg-[#faf8f5] px-2.5 py-1 text-xs font-mono text-black outline-none"
+              />
+            </div>
 
-              {boxartDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-neutral-950 border-2 border-black shadow-2xl max-h-96 overflow-y-auto divide-y divide-neutral-800">
-                  {pickerItems.length === 0 ? (
-                    <div className="p-4 text-center text-xs font-mono text-slate-400">
-                      No ROMs found in the <span className="text-amber-400 font-bold">{selectedConsoleFolder.toLowerCase()}/</span> folder yet.
-                      Upload ROMs to <code className="text-slate-200">roms/{selectedConsoleFolder.toLowerCase()}/</code> or click &ldquo;Load Local ROM&rdquo;.
-                    </div>
-                  ) : (
-                    pickerItems.map(item => {
-                      const isSelected = !localRomObjectUrl && item.romId === selectedRom.id;
-                      const displayTitle =
-                        item.genre === 'League'
-                          ? `${item.base.split('/').pop()?.toUpperCase()} — ${item.title.replace(/^\S+\s+—\s+/, '')}`
-                          : item.title;
-                      return (
-                        <button
-                          key={item.fileName}
-                          type="button"
-                          onClick={() => {
-                            if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
-                            setLocalRomObjectUrl(null);
-                            setLocalRomTitle(null);
-                            setCustomCoreOverride('auto');
-                            setSelectedRomId(item.romId);
-                            setHasLaunchedGame(false);
-                            setEmulatorRunning(false);
-                            setBoxartDropdownOpen(false);
-                            setActiveArenaTab('ice');
-                          }}
-                          className={`w-full flex items-center gap-3 p-2.5 text-left cursor-pointer transition ${
-                            isSelected ? 'bg-amber-500/20 border-l-4 border-l-amber-400' : 'hover:bg-neutral-900'
-                          }`}
-                        >
-                          <div className="w-16 h-11 bg-neutral-900 border border-neutral-700 shrink-0 overflow-hidden flex items-center justify-center">
-                            <RomCoverImage
-                              base={item.fileName}
-                              alt={displayTitle}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-black text-white truncate">{displayTitle}</div>
-                            <div className="text-[10px] font-mono text-slate-400 truncate">
-                              {item.consoleSystem} • {item.fileName}
-                            </div>
-                          </div>
-                          {isSelected && (
-                            <span className="text-[10px] font-mono font-black uppercase bg-amber-400 text-black px-2 py-0.5 rounded-xs shrink-0">
-                              ACTIVE
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
+            {/* Scrollable Game Library List with Boxart */}
+            <div className="max-h-[540px] overflow-y-auto divide-y divide-slate-200 bg-white">
+              {pickerItems.length === 0 ? (
+                <div className="p-4 text-center text-[11px] font-mono text-slate-500">
+                  No ROMs in <span className="font-bold text-black">{selectedConsoleFolder.toLowerCase()}/</span> yet.
+                  Upload to <code>roms/{selectedConsoleFolder.toLowerCase()}/</code> or load a local ROM below.
                 </div>
+              ) : (
+                pickerItems.map(item => {
+                  const isSelected = !localRomObjectUrl && item.romId === selectedRom.id;
+                  const displayTitle =
+                    item.genre === 'League'
+                      ? `${item.base.split('/').pop()?.toUpperCase()} — ${item.title.replace(/^\S+\s+—\s+/, '')}`
+                      : item.title;
+                  return (
+                    <button
+                      key={item.fileName}
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') (window as any).__NHL95_LOCAL_FILE = null;
+                        setLocalRomObjectUrl(null);
+                        setLocalRomTitle(null);
+                        setCustomCoreOverride('auto');
+                        setSelectedRomId(item.romId);
+                        setHasLaunchedGame(false);
+                        setEmulatorRunning(false);
+                        setActiveArenaTab('ice');
+                      }}
+                      className={`w-full flex items-center gap-2.5 p-2 text-left cursor-pointer transition ${
+                        isSelected
+                          ? 'bg-amber-100 border-l-4 border-l-amber-500'
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="w-14 h-10 bg-neutral-900 border border-black/30 shrink-0 overflow-hidden flex items-center justify-center">
+                        <RomCoverImage
+                          base={item.fileName}
+                          alt={displayTitle}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-black text-black truncate leading-tight">
+                          {displayTitle}
+                        </div>
+                        <div className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
+                          {item.consoleSystem} • {item.fileName.split('/').pop()}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </div>
+
+            {/* Single Load Local ROM Button */}
+            <div className="p-2.5 border-t border-black/15 bg-[#faf8f5]">
+              <button
+                type="button"
+                onClick={() => localRomInputRef.current?.click()}
+                className="w-full py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white border border-black font-mono text-[11px] font-black uppercase rounded-xs flex items-center justify-center gap-1.5 cursor-pointer transition"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>Load Local ROM File</span>
+              </button>
+            </div>
           </div>
+        </aside>
+
+        {/* CENTER MAIN ACTION COLUMN (6 cols on lg) */}
+        <div className="col-span-12 lg:col-span-6 space-y-4 order-1 lg:order-2">
 
           {/* NETPLAY BANNER IF IN 1v1 OR 2v2 ROOM */}
           {(netplayRole !== 'solo' || sentInviteNotice) && (
@@ -3415,65 +3373,6 @@ function ArenaContent() {
               </button>
             </div>
           )}
-
-          {/* PREGAME / LIVE SCOREBOARD JUMBOTRON */}
-          <div className="bg-neutral-950 border-2 border-black text-white p-3 sm:p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-            <div className="flex items-center justify-between text-[10px] font-mono uppercase text-slate-400 mb-2 px-1 flex-wrap gap-1">
-              <span className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${emulatorRunning ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-                <strong className="text-white">95 TV ARENA FEED</strong> — {emulatorRunning ? 'MATCH IN PROGRESS' : 'READY WHEN YOUR GAME STARTS'}
-              </span>
-              <span className="text-amber-400 font-bold">
-                SYSTEM: {activeConsoleLabel} • FILE: {localRomRawFile?.name || resolvedRomFileName || 'READY TO LOAD'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-12 border-2 border-neutral-700 bg-black p-2.5 sm:p-3 items-center gap-2">
-              <div className="col-span-4 sm:col-span-5 flex items-center gap-2.5 border-r border-neutral-800 pr-2">
-                <div className="w-8 h-8 rounded bg-amber-500/10 border border-amber-500/40 flex items-center justify-center font-mono text-[10px] font-black text-amber-400 shrink-0">
-                  {activeConsoleSystem === 'SNES'
-                    ? 'SNES'
-                    : activeConsoleSystem === 'NES'
-                    ? 'NES'
-                    : resolvedRomFileName
-                    ? resolvedRomFileName.replace(/\.(zip|bin|md|gen|smd|sfc|smc|nes)$/i, '').slice(0, 4).toUpperCase()
-                    : 'SEGA'}
-                </div>
-                <div className="truncate">
-                  <div className="text-[9px] font-mono uppercase text-slate-400">
-                    ACTIVE CARTRIDGE ({activeConsoleSystem})
-                  </div>
-                  <div className="text-xs sm:text-sm font-black uppercase font-mono text-white truncate">
-                    {localRomTitle || resolvedRomFileName || activeRomTitle}
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-span-4 sm:col-span-2 text-center">
-                <div className="text-[8px] font-mono uppercase tracking-widest text-amber-400">
-                  {netplayRole === 'solo' ? `SOLO • ${activeConsoleSystem}` : '2P ONLINE'}
-                </div>
-                <div className="text-xs sm:text-sm font-black font-mono uppercase text-emerald-400">
-                  {liveTelemetry && isCurrentGameNhl95
-                    ? `${liveTelemetry.homeScore} - ${liveTelemetry.awayScore}`
-                    : emulatorRunning
-                    ? 'PLAYING'
-                    : 'PREGAME'}
-                </div>
-              </div>
-
-              <div className="col-span-4 sm:col-span-5 flex items-center justify-end gap-2.5 border-l border-neutral-800 pl-2 text-right">
-                <div className="truncate">
-                  <div className="text-[9px] font-mono uppercase text-slate-400">
-                    {netplayOpponentName ? `VS ${netplayOpponentName}` : 'COACH AT THE BENCH'}
-                  </div>
-                  <div className="text-xs sm:text-sm font-black uppercase font-mono text-cyan-300 truncate">
-                    {myDisplayName}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* ================================================================= */}
           {/* TAB 1: ARENA ICE (PRE-GAME SELECTOR OR LIVE EMULATORJS CANVAS)    */}
@@ -4745,9 +4644,9 @@ function ArenaContent() {
         </div>
 
         {/* =================================================================== */}
-        {/* RIGHT SIDEBAR (4 cols on lg) — COACH CARD, OPPONENT LIST & CHAT     */}
+        {/* RIGHT NARROW COLUMN (3 cols on lg) — COACH CARD & LOCKER ROOM       */}
         {/* =================================================================== */}
-        <div className="lg:col-span-4 space-y-5">
+        <div className="col-span-12 lg:col-span-3 space-y-4 order-3">
           {/* COACH PROFILE CARD */}
           <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
             <div className="flex items-center gap-3.5 pb-3.5 border-b border-slate-200">
@@ -4850,11 +4749,11 @@ function ArenaContent() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-3.5 font-mono text-xs">
+            <div className="pt-3 font-mono text-xs">
               {!isLoggedIn ? (
                 <button
                   onClick={() => openLoginModal('Sign in to represent your franchise in the NHL95 Online Arena')}
-                  className="col-span-2 py-2 px-3 bg-blue-700 hover:bg-blue-600 text-white font-bold uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                  className="w-full py-2 px-3 bg-blue-700 hover:bg-blue-600 text-white font-bold uppercase rounded-xs cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Coach Sign In</span>
@@ -4862,33 +4761,11 @@ function ArenaContent() {
               ) : (
                 <Link
                   href="/managers"
-                  className="py-2 px-3 bg-blue-700 hover:bg-blue-600 text-white font-bold uppercase rounded-xs flex items-center justify-center gap-1.5 text-center"
+                  className="w-full py-2 px-3 bg-blue-700 hover:bg-blue-600 text-white font-bold uppercase rounded-xs flex items-center justify-center gap-1.5 text-center"
                 >
                   <span>Coach Profile</span>
                 </Link>
               )}
-
-              <button
-                onClick={() => setActiveArenaTab('records')}
-                className="py-2 px-3 bg-amber-500 hover:bg-amber-400 text-black border border-black font-black uppercase rounded-xs cursor-pointer transition flex items-center justify-center gap-1"
-              >
-                <Trophy className="w-3.5 h-3.5" />
-                <span>Records &amp; AI</span>
-              </button>
-
-              <button
-                onClick={() => setActiveArenaTab('controller')}
-                className="py-2 px-3 bg-slate-100 hover:bg-black hover:text-white text-black border border-slate-300 font-bold uppercase rounded-xs cursor-pointer transition"
-              >
-                Controller Setup
-              </button>
-
-              <button
-                onClick={() => setActiveArenaTab('vault')}
-                className="py-2 px-3 bg-slate-100 hover:bg-black hover:text-white text-black border border-slate-300 font-bold uppercase rounded-xs cursor-pointer transition"
-              >
-                Switch ROM
-              </button>
             </div>
           </div>
 
@@ -4898,20 +4775,6 @@ function ArenaContent() {
               <div className="font-mono text-xs font-black uppercase text-black flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-blue-700" />
                 <span>Locker Room ({onlinePlayers.length || 1} Online)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleHostOpenRoom(false)}
-                  className="text-[10px] font-mono font-black uppercase bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded cursor-pointer"
-                >
-                  + 1v1
-                </button>
-                <button
-                  onClick={() => handleHostOpenRoom(true)}
-                  className="text-[10px] font-mono font-black uppercase bg-cyan-600 hover:bg-cyan-500 text-white px-2 py-1 rounded cursor-pointer"
-                >
-                  + 2v2
-                </button>
               </div>
             </div>
 
