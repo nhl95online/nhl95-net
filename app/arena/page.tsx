@@ -1747,6 +1747,34 @@ function ArenaContent() {
   const [saveNoteInput, setSaveNoteInput] = useState<string>('');
   const [savingProgress, setSavingProgress] = useState<boolean>(false);
   const [saveLogStatus, setSaveLogStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [autoTrackEnabled, setAutoTrackEnabled] = useState<boolean>(true);
+  const latestAutoStateRef = useRef<{ gameKey: string; gameTitle: string; bytes: Uint8Array } | null>(null);
+  const liveRunRef = useRef<{
+    gameKey: string;
+    gameTitle: string;
+    playerName: string;
+    score: string;
+    distance: string;
+    flushed: boolean;
+  }>({
+    gameKey: 'W16',
+    gameTitle: 'W16',
+    playerName: 'Player',
+    score: '',
+    distance: '',
+    flushed: false,
+  });
+
+  useEffect(() => {
+    liveRunRef.current = {
+      gameKey: activeGameKey,
+      gameTitle: activeGameLabel,
+      playerName: hsPlayerInput.trim() || myDisplayName,
+      score: hsScoreInput.trim(),
+      distance: hsDistanceInput.trim(),
+      flushed: false,
+    };
+  }, [activeGameKey, activeGameLabel, hsPlayerInput, myDisplayName, hsScoreInput, hsDistanceInput]);
 
   useEffect(() => {
     if (isLoggedIn && currentCoach?.coach_name && !hsPlayerInput) {
@@ -1926,6 +1954,107 @@ function ArenaContent() {
     } catch {}
     persistSaveStateLog(saveStateLog.filter((item) => item.id !== id));
   };
+
+  // Live capture while playing: polls emulator state every 15s (auto-parses NHL '95 score/period)
+  // and registers score + auto-checkpoint when the window/tab is closed
+  useEffect(() => {
+    if (!autoTrackEnabled) return;
+
+    const pollLiveEmulator = () => {
+      try {
+        const iframeWin = iframeRef.current?.contentWindow as any;
+        const ejs = iframeWin?.EJS_emulator;
+        if (!ejs || !ejs.gameManager || typeof ejs.gameManager.getState !== 'function') return;
+        const liveRaw: Uint8Array = ejs.gameManager.getState();
+        if (!liveRaw || liveRaw.length === 0) return;
+
+        latestAutoStateRef.current = {
+          gameKey: activeGameKey,
+          gameTitle: activeGameLabel,
+          bytes: liveRaw,
+        };
+
+        // For NHL '95 ROMs, automatically read live score & period from Genesis RAM
+        if (selectedRom.category === 'league' || selectedRom.category === 'nhl-history') {
+          try {
+            const seasonCfg = getSeasonConfig(selectedSeasonConfigId);
+            const parsed = parseSaveStateBuffer(ensureRetroArchHeader(liveRaw), seasonCfg);
+            if (parsed && parsed.awayTeam && parsed.homeTeam) {
+              const awayCode = (parsed.awayTeam.teamCode || 'AWY').toUpperCase();
+              const homeCode = (parsed.homeTeam.teamCode || 'HME').toUpperCase();
+              const maxGoals = Math.max(parsed.awayTeam.goals || 0, parsed.homeTeam.goals || 0);
+              setHsScoreInput(String(maxGoals));
+              setHsDistanceInput(
+                `${awayCode} ${parsed.awayTeam.goals || 0}-${parsed.homeTeam.goals || 0} ${homeCode}`
+              );
+            }
+          } catch {}
+        }
+      } catch {}
+    };
+
+    const intervalId = window.setInterval(pollLiveEmulator, 15000);
+
+    const flushOnExit = () => {
+      const run = liveRunRef.current;
+      if (!run.flushed && (run.score !== '' || run.distance !== '')) {
+        run.flushed = true;
+        try {
+          const payload = JSON.stringify({
+            gameKey: run.gameKey,
+            gameTitle: run.gameTitle,
+            playerName: run.playerName,
+            score: run.score || null,
+            distance: run.distance,
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(
+              '/api/arena-progress',
+              new Blob([payload], { type: 'application/json' })
+            );
+          } else {
+            fetch('/api/arena-progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payload,
+              keepalive: true,
+            }).catch(() => {});
+          }
+        } catch {}
+      }
+
+      // Auto-save latest emulator state into Save State Progress Log on window close
+      const snap = latestAutoStateRef.current;
+      if (snap && snap.bytes && snap.bytes.length > 0) {
+        const id = `auto-${Date.now()}`;
+        putArenaStateBlob(id, snap.bytes).catch(() => {});
+        try {
+          const raw = window.localStorage.getItem(ARENA_SAVESTATE_LOG_STORAGE_KEY);
+          const existing: ArenaSaveStateLogEntry[] = raw ? JSON.parse(raw) : [];
+          const nextEntry: ArenaSaveStateLogEntry = {
+            id,
+            gameKey: snap.gameKey,
+            gameTitle: snap.gameTitle,
+            note: `Auto-Save on Exit (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+            byteLength: snap.bytes.length,
+            createdAt: new Date().toISOString(),
+          };
+          window.localStorage.setItem(
+            ARENA_SAVESTATE_LOG_STORAGE_KEY,
+            JSON.stringify([nextEntry, ...(Array.isArray(existing) ? existing : [])].slice(0, 40))
+          );
+        } catch {}
+      }
+    };
+
+    window.addEventListener('pagehide', flushOnExit);
+    window.addEventListener('beforeunload', flushOnExit);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('pagehide', flushOnExit);
+      window.removeEventListener('beforeunload', flushOnExit);
+    };
+  }, [autoTrackEnabled, activeGameKey, activeGameLabel, selectedRom.category, selectedSeasonConfigId]);
 
   useEffect(() => {
     if (selectedRom?.defaultSeasonConfigId) {
@@ -5237,10 +5366,22 @@ function ArenaContent() {
                   type="submit"
                   disabled={hsSubmitting}
                   className="px-2.5 py-1 bg-black hover:bg-amber-400 hover:text-black text-white font-mono text-[10px] font-black uppercase border border-black cursor-pointer disabled:opacity-50"
+                  title="Log score / distance (or click when you die / lose)"
                 >
-                  {hsSubmitting ? '...' : 'Log'}
+                  {hsSubmitting ? '...' : 'Died / Log'}
                 </button>
               </div>
+              <label className="flex items-center justify-between gap-2 text-[10px] font-bold text-slate-600 cursor-pointer select-none">
+                <span className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={autoTrackEnabled}
+                    onChange={(e) => setAutoTrackEnabled(e.target.checked)}
+                    className="accent-black cursor-pointer"
+                  />
+                  Auto-capture &amp; register score/state on window close
+                </span>
+              </label>
               {hsStatus && (
                 <div
                   className={`text-[10px] font-bold px-2 py-1 border ${
