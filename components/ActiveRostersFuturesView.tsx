@@ -326,6 +326,7 @@ interface RosterMatrixPlayerRow {
   avgOvr: number | null;
   activeYearsCount: number;
   isOpenSlot?: boolean;
+  isRetiredEmpty?: boolean;
   tradedFrom?: string;
   replacedFrom?: string;
   isCustomEdit?: boolean;
@@ -357,6 +358,7 @@ export default function ActiveRostersFuturesView({
     Record<string, { team_id?: number; team_name: string; coach_name?: string; coach_id?: number; banner_filename?: string }>
   >({});
   const [tradesRows, setTradesRows] = useState<any[]>([]);
+  const [leaguesRows, setLeaguesRows] = useState<any[]>([]);
   const [playerDbMap, setPlayerDbMap] = useState<
     Map<string, { pos: 'G' | 'F' | 'D'; hand: string; canonicalName: string; ovrByYear: Record<number, number> }>
   >(new Map());
@@ -408,7 +410,42 @@ export default function ActiveRostersFuturesView({
     }
   }, [initialTeamAbbr]);
 
-  const years = useMemo(() => (leagueType === 'W' ? W_YEARS : O_YEARS), [leagueType]);
+  const baseYears = useMemo(() => (leagueType === 'W' ? W_YEARS : O_YEARS), [leagueType]);
+
+  const archivedYears = useMemo(() => {
+    const archived = new Set<number>();
+    leaguesRows.forEach((l: any) => {
+      const status = String(l.status || '').trim().toLowerCase();
+      if (status !== 'archived') return;
+
+      const lid = Number(l.league_id);
+      const lName = String(l.league_name || '').trim().toUpperCase();
+
+      if (leagueType === 'W') {
+        const wMatch = lName.match(/^W(\d+)/);
+        if (wMatch) {
+          const sNum = Number(wMatch[1]);
+          if (sNum >= 18) archived.add(2013 + (sNum - 18));
+        } else if (lid >= 40 && !lName.startsWith('O') && !lName.startsWith('Q')) {
+          archived.add(2013 + (lid - 40));
+        }
+      } else {
+        const oMatch = lName.match(/^O0?(\d+)/);
+        if (oMatch) {
+          const sNum = Number(oMatch[1]);
+          if (sNum >= 1) archived.add(1927 + (sNum - 1));
+        } else if (lid === 39) {
+          archived.add(1927);
+        }
+      }
+    });
+    return archived;
+  }, [leaguesRows, leagueType]);
+
+  const years = useMemo(() => {
+    const remaining = baseYears.filter((yr) => !archivedYears.has(yr));
+    return remaining.length > 0 ? remaining : [baseYears[baseYears.length - 1]];
+  }, [baseYears, archivedYears]);
   const seasonConfig = useMemo(() => (leagueType === 'W' ? W_SEASON_CONFIG : O_SEASON_CONFIG), [leagueType]);
   const activeSeasonId = seasonConfig.seasonId;
 
@@ -430,14 +467,16 @@ export default function ActiveRostersFuturesView({
     let cancelled = false;
     async function loadTeamsMeta() {
       try {
-        const [teamsRes, coachesRes, tradesRes] = await Promise.all([
+        const [teamsRes, coachesRes, tradesRes, leaguesRes] = await Promise.all([
           supabase.from('league_teams').select('*').in('league_id', [38, 39, 40]),
           supabase.from('league_coaches').select('coach_id, coach_name'),
           supabase.from('league_trades').select('*').order('trade id', { ascending: true }),
+          supabase.from('leagues').select('league_id, league_name, status'),
         ]);
 
         if (cancelled) return;
         setTradesRows(tradesRes.data || []);
+        setLeaguesRows(leaguesRes.data || []);
         const coachMap: Record<number, string> = {};
         (coachesRes.data || []).forEach((c: any) => {
           if (c.coach_id !== undefined && c.coach_id !== null) {
@@ -482,7 +521,7 @@ export default function ActiveRostersFuturesView({
     async function loadYearsData() {
       setLoading(true);
       try {
-        const yearPromises = years.map(async (yr) => {
+        const yearPromises = baseYears.map(async (yr) => {
           const { data, error } = await supabase
             .from('league_player_database')
             .select('player_name, pos, ratings, player_info')
@@ -566,7 +605,7 @@ export default function ActiveRostersFuturesView({
     return () => {
       cancelled = true;
     };
-  }, [years]);
+  }, [baseYears]);
 
   // Searchable list of all DB players for the interactive replacement picker
   const allDbPlayersList = useMemo(() => {
@@ -583,7 +622,7 @@ export default function ActiveRostersFuturesView({
       const dedupKey = `${entry.pos === 'G' ? 'G' : 'S'}:${normName(entry.canonicalName)}`;
       if (seen.has(dedupKey)) return;
       seen.add(dedupKey);
-      const vals = Object.values(entry.ovrByYear).filter((v) => v > 0);
+      const vals = years.map((yr) => entry.ovrByYear[yr] || 0).filter((v) => v > 0);
       if (vals.length === 0) return;
       const peakOvr = Math.max(...vals);
       const avgOvr = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
@@ -597,7 +636,7 @@ export default function ActiveRostersFuturesView({
     });
 
     return list.sort((a, b) => b.peakOvr - a.peakOvr || b.avgOvr - a.avgOvr);
-  }, [playerDbMap]);
+  }, [playerDbMap, years]);
 
   // 3. Build complete matrix rows in exact team & positional order (2 G, 5 F, 3 D),
   //    synced with confirmed league_trades and interactive planner edits
@@ -772,6 +811,38 @@ export default function ActiveRostersFuturesView({
         ovrByYear[yr] = matched?.ovrByYear?.[yr] ?? null;
       });
       const { peakOvr, avgOvr, activeYearsCount } = computeSummaryMetrics(ovrByYear);
+      const displayName = DISPLAY_NAME_OVERRIDES[playerName] || matched?.canonicalName || playerName;
+
+      // Once an earlier season (e.g. 2013) is archived, empty the slot if the player is retired (0 remaining active years)
+      if (!extras?.isCustomEdit && archivedYears.size > 0 && playerDbMap.size > 0 && activeYearsCount === 0) {
+        const hadArchivedOvr = Array.from(archivedYears).some((yr) => (matched?.ovrByYear?.[yr] ?? 0) > 0);
+        if (hadArchivedOvr) {
+          const emptyYears: Record<number, number | null> = {};
+          years.forEach((yr) => {
+            emptyYears[yr] = null;
+          });
+          return {
+            slotId,
+            teamAbbr: abbr,
+            teamName,
+            teamId: meta?.team_id ?? null,
+            coachName,
+            coachId,
+            bannerFilename: meta?.banner_filename,
+            playerName: '',
+            displayPlayerName: `OPEN ${pos} SPOT`,
+            pos,
+            hand: '—',
+            ovrByYear: emptyYears,
+            peakOvr: null,
+            avgOvr: null,
+            activeYearsCount: 0,
+            isOpenSlot: true,
+            isRetiredEmpty: true,
+            replacedFrom: `${displayName} (Ret)`,
+          };
+        }
+      }
 
       return {
         slotId,
@@ -782,7 +853,7 @@ export default function ActiveRostersFuturesView({
         coachId,
         bannerFilename: meta?.banner_filename,
         playerName,
-        displayPlayerName: DISPLAY_NAME_OVERRIDES[playerName] || matched?.canonicalName || playerName,
+        displayPlayerName: displayName,
         pos,
         hand: matched?.hand || 'L',
         ovrByYear,
@@ -868,7 +939,7 @@ export default function ActiveRostersFuturesView({
     });
 
     return rows;
-  }, [seasonConfig, orderedTeamAbbrs, teamsMetaByAbbr, leagueType, playerDbMap, years, tradesRows, plannerEdits]);
+  }, [seasonConfig, orderedTeamAbbrs, teamsMetaByAbbr, leagueType, playerDbMap, years, archivedYears, tradesRows, plannerEdits]);
 
   const openSpotsCount = useMemo(
     () =>
