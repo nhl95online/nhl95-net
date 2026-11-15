@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useCoachAuth } from '@/lib/coach-auth';
-import { getDraftPickValueOrEstimate } from '@/lib/draftPickValues';
+import { getDraftPickValueOrEstimate, buildTradedPickOwnersMap, sortTeamsBestFirst } from '@/lib/draftPickValues';
 import Link from 'next/link';
 import { 
   ArrowLeftRight, Check, Copy, RotateCcw, AlertTriangle, ShieldCheck, 
@@ -210,7 +210,8 @@ interface PickAsset {
   year: number | string;
   value: number;
   team_id: number | string;
-  pickNumber?: number; // Overall pick # (from Draft Capital in league_drafts), when known
+  pickNumber?: number; // Overall pick # (from Draft Capital / standings order)
+  origAbbr?: string; // Original team abbreviation if acquired via trade
 }
 
 // Round label -> round number (e.g. '1st' -> 1)
@@ -328,6 +329,7 @@ export default function TradesPage() {
   const [selectedFranchiseFilter, setSelectedFranchiseFilter] = useState<string>('ALL');
   const [ledgerSortOrder, setLedgerSortOrder] = useState<'NEWEST' | 'BIGGEST' | 'LOPSIDED'>('NEWEST');
   const [trades, setTrades] = useState<any[]>([]);
+  const [standingsRows, setStandingsRows] = useState<any[]>([]);
   const [allDrafts, setAllDrafts] = useState<any[]>([]);
   const [teamMetadata, setTeamMetadata] = useState<Record<string, any>>({});
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -373,7 +375,7 @@ export default function TradesPage() {
     async function initGlobalData() {
       setLoadingArchive(true);
       try {
-        const [seasonRes, teamsRes, coachesRes, tradesRes, draftsRes] = await Promise.all([
+        const [seasonRes, teamsRes, coachesRes, tradesRes, draftsRes, standingsRes] = await Promise.all([
           supabase.from('league_seasons').select('*').order('league_id', { ascending: false }),
           supabase.from('league_teams').select('*'),
           supabase.from('league_coaches').select('*'),
@@ -382,7 +384,8 @@ export default function TradesPage() {
             round, pick_number, year, transaction_type, league_id,
             league_player_database (player_id, player_name, pos, ratings, player_info),
             league_teams (team_id, team_name, abbreviation, logo_url)
-          `)
+          `),
+          supabase.from('league_standings').select('team_id, season_id, pts, w, gd, gf')
         ]);
 
         const coachMap = new Map<number, { coach_name: string; discord_tag?: string }>();
@@ -431,6 +434,7 @@ export default function TradesPage() {
 
         setTrades(tradesRes.data || []);
         setAllDrafts(draftsRes.data || []);
+        setStandingsRows(standingsRes.data || []);
       } catch (err) {
         console.error("Global Init Error:", err);
       } finally {
@@ -440,38 +444,93 @@ export default function TradesPage() {
     initGlobalData();
   }, []);
 
-  // 2. Draft Pick Generator: strictly future seasons ONLY (Current season draft is finished!)
+  const tradedPickOwnersByAbbr = useMemo(() => buildTradedPickOwnersMap(trades), [trades]);
+
+  // 2. Draft Pick Generator: strictly future seasons ONLY, synced with standings draft order & confirmed trades
   const generateLeagueDraftPicks = (tId: string, leagueType: 'W' | 'O' | 'Q' | 'V'): PickAsset[] => {
     const config = CURRENT_LEAGUES_CONFIG.find(c => c.id === leagueType);
     const futureYears = config?.futureDraftYears || [2014, 2015, 2016];
     const rounds = config?.draftRounds || ['1st', '2nd'];
 
+    const targetTeam = leagueTeams.find(t => String(t.team_id) === String(tId));
+    const targetAbbr = String(targetTeam?.abbreviation || '').trim().toUpperCase();
+    const teamIds = leagueTeams.map(t => Number(t.team_id)).filter(n => Number.isFinite(n) && n > 0);
+    const abbrByTeamId = new Map<number, string>();
+    leagueTeams.forEach(t => {
+      abbrByTeamId.set(Number(t.team_id), String(t.abbreviation || '').trim().toUpperCase());
+    });
+
+    // Determine standings order (worst record first -> #1 overall)
+    const targetSeasonIdNum = typeof config?.seasonId === 'number' ? config.seasonId : undefined;
+    const hasPlayed = (rows: any[]) => rows.some(s => (Number(s.pts) || 0) > 0 || (Number(s.w) || 0) > 0);
+    let seasonStandings = targetSeasonIdNum
+      ? standingsRows.filter(s => Number(s.season_id) === targetSeasonIdNum)
+      : [];
+    if (!hasPlayed(seasonStandings)) {
+      const teamIdSet = new Set(teamIds);
+      const matchingSeasonIds = Array.from(
+        new Set(
+          standingsRows
+            .filter(s => teamIdSet.has(Number(s.team_id)) && ((Number(s.pts) || 0) > 0 || (Number(s.w) || 0) > 0))
+            .map(s => Number(s.season_id))
+        )
+      ).sort((a, b) => b - a);
+      if (matchingSeasonIds.length > 0) {
+        seasonStandings = standingsRows.filter(s => Number(s.season_id) === matchingSeasonIds[0]);
+      }
+    }
+
+    const standingByTeam = new Map<number, any>(seasonStandings.map((s: any) => [Number(s.team_id), s]));
+    const bestFirst = sortTeamsBestFirst(teamIds, standingByTeam);
+    const worstFirst = [...bestFirst].reverse();
+    const teamsCount = worstFirst.length;
+
     const generated: PickAsset[] = [];
     futureYears.forEach((yr) => {
       rounds.forEach((rd) => {
         const rdNum = ROUND_LABEL_TO_NUM[rd] || 1;
-        // Look up this team's slot in the uploaded Draft Capital (league_drafts) to get the overall pick #
-        const ownedRows = (allDrafts || []).filter((d: any) => {
-          const ownerId = d.league_teams?.team_id ?? d.team_id;
-          return (
-            Number(d.year) === Number(yr) &&
-            Number(d.round) === rdNum &&
-            String(ownerId) === String(tId) &&
-            !d.league_player_database?.player_name
-          );
-        });
-        const ownRow =
-          ownedRows.find((d: any) => !/via|from/i.test(String(d.transaction_type || ''))) || ownedRows[0];
-        const pickNumber = ownRow?.pick_number ? Number(ownRow.pick_number) : undefined;
+        if (teamsCount > 0 && targetAbbr) {
+          worstFirst.forEach((origTeamId, idx) => {
+            const origAbbr = abbrByTeamId.get(origTeamId) || '';
+            if (!origAbbr) return;
+            const tradeMatch = tradedPickOwnersByAbbr.get(`${yr}-${rdNum}-${origAbbr}`);
+            const currentOwnerAbbr = tradeMatch ? tradeMatch.currentOwnerAbbr : origAbbr;
+            if (currentOwnerAbbr !== targetAbbr) return;
 
-        generated.push({
-          id: `${tId}-pick-${yr}-${rd}`,
-          round: rd,
-          year: yr,
-          value: getDraftPickValueOrEstimate(pickNumber, rdNum),
-          team_id: tId,
-          pickNumber
-        });
+            const pickNumber = (rdNum - 1) * teamsCount + (idx + 1);
+            generated.push({
+              id: `${tId}-pick-${yr}-${rd}-${origAbbr}`,
+              round: rd,
+              year: yr,
+              value: getDraftPickValueOrEstimate(pickNumber, rdNum),
+              team_id: tId,
+              pickNumber,
+              origAbbr: origAbbr !== targetAbbr ? origAbbr : undefined
+            });
+          });
+        } else {
+          // Fallback if teams/standings not yet loaded
+          const ownedRows = (allDrafts || []).filter((d: any) => {
+            const ownerId = d.league_teams?.team_id ?? d.team_id;
+            return (
+              Number(d.year) === Number(yr) &&
+              Number(d.round) === rdNum &&
+              String(ownerId) === String(tId) &&
+              !d.league_player_database?.player_name
+            );
+          });
+          const ownRow =
+            ownedRows.find((d: any) => !/via|from/i.test(String(d.transaction_type || ''))) || ownedRows[0];
+          const pickNumber = ownRow?.pick_number ? Number(ownRow.pick_number) : undefined;
+          generated.push({
+            id: `${tId}-pick-${yr}-${rd}`,
+            round: rd,
+            year: yr,
+            value: getDraftPickValueOrEstimate(pickNumber, rdNum),
+            team_id: tId,
+            pickNumber
+          });
+        }
       });
     });
 
@@ -785,7 +844,7 @@ export default function TradesPage() {
       setTeamBSendingPlayers([]);
       setTeamBSendingPicks([]);
     }
-  }, [teamAId, teamBId, simLeague, leagueTeams, allDrafts]);
+  }, [teamAId, teamBId, simLeague, leagueTeams, allDrafts, standingsRows, tradedPickOwnersByAbbr]);
 
   // Simulator Calculations
   const teamA = leagueTeams.find(t => String(t.team_id) === String(teamAId));
@@ -858,7 +917,7 @@ export default function TradesPage() {
         .join('\n') || '• No players';
     const aPickList =
       teamASendingPicks
-        .map((pk) => `• ${pk.year} ${pk.round} Round Pick${pk.pickNumber ? ` (#${pk.pickNumber})` : ''} (${pk.value} pts)`)
+        .map((pk) => `• ${pk.year} ${pk.round} Round Pick${pk.pickNumber ? ` (#${pk.pickNumber})` : ''}${pk.origAbbr ? ` (via ${pk.origAbbr})` : ''} (${pk.value} pts)`)
         .join('\n') || '• No draft picks';
     const bPlayerList =
       teamBSendingPlayers
@@ -869,7 +928,7 @@ export default function TradesPage() {
         .join('\n') || '• No players';
     const bPickList =
       teamBSendingPicks
-        .map((pk) => `• ${pk.year} ${pk.round} Round Pick${pk.pickNumber ? ` (#${pk.pickNumber})` : ''} (${pk.value} pts)`)
+        .map((pk) => `• ${pk.year} ${pk.round} Round Pick${pk.pickNumber ? ` (#${pk.pickNumber})` : ''}${pk.origAbbr ? ` (via ${pk.origAbbr})` : ''} (${pk.value} pts)`)
         .join('\n') || '• No draft picks';
 
     const teamAName = teamA?.team_name || 'Team A';
@@ -1646,7 +1705,7 @@ export default function TradesPage() {
                               key={pk.id}
                               className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
                             >
-                              <span>{pk.year} {pk.round} Rd{pk.pickNumber ? ` (#${pk.pickNumber})` : ''}</span>
+                              <span>{pk.year} {pk.round} Rd{pk.pickNumber ? ` (#${pk.pickNumber})` : ''}{pk.origAbbr ? ` (via ${pk.origAbbr})` : ''}</span>
                               <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
                                 {pk.value} pts
                               </span>
@@ -1710,7 +1769,7 @@ export default function TradesPage() {
                               key={pk.id}
                               className="border border-black bg-white px-2.5 py-1 text-xs font-bold flex items-center justify-between shadow-2xs"
                             >
-                              <span>{pk.year} {pk.round} Rd{pk.pickNumber ? ` (#${pk.pickNumber})` : ''}</span>
+                              <span>{pk.year} {pk.round} Rd{pk.pickNumber ? ` (#${pk.pickNumber})` : ''}{pk.origAbbr ? ` (via ${pk.origAbbr})` : ''}</span>
                               <span className="font-mono text-[10px] bg-neutral-100 border border-neutral-300 px-1.5 py-0.2 ml-1 font-black shrink-0">
                                 {pk.value} pts
                               </span>
@@ -1958,7 +2017,7 @@ export default function TradesPage() {
                                         : 'bg-white border-neutral-300 hover:border-black'
                                     }`}
                                   >
-                                    <span>{pk.round} Rd{pk.pickNumber ? ` #${pk.pickNumber}` : ''}</span>
+                                    <span>{pk.round} Rd{pk.pickNumber ? ` #${pk.pickNumber}` : ''}{pk.origAbbr ? ` (via ${pk.origAbbr})` : ''}</span>
                                     <span className="opacity-75 font-mono">+{pk.value}</span>
                                   </button>
                                 );
@@ -2120,7 +2179,7 @@ export default function TradesPage() {
                                         : 'bg-white border-neutral-300 hover:border-black'
                                     }`}
                                   >
-                                    <span>{pk.round} Rd{pk.pickNumber ? ` #${pk.pickNumber}` : ''}</span>
+                                    <span>{pk.round} Rd{pk.pickNumber ? ` #${pk.pickNumber}` : ''}{pk.origAbbr ? ` (via ${pk.origAbbr})` : ''}</span>
                                     <span className="opacity-75 font-mono">+{pk.value}</span>
                                   </button>
                                 );

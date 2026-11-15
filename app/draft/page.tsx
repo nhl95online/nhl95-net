@@ -11,7 +11,7 @@ import {
   Users, MessageSquare
 } from 'lucide-react';
 import { useCoachAuth } from '@/lib/coach-auth';
-import { getDraftPickValue } from '@/lib/draftPickValues';
+import { getDraftPickValue, buildTradedPickOwnersMap, sortTeamsBestFirst } from '@/lib/draftPickValues';
 import CoachLockOverlay from '@/components/CoachLockOverlay';
 import ActiveRostersFuturesView from '@/components/ActiveRostersFuturesView';
 import {
@@ -1222,76 +1222,7 @@ export default function DraftPage() {
 
   // Parse traded future draft picks from league_trades (chronological by 'trade id')
   // Key: `${year}-${round}-${ORIG_TEAM_ABBR}` -> Value: `${CURRENT_OWNER_ABBR}`
-  const tradedPickOwnersByAbbr = useMemo(() => {
-    const map = new Map<string, { currentOwnerAbbr: string; origAbbr: string; year: number; round: number; tradeId: any }>();
-    const sortedTrades = [...tradesRows].sort((a, b) => (Number(a['trade id']) || 0) - (Number(b['trade id']) || 0));
-
-    const processSide = (senderAbbrRaw: any, receiverAbbrRaw: any, assetsStrRaw: any, tradeId: any) => {
-      const sender = String(senderAbbrRaw || '').trim().toUpperCase();
-      const receiver = String(receiverAbbrRaw || '').trim().toUpperCase();
-      const assetsStr = String(assetsStrRaw || '');
-      if (!sender || !receiver || !assetsStr || assetsStr === 'NULL') return;
-
-      const items = assetsStr.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
-      items.forEach(item => {
-        const lower = item.toLowerCase();
-        const isPick =
-          lower.includes('rdpk') ||
-          lower.includes('round') ||
-          lower.includes('pick') ||
-          /\b(19\d\d|20\d\d)\s+(1st|2nd|3rd|4th|5th)\b/i.test(item);
-        if (!isPick) return;
-
-        const yrMatch = item.match(/\b(19\d\d|20\d\d)\b/);
-        if (!yrMatch) return;
-        const yr = parseInt(yrMatch[1], 10);
-
-        let rd = 0;
-        if (lower.includes('1st')) rd = 1;
-        else if (lower.includes('2nd')) rd = 2;
-        else if (lower.includes('3rd')) rd = 3;
-        else if (lower.includes('4th')) rd = 4;
-        else if (lower.includes('5th')) rd = 5;
-        if (!rd) return;
-
-        // Check if pick originated from another team: e.g. "(fromSAS)" or "(from BOS)"
-        let origAbbr = sender;
-        const fromMatch = item.match(/from\s*([A-Za-z]{2,4})/i);
-        if (fromMatch) {
-          origAbbr = fromMatch[1].toUpperCase();
-        } else {
-          // Or if sender had previously acquired a pick in that (yr, rd) and didn't specify, check if sender owns their own pick first
-          const ownKey = `${yr}-${rd}-${sender}`;
-          const existingOwn = map.get(ownKey);
-          if (existingOwn && existingOwn.currentOwnerAbbr !== sender) {
-            // Sender already traded their own pick; check if they hold another team's pick for this (yr, rd)
-            for (const [, val] of map.entries()) {
-              if (val.year === yr && val.round === rd && val.currentOwnerAbbr === sender) {
-                origAbbr = val.origAbbr;
-                break;
-              }
-            }
-          }
-        }
-
-        const key = `${yr}-${rd}-${origAbbr}`;
-        map.set(key, {
-          currentOwnerAbbr: receiver,
-          origAbbr,
-          year: yr,
-          round: rd,
-          tradeId
-        });
-      });
-    };
-
-    sortedTrades.forEach(t => {
-      processSide(t.team, t.team_1, t.trade, t['trade id']);
-      processSide(t.team_1, t.team, t.trade_1, t['trade id']);
-    });
-
-    return map;
-  }, [tradesRows]);
+  const tradedPickOwnersByAbbr = useMemo(() => buildTradedPickOwnersMap(tradesRows), [tradesRows]);
 
   // Active Drafts: Only show current active drafts whose preceding season is completed, and remove any draft once it is completed.
   // Future drafts (e.g. W20 2015, W21 2016, O03 1929) are excluded until their preceding season is completed.
@@ -2203,25 +2134,55 @@ export default function DraftPage() {
       if (t.abbreviation) teamByAbbr.set(t.abbreviation.trim().toUpperCase(), t);
     });
 
+    const hasPlayedGames = (rows: any[]) =>
+      rows.some(s => (Number(s.pts) || 0) > 0 || (Number(s.w) || 0) > 0);
+
     let seasonStandings = standingsRows.filter(s => Number(s.season_id) === leagueIdNum);
-    if (seasonStandings.length === 0 && sourceLeagueId !== leagueIdNum) {
-      seasonStandings = standingsRows.filter(s => Number(s.season_id) === sourceLeagueId);
+    if (!hasPlayedGames(seasonStandings) && sourceLeagueId !== leagueIdNum) {
+      const srcRows = standingsRows.filter(s => Number(s.season_id) === sourceLeagueId);
+      if (hasPlayedGames(srcRows)) seasonStandings = srcRows;
+    }
+    if (!hasPlayedGames(seasonStandings)) {
+      const candidateSeasons = seasons
+        .filter(s => s.leagueType === targetType && Number(s.leagueId) <= leagueIdNum)
+        .sort((a, b) => Number(b.leagueId) - Number(a.leagueId));
+      for (const cs of candidateSeasons) {
+        const rows = standingsRows.filter(s => Number(s.season_id) === Number(cs.leagueId));
+        if (hasPlayedGames(rows)) {
+          seasonStandings = rows;
+          break;
+        }
+      }
     }
     const standingByTeam = new Map<number, any>(seasonStandings.map((s: any) => [Number(s.team_id), s]));
-    const num = (v: any) => Number(v) || 0;
 
-    const bestFirst = [...teamIds].sort((a, b) => {
-      const sa = standingByTeam.get(a);
-      const sb = standingByTeam.get(b);
-      return (
-        (num(sb?.pts) - num(sa?.pts)) ||
-        (num(sb?.w) - num(sa?.w)) ||
-        (num(sb?.gd) - num(sa?.gd)) ||
-        (num(sb?.gf) - num(sa?.gf)) ||
-        (a - b)
-      );
-    });
-    const worstFirst = [...bestFirst].reverse();
+    let bestFirst = sortTeamsBestFirst(teamIds, standingByTeam);
+    let worstFirst = [...bestFirst].reverse();
+
+    // If this draft already has saved slots in league_drafts (`data`), preserve its exact Round 1 draft order
+    const savedRd1 = data
+      .filter(d => d.leagueId === targetLeagueId && d.rd === 1 && d.pk > 0)
+      .sort((a, b) => a.pk - b.pk);
+    if (savedRd1.length >= teamIds.length) {
+      const seenSaved = new Set<number>();
+      const savedOrder: number[] = [];
+      savedRd1.forEach(row => {
+        const txMatch = String(row.transaction || '').match(/(?:traded from|via)\s+([a-z0-9]+)/i);
+        const origFromTx = txMatch ? teamByAbbr.get(txMatch[1].toUpperCase())?.team_id : undefined;
+        const resolvedOrigId = Number(origFromTx ?? row.teamId);
+        if (resolvedOrigId && teamIds.includes(resolvedOrigId) && !seenSaved.has(resolvedOrigId)) {
+          seenSaved.add(resolvedOrigId);
+          savedOrder.push(resolvedOrigId);
+        }
+      });
+      teamIds.forEach(id => {
+        if (!seenSaved.has(id)) savedOrder.push(id);
+      });
+      if (savedOrder.length === teamIds.length) {
+        worstFirst = savedOrder;
+        bestFirst = [...worstFirst].reverse();
+      }
+    }
 
     const draftRounds = Math.max(1, Math.floor(Number(draftRoundsInput)) || 2);
     const waiverRounds = Math.max(0, Math.floor(Number(waiverRoundsInput)) || 3);
@@ -2286,7 +2247,7 @@ export default function DraftPage() {
       });
     }
     return out;
-  }, [teamsMap, seasons, standingsRows, draftRoundsInput, waiverRoundsInput, pickOwnerOverrides, tradedPickOwnersByAbbr]);
+  }, [teamsMap, seasons, standingsRows, data, draftRoundsInput, waiverRoundsInput, pickOwnerOverrides, tradedPickOwnersByAbbr]);
 
   // Auto-computed draft order (from standings & teams of the active/previous season) merged with any persisted DB rows for this draft
   const projectedFloorRows = useMemo<DraftData[]>(() => {
