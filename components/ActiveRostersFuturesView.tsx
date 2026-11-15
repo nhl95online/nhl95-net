@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useCoachAuth } from '@/lib/coach-auth';
 import { W_SEASON_CONFIG, O_SEASON_CONFIG, W_LEAGUE_COACH_MAP } from '@/lib/seasons';
-import { Search, Download, Filter, RotateCcw, Users, Columns2, Table as TableIcon, UserCheck, X, ArrowLeftRight, Plus, Undo2 } from 'lucide-react';
+import { Search, Download, Filter, RotateCcw, Users, Columns2, Table as TableIcon, UserCheck, X, ArrowLeftRight, Plus, Undo2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const W_YEARS = [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
 const O_YEARS = [1927, 1928, 1929, 1930, 1931, 1932, 1933, 1934, 1935, 1936, 1937, 1938];
@@ -330,6 +331,9 @@ interface RosterMatrixPlayerRow {
   tradedFrom?: string;
   replacedFrom?: string;
   isCustomEdit?: boolean;
+  isBucketOverLimit?: boolean;
+  bucketCount?: number;
+  bucketMax?: number;
 }
 
 interface RosterPlannerState {
@@ -349,6 +353,7 @@ export default function ActiveRostersFuturesView({
   initialLeagueType = 'W',
   initialTeamAbbr = 'ALL',
 }: ActiveRostersFuturesViewProps) {
+  const { isLoggedIn, currentCoach, openLoginModal } = useCoachAuth();
   const [leagueType, setLeagueType] = useState<'W' | 'O'>(initialLeagueType);
   const [selectedTeamAbbr, setSelectedTeamAbbr] = useState<string>(initialTeamAbbr);
   const [posFilter, setPosFilter] = useState<'ALL' | 'G' | 'F' | 'D' | 'OPEN'>('ALL');
@@ -359,6 +364,8 @@ export default function ActiveRostersFuturesView({
   >({});
   const [tradesRows, setTradesRows] = useState<any[]>([]);
   const [leaguesRows, setLeaguesRows] = useState<any[]>([]);
+  const [isSubmittingRoster, setIsSubmittingRoster] = useState<boolean>(false);
+  const [submitBanner, setSubmitBanner] = useState<string | null>(null);
   const [playerDbMap, setPlayerDbMap] = useState<
     Map<string, { pos: 'G' | 'F' | 'D'; hand: string; canonicalName: string; ovrByYear: Record<number, number> }>
   >(new Map());
@@ -471,7 +478,7 @@ export default function ActiveRostersFuturesView({
           supabase.from('league_teams').select('*').in('league_id', [38, 39, 40]),
           supabase.from('league_coaches').select('coach_id, coach_name'),
           supabase.from('league_trades').select('*').order('trade id', { ascending: true }),
-          supabase.from('leagues').select('league_id, league_name, status'),
+          supabase.from('leagues').select('league_id, league_name, status, rules_json'),
         ]);
 
         if (cancelled) return;
@@ -637,6 +644,39 @@ export default function ActiveRostersFuturesView({
 
     return list.sort((a, b) => b.peakOvr - a.peakOvr || b.avgOvr - a.avgOvr);
   }, [playerDbMap, years]);
+
+  // Determine the active league_id for saving confirmed rosters & read any coach-confirmed rosters from rules_json
+  const targetConfirmLeagueId = useMemo(() => {
+    const firstYear = years[0] ?? (leagueType === 'W' ? 2013 : 1927);
+    if (leagueType === 'W') {
+      return 40 + Math.max(0, firstYear - 2013);
+    }
+    if (firstYear === 1927) return 39;
+    return 54 + Math.max(0, firstYear - 1928);
+  }, [years, leagueType]);
+
+  const confirmedRostersByAbbr = useMemo(() => {
+    const out: Record<string, { players: Array<{ playerName: string; pos: 'G' | 'F' | 'D' }>; updated_at?: string }> = {};
+    const targetRow = leaguesRows.find((l: any) => Number(l.league_id) === Number(targetConfirmLeagueId));
+    if (!targetRow?.rules_json) return out;
+    try {
+      const parsed =
+        typeof targetRow.rules_json === 'string'
+          ? JSON.parse(targetRow.rules_json)
+          : targetRow.rules_json;
+      const cr = parsed?.confirmed_rosters;
+      if (cr && typeof cr === 'object') {
+        Object.entries(cr).forEach(([abbr, val]: [string, any]) => {
+          if (val && Array.isArray(val.players)) {
+            out[abbr.toUpperCase()] = { players: val.players, updated_at: val.updated_at };
+          }
+        });
+      }
+    } catch {
+      // ignore malformed rules_json
+    }
+    return out;
+  }, [leaguesRows, targetConfirmLeagueId]);
 
   // 3. Build complete matrix rows in exact team & positional order (2 G, 5 F, 3 D),
   //    synced with confirmed league_trades and interactive planner edits
@@ -883,6 +923,17 @@ export default function ActiveRostersFuturesView({
         };
 
       const teamRoster = rostersByTeam[abbr] || { G: [], F: [], D: [] };
+      const confirmedOverride = confirmedRostersByAbbr[abbr];
+      if (confirmedOverride) {
+        teamRoster.G = [];
+        teamRoster.F = [];
+        teamRoster.D = [];
+        confirmedOverride.players.forEach((p) => {
+          const pPos: 'G' | 'F' | 'D' = p.pos === 'G' ? 'G' : p.pos === 'D' ? 'D' : 'F';
+          teamRoster[pPos].push({ name: p.playerName, pos: pPos });
+        });
+      }
+
       const targetCounts: Record<'G' | 'F' | 'D', number> = {
         G: posCounts.goalies ?? 2,
         F: posCounts.forwards ?? 5,
@@ -890,56 +941,186 @@ export default function ActiveRostersFuturesView({
       };
 
       (['G', 'F', 'D'] as const).forEach((bucket) => {
-        const list = teamRoster[bucket];
-        const totalSlots = Math.max(list.length, targetCounts[bucket]);
+        // Filter out removed players BEFORE padding OPEN slots so removing excess players shifts the roster into compliance
+        const activeList = teamRoster[bucket].filter(
+          (entry) => !plannerEdits.removed[`${abbr}:${bucket}:${normName(entry.name)}`]
+        );
+        const bucketCount = activeList.length;
+        const bucketMax = targetCounts[bucket];
+        const isBucketOverLimit = bucketCount > bucketMax;
+        const totalSlots = Math.max(activeList.length, bucketMax);
 
         for (let i = 0; i < totalSlots; i++) {
-          const entry = list[i];
+          const entry = activeList[i];
           const slotId = entry
             ? `${abbr}:${bucket}:${normName(entry.name)}`
             : `${abbr}:${bucket}:open-${i}`;
 
           const customReplacement = plannerEdits.replaced[slotId];
-          const isRemoved = Boolean(plannerEdits.removed[slotId]);
 
+          let builtRow: RosterMatrixPlayerRow;
           if (customReplacement) {
-            rows.push(
-              buildPlayerRow(
-                slotId,
-                abbr,
-                teamName,
-                meta,
-                coachName,
-                coachId,
-                customReplacement.playerName,
-                bucket,
-                {
-                  replacedFrom: entry?.name,
-                  isCustomEdit: true,
-                }
-              )
-            );
-          } else if (!entry || isRemoved) {
-            rows.push(
-              buildPlayerRow(slotId, abbr, teamName, meta, coachName, coachId, '', bucket, {
-                isOpenSlot: true,
+            builtRow = buildPlayerRow(
+              slotId,
+              abbr,
+              teamName,
+              meta,
+              coachName,
+              coachId,
+              customReplacement.playerName,
+              bucket,
+              {
                 replacedFrom: entry?.name,
-                isCustomEdit: isRemoved,
-              })
+                isCustomEdit: true,
+              }
             );
+          } else if (!entry) {
+            builtRow = buildPlayerRow(slotId, abbr, teamName, meta, coachName, coachId, '', bucket, {
+              isOpenSlot: true,
+            });
           } else {
-            rows.push(
-              buildPlayerRow(slotId, abbr, teamName, meta, coachName, coachId, entry.name, bucket, {
-                tradedFrom: entry.tradedFrom,
-              })
-            );
+            builtRow = buildPlayerRow(slotId, abbr, teamName, meta, coachName, coachId, entry.name, bucket, {
+              tradedFrom: entry.tradedFrom,
+            });
           }
+
+          rows.push({
+            ...builtRow,
+            isBucketOverLimit,
+            bucketCount,
+            bucketMax,
+          });
         }
       });
     });
 
     return rows;
-  }, [seasonConfig, orderedTeamAbbrs, teamsMetaByAbbr, leagueType, playerDbMap, years, archivedYears, tradesRows, plannerEdits]);
+  }, [seasonConfig, orderedTeamAbbrs, teamsMetaByAbbr, leagueType, playerDbMap, years, archivedYears, tradesRows, confirmedRostersByAbbr, plannerEdits]);
+
+  // Detect any teams currently over the 2 G / 5 F / 3 D compliance limits
+  const nonCompliantTeams = useMemo(() => {
+    const map = new Map<string, { abbr: string; teamName: string; issues: Set<string> }>();
+    allMatrixRows.forEach((r) => {
+      if (!r.isBucketOverLimit || !r.bucketCount || !r.bucketMax) return;
+      if (!map.has(r.teamAbbr)) {
+        map.set(r.teamAbbr, { abbr: r.teamAbbr, teamName: r.teamName, issues: new Set() });
+      }
+      map.get(r.teamAbbr)!.issues.add(`${r.bucketCount}/${r.bucketMax} ${r.pos}`);
+    });
+    return Array.from(map.values()).map((t) => ({
+      abbr: t.abbr,
+      teamName: t.teamName,
+      issues: Array.from(t.issues),
+    }));
+  }, [allMatrixRows]);
+
+  const handleConfirmTeamRoster = async (abbr: string) => {
+    if (!isLoggedIn || !currentCoach) {
+      openLoginModal('Confirm Team Roster');
+      return;
+    }
+    const overIssue = nonCompliantTeams.find((t) => t.abbr === abbr);
+    if (overIssue) {
+      alert(
+        `${abbr} is over roster compliance limits (${overIssue.issues.join(', ')}). Remove excess players with (✕) before confirming.`
+      );
+      return;
+    }
+
+    const teamRows = allMatrixRows.filter((r) => r.teamAbbr === abbr);
+    const meta = teamsMetaByAbbr[abbr];
+    const teamId = meta?.team_id ?? teamRows[0]?.teamId;
+    if (!teamId) {
+      alert(`Could not resolve database team_id for ${abbr}.`);
+      return;
+    }
+
+    const activePlayers = teamRows
+      .filter((r) => !r.isOpenSlot && r.playerName)
+      .map((r) => ({ playerName: r.playerName, pos: r.pos }));
+
+    setIsSubmittingRoster(true);
+    setSubmitBanner(null);
+    try {
+      const res = await fetch('/api/roster-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leagueId: targetConfirmLeagueId,
+          teamId,
+          teamAbbr: abbr,
+          coachName: currentCoach.coach_name,
+          players: activePlayers,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to confirm roster');
+
+      // Update leaguesRows in-memory so the confirmed roster takes effect immediately
+      setLeaguesRows((prev) => {
+        const exists = prev.some((l: any) => Number(l.league_id) === Number(targetConfirmLeagueId));
+        const updateRules = (rawRules: any) => {
+          let parsed: Record<string, any> = {};
+          try {
+            parsed = typeof rawRules === 'string' ? JSON.parse(rawRules) : { ...(rawRules || {}) };
+          } catch {
+            parsed = {};
+          }
+          return {
+            ...parsed,
+            confirmed_rosters: {
+              ...(parsed.confirmed_rosters || {}),
+              [abbr]: {
+                team_id: teamId,
+                team_abbr: abbr,
+                coach_name: currentCoach.coach_name,
+                updated_at: new Date().toISOString(),
+                players: activePlayers,
+              },
+            },
+          };
+        };
+
+        if (exists) {
+          return prev.map((l: any) =>
+            Number(l.league_id) === Number(targetConfirmLeagueId)
+              ? { ...l, rules_json: updateRules(l.rules_json) }
+              : l
+          );
+        }
+        return [
+          ...prev,
+          {
+            league_id: targetConfirmLeagueId,
+            league_name: leagueType === 'W' ? `W${18 + (targetConfirmLeagueId - 40)}` : `O01`,
+            status: 'active',
+            rules_json: updateRules({}),
+          },
+        ];
+      });
+
+      // Clear local planner edits for this team now that it's saved to DB
+      updatePlannerEdits((prev) => {
+        const prefix = `${abbr}:`;
+        const nextRemoved: Record<string, true> = {};
+        const nextReplaced: Record<string, { playerName: string; pos: 'G' | 'F' | 'D' }> = {};
+        Object.keys(prev.removed).forEach((k) => {
+          if (!k.startsWith(prefix)) nextRemoved[k] = true;
+        });
+        Object.entries(prev.replaced).forEach(([k, v]) => {
+          if (!k.startsWith(prefix)) nextReplaced[k] = v;
+        });
+        return { removed: nextRemoved, replaced: nextReplaced };
+      });
+
+      setSubmitBanner(`✅ Roster confirmed & updated in database for ${abbr} (${activePlayers.length} players).`);
+      setTimeout(() => setSubmitBanner(null), 6000);
+    } catch (err: any) {
+      alert(`Failed to update roster: ${err?.message || 'unknown error'}`);
+    } finally {
+      setIsSubmittingRoster(false);
+    }
+  };
 
   const openSpotsCount = useMemo(
     () =>
@@ -1153,6 +1334,8 @@ export default function ActiveRostersFuturesView({
                 className={`border border-[#d0d0d0] px-1.5 py-0 text-[12.5px] font-semibold whitespace-nowrap align-middle ${
                   row.isOpenSlot
                     ? 'bg-amber-50 text-amber-950'
+                    : row.isBucketOverLimit
+                    ? 'bg-red-50 text-black'
                     : row.isCustomEdit
                     ? 'bg-sky-50 text-black'
                     : 'bg-white text-black'
@@ -1179,6 +1362,14 @@ export default function ActiveRostersFuturesView({
                       >
                         {row.displayPlayerName}
                       </Link>
+                      {row.isBucketOverLimit && row.bucketCount && row.bucketMax && (
+                        <span
+                          className="text-[9px] font-black uppercase bg-red-600 text-white border border-red-800 px-1 py-0 shrink-0"
+                          title={`Over compliance limit (${row.bucketCount}/${row.bucketMax} ${row.pos}). Click ✕ to remove excess.`}
+                        >
+                          {row.bucketCount}/{row.bucketMax} {row.pos}
+                        </span>
+                      )}
                       {row.tradedFrom && (
                         <span
                           className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-900 border border-emerald-400 px-1 py-0 shrink-0"
@@ -1248,14 +1439,16 @@ export default function ActiveRostersFuturesView({
                         >
                           <ArrowLeftRight className="w-3 h-3" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePlayerToOpen(row.slotId)}
-                          className="opacity-40 group-hover:opacity-100 p-0.5 text-red-700 hover:bg-red-100 rounded-xs cursor-pointer transition-opacity"
-                          title={`Remove ${row.displayPlayerName} (create open ${row.pos} spot)`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                        {row.isBucketOverLimit && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePlayerToOpen(row.slotId)}
+                            className="p-0.5 text-red-700 bg-red-100 hover:bg-red-200 border border-red-400 rounded-xs cursor-pointer"
+                            title={`Remove excess ${row.displayPlayerName} to become compliant`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -1462,9 +1655,52 @@ export default function ActiveRostersFuturesView({
               <Download className="w-3.5 h-3.5" />
               CSV
             </button>
+
+            {selectedTeamAbbr !== 'ALL' && (
+              <button
+                type="button"
+                disabled={isSubmittingRoster}
+                onClick={() => handleConfirmTeamRoster(selectedTeamAbbr)}
+                className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-2.5 py-1 text-xs font-black uppercase border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] flex items-center gap-1 cursor-pointer"
+                title={`Confirm & submit ${selectedTeamAbbr} roster to database`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {isSubmittingRoster ? 'Submitting...' : `Confirm ${selectedTeamAbbr} Roster`}
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Compliance Warning Banner (when any team exceeds 2 G / 5 F / 3 D) */}
+      {nonCompliantTeams.length > 0 && (
+        <div className="bg-red-50 border-2 border-red-700 p-2.5 shadow-[3px_3px_0px_rgba(185,28,28,1)] flex flex-wrap items-center justify-between gap-2 font-sans">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-black uppercase text-red-900">
+            <AlertTriangle className="w-4 h-4 text-red-700 shrink-0" />
+            <span>Roster Compliance Warning (Max 2G / 5F / 3D):</span>
+            {nonCompliantTeams.map((t) => (
+              <button
+                key={t.abbr}
+                type="button"
+                onClick={() => setSelectedTeamAbbr(t.abbr)}
+                className="bg-red-700 hover:bg-red-800 text-white px-2 py-0.5 text-[11px] font-black uppercase border border-black cursor-pointer"
+                title={`Click to filter to ${t.teamName} and remove excess players`}
+              >
+                {t.abbr}: {t.issues.join(', ')}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] font-bold text-red-800">
+            Click ✕ on an excess player to shift into compliance, then Confirm Roster.
+          </span>
+        </div>
+      )}
+
+      {submitBanner && (
+        <div className="bg-emerald-100 border-2 border-emerald-800 px-3 py-2 text-xs font-black uppercase text-emerald-950 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+          {submitBanner}
+        </div>
+      )}
 
       {/* Spreadsheet Matrix Table(s) */}
       {loading ? (
