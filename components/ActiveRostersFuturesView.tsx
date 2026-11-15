@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { W_SEASON_CONFIG, O_SEASON_CONFIG, W_LEAGUE_COACH_MAP } from '@/lib/seasons';
-import { Search, Download, Filter, RotateCcw, Users, Columns2, Table as TableIcon, UserCheck } from 'lucide-react';
+import { Search, Download, Filter, RotateCcw, Users, Columns2, Table as TableIcon, UserCheck, X, ArrowLeftRight, Plus, Undo2 } from 'lucide-react';
 
 const W_YEARS = [2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
 const O_YEARS = [1927, 1928, 1929, 1930, 1931, 1932, 1933, 1934, 1935, 1936, 1937, 1938];
@@ -310,6 +310,7 @@ function TeamBannerCell({
 }
 
 interface RosterMatrixPlayerRow {
+  slotId: string;
   teamAbbr: string;
   teamName: string;
   teamId?: number | null;
@@ -324,7 +325,18 @@ interface RosterMatrixPlayerRow {
   peakOvr: number | null;
   avgOvr: number | null;
   activeYearsCount: number;
+  isOpenSlot?: boolean;
+  tradedFrom?: string;
+  replacedFrom?: string;
+  isCustomEdit?: boolean;
 }
+
+interface RosterPlannerState {
+  removed: Record<string, true>;
+  replaced: Record<string, { playerName: string; pos: 'G' | 'F' | 'D' }>;
+}
+
+const EMPTY_PLANNER_STATE: RosterPlannerState = { removed: {}, replaced: {} };
 
 export interface ActiveRostersFuturesViewProps {
   initialLeagueType?: 'W' | 'O';
@@ -338,16 +350,57 @@ export default function ActiveRostersFuturesView({
 }: ActiveRostersFuturesViewProps) {
   const [leagueType, setLeagueType] = useState<'W' | 'O'>(initialLeagueType);
   const [selectedTeamAbbr, setSelectedTeamAbbr] = useState<string>(initialTeamAbbr);
-  const [posFilter, setPosFilter] = useState<'ALL' | 'G' | 'F' | 'D'>('ALL');
+  const [posFilter, setPosFilter] = useState<'ALL' | 'G' | 'F' | 'D' | 'OPEN'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [splitColumns, setSplitColumns] = useState<boolean>(false);
   const [teamsMetaByAbbr, setTeamsMetaByAbbr] = useState<
     Record<string, { team_id?: number; team_name: string; coach_name?: string; coach_id?: number; banner_filename?: string }>
   >({});
+  const [tradesRows, setTradesRows] = useState<any[]>([]);
   const [playerDbMap, setPlayerDbMap] = useState<
-    Map<string, { hand: string; canonicalName: string; ovrByYear: Record<number, number> }>
+    Map<string, { pos: 'G' | 'F' | 'D'; hand: string; canonicalName: string; ovrByYear: Record<number, number> }>
   >(new Map());
   const [loading, setLoading] = useState<boolean>(true);
+  const [plannerEdits, setPlannerEdits] = useState<RosterPlannerState>(EMPTY_PLANNER_STATE);
+  const [pickerTarget, setPickerTarget] = useState<{
+    slotId: string;
+    teamAbbr: string;
+    teamName: string;
+    pos: 'G' | 'F' | 'D';
+    currentName?: string;
+  } | null>(null);
+  const [pickerQuery, setPickerQuery] = useState<string>('');
+  const [pickerPosFilter, setPickerPosFilter] = useState<'MATCH' | 'ALL'>('MATCH');
+
+  // Persist interactive roster planner edits per league in localStorage
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(`nhl95_roster_planner_v1_${leagueType}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setPlannerEdits({
+          removed: parsed?.removed && typeof parsed.removed === 'object' ? parsed.removed : {},
+          replaced: parsed?.replaced && typeof parsed.replaced === 'object' ? parsed.replaced : {},
+        });
+      } else {
+        setPlannerEdits(EMPTY_PLANNER_STATE);
+      }
+    } catch {
+      setPlannerEdits(EMPTY_PLANNER_STATE);
+    }
+  }, [leagueType]);
+
+  const updatePlannerEdits = (updater: (prev: RosterPlannerState) => RosterPlannerState) => {
+    setPlannerEdits((prev) => {
+      const next = updater(prev);
+      try {
+        window.localStorage.setItem(`nhl95_roster_planner_v1_${leagueType}`, JSON.stringify(next));
+      } catch {
+        // ignore storage quota errors
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (initialTeamAbbr) {
@@ -377,12 +430,14 @@ export default function ActiveRostersFuturesView({
     let cancelled = false;
     async function loadTeamsMeta() {
       try {
-        const [teamsRes, coachesRes] = await Promise.all([
+        const [teamsRes, coachesRes, tradesRes] = await Promise.all([
           supabase.from('league_teams').select('*').in('league_id', [38, 39, 40]),
           supabase.from('league_coaches').select('coach_id, coach_name'),
+          supabase.from('league_trades').select('*').order('trade id', { ascending: true }),
         ]);
 
         if (cancelled) return;
+        setTradesRows(tradesRes.data || []);
         const coachMap: Record<number, string> = {};
         (coachesRes.data || []).forEach((c: any) => {
           if (c.coach_id !== undefined && c.coach_id !== null) {
@@ -445,11 +500,12 @@ export default function ActiveRostersFuturesView({
 
         const compiled = new Map<
           string,
-          { hand: string; canonicalName: string; ovrByYear: Record<number, number> }
+          { pos: 'G' | 'F' | 'D'; hand: string; canonicalName: string; ovrByYear: Record<number, number> }
         >();
 
         const registerEntry = (
           key: string,
+          pos: 'G' | 'F' | 'D',
           yr: number,
           ovr: number,
           hand: string,
@@ -458,6 +514,7 @@ export default function ActiveRostersFuturesView({
           let existing = compiled.get(key);
           if (!existing) {
             existing = {
+              pos,
               hand: hand || 'L',
               canonicalName: rawName,
               ovrByYear: {},
@@ -483,15 +540,16 @@ export default function ActiveRostersFuturesView({
 
             const rawPos = String(row.pos || pInfo?.pos || '').trim().toUpperCase();
             const isG = rawPos === 'G';
+            const mappedPos: 'G' | 'F' | 'D' = isG ? 'G' : rawPos.includes('D') ? 'D' : 'F';
             const prefix = isG ? 'G' : 'S';
             const hand = extractHandedness(pInfo, rObj);
 
             const nKey = `${prefix}:${normName(rawName)}`;
-            registerEntry(nKey, yr, ovr, hand, rawName);
+            registerEntry(nKey, mappedPos, yr, ovr, hand, rawName);
 
             const aKey = `${prefix}:${normAlias(rawName)}`;
             if (aKey !== nKey) {
-              registerEntry(aKey, yr, ovr, hand, rawName);
+              registerEntry(aKey, mappedPos, yr, ovr, hand, rawName);
             }
           });
         });
@@ -510,7 +568,39 @@ export default function ActiveRostersFuturesView({
     };
   }, [years]);
 
-  // 3. Build complete matrix rows in exact team & positional order (2 G, 5 F, 3 D)
+  // Searchable list of all DB players for the interactive replacement picker
+  const allDbPlayersList = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{
+      name: string;
+      pos: 'G' | 'F' | 'D';
+      hand: string;
+      peakOvr: number;
+      avgOvr: number;
+    }> = [];
+
+    playerDbMap.forEach((entry) => {
+      const dedupKey = `${entry.pos === 'G' ? 'G' : 'S'}:${normName(entry.canonicalName)}`;
+      if (seen.has(dedupKey)) return;
+      seen.add(dedupKey);
+      const vals = Object.values(entry.ovrByYear).filter((v) => v > 0);
+      if (vals.length === 0) return;
+      const peakOvr = Math.max(...vals);
+      const avgOvr = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+      list.push({
+        name: entry.canonicalName,
+        pos: entry.pos,
+        hand: entry.hand || 'L',
+        peakOvr,
+        avgOvr,
+      });
+    });
+
+    return list.sort((a, b) => b.peakOvr - a.peakOvr || b.avgOvr - a.avgOvr);
+  }, [playerDbMap]);
+
+  // 3. Build complete matrix rows in exact team & positional order (2 G, 5 F, 3 D),
+  //    synced with confirmed league_trades and interactive planner edits
   const allMatrixRows = useMemo<RosterMatrixPlayerRow[]>(() => {
     const rows: RosterMatrixPlayerRow[] = [];
     const goaliesByTeam = seasonConfig.goalies || {};
@@ -522,6 +612,187 @@ export default function ActiveRostersFuturesView({
       const peakOvr = Math.max(...vals);
       const avgOvr = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
       return { peakOvr, avgOvr, activeYearsCount: vals.length };
+    };
+
+    // Build mutable per-team positional rosters starting from seasonConfig
+    type TeamSlotEntry = { name: string; pos: 'G' | 'F' | 'D'; tradedFrom?: string };
+    const rostersByTeam: Record<string, { G: TeamSlotEntry[]; F: TeamSlotEntry[]; D: TeamSlotEntry[] }> = {};
+
+    orderedTeamAbbrs.forEach((abbr) => {
+      const posCounts =
+        seasonConfig.teamPositionCounts?.[abbr] || seasonConfig.defaultPositionCounts || {
+          goalies: 2,
+          forwards: 5,
+          defensemen: 3,
+        };
+      const numForwards = posCounts.forwards || 5;
+      const teamGoalies = (goaliesByTeam[abbr] || [])
+        .map((n: string) => String(n || '').trim())
+        .filter((n: string) => n && n !== '--')
+        .map((name: string): TeamSlotEntry => ({ name, pos: 'G' }));
+
+      const teamSkaters = (skatersByTeam[abbr] || [])
+        .map((n: string) => String(n || '').trim())
+        .filter((n: string) => n && n !== '--');
+
+      const teamForwards: TeamSlotEntry[] = [];
+      const teamDefense: TeamSlotEntry[] = [];
+      teamSkaters.forEach((name: string, idx: number) => {
+        if (idx < numForwards) {
+          teamForwards.push({ name, pos: 'F' });
+        } else {
+          teamDefense.push({ name, pos: 'D' });
+        }
+      });
+
+      rostersByTeam[abbr] = { G: teamGoalies, F: teamForwards, D: teamDefense };
+    });
+
+    // Apply confirmed player trades from league_trades chronologically
+    const parseTradePlayers = (tradeStr: string): Array<{ pos: 'G' | 'F' | 'D'; name: string }> => {
+      if (!tradeStr) return [];
+      return tradeStr
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part && !/rdpk|pick|round|\b\d{4}\b/i.test(part))
+        .map((part) => {
+          const m = part.match(/^(F|D|G|LW|RW|C|LD|RD)\s+(.+)$/i);
+          if (m) {
+            const pRaw = m[1].toUpperCase();
+            const pos: 'G' | 'F' | 'D' = pRaw === 'G' ? 'G' : pRaw.includes('D') ? 'D' : 'F';
+            return { pos, name: m[2].trim() };
+          }
+          return { pos: 'F' as const, name: part };
+        });
+    };
+
+    const sortedTrades = [...tradesRows].sort((a, b) => Number(a['trade id'] || 0) - Number(b['trade id'] || 0));
+    sortedTrades.forEach((tr: any) => {
+      const lg = String(tr.lg || '').trim().toUpperCase();
+      if (leagueType === 'W') {
+        if (!/^W(?:1[89]|2\d)/i.test(lg)) return;
+      } else {
+        if (!/^O0?[12345]/i.test(lg)) return;
+      }
+
+      const tA = String(tr.team || '').trim().toUpperCase();
+      const tB = String(tr.team_1 || '').trim().toUpperCase();
+      if (!tA || !tB) return;
+
+      const movePlayers = (fromAbbr: string, toAbbr: string, assetsStr: string) => {
+        const players = parseTradePlayers(assetsStr);
+        const fromRoster = rostersByTeam[fromAbbr];
+        const toRoster = rostersByTeam[toAbbr];
+        if (!players.length) return;
+
+        players.forEach((pl) => {
+          const targetNorm = normName(pl.name);
+          const targetAlias = normAlias(pl.name);
+          let resolvedPos: 'G' | 'F' | 'D' = pl.pos;
+
+          if (fromRoster) {
+            for (const bucket of ['G', 'F', 'D'] as const) {
+              const idx = fromRoster[bucket].findIndex(
+                (item) => normName(item.name) === targetNorm || normAlias(item.name) === targetAlias
+              );
+              if (idx !== -1) {
+                resolvedPos = fromRoster[bucket][idx].pos;
+                fromRoster[bucket].splice(idx, 1);
+                break;
+              }
+            }
+          }
+
+          if (toRoster) {
+            const alreadyOnTeam = (['G', 'F', 'D'] as const).some((bucket) =>
+              toRoster[bucket].some(
+                (item) => normName(item.name) === targetNorm || normAlias(item.name) === targetAlias
+              )
+            );
+            if (!alreadyOnTeam) {
+              toRoster[resolvedPos].push({
+                name: pl.name,
+                pos: resolvedPos,
+                tradedFrom: fromAbbr,
+              });
+            }
+          }
+        });
+      };
+
+      movePlayers(tA, tB, tr.trade);
+      movePlayers(tB, tA, tr.trade_1);
+    });
+
+    const buildPlayerRow = (
+      slotId: string,
+      abbr: string,
+      teamName: string,
+      meta: any,
+      coachName: string,
+      coachId: number | null,
+      playerName: string,
+      pos: 'G' | 'F' | 'D',
+      extras?: { isOpenSlot?: boolean; tradedFrom?: string; replacedFrom?: string; isCustomEdit?: boolean }
+    ): RosterMatrixPlayerRow => {
+      if (extras?.isOpenSlot) {
+        const emptyYears: Record<number, number | null> = {};
+        years.forEach((yr) => {
+          emptyYears[yr] = null;
+        });
+        return {
+          slotId,
+          teamAbbr: abbr,
+          teamName,
+          teamId: meta?.team_id ?? null,
+          coachName,
+          coachId,
+          bannerFilename: meta?.banner_filename,
+          playerName: '',
+          displayPlayerName: `OPEN ${pos} SPOT`,
+          pos,
+          hand: '—',
+          ovrByYear: emptyYears,
+          peakOvr: null,
+          avgOvr: null,
+          activeYearsCount: 0,
+          isOpenSlot: true,
+          replacedFrom: extras.replacedFrom,
+          isCustomEdit: extras.isCustomEdit,
+        };
+      }
+
+      const prefix = pos === 'G' ? 'G' : 'S';
+      const nKey = `${prefix}:${normName(playerName)}`;
+      const aKey = `${prefix}:${normAlias(playerName)}`;
+      const matched = playerDbMap.get(nKey) || playerDbMap.get(aKey);
+
+      const ovrByYear: Record<number, number | null> = {};
+      years.forEach((yr) => {
+        ovrByYear[yr] = matched?.ovrByYear?.[yr] ?? null;
+      });
+      const { peakOvr, avgOvr, activeYearsCount } = computeSummaryMetrics(ovrByYear);
+
+      return {
+        slotId,
+        teamAbbr: abbr,
+        teamName,
+        teamId: meta?.team_id ?? null,
+        coachName,
+        coachId,
+        bannerFilename: meta?.banner_filename,
+        playerName,
+        displayPlayerName: DISPLAY_NAME_OVERRIDES[playerName] || matched?.canonicalName || playerName,
+        pos,
+        hand: matched?.hand || 'L',
+        ovrByYear,
+        peakOvr,
+        avgOvr,
+        activeYearsCount,
+        tradedFrom: extras?.tradedFrom,
+        replacedFrom: extras?.replacedFrom,
+        isCustomEdit: extras?.isCustomEdit,
+      };
     };
 
     orderedTeamAbbrs.forEach((abbr) => {
@@ -540,83 +811,88 @@ export default function ActiveRostersFuturesView({
           defensemen: 3,
         };
 
-      const teamGoalies = goaliesByTeam[abbr] || [];
-      const teamSkaters = skatersByTeam[abbr] || [];
+      const teamRoster = rostersByTeam[abbr] || { G: [], F: [], D: [] };
+      const targetCounts: Record<'G' | 'F' | 'D', number> = {
+        G: posCounts.goalies ?? 2,
+        F: posCounts.forwards ?? 5,
+        D: posCounts.defensemen ?? 3,
+      };
 
-      teamGoalies.forEach((gName: string) => {
-        const clean = String(gName || '').trim();
-        if (!clean || clean === '--') return;
-        const nKey = `G:${normName(clean)}`;
-        const aKey = `G:${normAlias(clean)}`;
-        const matched = playerDbMap.get(nKey) || playerDbMap.get(aKey);
+      (['G', 'F', 'D'] as const).forEach((bucket) => {
+        const list = teamRoster[bucket];
+        const totalSlots = Math.max(list.length, targetCounts[bucket]);
 
-        const ovrByYear: Record<number, number | null> = {};
-        years.forEach((yr) => {
-          ovrByYear[yr] = matched?.ovrByYear?.[yr] ?? null;
-        });
-        const { peakOvr, avgOvr, activeYearsCount } = computeSummaryMetrics(ovrByYear);
+        for (let i = 0; i < totalSlots; i++) {
+          const entry = list[i];
+          const slotId = entry
+            ? `${abbr}:${bucket}:${normName(entry.name)}`
+            : `${abbr}:${bucket}:open-${i}`;
 
-        rows.push({
-          teamAbbr: abbr,
-          teamName,
-          teamId: meta?.team_id ?? null,
-          coachName,
-          coachId,
-          bannerFilename: meta?.banner_filename,
-          playerName: clean,
-          displayPlayerName: DISPLAY_NAME_OVERRIDES[clean] || matched?.canonicalName || clean,
-          pos: 'G',
-          hand: matched?.hand || 'L',
-          ovrByYear,
-          peakOvr,
-          avgOvr,
-          activeYearsCount,
-        });
-      });
+          const customReplacement = plannerEdits.replaced[slotId];
+          const isRemoved = Boolean(plannerEdits.removed[slotId]);
 
-      const numForwards = posCounts.forwards || 5;
-      teamSkaters.forEach((sName: string, idx: number) => {
-        const clean = String(sName || '').trim();
-        if (!clean || clean === '--') return;
-        const pos: 'F' | 'D' = idx < numForwards ? 'F' : 'D';
-        const nKey = `S:${normName(clean)}`;
-        const aKey = `S:${normAlias(clean)}`;
-        const matched = playerDbMap.get(nKey) || playerDbMap.get(aKey);
-
-        const ovrByYear: Record<number, number | null> = {};
-        years.forEach((yr) => {
-          ovrByYear[yr] = matched?.ovrByYear?.[yr] ?? null;
-        });
-        const { peakOvr, avgOvr, activeYearsCount } = computeSummaryMetrics(ovrByYear);
-
-        rows.push({
-          teamAbbr: abbr,
-          teamName,
-          teamId: meta?.team_id ?? null,
-          coachName,
-          coachId,
-          bannerFilename: meta?.banner_filename,
-          playerName: clean,
-          displayPlayerName: DISPLAY_NAME_OVERRIDES[clean] || matched?.canonicalName || clean,
-          pos,
-          hand: matched?.hand || 'L',
-          ovrByYear,
-          peakOvr,
-          avgOvr,
-          activeYearsCount,
-        });
+          if (customReplacement) {
+            rows.push(
+              buildPlayerRow(
+                slotId,
+                abbr,
+                teamName,
+                meta,
+                coachName,
+                coachId,
+                customReplacement.playerName,
+                bucket,
+                {
+                  replacedFrom: entry?.name,
+                  isCustomEdit: true,
+                }
+              )
+            );
+          } else if (!entry || isRemoved) {
+            rows.push(
+              buildPlayerRow(slotId, abbr, teamName, meta, coachName, coachId, '', bucket, {
+                isOpenSlot: true,
+                replacedFrom: entry?.name,
+                isCustomEdit: isRemoved,
+              })
+            );
+          } else {
+            rows.push(
+              buildPlayerRow(slotId, abbr, teamName, meta, coachName, coachId, entry.name, bucket, {
+                tradedFrom: entry.tradedFrom,
+              })
+            );
+          }
+        }
       });
     });
 
     return rows;
-  }, [seasonConfig, orderedTeamAbbrs, teamsMetaByAbbr, leagueType, playerDbMap, years]);
+  }, [seasonConfig, orderedTeamAbbrs, teamsMetaByAbbr, leagueType, playerDbMap, years, tradesRows, plannerEdits]);
+
+  const openSpotsCount = useMemo(
+    () =>
+      allMatrixRows.filter(
+        (r) => r.isOpenSlot && (selectedTeamAbbr === 'ALL' || r.teamAbbr === selectedTeamAbbr)
+      ).length,
+    [allMatrixRows, selectedTeamAbbr]
+  );
+
+  const customEditsCount = useMemo(
+    () => Object.keys(plannerEdits.removed).length + Object.keys(plannerEdits.replaced).length,
+    [plannerEdits]
+  );
 
   // 4. Filter rows by selected team, position, and search query
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allMatrixRows.filter((r) => {
       if (selectedTeamAbbr !== 'ALL' && r.teamAbbr !== selectedTeamAbbr) return false;
-      if (posFilter !== 'ALL' && r.pos !== posFilter) return false;
+      if (posFilter === 'OPEN') {
+        if (!r.isOpenSlot) return false;
+      } else if (posFilter !== 'ALL' && r.pos !== posFilter) {
+        return false;
+      }
       if (q) {
         const matchPlayer = r.displayPlayerName.toLowerCase().includes(q) || r.playerName.toLowerCase().includes(q);
         const matchTeam = r.teamName.toLowerCase().includes(q) || r.teamAbbr.toLowerCase().includes(q);
@@ -626,6 +902,57 @@ export default function ActiveRostersFuturesView({
       return true;
     });
   }, [allMatrixRows, selectedTeamAbbr, posFilter, searchQuery]);
+
+  const pickerFilteredPlayers = useMemo(() => {
+    if (!pickerTarget) return [];
+    const q = pickerQuery.trim().toLowerCase();
+    return allDbPlayersList
+      .filter((p) => {
+        if (pickerPosFilter === 'MATCH' && p.pos !== pickerTarget.pos) return false;
+        if (q && !p.name.toLowerCase().includes(q)) return false;
+        return true;
+      })
+      .slice(0, 60);
+  }, [pickerTarget, pickerQuery, pickerPosFilter, allDbPlayersList]);
+
+  const handleRemovePlayerToOpen = (slotId: string) => {
+    updatePlannerEdits((prev) => {
+      const nextReplaced = { ...prev.replaced };
+      delete nextReplaced[slotId];
+      return {
+        removed: { ...prev.removed, [slotId]: true },
+        replaced: nextReplaced,
+      };
+    });
+  };
+
+  const handleRestoreSlot = (slotId: string) => {
+    updatePlannerEdits((prev) => {
+      const nextRemoved = { ...prev.removed };
+      const nextReplaced = { ...prev.replaced };
+      delete nextRemoved[slotId];
+      delete nextReplaced[slotId];
+      return { removed: nextRemoved, replaced: nextReplaced };
+    });
+  };
+
+  const handleAssignReplacement = (slotId: string, playerName: string, pos: 'G' | 'F' | 'D') => {
+    const clean = playerName.trim();
+    if (!clean) return;
+    updatePlannerEdits((prev) => {
+      const nextRemoved = { ...prev.removed };
+      delete nextRemoved[slotId];
+      return {
+        removed: nextRemoved,
+        replaced: {
+          ...prev.replaced,
+          [slotId]: { playerName: clean, pos },
+        },
+      };
+    });
+    setPickerTarget(null);
+    setPickerQuery('');
+  };
 
   // Split rows into 2 balanced columns when splitColumns is enabled
   const splitGroups = useMemo(() => {
@@ -677,7 +1004,7 @@ export default function ActiveRostersFuturesView({
               Coach
             </th>
           )}
-          <th className={`bg-black border border-black ${splitColumns ? 'w-[140px]' : 'w-[175px]'} py-1.5 px-2 text-left uppercase`}>
+          <th className={`bg-black border border-black ${splitColumns ? 'w-[175px]' : 'w-[225px]'} py-1.5 px-2 text-left uppercase`}>
             Player
           </th>
           <th className="bg-black border border-black w-[34px] py-1.5 px-0.5 text-center">
@@ -750,15 +1077,118 @@ export default function ActiveRostersFuturesView({
                 </td>
               )}
 
-              {/* Col C: Player Name */}
-              <td className="bg-white text-black border border-[#d0d0d0] px-1.5 py-0 text-[13px] font-semibold whitespace-nowrap align-middle truncate">
-                <Link
-                  href={`/players?q=${encodeURIComponent(row.displayPlayerName)}`}
-                  className="hover:underline hover:text-blue-800 block truncate"
-                  title={`View ${row.displayPlayerName} in Player Database`}
-                >
-                  {row.displayPlayerName}
-                </Link>
+              {/* Col C: Player Name + Trade / Open Slot / Remove & Replace Actions */}
+              <td
+                className={`border border-[#d0d0d0] px-1.5 py-0 text-[12.5px] font-semibold whitespace-nowrap align-middle ${
+                  row.isOpenSlot
+                    ? 'bg-amber-50 text-amber-950'
+                    : row.isCustomEdit
+                    ? 'bg-sky-50 text-black'
+                    : 'bg-white text-black'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 group">
+                  {row.isOpenSlot ? (
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-tight bg-amber-200 text-amber-950 border border-amber-500 px-1 py-0 shrink-0">
+                        OPEN {row.pos}
+                      </span>
+                      {row.replacedFrom && (
+                        <span className="text-[10px] text-neutral-500 line-through truncate" title={`Removed: ${row.replacedFrom}`}>
+                          {row.replacedFrom}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Link
+                        href={`/players?q=${encodeURIComponent(row.displayPlayerName)}`}
+                        className="hover:underline hover:text-blue-800 truncate"
+                        title={`View ${row.displayPlayerName} in Player Database`}
+                      >
+                        {row.displayPlayerName}
+                      </Link>
+                      {row.tradedFrom && (
+                        <span
+                          className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-900 border border-emerald-400 px-1 py-0 shrink-0"
+                          title={`Acquired via trade from ${row.tradedFrom}`}
+                        >
+                          VIA {row.tradedFrom}
+                        </span>
+                      )}
+                      {row.isCustomEdit && (
+                        <span
+                          className="text-[9px] font-black uppercase bg-sky-100 text-sky-900 border border-sky-400 px-1 py-0 shrink-0"
+                          title={row.replacedFrom ? `Replaced ${row.replacedFrom}` : 'Custom planner replacement'}
+                        >
+                          PLAN
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {row.isCustomEdit && (
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreSlot(row.slotId)}
+                        className="p-0.5 text-neutral-600 hover:text-black hover:bg-neutral-200 rounded-xs cursor-pointer"
+                        title={row.replacedFrom ? `Restore ${row.replacedFrom}` : 'Restore slot'}
+                      >
+                        <Undo2 className="w-3 h-3" />
+                      </button>
+                    )}
+                    {row.isOpenSlot ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPickerTarget({
+                            slotId: row.slotId,
+                            teamAbbr: row.teamAbbr,
+                            teamName: row.teamName,
+                            pos: row.pos,
+                          });
+                          setPickerPosFilter('MATCH');
+                          setPickerQuery('');
+                        }}
+                        className="px-1 py-0 text-[9.5px] font-black uppercase bg-black text-amber-300 hover:bg-neutral-800 border border-black cursor-pointer flex items-center gap-0.5"
+                        title="Fill open spot with a player"
+                      >
+                        <Plus className="w-2.5 h-2.5" />
+                        Fill
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPickerTarget({
+                              slotId: row.slotId,
+                              teamAbbr: row.teamAbbr,
+                              teamName: row.teamName,
+                              pos: row.pos,
+                              currentName: row.displayPlayerName,
+                            });
+                            setPickerPosFilter('MATCH');
+                            setPickerQuery('');
+                          }}
+                          className="opacity-40 group-hover:opacity-100 p-0.5 text-blue-700 hover:bg-blue-100 rounded-xs cursor-pointer transition-opacity"
+                          title={`Replace ${row.displayPlayerName}`}
+                        >
+                          <ArrowLeftRight className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePlayerToOpen(row.slotId)}
+                          className="opacity-40 group-hover:opacity-100 p-0.5 text-red-700 hover:bg-red-100 rounded-xs cursor-pointer transition-opacity"
+                          title={`Remove ${row.displayPlayerName} (create open ${row.pos} spot)`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
               </td>
 
               {/* Col D: Position */}
@@ -878,19 +1308,35 @@ export default function ActiveRostersFuturesView({
 
             {/* Position Filter Buttons */}
             <div className="flex items-center border-2 border-black bg-white">
-              {(['ALL', 'G', 'F', 'D'] as const).map((pos) => (
+              {(['ALL', 'G', 'F', 'D', 'OPEN'] as const).map((pos) => (
                 <button
                   key={pos}
                   type="button"
                   onClick={() => setPosFilter(pos)}
                   className={`px-2 py-1 text-xs font-black uppercase cursor-pointer transition-colors ${
-                    posFilter === pos ? 'bg-black text-white' : 'bg-white text-black hover:bg-neutral-100'
+                    posFilter === pos
+                      ? pos === 'OPEN'
+                        ? 'bg-amber-400 text-black'
+                        : 'bg-black text-white'
+                      : 'bg-white text-black hover:bg-neutral-100'
                   }`}
                 >
-                  {pos === 'ALL' ? 'All Pos' : pos}
+                  {pos === 'ALL' ? 'All Pos' : pos === 'OPEN' ? `Open (${openSpotsCount})` : pos}
                 </button>
               ))}
             </div>
+
+            {customEditsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => updatePlannerEdits(() => EMPTY_PLANNER_STATE)}
+                className="bg-sky-100 hover:bg-sky-200 text-sky-950 border-2 border-black px-2 py-1 text-xs font-black uppercase flex items-center gap-1 cursor-pointer transition-colors"
+                title="Clear all custom roster planner removals and replacements"
+              >
+                <Undo2 className="w-3 h-3" />
+                Reset Plan ({customEditsCount})
+              </button>
+            )}
 
             {(selectedTeamAbbr !== 'ALL' || posFilter !== 'ALL' || searchQuery.trim() !== '') && (
               <button
@@ -969,6 +1415,121 @@ export default function ActiveRostersFuturesView({
       ) : (
         <div className="bg-white border-2 border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] overflow-x-auto">
           {renderRosterTable(filteredRows)}
+        </div>
+      )}
+
+      {/* Interactive Player Replacement / Fill Open Spot Modal */}
+      {pickerTarget && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setPickerTarget(null)}
+        >
+          <div
+            className="bg-[#fdfaf5] border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,1)] w-full max-w-lg max-h-[85vh] flex flex-col font-sans"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-black text-white px-3.5 py-2.5 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                  {pickerTarget.teamAbbr} — {pickerTarget.teamName}
+                </div>
+                <div className="text-sm font-black uppercase">
+                  {pickerTarget.currentName
+                    ? `Replace ${pickerTarget.currentName} (${pickerTarget.pos})`
+                    : `Fill Open ${pickerTarget.pos} Roster Spot`}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPickerTarget(null)}
+                className="p-1 hover:bg-neutral-800 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 border-b border-black/20 space-y-2 bg-white">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2.5 top-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={pickerQuery}
+                    onChange={(e) => setPickerQuery(e.target.value)}
+                    placeholder="SEARCH PLAYER OR TYPE CUSTOM NAME..."
+                    className="w-full border-2 border-black pl-8 pr-2.5 py-1 text-xs font-bold uppercase outline-none bg-white text-black"
+                  />
+                </div>
+                <div className="flex items-center border-2 border-black bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setPickerPosFilter('MATCH')}
+                    className={`px-2 py-1 text-[10px] font-black uppercase cursor-pointer ${
+                      pickerPosFilter === 'MATCH' ? 'bg-black text-white' : 'bg-white text-black'
+                    }`}
+                  >
+                    {pickerTarget.pos} Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPickerPosFilter('ALL')}
+                    className={`px-2 py-1 text-[10px] font-black uppercase cursor-pointer border-l border-black ${
+                      pickerPosFilter === 'ALL' ? 'bg-black text-white' : 'bg-white text-black'
+                    }`}
+                  >
+                    All
+                  </button>
+                </div>
+              </div>
+
+              {pickerQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAssignReplacement(pickerTarget.slotId, pickerQuery.trim(), pickerTarget.pos)
+                  }
+                  className="w-full text-left px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 border border-black text-xs font-black uppercase flex items-center justify-between cursor-pointer"
+                >
+                  <span>Use &ldquo;{pickerQuery.trim()}&rdquo; as {pickerTarget.pos}</span>
+                  <span className="text-[10px] bg-black text-amber-300 px-1.5 py-0.5">+ Place</span>
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-y-auto flex-1 divide-y divide-neutral-200 bg-white">
+              {pickerFilteredPlayers.length === 0 ? (
+                <div className="p-6 text-center text-xs font-bold uppercase text-neutral-500">
+                  No matching players found in {years[0]}–{years[years.length - 1]} database.
+                </div>
+              ) : (
+                pickerFilteredPlayers.map((pl) => (
+                  <button
+                    key={`${pl.pos}-${pl.name}`}
+                    type="button"
+                    onClick={() => handleAssignReplacement(pickerTarget.slotId, pl.name, pickerTarget.pos)}
+                    className="w-full px-3 py-1.5 text-left hover:bg-yellow-50 flex items-center justify-between gap-2 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="bg-black text-white text-[10px] font-black px-1.5 py-0.5 w-6 text-center shrink-0">
+                        {pl.pos}
+                      </span>
+                      <span className="text-xs font-bold text-black truncate">{pl.name}</span>
+                      <span className="text-[10px] font-mono text-neutral-500 shrink-0">({pl.hand})</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px] font-black">
+                      <span className="bg-emerald-100 border border-emerald-400 px-1.5 py-0.5 text-emerald-950">
+                        PK {pl.peakOvr}
+                      </span>
+                      <span className="bg-neutral-100 border border-neutral-300 px-1.5 py-0.5 text-neutral-800">
+                        AVG {pl.avgOvr}
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
