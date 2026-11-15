@@ -25,7 +25,8 @@ import {
   CloudUpload,
   Swords,
   X,
-  Send
+  Send,
+  Save
 } from 'lucide-react';
 import {
   OFFICIAL_LEAGUE_ROMS,
@@ -152,6 +153,89 @@ function RomCoverImage({ base, alt, className }: { base: string | null | undefin
       className={className}
     />
   );
+}
+
+interface ArenaHighScoreRow {
+  id: string;
+  gameKey: string;
+  gameTitle: string;
+  playerName: string;
+  score: number | null;
+  distance: string;
+  createdAt: string;
+}
+
+interface ArenaSaveStateLogEntry {
+  id: string;
+  gameKey: string;
+  gameTitle: string;
+  note: string;
+  byteLength: number;
+  createdAt: string;
+}
+
+const ARENA_SAVESTATE_LOG_STORAGE_KEY = 'nhl95_arena_savestate_log_v1';
+
+function openArenaStateDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = window.indexedDB.open('nhl95_arena_savestates', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('states')) {
+        db.createObjectStore('states');
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function putArenaStateBlob(id: string, bytes: Uint8Array): Promise<void> {
+  const db = await openArenaStateDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('states', 'readwrite');
+    tx.objectStore('states').put(bytes, id);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
+}
+
+async function getArenaStateBlob(id: string): Promise<Uint8Array | null> {
+  const db = await openArenaStateDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('states', 'readonly');
+    const req = tx.objectStore('states').get(id);
+    req.onsuccess = () => {
+      db.close();
+      resolve(req.result instanceof Uint8Array ? req.result : req.result ? new Uint8Array(req.result) : null);
+    };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
+  });
+}
+
+async function deleteArenaStateBlob(id: string): Promise<void> {
+  const db = await openArenaStateDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('states', 'readwrite');
+    tx.objectStore('states').delete(id);
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+  });
 }
 
 // Stable catalog id for a cloud bucket file that isn't in the hand-written catalog (e.g. "Theme Park.zip")
@@ -1635,6 +1719,213 @@ function ArenaContent() {
     if (isLoggedIn && currentCoach?.coach_name) return currentCoach.coach_name;
     return `Skater_${myPeerId.slice(-4).toUpperCase()}`;
   }, [isLoggedIn, currentCoach, myPeerId]);
+
+  // High Score / Distance Gone & Save State Progress Log
+  const activeGameKey = useMemo(() => {
+    const raw = (localRomTitle || resolvedRomFileName || selectedRom.id || 'W16')
+      .split('/')
+      .pop()
+      ?.replace(ROM_EXT_RE, '')
+      .trim()
+      .toUpperCase();
+    return raw || 'W16';
+  }, [localRomTitle, resolvedRomFileName, selectedRom.id]);
+
+  const activeGameLabel = useMemo(
+    () => localRomTitle || selectedRom.title || activeGameKey,
+    [localRomTitle, selectedRom.title, activeGameKey]
+  );
+
+  const [highScores, setHighScores] = useState<ArenaHighScoreRow[]>([]);
+  const [hsPlayerInput, setHsPlayerInput] = useState<string>('');
+  const [hsScoreInput, setHsScoreInput] = useState<string>('');
+  const [hsDistanceInput, setHsDistanceInput] = useState<string>('');
+  const [hsSubmitting, setHsSubmitting] = useState<boolean>(false);
+  const [hsStatus, setHsStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [saveStateLog, setSaveStateLog] = useState<ArenaSaveStateLogEntry[]>([]);
+  const [saveNoteInput, setSaveNoteInput] = useState<string>('');
+  const [savingProgress, setSavingProgress] = useState<boolean>(false);
+  const [saveLogStatus, setSaveLogStatus] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (isLoggedIn && currentCoach?.coach_name && !hsPlayerInput) {
+      setHsPlayerInput(currentCoach.coach_name);
+    }
+  }, [isLoggedIn, currentCoach, hsPlayerInput]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHighScores() {
+      try {
+        const res = await fetch(`/api/arena-progress?gameKey=${encodeURIComponent(activeGameKey)}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && Array.isArray(json.scores)) {
+          setHighScores(json.scores);
+        }
+      } catch {
+        // ignore network errors
+      }
+    }
+    loadHighScores();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGameKey]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(ARENA_SAVESTATE_LOG_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setSaveStateLog(parsed);
+      }
+    } catch {}
+  }, []);
+
+  const persistSaveStateLog = useCallback((next: ArenaSaveStateLogEntry[]) => {
+    setSaveStateLog(next);
+    try {
+      window.localStorage.setItem(ARENA_SAVESTATE_LOG_STORAGE_KEY, JSON.stringify(next));
+    } catch {}
+  }, []);
+
+  const handleSubmitHighScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const scoreStr = hsScoreInput.trim();
+    const distStr = hsDistanceInput.trim();
+    if (!scoreStr && !distStr) {
+      setHsStatus({ type: 'error', text: 'Enter a score or distance/level reached.' });
+      return;
+    }
+    setHsSubmitting(true);
+    setHsStatus(null);
+    try {
+      const res = await fetch('/api/arena-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameKey: activeGameKey,
+          gameTitle: activeGameLabel,
+          playerName: hsPlayerInput.trim() || myDisplayName,
+          score: scoreStr || null,
+          distance: distStr,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to log high score');
+      if (Array.isArray(json.scores)) setHighScores(json.scores);
+      setHsScoreInput('');
+      setHsDistanceInput('');
+      setHsStatus({ type: 'success', text: 'High score / progress logged!' });
+      setTimeout(() => setHsStatus(null), 4000);
+    } catch (err: any) {
+      setHsStatus({ type: 'error', text: err?.message || 'Could not save high score.' });
+    } finally {
+      setHsSubmitting(false);
+    }
+  };
+
+  const handleSaveProgressToLog = async () => {
+    setSavingProgress(true);
+    setSaveLogStatus(null);
+    try {
+      let stateBytes: Uint8Array | null = null;
+      try {
+        const iframeWin = iframeRef.current?.contentWindow as any;
+        const ejs = iframeWin?.EJS_emulator;
+        if (ejs && ejs.gameManager && typeof ejs.gameManager.getState === 'function') {
+          const liveRaw: Uint8Array = ejs.gameManager.getState();
+          if (liveRaw && liveRaw.length > 0) {
+            stateBytes = liveRaw;
+          }
+        }
+      } catch {}
+
+      if (!stateBytes) {
+        stateBytes = await obtainLatestSaveStateBytes();
+      }
+      if (!stateBytes || stateBytes.length === 0) {
+        setSaveLogStatus({
+          type: 'error',
+          text: 'Start a game first so EmulatorJS has an active state to save.',
+        });
+        return;
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      await putArenaStateBlob(id, stateBytes);
+
+      const entry: ArenaSaveStateLogEntry = {
+        id,
+        gameKey: activeGameKey,
+        gameTitle: activeGameLabel,
+        note: saveNoteInput.trim() || `Checkpoint (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+        byteLength: stateBytes.length,
+        createdAt: new Date().toISOString(),
+      };
+      persistSaveStateLog([entry, ...saveStateLog].slice(0, 40));
+      setSaveNoteInput('');
+      setSaveLogStatus({ type: 'success', text: `Saved "${entry.note}" (${Math.round(stateBytes.length / 1024)} KB)` });
+      setTimeout(() => setSaveLogStatus(null), 4000);
+    } catch (err: any) {
+      setSaveLogStatus({ type: 'error', text: err?.message || 'Failed to save state.' });
+    } finally {
+      setSavingProgress(false);
+    }
+  };
+
+  const handleLoadStateFromLog = async (entry: ArenaSaveStateLogEntry) => {
+    setSaveLogStatus(null);
+    try {
+      const bytes = await getArenaStateBlob(entry.id);
+      if (!bytes) {
+        setSaveLogStatus({ type: 'error', text: 'Save state data not found in browser storage.' });
+        return;
+      }
+      const iframeWin = iframeRef.current?.contentWindow as any;
+      const ejs = iframeWin?.EJS_emulator;
+      if (ejs && ejs.gameManager && typeof ejs.gameManager.loadState === 'function') {
+        ejs.gameManager.loadState(bytes);
+        setSaveLogStatus({ type: 'success', text: `Loaded "${entry.note}"!` });
+        setTimeout(() => setSaveLogStatus(null), 3500);
+      } else {
+        setSaveLogStatus({
+          type: 'error',
+          text: 'Launch the game in the Arena screen first, then click Load.',
+        });
+      }
+    } catch (err: any) {
+      setSaveLogStatus({ type: 'error', text: err?.message || 'Could not load save state.' });
+    }
+  };
+
+  const handleDownloadStateFromLog = async (entry: ArenaSaveStateLogEntry) => {
+    try {
+      const bytes = await getArenaStateBlob(entry.id);
+      if (!bytes) {
+        setSaveLogStatus({ type: 'error', text: 'Save state data not found.' });
+        return;
+      }
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      const blob = new Blob([copy.buffer], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${entry.gameKey}_${entry.note.replace(/[^a-z0-9_-]+/gi, '_')}.state`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  };
+
+  const handleDeleteStateFromLog = async (id: string) => {
+    try {
+      await deleteArenaStateBlob(id);
+    } catch {}
+    persistSaveStateLog(saveStateLog.filter((item) => item.id !== id));
+  };
 
   useEffect(() => {
     if (selectedRom?.defaultSeasonConfigId) {
@@ -4898,6 +5189,208 @@ function ArenaContent() {
                   <Send className="w-3 h-3" />
                 </button>
               </form>
+            </div>
+          </div>
+
+          {/* CARD 3: HIGH SCORE & DISTANCE GONE LEADERBOARD */}
+          <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <div className="flex items-center justify-between border-b border-black/15 pb-2.5 mb-3">
+              <div className="flex items-center gap-1.5">
+                <Trophy className="w-4 h-4 text-amber-600" />
+                <h3 className="font-mono font-black text-xs uppercase tracking-wider text-black">
+                  High Scores &amp; Distance
+                </h3>
+              </div>
+              <span className="font-mono text-[10px] font-black bg-amber-100 border border-amber-400 px-1.5 py-0.5 text-amber-950 truncate max-w-[110px]">
+                {activeGameKey}
+              </span>
+            </div>
+
+            <form onSubmit={handleSubmitHighScore} className="space-y-2 mb-3">
+              <div className="grid grid-cols-2 gap-1.5">
+                <input
+                  type="text"
+                  value={hsPlayerInput}
+                  onChange={(e) => setHsPlayerInput(e.target.value)}
+                  placeholder="Player / Coach"
+                  maxLength={32}
+                  className="px-2 py-1 text-[11px] font-bold border border-black bg-white text-black outline-none"
+                />
+                <input
+                  type="number"
+                  value={hsScoreInput}
+                  onChange={(e) => setHsScoreInput(e.target.value)}
+                  placeholder="High Score"
+                  className="px-2 py-1 text-[11px] font-bold border border-black bg-white text-black outline-none"
+                />
+              </div>
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={hsDistanceInput}
+                  onChange={(e) => setHsDistanceInput(e.target.value)}
+                  placeholder="Distance / Level (e.g. World 8-2)"
+                  maxLength={50}
+                  className="flex-1 px-2 py-1 text-[11px] font-bold border border-black bg-white text-black outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={hsSubmitting}
+                  className="px-2.5 py-1 bg-black hover:bg-amber-400 hover:text-black text-white font-mono text-[10px] font-black uppercase border border-black cursor-pointer disabled:opacity-50"
+                >
+                  {hsSubmitting ? '...' : 'Log'}
+                </button>
+              </div>
+              {hsStatus && (
+                <div
+                  className={`text-[10px] font-bold px-2 py-1 border ${
+                    hsStatus.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
+                      : 'bg-red-50 border-red-400 text-red-900'
+                  }`}
+                >
+                  {hsStatus.text}
+                </div>
+              )}
+            </form>
+
+            <div className="space-y-1 max-h-44 overflow-y-auto">
+              {highScores.length === 0 ? (
+                <div className="text-[11px] text-slate-500 text-center py-4 bg-slate-50 border border-slate-200">
+                  No scores or distance logged for <span className="font-bold">{activeGameKey}</span> yet.
+                </div>
+              ) : (
+                highScores.slice(0, 10).map((hs, idx) => (
+                  <div
+                    key={hs.id}
+                    className="flex items-center justify-between gap-2 px-2 py-1 bg-slate-50 border border-slate-200 text-[11px]"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono font-black text-[10px] w-4 text-amber-700 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span className="font-bold text-black truncate">{hs.playerName}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
+                      {hs.distance && (
+                        <span className="bg-blue-50 border border-blue-200 text-blue-900 px-1 py-0.2 font-bold">
+                          {hs.distance}
+                        </span>
+                      )}
+                      {hs.score !== null && (
+                        <span className="bg-amber-100 border border-amber-300 text-amber-950 px-1.5 py-0.2 font-black">
+                          {hs.score.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* CARD 4: SAVE STATE PROGRESS LOG */}
+          <div className="bg-white border-2 border-black p-4 shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+            <div className="flex items-center justify-between border-b border-black/15 pb-2.5 mb-3">
+              <div className="flex items-center gap-1.5">
+                <Save className="w-4 h-4 text-emerald-700" />
+                <h3 className="font-mono font-black text-xs uppercase tracking-wider text-black">
+                  Save State Progress Log
+                </h3>
+              </div>
+              <span className="font-mono text-[10px] font-bold text-slate-500">
+                {saveStateLog.filter((s) => s.gameKey === activeGameKey).length} for game
+              </span>
+            </div>
+
+            <div className="flex gap-1.5 mb-2">
+              <input
+                type="text"
+                value={saveNoteInput}
+                onChange={(e) => setSaveNoteInput(e.target.value)}
+                placeholder="Progress note (e.g. Level 4 Boss)"
+                maxLength={50}
+                className="flex-1 px-2 py-1 text-[11px] font-bold border border-black bg-white text-black outline-none"
+              />
+              <button
+                type="button"
+                disabled={savingProgress}
+                onClick={handleSaveProgressToLog}
+                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-mono text-[10px] font-black uppercase border border-black cursor-pointer disabled:opacity-50 shrink-0"
+                title="Capture live emulator state and save to your browser progress log"
+              >
+                {savingProgress ? 'Saving...' : '+ Save'}
+              </button>
+            </div>
+
+            {saveLogStatus && (
+              <div
+                className={`text-[10px] font-bold px-2 py-1 border mb-2 ${
+                  saveLogStatus.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-400 text-emerald-900'
+                    : 'bg-red-50 border-red-400 text-red-900'
+                }`}
+              >
+                {saveLogStatus.text}
+              </div>
+            )}
+
+            <div className="space-y-1.5 max-h-52 overflow-y-auto">
+              {saveStateLog.length === 0 ? (
+                <div className="text-[11px] text-slate-500 text-center py-4 bg-slate-50 border border-slate-200">
+                  No saved progress states yet. Click <span className="font-bold">+ Save</span> while playing to keep your spot!
+                </div>
+              ) : (
+                saveStateLog.map((entry) => {
+                  const isCurrentGame = entry.gameKey === activeGameKey;
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`p-2 border text-[11px] ${
+                        isCurrentGame ? 'bg-emerald-50/60 border-emerald-400' : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="font-mono text-[9.5px] font-black uppercase bg-black text-amber-300 px-1 py-0.2 truncate max-w-[110px]">
+                          {entry.gameKey}
+                        </span>
+                        <span className="font-mono text-[9.5px] text-slate-500">
+                          {Math.round(entry.byteLength / 1024)} KB • {new Date(entry.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="font-bold text-black truncate mb-1.5" title={entry.note}>
+                        {entry.note}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadStateFromLog(entry)}
+                          className="flex-1 py-0.5 bg-black hover:bg-emerald-700 text-white font-mono text-[10px] font-black uppercase border border-black cursor-pointer"
+                          title="Load this save state into the active emulator"
+                        >
+                          Load State
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadStateFromLog(entry)}
+                          className="px-1.5 py-0.5 bg-white hover:bg-slate-100 text-black font-mono text-[10px] font-bold border border-black cursor-pointer"
+                          title="Download .state file"
+                        >
+                          <Download className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStateFromLog(entry.id)}
+                          className="px-1.5 py-0.5 bg-white hover:bg-red-100 text-red-700 font-mono text-[10px] font-bold border border-red-300 cursor-pointer"
+                          title="Delete saved state"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
