@@ -377,9 +377,11 @@ export default function ActiveRostersFuturesView({
     teamName: string;
     pos: 'G' | 'F' | 'D';
     currentName?: string;
+    mode?: 'SLOT' | 'AUTO_OPEN';
   } | null>(null);
   const [pickerQuery, setPickerQuery] = useState<string>('');
   const [pickerPosFilter, setPickerPosFilter] = useState<'MATCH' | 'ALL'>('MATCH');
+  const [pickerError, setPickerError] = useState<string | null>(null);
 
   // Persist interactive roster planner edits per league in localStorage
   useEffect(() => {
@@ -1160,7 +1162,9 @@ export default function ActiveRostersFuturesView({
     const q = pickerQuery.trim().toLowerCase();
     return allDbPlayersList
       .filter((p) => {
-        if (pickerPosFilter === 'MATCH' && p.pos !== pickerTarget.pos) return false;
+        if (pickerTarget.mode !== 'AUTO_OPEN' && pickerPosFilter === 'MATCH' && p.pos !== pickerTarget.pos) {
+          return false;
+        }
         if (q && !p.name.toLowerCase().includes(q)) return false;
         return true;
       })
@@ -1190,15 +1194,45 @@ export default function ActiveRostersFuturesView({
 
   const handleAssignReplacement = (slotId: string, playerName: string, pos: 'G' | 'F' | 'D') => {
     const clean = playerName.trim();
-    if (!clean) return;
+    if (!clean || !pickerTarget) return;
+
+    const targetAbbr = pickerTarget.teamAbbr;
+    const normTarget = normName(clean);
+    const alreadyOnTeam = allMatrixRows.some(
+      (r) =>
+        r.teamAbbr === targetAbbr &&
+        !r.isOpenSlot &&
+        r.slotId !== slotId &&
+        normName(r.playerName) === normTarget
+    );
+    if (alreadyOnTeam) {
+      setPickerError(`Error: ${clean} is already on ${targetAbbr}'s roster.`);
+      return;
+    }
+
+    let resolvedSlotId = slotId;
+    if (pickerTarget.mode === 'AUTO_OPEN') {
+      const openSlot = allMatrixRows.find(
+        (r) => r.teamAbbr === targetAbbr && r.isOpenSlot && r.pos === pos
+      );
+      if (!openSlot) {
+        setPickerError(
+          `Error: No available ${pos} spot on ${targetAbbr}. All ${pos} slots are full — use Replace (⇄) on an existing ${pos} instead.`
+        );
+        return;
+      }
+      resolvedSlotId = openSlot.slotId;
+    }
+
+    setPickerError(null);
     updatePlannerEdits((prev) => {
       const nextRemoved = { ...prev.removed };
-      delete nextRemoved[slotId];
+      delete nextRemoved[resolvedSlotId];
       return {
         removed: nextRemoved,
         replaced: {
           ...prev.replaced,
-          [slotId]: { playerName: clean, pos },
+          [resolvedSlotId]: { playerName: clean, pos },
         },
       };
     });
@@ -1657,16 +1691,44 @@ export default function ActiveRostersFuturesView({
             </button>
 
             {selectedTeamAbbr !== 'ALL' && (
-              <button
-                type="button"
-                disabled={isSubmittingRoster}
-                onClick={() => handleConfirmTeamRoster(selectedTeamAbbr)}
-                className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-2.5 py-1 text-xs font-black uppercase border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] flex items-center gap-1 cursor-pointer"
-                title={`Confirm & submit ${selectedTeamAbbr} roster to database`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                {isSubmittingRoster ? 'Submitting...' : `Confirm ${selectedTeamAbbr} Roster`}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const tName =
+                      teamsMetaByAbbr[selectedTeamAbbr]?.team_name ||
+                      (leagueType === 'W'
+                        ? W_TEAM_DEFAULT_NAMES[selectedTeamAbbr]
+                        : O_TEAM_DEFAULT_NAMES[selectedTeamAbbr]) ||
+                      selectedTeamAbbr;
+                    setPickerError(null);
+                    setPickerPosFilter('ALL');
+                    setPickerQuery('');
+                    setPickerTarget({
+                      slotId: '',
+                      teamAbbr: selectedTeamAbbr,
+                      teamName: tName,
+                      pos: 'F',
+                      mode: 'AUTO_OPEN',
+                    });
+                  }}
+                  className="bg-amber-300 hover:bg-amber-400 text-black px-2.5 py-1 text-xs font-black uppercase border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] flex items-center gap-1 cursor-pointer"
+                  title={`Select a player to fill an open roster spot on ${selectedTeamAbbr}`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Fill Open Spot
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmittingRoster}
+                  onClick={() => handleConfirmTeamRoster(selectedTeamAbbr)}
+                  className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-2.5 py-1 text-xs font-black uppercase border-2 border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] flex items-center gap-1 cursor-pointer"
+                  title={`Confirm & submit ${selectedTeamAbbr} roster to database`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {isSubmittingRoster ? 'Submitting...' : `Confirm ${selectedTeamAbbr} Roster`}
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -1741,7 +1803,9 @@ export default function ActiveRostersFuturesView({
                   {pickerTarget.teamAbbr} — {pickerTarget.teamName}
                 </div>
                 <div className="text-sm font-black uppercase">
-                  {pickerTarget.currentName
+                  {pickerTarget.mode === 'AUTO_OPEN'
+                    ? `Fill Available Roster Spot (${pickerTarget.teamAbbr})`
+                    : pickerTarget.currentName
                     ? `Replace ${pickerTarget.currentName} (${pickerTarget.pos})`
                     : `Fill Open ${pickerTarget.pos} Roster Spot`}
                 </div>
@@ -1790,6 +1854,13 @@ export default function ActiveRostersFuturesView({
                 </div>
               </div>
 
+              {pickerError && (
+                <div className="bg-red-100 border-2 border-red-700 px-2.5 py-1.5 text-xs font-black text-red-900 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-red-700 shrink-0" />
+                  <span>{pickerError}</span>
+                </div>
+              )}
+
               {pickerQuery.trim() && (
                 <button
                   type="button"
@@ -1814,7 +1885,7 @@ export default function ActiveRostersFuturesView({
                   <button
                     key={`${pl.pos}-${pl.name}`}
                     type="button"
-                    onClick={() => handleAssignReplacement(pickerTarget.slotId, pl.name, pickerTarget.pos)}
+                    onClick={() => handleAssignReplacement(pickerTarget.slotId, pl.name, pickerTarget.mode === 'AUTO_OPEN' ? pl.pos : pickerTarget.pos)}
                     className="w-full px-3 py-1.5 text-left hover:bg-yellow-50 flex items-center justify-between gap-2 cursor-pointer"
                   >
                     <div className="flex items-center gap-2 min-w-0">
