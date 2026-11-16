@@ -1596,14 +1596,16 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
         return None
 
     try:
-        # Ensure league_standings is recalculated from live league_gamestats + league_schedule first
-        recalc_res = recalculate_and_save_season_standings(s_id)
-        standings_rows = recalc_res.get("rows") or []
-        if not standings_rows:
-            standings_rows = supabase.select(
-                "league_standings",
-                {"select": "*", "season_id": f"eq.{s_id}"},
-            ) or []
+        standings_rows = []
+        if not is_playoff_mode:
+            # Ensure league_standings is recalculated from live league_gamestats + league_schedule first
+            recalc_res = recalculate_and_save_season_standings(s_id)
+            standings_rows = recalc_res.get("rows") or []
+            if not standings_rows:
+                standings_rows = supabase.select(
+                    "league_standings",
+                    {"select": "*", "season_id": f"eq.{s_id}"},
+                ) or []
         teams_data = supabase.select(
             "league_teams",
             {"select": "*"},
@@ -1764,8 +1766,8 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
         reverse=True,
     )[:15]
 
-    W = 1024
-    H = max(516, 58 + len(standings_sorted) * 14)
+    W = 1060 if is_playoff_mode else 1024
+    H = 290 if is_playoff_mode else max(516, 58 + len(standings_sorted) * 14)
     img = Image.new("RGB", (W, H), (0, 0, 0))
     draw = ImageDraw.Draw(img)
 
@@ -1802,7 +1804,8 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
     if badge_img:
         bw, bh = 56, 56
         b_resized = badge_img.resize((bw, bh), Image.Resampling.LANCZOS)
-        bx, by = 452, 6
+        bx = 502 if is_playoff_mode else 452
+        by = 6
         mask = Image.new("L", (bw, bh), 0)
         mdraw = ImageDraw.Draw(mask)
         mdraw.ellipse((0, 0, bw - 1, bh - 1), fill=255)
@@ -1810,6 +1813,99 @@ def render_standings_and_leaders_png(s_id: int, is_playoff_mode: bool = False) -
         circle_bg.paste(b_resized, (0, 0), b_resized)
         img.paste(circle_bg, (bx, by), mask)
         draw.ellipse((bx, by, bx + bw - 1, by + bh - 1), outline=(30, 144, 255), width=1)
+
+    if is_playoff_mode:
+        # PLAYOFFS: League Leaders only (no Regular Season Standings)
+        # Left: Top 15 Playoff Scorers (x=8..496)
+        draw.text((252, 6), f"{league_code} ({year_num}) Playoff Top 15 Scorers" if year_num else f"{league_code} Playoff Top 15 Scorers", fill=GREEN, font=f_title, anchor="ma")
+        shy = 22
+        sc_headers_po = [
+            ("#", 22, "ra"),
+            ("Player", 28, "la"),
+            ("Team", 184, "la"),
+            ("GP", 232, "ra"),
+            ("G", 260, "ra"),
+            ("A", 288, "ra"),
+            ("PTS", 320, "ra"),
+            ("SOG", 356, "ra"),
+            ("CHK", 392, "ra"),
+            ("PIM", 426, "ra"),
+            ("PPP", 460, "ra"),
+            ("SHP", 494, "ra"),
+        ]
+        for label, cx, anc in sc_headers_po:
+            draw.text((cx, shy), label, fill=WHITE, font=f_row, anchor=anc)
+        draw.line([(8, shy + 13), (496, shy + 13)], fill=RULE, width=1)
+
+        sry = shy + 17
+        for idx, sc in enumerate(top_scorers, start=1):
+            draw.text((22, sry), str(idx), fill=WHITE, font=f_row, anchor="ra")
+            draw.text((28, sry), sc["name"][:22], fill=WHITE, font=f_row, anchor="la")
+            draw.text((184, sry), sc["team"][:3], fill=GREEN, font=f_row, anchor="la")
+            for val, cx in [
+                (str(sc["gp"]), 232),
+                (str(sc["g"]), 260),
+                (str(sc["a"]), 288),
+                (str(sc["pts"]), 320),
+                (str(sc["sog"]), 356),
+                (str(sc["chk"]), 392),
+                (str(sc["pim"]), 426),
+                (str(sc["ppp"]), 460),
+                (str(sc["shp"]), 494),
+            ]:
+                draw.text((cx, sry), val, fill=GREEN if cx == 320 else WHITE, font=f_row, anchor="ra")
+            sry += 14
+
+        # Right: Top 15 Playoff Goalies (x=564..1052)
+        draw.text((808, 6), f"{league_code} ({year_num}) Playoff Top 15 Goalies" if year_num else f"{league_code} Playoff Top 15 Goalies", fill=GREEN, font=f_title, anchor="ma")
+        ghy = 22
+        gl_headers_po = [
+            ("#", 576, "ra"),
+            ("Goalie", 582, "la"),
+            ("Team", 736, "la"),
+            ("GP", 778, "ra"),
+            ("W", 804, "ra"),
+            ("L", 828, "ra"),
+            ("T", 850, "ra"),
+            ("GA", 878, "ra"),
+            ("SV", 910, "ra"),
+            ("SH", 944, "ra"),
+            ("SV%", 988, "ra"),
+            ("GAA", 1024, "ra"),
+            ("SO", 1052, "ra"),
+        ]
+        for label, cx, anc in gl_headers_po:
+            draw.text((cx, ghy), label, fill=WHITE, font=f_row, anchor=anc)
+        draw.line([(564, ghy + 13), (1054, ghy + 13)], fill=RULE, width=1)
+
+        gry = ghy + 17
+        for idx, gl in enumerate(top_goalies, start=1):
+            sv_pct = (gl["sv"] / gl["sh"]) if gl["sh"] > 0 else 0.0
+            sv_str = "1.000" if sv_pct >= 0.9995 else f"{sv_pct:.3f}"[1:]
+            gaa = (gl["ga"] / gl["gp"]) if gl["gp"] > 0 else 0.0
+            gaa_str = f"{gaa:.2f}"
+
+            draw.text((576, gry), str(idx), fill=WHITE, font=f_row, anchor="ra")
+            draw.text((582, gry), gl["name"][:22], fill=WHITE, font=f_row, anchor="la")
+            draw.text((736, gry), gl["team"][:3], fill=GREEN, font=f_row, anchor="la")
+            for val, cx in [
+                (str(gl["gp"]), 778),
+                (str(gl["w"]), 804),
+                (str(gl["l"]), 828),
+                (str(gl["t"]), 850),
+                (str(gl["ga"]), 878),
+                (str(gl["sv"]), 910),
+                (str(gl["sh"]), 944),
+                (sv_str, 988),
+                (gaa_str, 1024),
+                (str(gl["so"]), 1052),
+            ]:
+                draw.text((cx, gry), val, fill=GREEN if cx in (804, 988) else WHITE, font=f_row, anchor="ra")
+            gry += 14
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
 
     # =========================================================
     # 1. LEFT PANEL: LEAGUE STANDINGS (x=4..444)
